@@ -31,11 +31,16 @@ text_enum!(Priority, kind = "priority", {
 });
 
 /// Who is responsible for a task.
+///
+/// A task can be given to anyone on the project: the manager, an AI agent
+/// such as a hardware designer, or a human teammate. Agents and human
+/// teammates are both team members, so a task is assigned to either in the
+/// same way.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Assignee {
-    /// The human manager of the project.
+    /// The manager who owns the project.
     Manager,
-    /// A member of the project's AI team.
+    /// A member of the project's team: an AI agent or a human teammate.
     Member(MemberId),
 }
 

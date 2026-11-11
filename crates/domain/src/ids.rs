@@ -79,7 +79,7 @@ define_id!(
 );
 
 define_id!(
-    /// Identifies a member of a project's team: an AI specialist or the Advisor.
+    /// Identifies a member of a project's team: an AI agent or a human teammate.
     MemberId,
     kind = "team member identifier"
 );
