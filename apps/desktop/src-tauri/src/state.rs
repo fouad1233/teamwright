@@ -1,8 +1,9 @@
 //! The services the commands work with, built once when the application
 //! starts.
 
-use std::fs;
+use std::path::PathBuf;
 use std::sync::Arc;
+use std::{env, fs};
 
 use tauri::{AppHandle, Manager};
 use teamwright_application::{ProjectService, StorageError, SystemClock, TaskService};
@@ -10,6 +11,12 @@ use teamwright_storage::{Database, SqliteProjectRepository, SqliteTaskRepository
 
 /// The name of the database file inside the application's data directory.
 const DATABASE_FILE_NAME: &str = "teamwright.db";
+
+/// Names a folder to keep the data in, instead of the place the operating
+/// system assigns to the application. Tests use it to stay away from the
+/// user's real data, and it allows an installation that carries its data
+/// along.
+const DATA_DIRECTORY_VARIABLE: &str = "TEAMWRIGHT_DATA_DIR";
 
 /// Why the application could not get ready.
 #[derive(Debug, thiserror::Error)]
@@ -42,7 +49,7 @@ impl AppState {
     /// This is the one place where the program decides which implementation
     /// stands behind each interface of the application crate.
     pub fn open(app: &AppHandle) -> Result<Self, StartupError> {
-        let data_directory = app.path().app_data_dir()?;
+        let data_directory = data_directory(app)?;
         fs::create_dir_all(&data_directory)?;
         let database = Arc::new(Database::open(data_directory.join(DATABASE_FILE_NAME))?);
 
@@ -54,5 +61,15 @@ impl AppState {
             projects: ProjectService::new(project_repository.clone(), clock.clone()),
             tasks: TaskService::new(project_repository, task_repository, clock),
         })
+    }
+}
+
+/// The folder the data is kept in: the one named by `TEAMWRIGHT_DATA_DIR` if
+/// that is set, and otherwise the place the operating system assigns to the
+/// application.
+fn data_directory(app: &AppHandle) -> Result<PathBuf, StartupError> {
+    match env::var_os(DATA_DIRECTORY_VARIABLE) {
+        Some(directory) if !directory.is_empty() => Ok(PathBuf::from(directory)),
+        _ => Ok(app.path().app_data_dir()?),
     }
 }
