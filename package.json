@@ -1,0 +1,15 @@
+{
+  "name": "teamwright",
+  "private": true,
+  "description": "You manage. A right-sized team of AI specialists does the work.",
+  "license": "Apache-2.0",
+  "workspaces": [
+    "apps/desktop"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace @teamwright/desktop",
+    "app": "npm run tauri --workspace @teamwright/desktop -- dev",
+    "build": "npm run build --workspace @teamwright/desktop",
+    "check": "npm run check --workspace @teamwright/desktop"
+  }
+}
