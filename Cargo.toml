@@ -11,6 +11,7 @@ publish = false
 # Versions of third-party crates are declared once, here, and inherited by the
 # member crates so the whole workspace always agrees on them.
 [workspace.dependencies]
+teamwright-application = { path = "crates/application" }
 teamwright-domain = { path = "crates/domain" }
 
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }

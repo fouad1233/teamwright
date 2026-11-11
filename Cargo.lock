@@ -224,6 +224,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "teamwright-application"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "teamwright-domain",
+ "thiserror",
+]
+
+[[package]]
 name = "teamwright-domain"
 version = "0.1.0"
 dependencies = [

@@ -1,0 +1,16 @@
+[package]
+name = "teamwright-application"
+description = "Teamwright's use cases and the interfaces they need from the outside world."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+teamwright-domain.workspace = true
+
+chrono.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true
