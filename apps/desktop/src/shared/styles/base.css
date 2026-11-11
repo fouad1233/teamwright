@@ -85,10 +85,40 @@ svg {
   background: var(--brass-soft);
 }
 
-/* Thin scrollbars in the color of a hairline. */
-* {
-  scrollbar-width: thin;
-  scrollbar-color: var(--rule-strong) transparent;
+/*
+ * A scrollbar is a short hairline at the edge of what scrolls: no track, no
+ * arrows. The web views that the desktop application runs in understand the
+ * first form. The second form is for other browsers during development.
+ */
+@supports selector(::-webkit-scrollbar) {
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-track,
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
+  /* The transparent border leaves a line of four pixels in the middle. */
+  ::-webkit-scrollbar-thumb {
+    border: 3px solid transparent;
+    border-radius: 5px;
+    background-color: var(--rule-strong);
+    background-clip: padding-box;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: var(--ink-faint);
+  }
+}
+
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--rule-strong) transparent;
+  }
 }
 
 /*
