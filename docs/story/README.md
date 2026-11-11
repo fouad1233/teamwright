@@ -27,3 +27,4 @@ two readers.
 |---|---|---|
 | 0 | [The idea](00-the-idea.md) | 11 November 2026 |
 | 1 | [Day one: checking the ground](01-day-one.md) | 11 November 2026 |
+| 2 | [The first build, and the interface that was thrown away](02-first-build.md) | 11 November 2026 |
