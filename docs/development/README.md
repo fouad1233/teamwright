@@ -79,6 +79,12 @@ The application keeps its database in the folder the operating system assigns
 to it (`%APPDATA%\dev.teamwright.app` on Windows). Set `TEAMWRIGHT_DATA_DIR`
 to use another folder.
 
+What the interface remembers about itself, such as the project and the view
+that were open, is not in the database. The web view keeps it in a folder of
+its own. The tools above give every run a fresh one through
+`WEBVIEW2_USER_DATA_FOLDER`, so that a run never sees what an earlier run or
+the installed application left behind.
+
 ## The layout of the repository
 
 | Path | Contents |

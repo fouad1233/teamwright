@@ -13,12 +13,12 @@
  * The pictures go to docs/screenshots unless another folder is named.
  */
 
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 
-import { DesktopApplication } from '../shared/desktop-application.mjs';
+import { DesktopApplication, removeDataDirectory } from '../shared/desktop-application.mjs';
 
 const [executable, outputDirectory = 'docs/screenshots'] = process.argv.slice(2);
 if (!executable) {
@@ -315,5 +315,5 @@ try {
   process.exitCode = 1;
 } finally {
   await application.stop();
-  rmSync(dataDirectory, { recursive: true, force: true });
+  removeDataDirectory(dataDirectory);
 }

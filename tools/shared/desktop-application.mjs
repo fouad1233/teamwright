@@ -9,11 +9,13 @@
  *
  * Nothing is needed but Node.js 22 or later. The real data of the user is
  * never touched: the application is pointed at a folder that the caller
- * chooses, through TEAMWRIGHT_DATA_DIR.
+ * chooses, through TEAMWRIGHT_DATA_DIR, and its web view keeps its own files
+ * in that folder too.
  */
 
 import { spawn } from 'node:child_process';
-import { writeFileSync } from 'node:fs';
+import { rmSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 
 /** How long to wait for the window, or for a text in it, before giving up. */
@@ -49,6 +51,11 @@ export class DesktopApplication {
       env: {
         ...process.env,
         TEAMWRIGHT_DATA_DIR: dataDirectory,
+        // The web view keeps what the interface remembers about itself, such
+        // as the view that was open, in a folder of its own. Left alone, it
+        // would share that folder with the installed application and with
+        // every earlier run of a tool.
+        WEBVIEW2_USER_DATA_FOLDER: join(dataDirectory, 'web-view'),
         WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${debuggingPort}`,
       },
     });
@@ -95,6 +102,16 @@ export class DesktopApplication {
     // of the debugging port.
     await sleep(1500);
   }
+}
+
+/**
+ * Removes a data folder after the application that used it has stopped.
+ *
+ * The web view lets go of its files a moment after the application is gone,
+ * so the removal is tried again for a few seconds before it gives up.
+ */
+export function removeDataDirectory(dataDirectory) {
+  rmSync(dataDirectory, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
 }
 
 /** A connection to the window of the application. */

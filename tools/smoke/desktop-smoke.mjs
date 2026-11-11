@@ -15,11 +15,11 @@
  * TEAMWRIGHT_DATA_DIR.
  */
 
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { DesktopApplication } from '../shared/desktop-application.mjs';
+import { DesktopApplication, removeDataDirectory } from '../shared/desktop-application.mjs';
 
 const [executable, screenshotPath] = process.argv.slice(2);
 if (!executable) {
@@ -139,7 +139,7 @@ try {
   check('the smoke test ran to its end', false, failure.message);
 } finally {
   await application.stop();
-  rmSync(dataDirectory, { recursive: true, force: true });
+  removeDataDirectory(dataDirectory);
 }
 
 console.log(failures === 0 ? '\nAll checks passed.' : `\n${failures} check(s) failed.`);
