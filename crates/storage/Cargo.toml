@@ -1,0 +1,24 @@
+[package]
+name = "teamwright-storage"
+description = "Stores Teamwright's projects and tasks in SQLite and logs every change."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+teamwright-application.workspace = true
+teamwright-domain.workspace = true
+
+chrono.workspace = true
+rusqlite.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

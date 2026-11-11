@@ -1,0 +1,507 @@
+//! The repositories and the operation log, tested against a real SQLite
+//! database.
+
+// The helper functions below are test code as well, but the linter only
+// recognizes functions marked `#[test]` as such.
+#![allow(clippy::unwrap_used)]
+
+use std::sync::Arc;
+
+use chrono::{TimeDelta, TimeZone, Utc};
+use teamwright_application::in_memory::ManualClock;
+use teamwright_application::{
+    NewProject, NewTask, ProjectRepository, ProjectService, TaskRepository, TaskService,
+    WorkflowTemplate,
+};
+use teamwright_domain::{
+    Assignee, CalendarDate, MemberId, Priority, Project, ProjectKey, ProjectName, Rank, Schedule,
+    Status, StatusCategory, StatusColor, StatusName, Task, TaskDraft, TaskId, TaskTitle, Timestamp,
+    Workflow,
+};
+use teamwright_storage::{Database, SqliteProjectRepository, SqliteTaskRepository};
+
+/// A database with both repositories working on it.
+struct Store {
+    database: Arc<Database>,
+    projects: SqliteProjectRepository,
+    tasks: SqliteTaskRepository,
+}
+
+impl Store {
+    fn on(database: Database) -> Self {
+        let database = Arc::new(database);
+        Self {
+            projects: SqliteProjectRepository::new(database.clone()),
+            tasks: SqliteTaskRepository::new(database.clone()),
+            database,
+        }
+    }
+
+    fn in_memory() -> Self {
+        Self::on(Database::open_in_memory().unwrap())
+    }
+
+    /// Stores a project and returns it.
+    fn project(&self, name: &str) -> Project {
+        let project = new_project(name);
+        self.projects.save(&project).unwrap();
+        project
+    }
+
+    /// Stores a task in the project's first status and returns it.
+    fn task(&self, project: &Project, number: u32, title: &str) -> Task {
+        let task = new_task(project, number, title);
+        self.tasks.save(&task).unwrap();
+        task
+    }
+}
+
+fn moment(hour: u32) -> Timestamp {
+    Utc.with_ymd_and_hms(2026, 11, 11, hour, 0, 0).unwrap()
+}
+
+fn day(day_of_month: u32) -> CalendarDate {
+    CalendarDate::from_ymd_opt(2026, 11, day_of_month).unwrap()
+}
+
+fn new_project(name: &str) -> Project {
+    let name = ProjectName::parse(name).unwrap();
+    let key = ProjectKey::suggest(&name);
+    Project::create(
+        name,
+        key,
+        "A small connected device.".to_owned(),
+        Workflow::engineering(),
+        moment(9),
+    )
+}
+
+fn new_task(project: &Project, number: u32, title: &str) -> Task {
+    Task::create(
+        project.id(),
+        number,
+        project.workflow().initial_status(),
+        Rank::from_value(f64::from(number)),
+        TaskDraft::titled(TaskTitle::parse(title).unwrap()),
+        moment(9),
+    )
+}
+
+// Projects
+
+#[test]
+fn a_saved_project_is_found_again_unchanged() {
+    let store = Store::in_memory();
+    let project = store.project("Smart sensor node");
+
+    let found = store.projects.find(project.id()).unwrap();
+
+    assert_eq!(found, Some(project));
+}
+
+#[test]
+fn a_project_that_was_never_saved_is_not_found() {
+    let store = Store::in_memory();
+
+    let found = store
+        .projects
+        .find(new_project("Never saved").id())
+        .unwrap();
+
+    assert_eq!(found, None);
+}
+
+#[test]
+fn the_statuses_of_a_project_keep_their_board_order() {
+    let store = Store::in_memory();
+    let project = store.project("Smart sensor node");
+
+    let found = store.projects.find(project.id()).unwrap().unwrap();
+
+    let names: Vec<&str> = found
+        .workflow()
+        .statuses()
+        .iter()
+        .map(|status| status.name().as_str())
+        .collect();
+    assert_eq!(
+        names,
+        ["To do", "In progress", "In revision", "In test", "Done"]
+    );
+}
+
+#[test]
+fn saving_a_project_again_replaces_what_was_stored() {
+    let store = Store::in_memory();
+    let mut project = store.project("Smart sensor node");
+
+    project.rename(ProjectName::parse("Air quality monitor").unwrap());
+    project.describe("Measures temperature and oxygen.".to_owned());
+    project.allocate_task_number();
+    project.archive(moment(17));
+    store.projects.save(&project).unwrap();
+
+    let found = store.projects.find(project.id()).unwrap().unwrap();
+    assert_eq!(found, project);
+    assert_eq!(found.next_task_number(), 2);
+    assert_eq!(found.archived_at(), Some(moment(17)));
+    assert_eq!(store.projects.list().unwrap().len(), 1);
+}
+
+#[test]
+fn projects_are_listed_oldest_first_each_with_its_own_workflow() {
+    let store = Store::in_memory();
+    let older = Project::create(
+        ProjectName::parse("Older").unwrap(),
+        ProjectKey::parse("OLD").unwrap(),
+        String::new(),
+        Workflow::standard(),
+        moment(8),
+    );
+    let newer = new_project("Newer");
+    // Stored in the opposite order, to prove that the list sorts.
+    store.projects.save(&newer).unwrap();
+    store.projects.save(&older).unwrap();
+
+    let listed = store.projects.list().unwrap();
+
+    assert_eq!(listed, [older, newer]);
+    assert_eq!(listed[0].workflow().statuses().len(), 4);
+    assert_eq!(listed[1].workflow().statuses().len(), 5);
+}
+
+// Tasks
+
+#[test]
+fn a_saved_task_is_found_again_unchanged() {
+    let store = Store::in_memory();
+    let project = store.project("Smart sensor node");
+    let parent = store.task(&project, 1, "Design the board");
+    let blocker = store.task(&project, 2, "Choose the microcontroller");
+
+    let mut task = Task::create(
+        project.id(),
+        3,
+        project.workflow().first_in(StatusCategory::Done).unwrap(),
+        Rank::from_value(-512.25),
+        TaskDraft {
+            description: "Two layers.\nUSB-C power.".to_owned(),
+            priority: Priority::Urgent,
+            assignee: Some(Assignee::Member(MemberId::generate())),
+            parent_id: Some(parent.id()),
+            estimate_minutes: Some(240),
+            schedule: Schedule::new(Some(day(12)), Some(day(14))).unwrap(),
+            ..TaskDraft::titled(TaskTitle::parse("Draw the schematic").unwrap())
+        },
+        moment(10),
+    );
+    task.block_on(blocker.id(), moment(11)).unwrap();
+    store.tasks.save(&task).unwrap();
+
+    let found = store.tasks.find(task.id()).unwrap();
+
+    assert_eq!(found, Some(task));
+}
+
+#[test]
+fn a_task_with_nothing_optional_set_is_found_again_unchanged() {
+    let store = Store::in_memory();
+    let project = store.project("Smart sensor node");
+    let task = store.task(&project, 1, "Order the samples");
+
+    let found = store.tasks.find(task.id()).unwrap().unwrap();
+
+    assert_eq!(found, task);
+    assert_eq!(found.assignee(), None);
+    assert_eq!(found.schedule(), Schedule::unscheduled());
+    assert!(found.blocked_by().is_empty());
+}
+
+#[test]
+fn a_task_assigned_to_the_manager_is_found_again_unchanged() {
+    let store = Store::in_memory();
+    let project = store.project("Smart sensor node");
+    let mut task = new_task(&project, 1, "Approve the bill of materials");
+    task.assign(Some(Assignee::Manager), moment(10));
+    store.tasks.save(&task).unwrap();
+
+    let found = store.tasks.find(task.id()).unwrap().unwrap();
+
+    assert_eq!(found.assignee(), Some(Assignee::Manager));
+}
+
+#[test]
+fn a_task_that_was_never_saved_is_not_found() {
+    let store = Store::in_memory();
+
+    assert_eq!(store.tasks.find(TaskId::generate()).unwrap(), None);
+}
+
+#[test]
+fn saving_a_task_again_keeps_the_tasks_that_refer_to_it_attached() {
+    let store = Store::in_memory();
+    let project = store.project("Smart sensor node");
+    let mut board = store.task(&project, 1, "Design the board");
+    let mut schematic = new_task(&project, 2, "Draw the schematic");
+    schematic.set_parent(Some(board.id()), moment(10)).unwrap();
+    let mut firmware = new_task(&project, 3, "Write the firmware");
+    firmware.block_on(board.id(), moment(10)).unwrap();
+    store
+        .tasks
+        .save_all(&[schematic.clone(), firmware.clone()])
+        .unwrap();
+
+    board.rename(
+        TaskTitle::parse("Design the main board").unwrap(),
+        moment(12),
+    );
+    store.tasks.save(&board).unwrap();
+
+    assert_eq!(store.tasks.find(schematic.id()).unwrap(), Some(schematic));
+    assert_eq!(store.tasks.find(firmware.id()).unwrap(), Some(firmware));
+}
+
+#[test]
+fn removing_a_dependency_and_saving_removes_it_from_storage() {
+    let store = Store::in_memory();
+    let project = store.project("Smart sensor node");
+    let board = store.task(&project, 1, "Design the board");
+    let mut firmware = new_task(&project, 2, "Write the firmware");
+    firmware.block_on(board.id(), moment(10)).unwrap();
+    store.tasks.save(&firmware).unwrap();
+
+    firmware.unblock_from(board.id(), moment(11));
+    store.tasks.save(&firmware).unwrap();
+
+    assert!(
+        store
+            .tasks
+            .find(firmware.id())
+            .unwrap()
+            .unwrap()
+            .blocked_by()
+            .is_empty()
+    );
+}
+
+#[test]
+fn tasks_are_listed_for_their_own_project_only() {
+    let store = Store::in_memory();
+    let sensor = store.project("Smart sensor node");
+    let display = store.project("Display driver");
+    let board = store.task(&sensor, 1, "Design the board");
+    let mut firmware = new_task(&sensor, 2, "Write the firmware");
+    firmware.block_on(board.id(), moment(10)).unwrap();
+    store.tasks.save(&firmware).unwrap();
+    store.task(&display, 1, "Write the driver");
+
+    let mut listed = store.tasks.list_for_project(sensor.id()).unwrap();
+    listed.sort_by_key(Task::number);
+
+    assert_eq!(listed, [board, firmware]);
+}
+
+#[test]
+fn several_tasks_are_saved_together_or_not_at_all() {
+    let store = Store::in_memory();
+    let project = store.project("Smart sensor node");
+    let valid = new_task(&project, 1, "Design the board");
+    // This status belongs to no stored project, so the database refuses it.
+    let unknown_status = Status::new(
+        StatusName::parse("Nowhere").unwrap(),
+        StatusCategory::Todo,
+        StatusColor::Gray,
+    );
+    let invalid = Task::create(
+        project.id(),
+        2,
+        &unknown_status,
+        Rank::FIRST,
+        TaskDraft::titled(TaskTitle::parse("Write the firmware").unwrap()),
+        moment(9),
+    );
+
+    let result = store.tasks.save_all(&[valid.clone(), invalid]);
+
+    assert!(result.is_err());
+    assert_eq!(store.tasks.find(valid.id()).unwrap(), None);
+    assert!(
+        store
+            .database
+            .operations()
+            .unwrap()
+            .iter()
+            .all(|op| op.entity != "task")
+    );
+}
+
+#[test]
+fn deleting_tasks_removes_them_and_the_dependencies_that_mention_them() {
+    let store = Store::in_memory();
+    let project = store.project("Smart sensor node");
+    let board = store.task(&project, 1, "Design the board");
+    let mut firmware = new_task(&project, 2, "Write the firmware");
+    firmware.block_on(board.id(), moment(10)).unwrap();
+    store.tasks.save(&firmware).unwrap();
+
+    store
+        .tasks
+        .delete(&[board.id(), TaskId::generate()])
+        .unwrap();
+
+    assert_eq!(store.tasks.find(board.id()).unwrap(), None);
+    let firmware = store.tasks.find(firmware.id()).unwrap().unwrap();
+    assert!(firmware.blocked_by().is_empty());
+}
+
+// The operation log
+
+#[test]
+fn every_write_is_logged_in_order_with_the_identity_of_the_computer() {
+    let store = Store::in_memory();
+    let project = store.project("Smart sensor node");
+    let mut task = store.task(&project, 1, "Design the board");
+    task.rename(
+        TaskTitle::parse("Design the main board").unwrap(),
+        moment(10),
+    );
+    store.tasks.save(&task).unwrap();
+    store.tasks.delete(&[task.id()]).unwrap();
+
+    let log = store.database.operations().unwrap();
+
+    let summary: Vec<(&str, &str)> = log
+        .iter()
+        .map(|op| (op.entity.as_str(), op.kind.as_str()))
+        .collect();
+    assert_eq!(
+        summary,
+        [
+            ("project", "upsert"),
+            ("task", "upsert"),
+            ("task", "upsert"),
+            ("task", "delete")
+        ]
+    );
+    assert!(
+        log.iter()
+            .all(|op| op.device_id == store.database.device_id())
+    );
+    assert!(
+        log.windows(2).all(|pair| pair[0].stamp < pair[1].stamp),
+        "stamps must increase"
+    );
+    assert!(
+        log[1..]
+            .iter()
+            .all(|op| op.entity_id == task.id().to_string())
+    );
+}
+
+#[test]
+fn an_upsert_carries_the_complete_new_state_and_a_delete_carries_nothing() {
+    let store = Store::in_memory();
+    let project = store.project("Smart sensor node");
+    let task = store.task(&project, 1, "Design the board");
+    store.tasks.delete(&[task.id()]).unwrap();
+
+    let log = store.database.operations().unwrap();
+
+    let project_state: serde_json::Value =
+        serde_json::from_str(log[0].payload.as_deref().unwrap()).unwrap();
+    assert_eq!(project_state["name"], "Smart sensor node");
+    assert_eq!(project_state["key"], "SSN");
+    assert_eq!(project_state["statuses"].as_array().unwrap().len(), 5);
+
+    let task_state: serde_json::Value =
+        serde_json::from_str(log[1].payload.as_deref().unwrap()).unwrap();
+    assert_eq!(task_state["title"], "Design the board");
+    assert_eq!(task_state["number"], 1);
+    assert_eq!(task_state["created_at"], "2026-11-11T09:00:00.000Z");
+
+    assert_eq!(log[2].payload, None);
+}
+
+#[test]
+fn deleting_a_task_that_is_not_stored_logs_nothing() {
+    let store = Store::in_memory();
+
+    store.tasks.delete(&[TaskId::generate()]).unwrap();
+
+    assert!(store.database.operations().unwrap().is_empty());
+}
+
+// A database file
+
+#[test]
+fn everything_survives_closing_and_reopening_the_file() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("teamwright.db");
+
+    let (project, task, stamp_before) = {
+        let store = Store::on(Database::open(&path).unwrap());
+        let project = store.project("Smart sensor node");
+        let task = store.task(&project, 1, "Design the board");
+        let last_stamp = store.database.operations().unwrap().pop().unwrap().stamp;
+        (project, task, last_stamp)
+    };
+
+    let reopened = Store::on(Database::open(&path).unwrap());
+    assert_eq!(
+        reopened.projects.find(project.id()).unwrap(),
+        Some(project.clone())
+    );
+    assert_eq!(reopened.tasks.find(task.id()).unwrap(), Some(task));
+
+    // The clock carries on from where the log ends.
+    reopened.projects.save(&project).unwrap();
+    let stamp_after = reopened.database.operations().unwrap().pop().unwrap().stamp;
+    assert!(stamp_after > stamp_before);
+}
+
+// The use cases on the real database
+
+#[test]
+fn the_use_cases_work_on_the_real_database() {
+    let database = Arc::new(Database::open_in_memory().unwrap());
+    let project_repository = Arc::new(SqliteProjectRepository::new(database.clone()));
+    let task_repository = Arc::new(SqliteTaskRepository::new(database));
+    let clock = Arc::new(ManualClock::starting_at(moment(9)));
+    let projects = ProjectService::new(project_repository.clone(), clock.clone());
+    let tasks = TaskService::new(project_repository, task_repository, clock.clone());
+
+    let project = projects
+        .create(NewProject {
+            name: "Smart sensor node".to_owned(),
+            workflow: WorkflowTemplate::Engineering,
+            ..NewProject::default()
+        })
+        .unwrap();
+    let hardware = tasks
+        .create(NewTask::titled(project.id(), "Design the board"))
+        .unwrap();
+    let firmware = tasks
+        .create(NewTask::titled(project.id(), "Write the firmware"))
+        .unwrap();
+    let enclosure = tasks
+        .create(NewTask::titled(project.id(), "Design the enclosure"))
+        .unwrap();
+    tasks.add_dependency(firmware.id(), hardware.id()).unwrap();
+    tasks.add_dependency(enclosure.id(), hardware.id()).unwrap();
+
+    clock.advance(TimeDelta::hours(4));
+    let done = project
+        .workflow()
+        .first_in(StatusCategory::Done)
+        .unwrap()
+        .id();
+    let finished = tasks.move_to(hardware.id(), done, 0).unwrap();
+    tasks.delete(enclosure.id()).unwrap();
+
+    assert_eq!(finished.completed_at(), Some(moment(13)));
+    let remaining = tasks.list_for_project(project.id()).unwrap();
+    let titles: Vec<&str> = remaining.iter().map(|task| task.title().as_str()).collect();
+    assert_eq!(titles, ["Design the board", "Write the firmware"]);
+    assert_eq!(projects.get(project.id()).unwrap().next_task_number(), 4);
+    assert!(tasks.add_dependency(hardware.id(), firmware.id()).is_err());
+}
