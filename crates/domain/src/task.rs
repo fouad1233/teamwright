@@ -1,5 +1,6 @@
 //! Tasks.
 
+use std::cmp::Ordering;
 use std::collections::BTreeSet;
 
 use crate::error::DomainError;
@@ -49,7 +50,10 @@ pub enum Assignee {
 /// Ranks let a manager order cards by hand. Moving a card changes only that
 /// card's rank: it receives a value between the ranks of its new neighbours,
 /// and no other task is touched.
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+///
+/// A rank is always an ordinary number, never infinite and never "not a
+/// number", so ranks can be compared and sorted like whole numbers.
+#[derive(Debug, Clone, Copy)]
 pub struct Rank(f64);
 
 impl Rank {
@@ -66,7 +70,9 @@ impl Rank {
     #[must_use]
     pub const fn from_value(value: f64) -> Self {
         if value.is_finite() {
-            Self(value)
+            // Floating-point numbers have a "negative zero". Adding zero
+            // turns it into plain zero, so equal ranks always compare equal.
+            Self(value + 0.0)
         } else {
             Self::FIRST
         }
@@ -83,14 +89,46 @@ impl Rank {
     /// Either neighbour can be missing: a task placed at the top of a list
     /// has nothing before it, one placed at the bottom has nothing after it,
     /// and the first task of an empty list has neither.
+    ///
+    /// After very many insertions at the same spot, two neighbours can be so
+    /// close that no number fits between them. Check the result with
+    /// [`Rank::fits_between`] and space the list out again if it does not.
     #[must_use]
     pub fn between(before: Option<Self>, after: Option<Self>) -> Self {
-        match (before, after) {
-            (None, None) => Self::FIRST,
-            (Some(before), None) => Self(before.0 + Self::STEP),
-            (None, Some(after)) => Self(after.0 - Self::STEP),
-            (Some(before), Some(after)) => Self(before.0.midpoint(after.0)),
-        }
+        let value = match (before, after) {
+            (None, None) => return Self::FIRST,
+            (Some(before), None) => before.0 + Self::STEP,
+            (None, Some(after)) => after.0 - Self::STEP,
+            (Some(before), Some(after)) => before.0.midpoint(after.0),
+        };
+        Self::from_value(value)
+    }
+
+    /// Tells whether this rank lies strictly between two neighbours, either
+    /// of which can be missing.
+    #[must_use]
+    pub fn fits_between(self, before: Option<Self>, after: Option<Self>) -> bool {
+        before.is_none_or(|before| before < self) && after.is_none_or(|after| self < after)
+    }
+}
+
+impl PartialEq for Rank {
+    fn eq(&self, other: &Self) -> bool {
+        self.cmp(other) == Ordering::Equal
+    }
+}
+
+impl Eq for Rank {}
+
+impl PartialOrd for Rank {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Rank {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.0.total_cmp(&other.0)
     }
 }
 
@@ -180,7 +218,7 @@ impl TaskDraft {
 }
 
 /// The plain data of a task, used to recreate one that was stored.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TaskSnapshot {
     /// The identifier of the task.
     pub id: TaskId,
@@ -217,7 +255,7 @@ pub struct TaskSnapshot {
 }
 
 /// A unit of work in a project.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Task {
     id: TaskId,
     project_id: ProjectId,
@@ -760,5 +798,44 @@ mod tests {
     fn a_stored_rank_that_is_not_a_number_becomes_the_starting_rank() {
         assert_eq!(Rank::from_value(f64::NAN), Rank::FIRST);
         assert_eq!(Rank::from_value(f64::INFINITY), Rank::FIRST);
+    }
+
+    #[test]
+    fn negative_zero_and_zero_are_the_same_rank() {
+        assert_eq!(Rank::from_value(-0.0), Rank::from_value(0.0));
+    }
+
+    #[test]
+    fn ranks_sort_in_the_order_of_their_values() {
+        let mut ranks = [
+            Rank::from_value(3.5),
+            Rank::from_value(-2.0),
+            Rank::from_value(0.25),
+        ];
+
+        ranks.sort();
+
+        assert_eq!(ranks.map(Rank::value), [-2.0, 0.25, 3.5]);
+    }
+
+    #[test]
+    fn a_rank_fits_between_neighbours_it_lies_strictly_between() {
+        let upper = Rank::from_value(1.0);
+        let lower = Rank::from_value(2.0);
+
+        assert!(Rank::from_value(1.5).fits_between(Some(upper), Some(lower)));
+        assert!(Rank::from_value(1.5).fits_between(None, Some(lower)));
+        assert!(Rank::from_value(1.5).fits_between(Some(upper), None));
+        assert!(Rank::from_value(1.5).fits_between(None, None));
+    }
+
+    #[test]
+    fn neighbours_with_no_number_between_them_leave_no_room_for_a_rank() {
+        let upper = Rank::from_value(1.0);
+        let lower = Rank::from_value(1.0_f64.next_up());
+
+        let squeezed = Rank::between(Some(upper), Some(lower));
+
+        assert!(!squeezed.fits_between(Some(upper), Some(lower)));
     }
 }
