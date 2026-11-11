@@ -15,11 +15,11 @@
  * TEAMWRIGHT_DATA_DIR.
  */
 
-import { spawn } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { setTimeout as sleep } from 'node:timers/promises';
+
+import { DesktopApplication } from '../shared/desktop-application.mjs';
 
 const [executable, screenshotPath] = process.argv.slice(2);
 if (!executable) {
@@ -29,144 +29,6 @@ if (!executable) {
 
 /** The port on which the web view of the application offers its debugging protocol. */
 const DEBUGGING_PORT = 9333;
-const WINDOW_TIMEOUT_MILLISECONDS = 30_000;
-
-// ----------------------------------------------------------- the application
-
-/** Starts the application on a data folder, with the debugging protocol switched on. */
-function startApplication(dataDirectory) {
-  return spawn(executable, [], {
-    stdio: 'ignore',
-    env: {
-      ...process.env,
-      TEAMWRIGHT_DATA_DIR: dataDirectory,
-      WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${DEBUGGING_PORT}`,
-    },
-  });
-}
-
-/** Stops the application and waits until it is gone, so its port and files are free. */
-async function stopApplication(application) {
-  if (application.exitCode !== null) {
-    return;
-  }
-  const gone = new Promise((resolve) => application.once('exit', resolve));
-  application.kill();
-  await gone;
-  // The web view runs in processes of its own and takes a moment to let go
-  // of the debugging port.
-  await sleep(1500);
-}
-
-// ------------------------------------------------- the debugging connection
-
-/** A connection to the window of the application. */
-class Window {
-  #socket;
-  #nextId = 1;
-  #waiting = new Map();
-
-  constructor(socket) {
-    this.#socket = socket;
-    socket.addEventListener('message', (event) => {
-      const message = JSON.parse(event.data);
-      const waiter = this.#waiting.get(message.id);
-      if (!waiter) {
-        return;
-      }
-      this.#waiting.delete(message.id);
-      if (message.error) {
-        waiter.reject(new Error(message.error.message));
-      } else {
-        waiter.resolve(message.result);
-      }
-    });
-  }
-
-  /** Waits for the window of the application to appear and connects to it. */
-  static async connect() {
-    const deadline = Date.now() + WINDOW_TIMEOUT_MILLISECONDS;
-    while (Date.now() < deadline) {
-      try {
-        const response = await fetch(`http://127.0.0.1:${DEBUGGING_PORT}/json`);
-        const page = (await response.json()).find((target) => target.type === 'page');
-        if (page) {
-          const socket = new WebSocket(page.webSocketDebuggerUrl);
-          await new Promise((resolve, reject) => {
-            socket.addEventListener('open', resolve, { once: true });
-            socket.addEventListener('error', reject, { once: true });
-          });
-          return new Window(socket);
-        }
-      } catch {
-        // The application is still starting.
-      }
-      await sleep(400);
-    }
-    throw new Error('the window of the application did not appear');
-  }
-
-  #send(method, params = {}) {
-    const id = this.#nextId;
-    this.#nextId += 1;
-    return new Promise((resolve, reject) => {
-      this.#waiting.set(id, { resolve, reject });
-      this.#socket.send(JSON.stringify({ id, method, params }));
-    });
-  }
-
-  /** Runs JavaScript in the window and returns its value. */
-  async evaluate(expression) {
-    const { result, exceptionDetails } = await this.#send('Runtime.evaluate', {
-      expression,
-      awaitPromise: true,
-      returnByValue: true,
-    });
-    if (exceptionDetails) {
-      throw new Error(exceptionDetails.exception?.description ?? exceptionDetails.text);
-    }
-    return result.value;
-  }
-
-  /**
-   * Calls a command of the shell the way the interface does. Resolves to
-   * `{ ok: value }` or, if the command refuses, to `{ refused: error }`.
-   */
-  command(name, args = {}) {
-    return this.evaluate(
-      `window.__TAURI_INTERNALS__.invoke(${JSON.stringify(name)}, ${JSON.stringify(args)})
-         .then((ok) => ({ ok }), (refused) => ({ refused }))`,
-    );
-  }
-
-  /** Waits until the page shows a text. */
-  async waitForText(text) {
-    const deadline = Date.now() + WINDOW_TIMEOUT_MILLISECONDS;
-    while (Date.now() < deadline) {
-      // Right after the application starts, the page has no body yet.
-      const shown = await this.evaluate("document.body?.innerText ?? ''").catch(() => '');
-      if (shown.includes(text)) {
-        return shown;
-      }
-      await sleep(300);
-    }
-    throw new Error(`the window never showed "${text}"`);
-  }
-
-  async reload() {
-    await this.#send('Page.reload');
-    await sleep(1500);
-  }
-
-  async screenshot(path) {
-    const { data } = await this.#send('Page.captureScreenshot', { format: 'png' });
-    writeFileSync(path, Buffer.from(data, 'base64'));
-  }
-
-  close() {
-    this.#socket.close();
-  }
-}
 
 // ------------------------------------------------------------------ checks
 
@@ -180,11 +42,11 @@ function check(description, passed, detail = '') {
 }
 
 const dataDirectory = mkdtempSync(join(tmpdir(), 'teamwright-smoke-'));
-let application = startApplication(dataDirectory);
+let application = DesktopApplication.start(executable, dataDirectory, DEBUGGING_PORT);
 
 try {
   // First run: an empty application, used the way the interface uses it.
-  let window = await Window.connect();
+  let window = await application.openWindow();
   await window.waitForText('No projects yet');
   check('a new installation shows the first-run screen', true);
 
@@ -250,9 +112,9 @@ try {
   window.close();
 
   // Second run: what was stored is still there.
-  await stopApplication(application);
-  application = startApplication(dataDirectory);
-  window = await Window.connect();
+  await application.stop();
+  application = DesktopApplication.start(executable, dataDirectory, DEBUGGING_PORT);
+  window = await application.openWindow();
   await window.waitForText('Smart sensor node');
   const projects = (await window.command('list_projects')).ok;
   const tasks = (await window.command('list_tasks', { projectId: projects[0]?.id })).ok;
@@ -276,7 +138,7 @@ try {
 } catch (failure) {
   check('the smoke test ran to its end', false, failure.message);
 } finally {
-  await stopApplication(application);
+  await application.stop();
   rmSync(dataDirectory, { recursive: true, force: true });
 }
 
