@@ -9,6 +9,11 @@ plans and tracks projects.
 A project holds one piece of work: its tasks and the statuses they move
 through.
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="../screenshots/first-run-dark.png">
+  <img alt="The first screen of a new installation, with the button Create a project" src="../screenshots/first-run-light.png">
+</picture>
+
 **Create a project.** Press the plus sign next to *Projects* in the sidebar,
 or *Create a project* on the first screen.
 
@@ -44,6 +49,11 @@ done.
 **Open a task** by clicking it on the board or in the list. Its panel shows
 everything about it:
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="../screenshots/task-dark.png">
+  <img alt="The panel of a task, open at the right of the board" src="../screenshots/task-light.png">
+</picture>
+
 | Field | What it is |
 |---|---|
 | Status | Where the task stands. Choosing another status moves the task. |
@@ -77,7 +87,17 @@ because SSN-3 already waits for SSN-1."*
 its status, or up and down to change its place. An overdue date is shown in
 red.
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="../screenshots/board-dark.png">
+  <img alt="The board of a project, with one lane for each of its five statuses" src="../screenshots/board-light.png">
+</picture>
+
 **List.** One table of all tasks, grouped by status.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="../screenshots/list-dark.png">
+  <img alt="The list of a project: its tasks in rows, grouped by status" src="../screenshots/list-light.png">
+</picture>
 
 ## Keyboard
 

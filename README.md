@@ -22,6 +22,22 @@ with a clear decision request whenever a choice is yours to make.
 > be [built from source](docs/development/README.md). The
 > [roadmap](docs/product/roadmap.md) says exactly what is done.
 
+## What it looks like today
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/board-dark.png">
+  <img alt="The board of a sample project: twelve tasks in five statuses from To do to Done, each card with its number, what it waits for, its due date and its estimate" src="docs/screenshots/board-light.png">
+</picture>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/task-dark.png">
+  <img alt="A task opened from the board: its status, assignee, priority, estimate and dates, a description, and the two tasks it waits for" src="docs/screenshots/task-light.png">
+</picture>
+
+These are pictures of the application as it runs today, on a sample project.
+They are [taken from the real program](docs/screenshots/README.md), not drawn.
+The team is not in them, because the team is not built yet.
+
 ## The problem
 
 AI coding agents are good at tasks. A project is more than a pile of tasks.
