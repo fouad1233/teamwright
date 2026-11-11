@@ -5,6 +5,8 @@ import type {
   Assignee,
   CalendarDate,
   Id,
+  Member,
+  NewMember,
   NewProject,
   NewTask,
   Priority,
@@ -87,6 +89,26 @@ export class TauriBackend implements Backend {
 
   deleteTask(taskId: Id): Promise<void> {
     return call('delete_task', { taskId });
+  }
+
+  listMembers(projectId: Id): Promise<Member[]> {
+    return call('list_members', { projectId });
+  }
+
+  addMember(member: NewMember): Promise<Member> {
+    return call('add_member', { input: member });
+  }
+
+  renameMember(memberId: Id, name: string): Promise<Member> {
+    return call('rename_member', { memberId, name });
+  }
+
+  setMemberResponsibility(memberId: Id, responsibility: string): Promise<Member> {
+    return call('set_member_responsibility', { memberId, responsibility });
+  }
+
+  removeMember(memberId: Id): Promise<void> {
+    return call('remove_member', { memberId });
   }
 }
 

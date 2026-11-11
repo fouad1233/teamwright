@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::{env, fs};
 
 use tauri::{AppHandle, Manager};
-use teamwright_application::{ProjectService, StorageError, SystemClock, TaskService};
+use teamwright_application::{ProjectService, StorageError, SystemClock, TaskService, TeamService};
 use teamwright_storage::{
     Database, SqliteMemberRepository, SqliteProjectRepository, SqliteTaskRepository,
 };
@@ -42,6 +42,8 @@ pub struct AppState {
     pub projects: ProjectService,
     /// The use cases for tasks.
     pub tasks: TaskService,
+    /// The use cases for the team of a project.
+    pub team: TeamService,
 }
 
 impl AppState {
@@ -63,9 +65,15 @@ impl AppState {
         Ok(Self {
             projects: ProjectService::new(project_repository.clone(), clock.clone()),
             tasks: TaskService::new(
+                project_repository.clone(),
+                task_repository.clone(),
+                member_repository.clone(),
+                clock.clone(),
+            ),
+            team: TeamService::new(
                 project_repository,
-                task_repository,
                 member_repository,
+                task_repository,
                 clock,
             ),
         })

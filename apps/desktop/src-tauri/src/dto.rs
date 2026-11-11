@@ -8,9 +8,10 @@ use std::str::FromStr;
 
 use chrono::SecondsFormat;
 use serde::{Deserialize, Serialize};
-use teamwright_application::{NewProject, NewTask, WorkflowTemplate};
+use teamwright_application::{NewMember, NewProject, NewTask, WorkflowTemplate};
 use teamwright_domain::{
-    Assignee, CalendarDate, DomainError, Priority, Project, Status, Task, Timestamp,
+    Assignee, CalendarDate, DomainError, Member, MemberKind, Priority, Project, Status, Task,
+    Timestamp,
 };
 
 use crate::error::CommandError;
@@ -152,6 +153,59 @@ impl TryFrom<AssigneeDto> for Assignee {
             AssigneeDto::Manager => Ok(Self::Manager),
             AssigneeDto::Member { member_id } => Ok(Self::Member(parse_id(&member_id)?)),
         }
+    }
+}
+
+/// A member of a team as the interface sees it.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MemberDto {
+    id: String,
+    project_id: String,
+    name: String,
+    kind: &'static str,
+    responsibility: String,
+    color: &'static str,
+    joined_at: String,
+    updated_at: String,
+}
+
+impl From<&Member> for MemberDto {
+    fn from(member: &Member) -> Self {
+        Self {
+            id: member.id().to_string(),
+            project_id: member.project_id().to_string(),
+            name: member.name().to_string(),
+            kind: member.kind().as_str(),
+            responsibility: member.responsibility().to_owned(),
+            color: member.color().as_str(),
+            joined_at: moment_to_text(member.joined_at()),
+            updated_at: moment_to_text(member.updated_at()),
+        }
+    }
+}
+
+/// What the interface sends to put someone on a team.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NewMemberInput {
+    project_id: String,
+    name: String,
+    kind: String,
+    #[serde(default)]
+    responsibility: String,
+}
+
+impl TryFrom<NewMemberInput> for NewMember {
+    type Error = CommandError;
+
+    fn try_from(input: NewMemberInput) -> Result<Self, Self::Error> {
+        Ok(Self {
+            project_id: parse_id(&input.project_id)?,
+            name: input.name,
+            kind: input.kind.parse::<MemberKind>()?,
+            responsibility: input.responsibility,
+        })
     }
 }
 

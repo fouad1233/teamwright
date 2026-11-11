@@ -45,6 +45,11 @@ fn main() -> ExitCode {
             commands::tasks::add_task_dependency,
             commands::tasks::remove_task_dependency,
             commands::tasks::delete_task,
+            commands::team::list_members,
+            commands::team::add_member,
+            commands::team::rename_member,
+            commands::team::set_member_responsibility,
+            commands::team::remove_member,
         ])
         .run(tauri::generate_context!());
 

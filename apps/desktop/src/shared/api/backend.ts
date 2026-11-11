@@ -2,6 +2,8 @@ import type {
   Assignee,
   CalendarDate,
   Id,
+  Member,
+  NewMember,
   NewProject,
   NewTask,
   Priority,
@@ -47,6 +49,15 @@ export interface Backend {
   removeTaskDependency(taskId: Id, blockerId: Id): Promise<Task>;
   /** Removes a task together with its subtasks. */
   deleteTask(taskId: Id): Promise<void>;
+
+  /** Lists the team of a project. The member who joined first comes first. */
+  listMembers(projectId: Id): Promise<Member[]>;
+  addMember(member: NewMember): Promise<Member>;
+  renameMember(memberId: Id, name: string): Promise<Member>;
+  /** Replaces what a member is on the team for. */
+  setMemberResponsibility(memberId: Id, responsibility: string): Promise<Member>;
+  /** Takes a member off the team. The member's tasks are given to nobody. */
+  removeMember(memberId: Id): Promise<void>;
 }
 
 /**

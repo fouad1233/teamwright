@@ -4,8 +4,11 @@ import { BackendError, type Backend } from '../backend';
 import type {
   Assignee,
   CalendarDate,
+  Color,
   Id,
+  Member,
   Moment,
+  NewMember,
   NewProject,
   NewTask,
   Priority,
@@ -21,10 +24,11 @@ export interface DemoEnvironment {
   newId(): Id;
 }
 
-/** The projects and tasks a demo backend starts with. */
+/** The projects, tasks and team members a demo backend starts with. */
 export interface DemoWorkspace {
   projects: Project[];
   tasks: Task[];
+  members: Member[];
 }
 
 const browserEnvironment: DemoEnvironment = {
@@ -48,8 +52,16 @@ const WORKFLOWS: Record<WorkflowTemplate, readonly Omit<Status, 'id'>[]> = {
   ],
 };
 
+/**
+ * The colors that are handed out to new members of a team, in this order.
+ * Gray, amber and red are left out: the interface uses them for nobody, for
+ * the manager and for trouble.
+ */
+const MEMBER_COLORS: readonly Color[] = ['teal', 'blue', 'purple', 'pink', 'green'];
+
 const PROJECT_NAME_MAX_LENGTH = 80;
 const TASK_TITLE_MAX_LENGTH = 200;
+const MEMBER_NAME_MAX_LENGTH = 60;
 const PROJECT_KEY_MAX_LENGTH = 6;
 const PROJECT_KEY_PATTERN = /^[A-Z][A-Z0-9]{1,5}$/;
 const FALLBACK_PROJECT_KEY = 'PRJ';
@@ -66,6 +78,7 @@ export class DemoBackend implements Backend {
   private readonly environment: DemoEnvironment;
   private readonly projects = new Map<Id, Project>();
   private readonly tasks = new Map<Id, Task>();
+  private readonly members = new Map<Id, Member>();
   private readonly nextTaskNumbers = new Map<Id, number>();
 
   constructor(workspace?: DemoWorkspace, environment: DemoEnvironment = browserEnvironment) {
@@ -77,6 +90,9 @@ export class DemoBackend implements Backend {
       this.tasks.set(task.id, structuredClone(task));
       const next = Math.max(this.nextTaskNumbers.get(task.projectId) ?? 1, task.number + 1);
       this.nextTaskNumbers.set(task.projectId, next);
+    }
+    for (const member of workspace?.members ?? []) {
+      this.members.set(member.id, structuredClone(member));
     }
   }
 
@@ -154,6 +170,7 @@ export class DemoBackend implements Backend {
           );
         }
       }
+      this.checkAssignee(newTask.assignee ?? null, project.id);
 
       const lastInStatus = this.tasksOfStatus(project.id, status.id).at(-1);
       const number = this.nextTaskNumbers.get(project.id) ?? 1;
@@ -211,6 +228,7 @@ export class DemoBackend implements Backend {
   assignTask(taskId: Id, assignee: Assignee | null): Promise<Task> {
     return respond(() =>
       this.change(taskId, (task) => {
+        this.checkAssignee(assignee, task.projectId);
         task.assignee = assignee;
       }),
     );
@@ -326,6 +344,72 @@ export class DemoBackend implements Backend {
     });
   }
 
+  listMembers(projectId: Id): Promise<Member[]> {
+    return respond(() => {
+      this.requireProject(projectId);
+      return this.teamOf(projectId);
+    });
+  }
+
+  addMember(newMember: NewMember): Promise<Member> {
+    return respond(() => {
+      const project = this.requireProject(newMember.projectId);
+      const name = tidyName(newMember.name, 'name of the team member', MEMBER_NAME_MAX_LENGTH);
+      const team = this.teamOf(project.id);
+      refuseNameInUse(team, name);
+      const now = this.nowAsText();
+      const member: Member = {
+        id: this.environment.newId(),
+        projectId: project.id,
+        name,
+        kind: newMember.kind,
+        responsibility: newMember.responsibility?.trim() ?? '',
+        color: colorForNewcomer(team.map((other) => other.color)),
+        joinedAt: now,
+        updatedAt: now,
+      };
+      this.members.set(member.id, member);
+      return member;
+    });
+  }
+
+  renameMember(memberId: Id, name: string): Promise<Member> {
+    return respond(() => {
+      const member = this.requireMember(memberId);
+      const tidy = tidyName(name, 'name of the team member', MEMBER_NAME_MAX_LENGTH);
+      refuseNameInUse(
+        this.teamOf(member.projectId).filter((other) => other.id !== member.id),
+        tidy,
+      );
+      member.name = tidy;
+      member.updatedAt = this.nowAsText();
+      return member;
+    });
+  }
+
+  setMemberResponsibility(memberId: Id, responsibility: string): Promise<Member> {
+    return respond(() => {
+      const member = this.requireMember(memberId);
+      member.responsibility = responsibility.trim();
+      member.updatedAt = this.nowAsText();
+      return member;
+    });
+  }
+
+  removeMember(memberId: Id): Promise<void> {
+    return respond(() => {
+      const member = this.requireMember(memberId);
+      const now = this.nowAsText();
+      for (const task of this.tasksOfProject(member.projectId)) {
+        if (task.assignee?.kind === 'member' && task.assignee.memberId === member.id) {
+          task.assignee = null;
+          task.updatedAt = now;
+        }
+      }
+      this.members.delete(member.id);
+    });
+  }
+
   private allProjects(): Project[] {
     return [...this.projects.values()].sort((first, second) =>
       first.createdAt.localeCompare(second.createdAt),
@@ -349,6 +433,41 @@ export class DemoBackend implements Backend {
       throw new BackendError('not_found', `there is no project with the identifier ${projectId}`);
     }
     return project;
+  }
+
+  /** The team of a project. The member who joined first comes first. */
+  private teamOf(projectId: Id): Member[] {
+    return [...this.members.values()]
+      .filter((member) => member.projectId === projectId)
+      .sort((first, second) => first.joinedAt.localeCompare(second.joinedAt));
+  }
+
+  private requireMember(memberId: Id): Member {
+    const member = this.members.get(memberId);
+    if (!member) {
+      throw new BackendError(
+        'not_found',
+        `there is no team member with the identifier ${memberId}`,
+      );
+    }
+    return member;
+  }
+
+  /**
+   * Makes sure that a task of a project can be given to an assignee: a team
+   * member must exist and be on the team of that project.
+   */
+  private checkAssignee(assignee: Assignee | null, projectId: Id): void {
+    if (assignee?.kind !== 'member') {
+      return;
+    }
+    const member = this.requireMember(assignee.memberId);
+    if (member.projectId !== projectId) {
+      throw new BackendError(
+        'assignee_from_another_team',
+        'a task can only be given to a member of the team of its own project',
+      );
+    }
   }
 
   private requireTask(taskId: Id): Task {
@@ -457,6 +576,26 @@ function respond<Result>(work: () => Result): Promise<Result> {
       reject(failure instanceof Error ? failure : new Error(String(failure)));
     }
   });
+}
+
+/**
+ * Refuses a name that a member of the team already has. Capital and small
+ * letters count as the same.
+ */
+function refuseNameInUse(team: Member[], name: string): void {
+  const wanted = name.toLowerCase();
+  if (team.some((member) => member.name.toLowerCase() === wanted)) {
+    throw new BackendError('member_name_taken', `the team already has a member called "${name}"`);
+  }
+}
+
+/**
+ * The color for a newcomer to a team: the first one that nobody has, or the
+ * one that the fewest members have when all are taken.
+ */
+function colorForNewcomer(colorsInUse: Color[]): Color {
+  const timesUsed = (color: Color) => colorsInUse.filter((used) => used === color).length;
+  return MEMBER_COLORS.reduce((best, color) => (timesUsed(color) < timesUsed(best) ? color : best));
 }
 
 /** Sorts tasks by rank, and by number where ranks are equal. */

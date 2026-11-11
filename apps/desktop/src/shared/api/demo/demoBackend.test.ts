@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { BackendError } from '../backend';
-import type { Id, Project, Task } from '../types';
+import type { Id, Member, Project, Task } from '../types';
 import { DemoBackend, type DemoEnvironment } from './demoBackend';
 import { sampleWorkspace } from './sampleWorkspace';
 
@@ -279,6 +279,178 @@ describe('DemoBackend', () => {
   });
 });
 
+describe('the team in the DemoBackend', () => {
+  let environment: ReturnType<typeof testEnvironment>;
+  let backend: DemoBackend;
+  let project: Project;
+
+  beforeEach(async () => {
+    environment = testEnvironment();
+    backend = new DemoBackend(undefined, environment);
+    project = await backend.createProject({ name: 'Smart sensor node', workflow: 'engineering' });
+  });
+
+  /** Puts an agent on the team. An hour passes afterwards, so members join at different times. */
+  async function agent(name: string, onProject: Project = project): Promise<Member> {
+    const member = await backend.addMember({ projectId: onProject.id, name, kind: 'agent' });
+    environment.advanceHours(1);
+    return member;
+  }
+
+  it('puts a member on the team with a tidy name and what it is there for', async () => {
+    const member = await backend.addMember({
+      projectId: project.id,
+      name: '  Hardware   engineer ',
+      kind: 'agent',
+      responsibility: ' The schematic, the parts and the board. ',
+    });
+
+    expect(member).toMatchObject({
+      projectId: project.id,
+      name: 'Hardware engineer',
+      kind: 'agent',
+      responsibility: 'The schematic, the parts and the board.',
+      joinedAt: '2026-11-11T09:00:00.000Z',
+    });
+    expect(await backend.listMembers(project.id)).toEqual([member]);
+  });
+
+  it('lists the team in the order its members joined, people next to agents', async () => {
+    await agent('Hardware engineer');
+    await backend.addMember({ projectId: project.id, name: 'Dana', kind: 'human' });
+
+    const team = await backend.listMembers(project.id);
+
+    expect(team.map((member) => [member.name, member.kind])).toEqual([
+      ['Hardware engineer', 'agent'],
+      ['Dana', 'human'],
+    ]);
+  });
+
+  it('gives every newcomer a color that nobody on the team has', async () => {
+    const colors = [];
+    for (const name of ['Hardware', 'Firmware', 'Mechanical', 'Tester', 'Writer']) {
+      colors.push((await agent(name)).color);
+    }
+
+    expect(colors).toEqual(['teal', 'blue', 'purple', 'pink', 'green']);
+    expect((await agent('Sixth')).color).toBe('teal');
+  });
+
+  it('hands out the color of a member who left again', async () => {
+    const first = await agent('Hardware engineer');
+    await agent('Firmware engineer');
+
+    await backend.removeMember(first.id);
+
+    expect((await agent('Tester')).color).toBe(first.color);
+  });
+
+  it('refuses a second member with the same name, whatever the capitals', async () => {
+    await agent('Tester');
+
+    const error = await refusal(
+      backend.addMember({ projectId: project.id, name: 'tester', kind: 'agent' }),
+    );
+
+    expect(error.code).toBe('member_name_taken');
+    expect(error.message).toBe('the team already has a member called "tester"');
+  });
+
+  it('allows the same name on the teams of two projects', async () => {
+    const other = await backend.createProject({ name: 'Thermostat', workflow: 'standard' });
+    await agent('Hardware engineer');
+
+    const second = await agent('Hardware engineer', other);
+
+    expect(second.projectId).toBe(other.id);
+  });
+
+  it('refuses a member without a name', async () => {
+    const error = await refusal(
+      backend.addMember({ projectId: project.id, name: '  ', kind: 'agent' }),
+    );
+
+    expect(error.code).toBe('rule_broken');
+  });
+
+  it('renames a member and changes what it is there for', async () => {
+    const member = await agent('Hardware engineer');
+
+    await backend.renameMember(member.id, 'Electronics engineer');
+    const changed = await backend.setMemberResponsibility(member.id, ' Everything on the board. ');
+
+    expect(changed.name).toBe('Electronics engineer');
+    expect(changed.responsibility).toBe('Everything on the board.');
+    expect(changed.updatedAt).toBe('2026-11-11T10:00:00.000Z');
+    expect(changed.joinedAt).toBe(member.joinedAt);
+  });
+
+  it('lets a member change the capitals of its own name but not take another name', async () => {
+    await agent('Hardware engineer');
+    const tester = await agent('tester');
+
+    expect((await backend.renameMember(tester.id, 'Tester')).name).toBe('Tester');
+    const error = await refusal(backend.renameMember(tester.id, 'HARDWARE ENGINEER'));
+    expect(error.code).toBe('member_name_taken');
+  });
+
+  it('gives a task to a member, and to nobody when the member leaves', async () => {
+    const hardware = await agent('Hardware engineer');
+    const firmware = await agent('Firmware engineer');
+    const schematic = await backend.createTask({
+      projectId: project.id,
+      title: 'Draw the schematic',
+      assignee: { kind: 'member', memberId: hardware.id },
+    });
+    const drivers = await backend.createTask({ projectId: project.id, title: 'Write the drivers' });
+    await backend.assignTask(drivers.id, { kind: 'member', memberId: firmware.id });
+
+    await backend.removeMember(hardware.id);
+
+    const tasks = await backend.listTasks(project.id);
+    expect(tasks.find((task) => task.id === schematic.id)?.assignee).toBeNull();
+    expect(tasks.find((task) => task.id === drivers.id)?.assignee).toEqual({
+      kind: 'member',
+      memberId: firmware.id,
+    });
+    expect((await backend.listMembers(project.id)).map((member) => member.name)).toEqual([
+      'Firmware engineer',
+    ]);
+  });
+
+  it('refuses to give a task to a member of the team of another project', async () => {
+    const film = await backend.createProject({ name: 'Product film', workflow: 'standard' });
+    const editor = await agent('Video editor', film);
+    const task = await backend.createTask({ projectId: project.id, title: 'Draw the schematic' });
+
+    const onAssigning = await refusal(
+      backend.assignTask(task.id, { kind: 'member', memberId: editor.id }),
+    );
+    const onOpening = await refusal(
+      backend.createTask({
+        projectId: project.id,
+        title: 'Route the board',
+        assignee: { kind: 'member', memberId: editor.id },
+      }),
+    );
+
+    expect(onAssigning.code).toBe('assignee_from_another_team');
+    expect(onOpening.code).toBe('assignee_from_another_team');
+    expect(await backend.listTasks(project.id)).toHaveLength(1);
+  });
+
+  it('refuses to give a task to a member that does not exist', async () => {
+    const task = await backend.createTask({ projectId: project.id, title: 'Draw the schematic' });
+
+    const error = await refusal(
+      backend.assignTask(task.id, { kind: 'member', memberId: 'nobody' }),
+    );
+
+    expect(error.code).toBe('not_found');
+  });
+});
+
 describe('the sample workspace', () => {
   const workspace = sampleWorkspace(new Date('2026-11-11T09:00:00.000Z'));
   const [project] = workspace.projects;
@@ -306,6 +478,17 @@ describe('the sample workspace', () => {
     });
 
     expect(created.number).toBe(workspace.tasks.length + 1);
+  });
+
+  it('gives tasks only to the manager and to members of its team', () => {
+    const memberIds = new Set(workspace.members.map((member) => member.id));
+    const givenToMembers = workspace.tasks.flatMap((task) =>
+      task.assignee?.kind === 'member' ? [task.assignee.memberId] : [],
+    );
+
+    expect(givenToMembers.length).toBeGreaterThan(0);
+    expect(givenToMembers.every((id) => memberIds.has(id))).toBe(true);
+    expect(workspace.members.every((member) => member.projectId === project?.id)).toBe(true);
   });
 
   it('counts dates from the given day', () => {

@@ -1,6 +1,6 @@
 import { evenlySpacedRanks } from '@/shared/lib/rank';
 
-import type { Assignee, CalendarDate, Id, Priority, Project, Status, Task } from '../types';
+import type { Assignee, CalendarDate, Id, Member, Priority, Project, Status, Task } from '../types';
 import type { DemoWorkspace } from './demoBackend';
 
 /** The statuses of the sample project, by a short name used in this file. */
@@ -19,6 +19,33 @@ const STATUSES = {
 
 type StatusName = keyof typeof STATUSES;
 
+/**
+ * The team of the sample project, by a short name used in this file: the
+ * three disciplines a small connected device needs.
+ */
+const TEAM = {
+  hardware: {
+    id: 'demo-member-hardware',
+    name: 'Hardware engineer',
+    responsibility: 'The parts, the schematic and the board.',
+    color: 'teal',
+  },
+  firmware: {
+    id: 'demo-member-firmware',
+    name: 'Firmware engineer',
+    responsibility: 'Everything that runs on the device.',
+    color: 'blue',
+  },
+  mechanical: {
+    id: 'demo-member-mechanical',
+    name: 'Mechanical engineer',
+    responsibility: 'The enclosure, and how the board sits in it.',
+    color: 'purple',
+  },
+} as const satisfies Record<string, Pick<Member, 'id' | 'name' | 'responsibility' | 'color'>>;
+
+type TeamMemberName = keyof typeof TEAM;
+
 /** One task of the sample project, written the way a person would list it. */
 interface SampleTask {
   number: number;
@@ -26,8 +53,8 @@ interface SampleTask {
   status: StatusName;
   description?: string;
   priority?: Priority;
-  /** Tasks given to the manager. All others are unassigned until a team exists. */
-  forManager?: boolean;
+  /** Who the task is given to. A task without an owner is unassigned. */
+  owner?: 'manager' | TeamMemberName;
   /** The numbers of the tasks this one waits for. */
   waitsFor?: number[];
   estimateHours?: number;
@@ -48,7 +75,7 @@ const SAMPLE_TASKS: SampleTask[] = [
     status: 'done',
     description:
       'Temperature, humidity and oxygen. A small screen. Wi-Fi. Low cost and a compact board.',
-    forManager: true,
+    owner: 'manager',
     estimateHours: 2,
     startsInDays: -9,
     dueInDays: -8,
@@ -57,6 +84,7 @@ const SAMPLE_TASKS: SampleTask[] = [
     number: 2,
     title: 'Choose the microcontroller',
     status: 'done',
+    owner: 'hardware',
     priority: 'high',
     waitsFor: [1],
     estimateHours: 3,
@@ -67,6 +95,7 @@ const SAMPLE_TASKS: SampleTask[] = [
     number: 3,
     title: 'Select the sensors and the display',
     status: 'test',
+    owner: 'hardware',
     waitsFor: [1],
     estimateHours: 4,
     startsInDays: -6,
@@ -76,6 +105,7 @@ const SAMPLE_TASKS: SampleTask[] = [
     number: 4,
     title: 'Draw the schematic',
     status: 'progress',
+    owner: 'hardware',
     description:
       'Power, microcontroller, sensors on I2C, display on SPI. Keep the board under 40 by 60 mm.',
     priority: 'high',
@@ -88,6 +118,7 @@ const SAMPLE_TASKS: SampleTask[] = [
     number: 5,
     title: 'Define the pin map',
     status: 'revision',
+    owner: 'hardware',
     description: 'The firmware cannot start before the pins are fixed.',
     waitsFor: [2],
     estimateHours: 2,
@@ -98,6 +129,7 @@ const SAMPLE_TASKS: SampleTask[] = [
     number: 6,
     title: 'Route the board',
     status: 'todo',
+    owner: 'hardware',
     waitsFor: [4],
     estimateHours: 10,
     startsInDays: 2,
@@ -107,6 +139,7 @@ const SAMPLE_TASKS: SampleTask[] = [
     number: 7,
     title: 'Write the Wi-Fi setup',
     status: 'todo',
+    owner: 'firmware',
     waitsFor: [5],
     estimateHours: 6,
     startsInDays: 1,
@@ -116,6 +149,7 @@ const SAMPLE_TASKS: SampleTask[] = [
     number: 8,
     title: 'Write the sensor drivers',
     status: 'todo',
+    owner: 'firmware',
     waitsFor: [5],
     estimateHours: 8,
     startsInDays: 1,
@@ -125,6 +159,7 @@ const SAMPLE_TASKS: SampleTask[] = [
     number: 9,
     title: 'Design the screens of the display',
     status: 'todo',
+    owner: 'firmware',
     priority: 'low',
     estimateHours: 5,
     dueInDays: 9,
@@ -133,6 +168,7 @@ const SAMPLE_TASKS: SampleTask[] = [
     number: 10,
     title: 'Design the enclosure',
     status: 'todo',
+    owner: 'mechanical',
     waitsFor: [6],
     estimateHours: 8,
     startsInDays: 6,
@@ -143,7 +179,7 @@ const SAMPLE_TASKS: SampleTask[] = [
     title: 'Order the parts for three prototypes',
     status: 'todo',
     priority: 'urgent',
-    forManager: true,
+    owner: 'manager',
     waitsFor: [4],
     estimateHours: 1,
     dueInDays: 3,
@@ -180,9 +216,16 @@ export function sampleWorkspace(today: Date = new Date()): DemoWorkspace {
     archivedAt: null,
   };
 
+  const members = Object.values(TEAM).map((member): Member => ({
+    ...member,
+    projectId: project.id,
+    kind: 'agent',
+    joinedAt: createdAt,
+    updatedAt: createdAt,
+  }));
+
   const tasks = SAMPLE_TASKS.map((sample): Task => {
     const status = STATUSES[sample.status];
-    const assignee: Assignee | null = sample.forManager ? { kind: 'manager' } : null;
     const isDone = status.category === 'done';
     return {
       id: taskId(sample.number),
@@ -192,7 +235,7 @@ export function sampleWorkspace(today: Date = new Date()): DemoWorkspace {
       description: sample.description ?? '',
       statusId: status.id,
       priority: sample.priority ?? 'normal',
-      assignee,
+      assignee: assigneeOf(sample),
       parentId: null,
       blockedBy: (sample.waitsFor ?? []).map(taskId),
       estimateMinutes: sample.estimateHours === undefined ? null : sample.estimateHours * 60,
@@ -205,7 +248,17 @@ export function sampleWorkspace(today: Date = new Date()): DemoWorkspace {
     };
   });
 
-  return { projects: [project], tasks };
+  return { projects: [project], tasks, members };
+}
+
+function assigneeOf(sample: SampleTask): Assignee | null {
+  if (sample.owner === undefined) {
+    return null;
+  }
+  if (sample.owner === 'manager') {
+    return { kind: 'manager' };
+  }
+  return { kind: 'member', memberId: TEAM[sample.owner].id };
 }
 
 function taskId(number: number): Id {
