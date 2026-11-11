@@ -1,0 +1,45 @@
+# Private reference material (screenshots of third-party tools and of the
+# maintainers' own workspaces). Never published.
+/References/
+
+# Rust
+/target/
+**/*.rs.bk
+
+# Node / frontend
+node_modules/
+dist/
+dist-ssr/
+*.tsbuildinfo
+.vite/
+
+# Tauri
+/apps/desktop/src-tauri/target/
+/apps/desktop/src-tauri/gen/schemas/
+
+# Local data and secrets
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+*.db
+*.db-wal
+*.db-shm
+.env
+.env.*
+!.env.example
+
+# Machine-specific tool configuration
+/.cargo/config.toml
+.claude/settings.local.json
+
+# Editors and operating systems
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
