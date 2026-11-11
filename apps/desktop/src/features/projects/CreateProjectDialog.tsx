@@ -1,33 +1,45 @@
 import { useState, type FormEvent } from 'react';
 
 import { useNavigation } from '@/app/navigation';
-import type { WorkflowTemplate } from '@/shared/api/types';
+import type { Status, WorkflowTemplate } from '@/shared/api/types';
 import { classNames } from '@/shared/lib/classNames';
 import { Button } from '@/shared/ui/Button';
 import { Dialog } from '@/shared/ui/Dialog';
 import { Field, TextArea, TextInput } from '@/shared/ui/Field';
 import { describeFailure } from '@/shared/ui/Toast';
 
+import { StatusMark } from '../tasks/TaskBadges';
 import styles from './CreateProjectDialog.module.css';
 import { useCreateProject } from './projectQueries';
 
 interface WorkflowChoice {
   template: WorkflowTemplate;
   name: string;
-  /** The statuses of the workflow, in order. */
-  statuses: string[];
+  /** The statuses the workflow starts with, in order, as the backend creates them. */
+  statuses: Pick<Status, 'name' | 'category' | 'color'>[];
 }
 
 const WORKFLOW_CHOICES: WorkflowChoice[] = [
   {
     template: 'standard',
     name: 'Standard',
-    statuses: ['To do', 'In progress', 'In review', 'Done'],
+    statuses: [
+      { name: 'To do', category: 'todo', color: 'gray' },
+      { name: 'In progress', category: 'active', color: 'blue' },
+      { name: 'In review', category: 'review', color: 'amber' },
+      { name: 'Done', category: 'done', color: 'green' },
+    ],
   },
   {
     template: 'engineering',
     name: 'Engineering',
-    statuses: ['To do', 'In progress', 'In revision', 'In test', 'Done'],
+    statuses: [
+      { name: 'To do', category: 'todo', color: 'gray' },
+      { name: 'In progress', category: 'active', color: 'blue' },
+      { name: 'In revision', category: 'active', color: 'purple' },
+      { name: 'In test', category: 'review', color: 'amber' },
+      { name: 'Done', category: 'done', color: 'green' },
+    ],
   },
 ];
 
@@ -84,32 +96,33 @@ function CreateProjectForm({ onDone }: { onDone: () => void }) {
 
   return (
     <form className={styles.form} onSubmit={handleSubmit}>
-      <Field label="Name">
-        <TextInput
-          value={name}
-          onChange={(event) => {
-            setName(event.target.value);
-          }}
-          placeholder="Smart sensor node"
-          data-initial-focus
-          required
-        />
-      </Field>
-
-      <Field
-        label="Key"
-        hint="Prefixes the task numbers, as in IOT-12. Leave it empty to derive it from the name."
-      >
-        <TextInput
-          value={key}
-          onChange={(event) => {
-            setKey(event.target.value.toUpperCase());
-          }}
-          placeholder="IOT"
-          maxLength={6}
-          className={styles.keyInput}
-        />
-      </Field>
+      <div className={styles.nameAndKey}>
+        <Field label="Name">
+          <TextInput
+            value={name}
+            onChange={(event) => {
+              setName(event.target.value);
+            }}
+            placeholder="Smart sensor node"
+            data-initial-focus
+            required
+          />
+        </Field>
+        <Field label="Key">
+          <TextInput
+            value={key}
+            onChange={(event) => {
+              setKey(event.target.value.toUpperCase());
+            }}
+            placeholder="Auto"
+            maxLength={6}
+            className={styles.keyInput}
+          />
+        </Field>
+      </div>
+      <p className={styles.hint}>
+        The key prefixes the task numbers, as in IOT-12. Left empty, it is derived from the name.
+      </p>
 
       <Field label="Description">
         <TextArea
@@ -118,18 +131,18 @@ function CreateProjectForm({ onDone }: { onDone: () => void }) {
             setDescription(event.target.value);
           }}
           placeholder="What is this project for?"
-          rows={3}
+          rows={2}
         />
       </Field>
 
       <fieldset className={styles.workflows}>
-        <legend className={styles.legend}>Workflow</legend>
+        <legend className={classNames('label', styles.legend)}>Workflow</legend>
         {WORKFLOW_CHOICES.map((choice) => (
           <label
             key={choice.template}
             className={classNames(
               styles.workflow,
-              workflow === choice.template && styles.selectedWorkflow,
+              workflow === choice.template && styles.chosenWorkflow,
             )}
           >
             <input
@@ -142,12 +155,19 @@ function CreateProjectForm({ onDone }: { onDone: () => void }) {
               }}
             />
             <span className={styles.workflowName}>{choice.name}</span>
-            <span className={styles.workflowStatuses}>{choice.statuses.join('  →  ')}</span>
+            <span className={styles.workflowStatuses}>
+              {choice.statuses.map((status) => (
+                <span key={status.name} className={styles.workflowStatus}>
+                  <StatusMark status={status} />
+                  {status.name}
+                </span>
+              ))}
+            </span>
           </label>
         ))}
       </fieldset>
 
-      {refusal && (
+      {refusal !== null && (
         <p className={styles.refusal} role="alert">
           {refusal}
         </p>

@@ -1,33 +1,7 @@
 .list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-5);
   height: 100%;
-  padding: var(--space-4) var(--space-5) var(--space-6);
+  padding: 0 var(--space-5) var(--space-6);
   overflow-y: auto;
-}
-
-.group {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-
-.groupHeader {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-.count {
-  color: var(--text-muted);
-  font-size: var(--font-size-sm);
-  font-weight: 600;
-}
-
-.empty {
-  padding: var(--space-2) var(--space-3);
-  color: var(--text-muted);
 }
 
 .table {
@@ -36,59 +10,89 @@
   table-layout: fixed;
 }
 
-.table th {
-  padding: var(--space-1) var(--space-3);
-  border-bottom: 1px solid var(--border-subtle);
-  color: var(--text-muted);
-  font-size: var(--font-size-xs);
-  font-weight: 600;
-  letter-spacing: 0.04em;
+/* The headings of the columns stay in view while the rows scroll. */
+.table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  height: 36px;
+  padding: 0 var(--space-3);
+  border-bottom: 1px solid var(--rule);
+  background: var(--ground);
   text-align: left;
-  text-transform: uppercase;
 }
 
-.table td {
-  height: 38px;
-  padding: 0 var(--space-3);
-  border-bottom: 1px solid var(--border-subtle);
-  overflow: hidden;
-  color: var(--text-secondary);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.table thead th:first-child,
+.table td:first-child {
+  padding-left: 0;
 }
 
 .referenceColumn {
-  width: 96px;
+  width: 84px;
 }
 
 .assigneeColumn {
-  width: 160px;
+  width: 168px;
 }
 
 .narrowColumn {
   width: 112px;
 }
 
+.group th {
+  height: 44px;
+  padding: var(--space-4) 0 0;
+  border-bottom: 1px solid var(--rule-strong);
+  font-weight: 600;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.groupName {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.count {
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 400;
+}
+
 .row {
   cursor: pointer;
-  transition: background-color 120ms ease;
+  transition: background-color 80ms ease;
 }
 
 .row:hover {
-  background: var(--surface-hover);
+  background: var(--hover);
 }
 
 .row:focus-visible {
   outline-offset: -2px;
 }
 
-.reference {
-  font-family: var(--font-mono);
-  font-size: var(--font-size-sm);
+.row td {
+  height: 36px;
+  padding: 0 var(--space-3);
+  border-bottom: 1px solid var(--rule);
+  overflow: hidden;
+  color: var(--ink-soft);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.table td.title {
-  color: var(--text-primary);
+.row td.reference {
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+
+.row td.title {
+  color: var(--ink);
   font-weight: 500;
 }
 
@@ -98,7 +102,11 @@
   gap: var(--space-2);
 }
 
-.table td.overdue {
+.row td.number {
+  font-variant-numeric: tabular-nums;
+}
+
+.row td.overdue {
   color: var(--danger);
   font-weight: 600;
 }

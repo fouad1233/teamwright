@@ -4,13 +4,13 @@ import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import type { Id, Project, Status, Task } from '@/shared/api/types';
 import { classNames } from '@/shared/lib/classNames';
 
-import { StatusPill } from '../tasks/TaskBadges';
-import { unfinishedBlockers } from '../tasks/taskModel';
-import styles from './BoardColumn.module.css';
-import { SortableTaskCard } from './TaskCard';
+import { StatusLabel } from '../tasks/TaskBadges';
 import { TaskComposer } from '../tasks/TaskComposer';
+import { unfinishedBlockers } from '../tasks/taskModel';
+import styles from './BoardLane.module.css';
+import { SortableTaskCard } from './TaskCard';
 
-interface BoardColumnProps {
+interface BoardLaneProps {
   project: Project;
   status: Status;
   /** The tasks of the status, from top to bottom. */
@@ -23,22 +23,24 @@ interface BoardColumnProps {
 }
 
 /** One status of the board: its name, its cards, and a line to add a task. */
-export function BoardColumn({
+export function BoardLane({
   project,
   status,
   tasks,
   tasksById,
   onOpenTask,
   onCreateTask,
-}: BoardColumnProps) {
+}: BoardLaneProps) {
   // The whole list accepts drops, so a card can be dropped into an empty
   // status or below the last card.
   const { setNodeRef, isOver } = useDroppable({ id: status.id });
 
   return (
-    <section className={styles.column} aria-label={status.name}>
+    <section className={styles.lane} aria-label={status.name}>
       <header className={styles.header}>
-        <StatusPill status={status} />
+        <span className={styles.name}>
+          <StatusLabel status={status} />
+        </span>
         <span className={styles.count}>{tasks.length}</span>
       </header>
 

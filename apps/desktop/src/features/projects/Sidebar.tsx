@@ -1,4 +1,4 @@
-import { FlaskConical, Plus } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { useState } from 'react';
 
 import { useNavigation } from '@/app/navigation';
@@ -6,6 +6,7 @@ import { useIsDemo } from '@/shared/api/BackendProvider';
 import type { Id, Project } from '@/shared/api/types';
 import { classNames } from '@/shared/lib/classNames';
 import { IconButton } from '@/shared/ui/Button';
+import { Logo } from '@/shared/ui/Logo';
 
 import { CreateProjectDialog } from './CreateProjectDialog';
 import styles from './Sidebar.module.css';
@@ -25,13 +26,13 @@ export function Sidebar({ projects, activeProjectId }: SidebarProps) {
   return (
     <aside className={styles.sidebar}>
       <div className={styles.brand}>
-        <img className={styles.logo} src="/teamwright.svg" alt="" />
-        <span className={styles.name}>Teamwright</span>
+        <Logo size={20} />
+        <span className={styles.wordmark}>Teamwright</span>
       </div>
 
       <nav className={styles.section} aria-label="Projects">
         <div className={styles.sectionHeader}>
-          <span className={styles.sectionTitle}>Projects</span>
+          <span className="label">Projects</span>
           <IconButton
             label="New project"
             onClick={() => {
@@ -46,32 +47,33 @@ export function Sidebar({ projects, activeProjectId }: SidebarProps) {
           <p className={styles.empty}>No projects yet.</p>
         ) : (
           <ul className={styles.projects}>
-            {projects.map((project) => (
-              <li key={project.id}>
-                <button
-                  type="button"
-                  className={classNames(
-                    styles.project,
-                    project.id === activeProjectId && styles.activeProject,
-                  )}
-                  aria-current={project.id === activeProjectId ? 'page' : undefined}
-                  onClick={() => {
-                    navigation.openProject(project.id);
-                  }}
-                >
-                  <span className={styles.projectKey}>{project.key}</span>
-                  <span className={styles.projectName}>{project.name}</span>
-                </button>
-              </li>
-            ))}
+            {projects.map((project) => {
+              const isActive = project.id === activeProjectId;
+              return (
+                <li key={project.id}>
+                  <button
+                    type="button"
+                    className={classNames(styles.project, isActive && styles.activeProject)}
+                    aria-current={isActive ? 'page' : undefined}
+                    onClick={() => {
+                      navigation.openProject(project.id);
+                    }}
+                  >
+                    <span className={styles.projectName}>{project.name}</span>
+                    <span className={styles.projectKey}>{project.key}</span>
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         )}
       </nav>
 
       {isDemo && (
-        <p className={styles.demoNote}>
-          <FlaskConical className={styles.demoIcon} />
-          Demo with sample data. Nothing you change here is saved.
+        <p className={classNames('label', styles.demoNote)}>
+          Demo data
+          <br />
+          Changes are not saved
         </p>
       )}
 

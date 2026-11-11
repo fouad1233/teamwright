@@ -1,0 +1,44 @@
+.figure {
+  width: 100%;
+  max-width: 380px;
+  height: auto;
+}
+
+.part {
+  stroke: var(--ink);
+  stroke-width: 1.5;
+}
+
+.keystone {
+  stroke: var(--brass);
+  stroke-width: 1.5;
+}
+
+.hatch {
+  stroke: var(--ink);
+  stroke-width: 0.9;
+}
+
+.dot {
+  fill: var(--ink);
+}
+
+.dimension line {
+  stroke: var(--ink-faint);
+  stroke-width: 0.75;
+}
+
+.measure {
+  fill: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-anchor: middle;
+}
+
+.register circle,
+.register line {
+  fill: none;
+  stroke: var(--ink-inverse);
+  stroke-width: 1;
+}

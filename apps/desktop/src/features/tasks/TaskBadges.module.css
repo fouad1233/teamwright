@@ -1,40 +1,38 @@
-.statusPill {
+.statusMark {
+  flex: none;
+  color: var(--tone);
+}
+
+.statusLabel {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  height: 22px;
-  padding: 0 var(--space-2);
-  border-radius: var(--radius-pill);
-  background: var(--tone-soft);
-  color: var(--tone);
-  font-size: var(--font-size-xs);
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  min-width: 0;
   white-space: nowrap;
-}
-
-.statusDot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--tone);
 }
 
 .priority {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-1);
-  color: var(--tone);
-  font-size: var(--font-size-sm);
-  font-weight: 600;
+  gap: 6px;
+  color: var(--ink-faint);
   white-space: nowrap;
 }
 
-.priorityIcon {
-  width: 14px;
-  height: 14px;
-  fill: var(--tone-soft);
+.priority svg {
+  width: 13px;
+  height: 13px;
+  stroke-width: 1.75;
+}
+
+/* High and urgent flags carry their pigment and are filled in. */
+.raised {
+  color: var(--tone-text);
+}
+
+.raised svg {
+  fill: var(--tone);
+  stroke: var(--tone);
 }
 
 .avatar {
@@ -42,31 +40,28 @@
   flex: none;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
 }
 
 .avatar svg {
-  width: 13px;
-  height: 13px;
+  width: 12px;
+  height: 12px;
+  stroke-width: 2;
 }
 
 .unassigned {
-  color: var(--text-muted);
-}
-
-.unassigned svg {
-  width: 20px;
-  height: 20px;
+  border: 1.25px dashed var(--ink-faint);
+  opacity: 0.7;
 }
 
 .manager {
-  background: var(--accent);
-  color: var(--text-on-accent);
+  background: var(--brass);
+  color: var(--ink-inverse);
 }
 
 .member {
-  background: var(--tone-teal-soft);
-  color: var(--tone-teal);
+  background: var(--pigment-teal-wash);
+  color: var(--pigment-teal-text);
 }

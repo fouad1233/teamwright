@@ -14,12 +14,28 @@ export function taskReference(project: Pick<Project, 'key'>, task: Pick<Task, 'n
   return `${project.key}-${task.number.toString()}`;
 }
 
+/** The calendar date of a moment, where the user is. */
+export function calendarDateOf(moment: Date): CalendarDate {
+  const year = moment.getFullYear().toString().padStart(4, '0');
+  const month = (moment.getMonth() + 1).toString().padStart(2, '0');
+  const day = moment.getDate().toString().padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * The start of a calendar date where the user is.
+ *
+ * A calendar date has no time zone. Building it from its parts keeps it on
+ * the same day everywhere, which reading it as a moment would not.
+ */
+export function localDateOf(date: CalendarDate): Date {
+  const [year = 0, month = 1, day = 1] = date.split('-').map(Number);
+  return new Date(year, month - 1, day);
+}
+
 /** Today's calendar date where the user is. */
 export function today(now: Date = new Date()): CalendarDate {
-  const year = now.getFullYear().toString().padStart(4, '0');
-  const month = (now.getMonth() + 1).toString().padStart(2, '0');
-  const day = now.getDate().toString().padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  return calendarDateOf(now);
 }
 
 /**
@@ -27,14 +43,11 @@ export function today(now: Date = new Date()): CalendarDate {
  * is not the current one.
  */
 export function formatDate(date: CalendarDate, now: Date = new Date()): string {
-  // A calendar date has no time zone. Building it from its parts keeps it on
-  // the same day everywhere, which parsing it as a moment would not.
-  const [year = 0, month = 1, day = 1] = date.split('-').map(Number);
-  const localDate = new Date(year, month - 1, day);
+  const localDate = localDateOf(date);
   return new Intl.DateTimeFormat(INTERFACE_LOCALE, {
     month: 'short',
     day: 'numeric',
-    year: year === now.getFullYear() ? undefined : 'numeric',
+    year: localDate.getFullYear() === now.getFullYear() ? undefined : 'numeric',
   }).format(localDate);
 }
 

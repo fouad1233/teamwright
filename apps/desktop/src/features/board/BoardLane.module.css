@@ -1,0 +1,49 @@
+/* A lane is a ruled column of the sheet, not a box: a hairline separates it
+   from the next one. */
+.lane {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: var(--lane-width);
+  height: 100%;
+  padding: var(--space-3) 10px var(--space-4);
+  border-right: 1px solid var(--rule);
+}
+
+.header {
+  display: flex;
+  flex: none;
+  align-items: baseline;
+  gap: var(--space-2);
+  height: 26px;
+  padding: 0 2px;
+}
+
+.name {
+  font-weight: 600;
+}
+
+.count {
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.cards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  /* Tall enough to be a drop target when the status is empty. */
+  min-height: 36px;
+  /* Room for the focus ring of the cards inside the scrolling area. */
+  padding: 2px;
+  margin: -2px;
+  border-radius: var(--radius-card);
+  overflow-y: auto;
+  transition: background-color 100ms ease;
+}
+
+.dropTarget {
+  background: var(--hover);
+}

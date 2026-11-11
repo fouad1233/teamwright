@@ -1,27 +1,31 @@
 /*
  * Design tokens: every color, size and radius the interface uses.
  *
+ * They follow the design philosophy in docs/design/philosophy.md. The ground
+ * is graphite or paper, the text is ink, hairline rules do the work of
+ * shadows, brass marks the one point of attention, and pigment is used only
+ * to tell things apart.
+ *
  * Components refer to these names and never to raw values. A theme is a
- * different set of values for the same names, so the light theme below
- * changes colors without touching a single component.
+ * different set of values for the same names.
  */
 
 :root {
   color-scheme: dark;
 
-  /* Type */
-  --font-sans:
-    'Segoe UI Variable Text', 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial,
-    sans-serif;
-  --font-mono: 'Cascadia Mono', Consolas, ui-monospace, 'SF Mono', monospace;
-  --font-size-xs: 11px;
-  --font-size-sm: 12px;
-  --font-size-md: 13px;
-  --font-size-lg: 15px;
-  --font-size-xl: 20px;
-  --font-size-display: 30px;
+  /* Type: a grotesque for the interface, a serif for one gesture per view,
+     a monospace for anything that is counted or coded. */
+  --font-sans: 'Instrument Sans Variable', 'Segoe UI', system-ui, sans-serif;
+  --font-serif: 'Instrument Serif', Georgia, 'Times New Roman', serif;
+  --font-mono: 'IBM Plex Mono', 'Cascadia Mono', Consolas, monospace;
+  --text-label: 10.5px;
+  --text-small: 12px;
+  --text-body: 13.5px;
+  --text-strong: 15px;
+  --text-title: 21px;
+  --text-display: 34px;
 
-  /* Space */
+  /* Space: one module of 8, with a half step. */
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -29,160 +33,179 @@
   --space-5: 24px;
   --space-6: 32px;
   --space-7: 48px;
+  --space-8: 64px;
 
-  /* Shape */
-  --radius-sm: 6px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
-  --radius-pill: 999px;
+  /* Shape: corners are eased, never round. */
+  --radius-control: 5px;
+  --radius-card: 6px;
+  --radius-overlay: 8px;
 
   /* Layout */
-  --sidebar-width: 248px;
-  --drawer-width: 540px;
-  --column-width: 296px;
+  --sidebar-width: 236px;
+  --panel-width: 560px;
+  --lane-width: 292px;
+  --control-height: 30px;
 
-  /* Surfaces, from the back of the window to the front */
-  --surface-app: #0f1014;
-  --surface-sidebar: #131419;
-  --surface-raised: #181a21;
-  --surface-card: #1f222b;
-  --surface-overlay: #23262f;
-  --surface-hover: rgb(255 255 255 / 5%);
-  --surface-pressed: rgb(255 255 255 / 9%);
-  --border-subtle: #24262e;
-  --border-strong: #363a48;
-  --backdrop: rgb(6 7 10 / 62%);
+  /* Graphite: the ground, from the back of the window to the front. */
+  --ground: #181715;
+  --ground-sunken: #121110;
+  --surface: #201e1b;
+  --surface-raised: #292622;
+  --rule: rgb(243 239 230 / 9%);
+  --rule-strong: rgb(243 239 230 / 18%);
+  --hover: rgb(243 239 230 / 5%);
+  --pressed: rgb(243 239 230 / 10%);
+  --backdrop: rgb(10 9 8 / 62%);
 
-  /* Text */
-  --text-primary: #e9eaf0;
-  --text-secondary: #a4a8b8;
-  --text-muted: #747890;
-  --text-on-accent: #0c0d12;
+  /* Ink */
+  --ink: #f0ede5;
+  --ink-soft: #b5b0a5;
+  --ink-faint: #7f7a6f;
+  --ink-inverse: #181715;
 
-  /* Brand and feedback */
-  --accent: #7c8cff;
-  --accent-hover: #96a3ff;
-  --accent-soft: rgb(124 140 255 / 14%);
-  --focus-ring: rgb(124 140 255 / 60%);
-  --danger: #ff6b6b;
-  --danger-soft: rgb(255 107 107 / 14%);
+  /* Brass: the one metal. */
+  --brass: #d3a43d;
+  --brass-soft: rgb(211 164 61 / 16%);
 
-  /* Tones: the colors a status or a priority can have, each with a soft
-     background of the same hue. */
-  --tone-gray: #9aa0b4;
-  --tone-gray-soft: rgb(154 160 180 / 14%);
-  --tone-blue: #5aa2ff;
-  --tone-blue-soft: rgb(90 162 255 / 14%);
-  --tone-purple: #b18cff;
-  --tone-purple-soft: rgb(177 140 255 / 14%);
-  --tone-amber: #f5b041;
-  --tone-amber-soft: rgb(245 176 65 / 14%);
-  --tone-green: #3ecf8e;
-  --tone-green-soft: rgb(62 207 142 / 14%);
-  --tone-red: #ff6b6b;
-  --tone-red-soft: rgb(255 107 107 / 14%);
-  --tone-pink: #ff7eb6;
-  --tone-pink-soft: rgb(255 126 182 / 14%);
-  --tone-teal: #34d1bf;
-  --tone-teal-soft: rgb(52 209 191 / 14%);
+  --danger: #e2674f;
+  --danger-soft: rgb(226 103 79 / 14%);
 
-  /* Depth */
-  --shadow-card: 0 1px 2px rgb(0 0 0 / 35%);
-  --shadow-overlay: 0 18px 44px rgb(0 0 0 / 55%);
-  --shadow-drag: 0 14px 30px rgb(0 0 0 / 60%);
+  /* Pigments: a solid tone, a tone for text, and a wash of the same hue. */
+  --pigment-gray: #8a857a;
+  --pigment-gray-text: #b5b0a5;
+  --pigment-gray-wash: rgb(243 239 230 / 6%);
+  --pigment-blue: #5b8fd9;
+  --pigment-blue-text: #8fb6ee;
+  --pigment-blue-wash: rgb(91 143 217 / 14%);
+  --pigment-purple: #9a7bd6;
+  --pigment-purple-text: #bea8ee;
+  --pigment-purple-wash: rgb(154 123 214 / 14%);
+  --pigment-amber: #e0913a;
+  --pigment-amber-text: #f0b16c;
+  --pigment-amber-wash: rgb(224 145 58 / 14%);
+  --pigment-green: #4fae82;
+  --pigment-green-text: #80d1a8;
+  --pigment-green-wash: rgb(79 174 130 / 14%);
+  --pigment-red: #dd5f4a;
+  --pigment-red-text: #f18f7d;
+  --pigment-red-wash: rgb(221 95 74 / 14%);
+  --pigment-pink: #d4699a;
+  --pigment-pink-text: #ec9dc1;
+  --pigment-pink-wash: rgb(212 105 154 / 14%);
+  --pigment-teal: #3fa8a0;
+  --pigment-teal-text: #76cec6;
+  --pigment-teal-wash: rgb(63 168 160 / 14%);
+
+  /* Depth is used only for things that float above the sheet. */
+  --shadow-overlay: 0 12px 32px rgb(0 0 0 / 45%);
+  --shadow-lifted: 0 10px 24px rgb(0 0 0 / 50%);
 }
 
 @media (prefers-color-scheme: light) {
   :root {
     color-scheme: light;
 
-    --surface-app: #f5f6f9;
-    --surface-sidebar: #eceef4;
-    --surface-raised: #e9ebf2;
-    --surface-card: #ffffff;
-    --surface-overlay: #ffffff;
-    --surface-hover: rgb(15 16 20 / 5%);
-    --surface-pressed: rgb(15 16 20 / 9%);
-    --border-subtle: #dfe2ea;
-    --border-strong: #c5cad8;
-    --backdrop: rgb(20 22 30 / 38%);
+    /* Paper */
+    --ground: #f7f4ed;
+    --ground-sunken: #efebe2;
+    --surface: #fffdf8;
+    --surface-raised: #fffefb;
+    --rule: rgb(33 31 27 / 10%);
+    --rule-strong: rgb(33 31 27 / 20%);
+    --hover: rgb(33 31 27 / 5%);
+    --pressed: rgb(33 31 27 / 9%);
+    --backdrop: rgb(33 31 27 / 36%);
 
-    --text-primary: #16171d;
-    --text-secondary: #4d5263;
-    --text-muted: #777c90;
-    --text-on-accent: #ffffff;
+    --ink: #211f1b;
+    --ink-soft: #5f5a50;
+    --ink-faint: #8d887c;
+    --ink-inverse: #f7f4ed;
 
-    --accent: #4b5be0;
-    --accent-hover: #3d4cc9;
-    --accent-soft: rgb(75 91 224 / 10%);
-    --focus-ring: rgb(75 91 224 / 45%);
-    --danger: #cf3535;
-    --danger-soft: rgb(207 53 53 / 10%);
+    --brass: #a8791c;
+    --brass-soft: rgb(168 121 28 / 14%);
 
-    --tone-gray: #5d6375;
-    --tone-gray-soft: rgb(93 99 117 / 12%);
-    --tone-blue: #1f6fd6;
-    --tone-blue-soft: rgb(31 111 214 / 11%);
-    --tone-purple: #7a4fd6;
-    --tone-purple-soft: rgb(122 79 214 / 11%);
-    --tone-amber: #a86a05;
-    --tone-amber-soft: rgb(214 143 20 / 14%);
-    --tone-green: #14885a;
-    --tone-green-soft: rgb(20 136 90 / 12%);
-    --tone-red: #cf3535;
-    --tone-red-soft: rgb(207 53 53 / 10%);
-    --tone-pink: #c7347c;
-    --tone-pink-soft: rgb(199 52 124 / 10%);
-    --tone-teal: #0f8577;
-    --tone-teal-soft: rgb(15 133 119 / 11%);
+    --danger: #bf3f2a;
+    --danger-soft: rgb(191 63 42 / 10%);
 
-    --shadow-card: 0 1px 2px rgb(20 22 30 / 10%);
-    --shadow-overlay: 0 18px 44px rgb(20 22 30 / 20%);
-    --shadow-drag: 0 14px 30px rgb(20 22 30 / 24%);
+    --pigment-gray: #8d887c;
+    --pigment-gray-text: #5f5a50;
+    --pigment-gray-wash: rgb(33 31 27 / 5%);
+    --pigment-blue: #3f73c4;
+    --pigment-blue-text: #2f5fa8;
+    --pigment-blue-wash: rgb(63 115 196 / 11%);
+    --pigment-purple: #7a5ac0;
+    --pigment-purple-text: #6447a6;
+    --pigment-purple-wash: rgb(122 90 192 / 11%);
+    --pigment-amber: #c9761d;
+    --pigment-amber-text: #9c5a10;
+    --pigment-amber-wash: rgb(201 118 29 / 13%);
+    --pigment-green: #2f8f63;
+    --pigment-green-text: #23724e;
+    --pigment-green-wash: rgb(47 143 99 / 11%);
+    --pigment-red: #c8452f;
+    --pigment-red-text: #a63522;
+    --pigment-red-wash: rgb(200 69 47 / 10%);
+    --pigment-pink: #bf4d83;
+    --pigment-pink-text: #9e3b6a;
+    --pigment-pink-wash: rgb(191 77 131 / 10%);
+    --pigment-teal: #23877f;
+    --pigment-teal-text: #186c65;
+    --pigment-teal-wash: rgb(35 135 127 / 11%);
+
+    --shadow-overlay: 0 12px 32px rgb(33 31 27 / 16%);
+    --shadow-lifted: 0 10px 24px rgb(33 31 27 / 20%);
   }
 }
 
 /*
- * An element with a `data-tone` attribute gets that tone as `--tone` and
- * `--tone-soft`. A component styles itself with these two and so supports
- * every tone without knowing their names.
+ * An element with a `data-tone` attribute gets that pigment as `--tone`,
+ * `--tone-text` and `--tone-wash`. A component styles itself with these
+ * three and so supports every pigment without knowing their names.
  */
 [data-tone='gray'] {
-  --tone: var(--tone-gray);
-  --tone-soft: var(--tone-gray-soft);
+  --tone: var(--pigment-gray);
+  --tone-text: var(--pigment-gray-text);
+  --tone-wash: var(--pigment-gray-wash);
 }
 
 [data-tone='blue'] {
-  --tone: var(--tone-blue);
-  --tone-soft: var(--tone-blue-soft);
+  --tone: var(--pigment-blue);
+  --tone-text: var(--pigment-blue-text);
+  --tone-wash: var(--pigment-blue-wash);
 }
 
 [data-tone='purple'] {
-  --tone: var(--tone-purple);
-  --tone-soft: var(--tone-purple-soft);
+  --tone: var(--pigment-purple);
+  --tone-text: var(--pigment-purple-text);
+  --tone-wash: var(--pigment-purple-wash);
 }
 
 [data-tone='amber'] {
-  --tone: var(--tone-amber);
-  --tone-soft: var(--tone-amber-soft);
+  --tone: var(--pigment-amber);
+  --tone-text: var(--pigment-amber-text);
+  --tone-wash: var(--pigment-amber-wash);
 }
 
 [data-tone='green'] {
-  --tone: var(--tone-green);
-  --tone-soft: var(--tone-green-soft);
+  --tone: var(--pigment-green);
+  --tone-text: var(--pigment-green-text);
+  --tone-wash: var(--pigment-green-wash);
 }
 
 [data-tone='red'] {
-  --tone: var(--tone-red);
-  --tone-soft: var(--tone-red-soft);
+  --tone: var(--pigment-red);
+  --tone-text: var(--pigment-red-text);
+  --tone-wash: var(--pigment-red-wash);
 }
 
 [data-tone='pink'] {
-  --tone: var(--tone-pink);
-  --tone-soft: var(--tone-pink-soft);
+  --tone: var(--pigment-pink);
+  --tone-text: var(--pigment-pink-text);
+  --tone-wash: var(--pigment-pink-wash);
 }
 
 [data-tone='teal'] {
-  --tone: var(--tone-teal);
-  --tone-soft: var(--tone-teal-soft);
+  --tone: var(--pigment-teal);
+  --tone-text: var(--pigment-teal-text);
+  --tone-wash: var(--pigment-teal-wash);
 }

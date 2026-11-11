@@ -1,6 +1,6 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { CalendarDays, Hourglass, Timer } from 'lucide-react';
+import { Hourglass } from 'lucide-react';
 import type { KeyboardEvent } from 'react';
 
 import type { Project, Task } from '@/shared/api/types';
@@ -17,39 +17,34 @@ interface TaskCardProps {
   unfinishedBlockerCount: number;
 }
 
-/** How a task looks on the board. */
+/** How a task looks on the board: its title, and a line of facts below it. */
 export function TaskCard({ project, task, unfinishedBlockerCount }: TaskCardProps) {
+  const overdue = isOverdue(task);
+  const hasRaisedPriority = task.priority === 'urgent' || task.priority === 'high';
+
   return (
     <div className={styles.card}>
-      <div className={styles.heading}>
-        <span className={styles.reference}>{taskReference(project, task)}</span>
-        {task.priority !== 'normal' && <PriorityFlag priority={task.priority} />}
-      </div>
-
       <p className={styles.title}>{task.title}</p>
 
-      <div className={styles.details}>
+      <div className={styles.facts}>
+        <span className={styles.reference}>{taskReference(project, task)}</span>
+        {hasRaisedPriority && <PriorityFlag priority={task.priority} />}
         {unfinishedBlockerCount > 0 && (
-          <span
-            className={classNames(styles.detail, styles.waiting)}
-            title="Waits for tasks that are not finished"
-          >
+          <span className={styles.waiting} title="Waits for tasks that are not finished">
             <Hourglass />
-            Waits for {unfinishedBlockerCount}
+            {unfinishedBlockerCount}
           </span>
         )}
         {task.dueOn !== null && (
           <span
-            className={classNames(styles.detail, isOverdue(task) && styles.overdue)}
-            title={isOverdue(task) ? 'Overdue' : 'Due date'}
+            className={classNames(styles.fact, overdue && styles.overdue)}
+            title={overdue ? 'Overdue' : 'Due date'}
           >
-            <CalendarDays />
             {formatDate(task.dueOn)}
           </span>
         )}
         {task.estimateMinutes !== null && (
-          <span className={styles.detail} title="Estimate">
-            <Timer />
+          <span className={styles.fact} title="Estimate">
             {formatEstimate(task.estimateMinutes)}
           </span>
         )}

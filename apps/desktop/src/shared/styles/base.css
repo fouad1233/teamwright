@@ -15,20 +15,31 @@ body,
 body {
   margin: 0;
   overflow: hidden;
-  background: var(--surface-app);
-  color: var(--text-primary);
+  background: var(--ground);
+  color: var(--ink);
   font-family: var(--font-sans);
-  font-size: var(--font-size-md);
+  font-size: var(--text-body);
   line-height: 1.45;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  /* The interface is an application, not a document: text can be selected
+     only where it is content. */
+  user-select: none;
 }
 
 h1,
 h2,
 h3,
-p {
+p,
+ul,
+ol {
   margin: 0;
+}
+
+ul,
+ol {
+  padding: 0;
+  list-style: none;
 }
 
 button,
@@ -40,9 +51,9 @@ textarea {
 }
 
 button {
+  padding: 0;
   border: none;
   background: none;
-  padding: 0;
   cursor: pointer;
 }
 
@@ -50,40 +61,49 @@ button:disabled {
   cursor: default;
 }
 
-a {
-  color: var(--accent);
+input,
+textarea,
+[data-selectable] {
+  user-select: text;
 }
 
-/* A visible ring for keyboard users, and none for mouse users. */
+svg {
+  flex: none;
+}
+
+/* A ring in brass for keyboard users, and none for mouse users. */
 :focus {
   outline: none;
 }
 
 :focus-visible {
-  outline: 2px solid var(--focus-ring);
+  outline: 2px solid var(--brass);
   outline-offset: 2px;
 }
 
 ::selection {
-  background: var(--accent-soft);
+  background: var(--brass-soft);
 }
 
-/* Thin scrollbars that match the theme. */
+/* Thin scrollbars in the color of a hairline. */
 * {
   scrollbar-width: thin;
-  scrollbar-color: var(--border-strong) transparent;
+  scrollbar-color: var(--rule-strong) transparent;
 }
 
-/* The interface is an application, not a document: text is selectable only
-   where it is content. */
-body {
-  user-select: none;
-}
-
-input,
-textarea,
-[data-selectable] {
-  user-select: text;
+/*
+ * The label style of the interface: small capitals in the monospace, widely
+ * spaced, the way the parts of a drawing are labeled. It is a global class
+ * so that any component can put it next to its own: `className="label"`.
+ */
+.label {
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  line-height: 1.4;
+  text-transform: uppercase;
 }
 
 @media (prefers-reduced-motion: reduce) {

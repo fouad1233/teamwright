@@ -1,74 +1,74 @@
 .item {
-  border-radius: var(--radius-md);
-  list-style: none;
+  border-radius: var(--radius-card);
   cursor: grab;
   touch-action: none;
 }
 
-/* The place a dragged card came from stays visible as a faint outline. */
-.lifted {
-  opacity: 0.35;
+/* The place a dragged card came from stays visible as an empty outline. */
+.lifted .card {
+  border-style: dashed;
+  border-color: var(--rule-strong);
+  background: transparent;
+}
+
+.lifted .card > * {
+  visibility: hidden;
 }
 
 .card {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: 10px;
   padding: var(--space-3);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  background: var(--surface-card);
-  box-shadow: var(--shadow-card);
-  transition: border-color 120ms ease;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  transition: border-color 100ms ease;
 }
 
 .item:hover .card {
-  border-color: var(--border-strong);
-}
-
-.heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-}
-
-.reference {
-  color: var(--text-muted);
-  font-family: var(--font-mono);
-  font-size: var(--font-size-xs);
-  font-weight: 600;
+  border-color: var(--rule-strong);
 }
 
 .title {
+  color: var(--ink);
   font-weight: 500;
   line-height: 1.4;
   overflow-wrap: anywhere;
 }
 
-.details {
+/* The facts of a task, set small on one line like the notes on a drawing. */
+.facts {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-2) var(--space-3);
-  min-height: 22px;
+  gap: var(--space-3);
+  min-height: 20px;
+  color: var(--ink-faint);
+  font-size: var(--text-small);
+  font-variant-numeric: tabular-nums;
 }
 
-.detail {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  color: var(--text-secondary);
-  font-size: var(--font-size-sm);
+.reference {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.02em;
 }
 
-.detail svg {
-  width: 13px;
-  height: 13px;
+.fact {
+  white-space: nowrap;
 }
 
 .waiting {
-  color: var(--tone-amber);
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--pigment-amber-text);
+}
+
+.waiting svg {
+  width: 12px;
+  height: 12px;
+  stroke-width: 1.75;
 }
 
 .overdue {

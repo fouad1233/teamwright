@@ -4,10 +4,21 @@
   gap: var(--space-4);
 }
 
+.nameAndKey {
+  display: grid;
+  grid-template-columns: 1fr 96px;
+  gap: var(--space-3);
+}
+
 .keyInput {
-  width: 120px;
   font-family: var(--font-mono);
   letter-spacing: 0.06em;
+}
+
+.hint {
+  margin-top: calc(-1 * var(--space-2));
+  color: var(--ink-faint);
+  font-size: var(--text-small);
 }
 
 .workflows {
@@ -20,40 +31,46 @@
 }
 
 .legend {
-  margin-bottom: var(--space-1);
+  margin-bottom: 6px;
   padding: 0;
-  color: var(--text-secondary);
-  font-size: var(--font-size-sm);
-  font-weight: 600;
 }
 
 .workflow {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 2px var(--space-3);
-  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
   padding: var(--space-3);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-md);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius-card);
   cursor: pointer;
   transition:
-    border-color 120ms ease,
-    background-color 120ms ease;
+    border-color 100ms ease,
+    background-color 100ms ease;
 }
 
 .workflow:hover {
-  background: var(--surface-hover);
+  background: var(--hover);
 }
 
-.selectedWorkflow {
-  border-color: var(--accent);
-  background: var(--accent-soft);
+/* The chosen workflow is outlined in ink, like a part that has been picked
+   up. */
+.chosenWorkflow,
+.chosenWorkflow:hover {
+  border-color: var(--ink);
+  background: transparent;
 }
 
+/* The radio button does the work for the keyboard and for screen readers;
+   the card around it shows the choice. */
 .radio {
-  grid-row: span 2;
-  margin: 0;
-  accent-color: var(--accent);
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.workflow:has(.radio:focus-visible) {
+  outline: 2px solid var(--brass);
+  outline-offset: 2px;
 }
 
 .workflowName {
@@ -61,19 +78,31 @@
 }
 
 .workflowStatuses {
-  color: var(--text-secondary);
-  font-size: var(--font-size-sm);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  color: var(--ink-soft);
+  font-size: var(--text-small);
+}
+
+.workflowStatus {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
 }
 
 .refusal {
   padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-md);
+  border-left: 3px solid var(--danger);
+  border-radius: var(--radius-control);
   background: var(--danger-soft);
-  color: var(--danger);
+  color: var(--ink);
 }
 
 .actions {
   display: flex;
   justify-content: flex-end;
   gap: var(--space-2);
+  margin-top: var(--space-2);
 }

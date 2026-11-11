@@ -1,27 +1,38 @@
-import { CornerDownRight, Trash2, X } from 'lucide-react';
+import { CornerDownRight, Ellipsis, Trash2, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 
 import { useNavigation } from '@/app/navigation';
-import type { Assignee, Id, Priority, Project, Task } from '@/shared/api/types';
+import type { Assignee, Id, Project, Task } from '@/shared/api/types';
+import { classNames } from '@/shared/lib/classNames';
 import { formatEstimate, formatMoment, parseEstimate, taskReference } from '@/shared/lib/format';
-import { Button, IconButton } from '@/shared/ui/Button';
+import { Button, IconButton, ValueButton } from '@/shared/ui/Button';
+import { DateField } from '@/shared/ui/DateField';
 import { Dialog } from '@/shared/ui/Dialog';
-import { SelectInput, TextArea, TextInput } from '@/shared/ui/Field';
+import { ActionMenu, ChoiceMenu, type Choice } from '@/shared/ui/Menu';
 
-import { PRIORITIES, StatusPill, priorityLabel } from './TaskBadges';
+import {
+  AssigneeAvatar,
+  PRIORITIES,
+  PriorityFlag,
+  StatusLabel,
+  StatusMark,
+  assigneeLabel,
+  priorityLabel,
+} from './TaskBadges';
 import { TaskComposer } from './TaskComposer';
-import styles from './TaskDrawer.module.css';
+import styles from './TaskPanel.module.css';
+import { TaskPicker } from './TaskPicker';
 import { indexById, statusOf, subtasksOf } from './taskModel';
-import { useTaskCommands, type TaskCommands } from './taskQueries';
+import { useTaskCommands } from './taskQueries';
 
 /** The value of the assignee menu that stands for "nobody". */
-const UNASSIGNED = '';
+const UNASSIGNED = 'unassigned';
 /** The value of the assignee menu that stands for the manager. */
 const MANAGER = 'manager';
 /** Moving a task to this position puts it at the bottom of a status. */
 const BOTTOM = Number.MAX_SAFE_INTEGER;
 
-interface TaskDrawerProps {
+interface TaskPanelProps {
   project: Project;
   task: Task;
   /** Every task of the project, to show the tasks this one is connected to. */
@@ -30,19 +41,47 @@ interface TaskDrawerProps {
 }
 
 /** The panel that shows one task in full and lets the manager change it. */
-export function TaskDrawer({ project, task, tasks, onClose }: TaskDrawerProps) {
+export function TaskPanel({ project, task, tasks, onClose }: TaskPanelProps) {
   const commands = useTaskCommands(project.id);
   const navigation = useNavigation();
-  const drawer = useRef<HTMLElement>(null);
+  const panel = useRef<HTMLElement>(null);
   const [isConfirmingDeletion, setIsConfirmingDeletion] = useState(false);
 
   const tasksById = useMemo(() => indexById(tasks), [tasks]);
   const reference = taskReference(project, task);
+  const status = statusOf(project, task);
   const parent = task.parentId === null ? undefined : tasksById.get(task.parentId);
+  const byNumber = (first: Task, second: Task) => first.number - second.number;
+  const blockers = tasks.filter((other) => task.blockedBy.includes(other.id)).sort(byNumber);
+  const possibleBlockers = tasks
+    .filter((other) => other.id !== task.id && !task.blockedBy.includes(other.id))
+    .sort(byNumber);
+
+  const statusChoices: Choice<Id>[] = project.statuses.map((choice) => ({
+    value: choice.id,
+    label: choice.name,
+    icon: <StatusMark status={choice} />,
+  }));
+  const assigneeChoices: Choice<string>[] = [
+    { value: UNASSIGNED, label: 'Unassigned', icon: <AssigneeAvatar assignee={null} /> },
+    { value: MANAGER, label: 'You', icon: <AssigneeAvatar assignee={{ kind: 'manager' }} /> },
+  ];
+  if (task.assignee?.kind === 'member') {
+    assigneeChoices.push({
+      value: task.assignee.memberId,
+      label: 'Team member',
+      icon: <AssigneeAvatar assignee={task.assignee} />,
+    });
+  }
+  const priorityChoices = PRIORITIES.map((priority) => ({
+    value: priority,
+    label: priorityLabel(priority),
+    icon: <PriorityFlag priority={priority} />,
+  }));
 
   // Moving the focus into the panel lets Escape close it right away.
   useEffect(() => {
-    drawer.current?.focus();
+    panel.current?.focus();
   }, [task.id]);
 
   function closeOnEscape(event: KeyboardEvent) {
@@ -60,8 +99,8 @@ export function TaskDrawer({ project, task, tasks, onClose }: TaskDrawerProps) {
 
   return (
     <aside
-      ref={drawer}
-      className={styles.drawer}
+      ref={panel}
+      className={styles.panel}
       aria-label={`Task ${reference}`}
       tabIndex={-1}
       onKeyDown={closeOnEscape}
@@ -80,15 +119,24 @@ export function TaskDrawer({ project, task, tasks, onClose }: TaskDrawerProps) {
             Part of {taskReference(project, parent)}
           </button>
         )}
-        <span className={styles.headerSpace} />
-        <IconButton
-          label="Delete task"
-          onClick={() => {
-            setIsConfirmingDeletion(true);
-          }}
+        <span className={styles.space} />
+        <ActionMenu
+          label="Task actions"
+          actions={[
+            {
+              label: 'Delete task',
+              icon: <Trash2 />,
+              isDestructive: true,
+              onSelect: () => {
+                setIsConfirmingDeletion(true);
+              },
+            },
+          ]}
         >
-          <Trash2 />
-        </IconButton>
+          <IconButton label="More">
+            <Ellipsis />
+          </IconButton>
+        </ActionMenu>
         <IconButton label="Close" onClick={onClose}>
           <X />
         </IconButton>
@@ -105,48 +153,49 @@ export function TaskDrawer({ project, task, tasks, onClose }: TaskDrawerProps) {
 
         <div className={styles.properties}>
           <Property label="Status">
-            <SelectInput
+            <ChoiceMenu
+              label="Status"
+              choices={statusChoices}
               value={task.statusId}
-              onChange={(event) => {
-                void commands.move(task.id, event.target.value, BOTTOM);
+              onChoose={(statusId) => {
+                void commands.move(task.id, statusId, BOTTOM);
               }}
             >
-              {project.statuses.map((status) => (
-                <option key={status.id} value={status.id}>
-                  {status.name}
-                </option>
-              ))}
-            </SelectInput>
+              <ValueButton aria-label="Status">
+                {status && <StatusLabel status={status} />}
+              </ValueButton>
+            </ChoiceMenu>
           </Property>
 
           <Property label="Assignee">
-            <SelectInput
+            <ChoiceMenu
+              label="Assignee"
+              choices={assigneeChoices}
               value={assigneeValue(task.assignee)}
-              onChange={(event) => {
-                void commands.assign(task.id, assigneeOf(event.target.value));
+              onChoose={(value) => {
+                void commands.assign(task.id, assigneeOf(value));
               }}
             >
-              <option value={UNASSIGNED}>Unassigned</option>
-              <option value={MANAGER}>You</option>
-              {task.assignee?.kind === 'member' && (
-                <option value={task.assignee.memberId}>Team member</option>
-              )}
-            </SelectInput>
+              <ValueButton aria-label="Assignee" isEmpty={task.assignee === null}>
+                <AssigneeAvatar assignee={task.assignee} />
+                {assigneeLabel(task.assignee)}
+              </ValueButton>
+            </ChoiceMenu>
           </Property>
 
           <Property label="Priority">
-            <SelectInput
+            <ChoiceMenu
+              label="Priority"
+              choices={priorityChoices}
               value={task.priority}
-              onChange={(event) => {
-                void commands.prioritize(task.id, event.target.value as Priority);
+              onChoose={(priority) => {
+                void commands.prioritize(task.id, priority);
               }}
             >
-              {PRIORITIES.map((priority) => (
-                <option key={priority} value={priority}>
-                  {priorityLabel(priority)}
-                </option>
-              ))}
-            </SelectInput>
+              <ValueButton aria-label="Priority">
+                <PriorityFlag priority={task.priority} withLabel />
+              </ValueButton>
+            </ChoiceMenu>
           </Property>
 
           <Property label="Estimate">
@@ -158,23 +207,23 @@ export function TaskDrawer({ project, task, tasks, onClose }: TaskDrawerProps) {
           </Property>
 
           <Property label="Start">
-            <TextInput
-              type="date"
-              value={task.startOn ?? ''}
-              max={task.dueOn ?? undefined}
-              onChange={(event) => {
-                void commands.reschedule(task.id, event.target.value || null, task.dueOn);
+            <DateField
+              label="Start date"
+              value={task.startOn}
+              latest={task.dueOn}
+              onChange={(startOn) => {
+                void commands.reschedule(task.id, startOn, task.dueOn);
               }}
             />
           </Property>
 
           <Property label="Due">
-            <TextInput
-              type="date"
-              value={task.dueOn ?? ''}
-              min={task.startOn ?? undefined}
-              onChange={(event) => {
-                void commands.reschedule(task.id, task.startOn, event.target.value || null);
+            <DateField
+              label="Due date"
+              value={task.dueOn}
+              earliest={task.startOn}
+              onChange={(dueOn) => {
+                void commands.reschedule(task.id, task.startOn, dueOn);
               }}
             />
           </Property>
@@ -188,8 +237,34 @@ export function TaskDrawer({ project, task, tasks, onClose }: TaskDrawerProps) {
           />
         </Section>
 
-        <Section title="Waits for">
-          <Dependencies project={project} task={task} tasks={tasks} commands={commands} />
+        <Section
+          title="Waits for"
+          action={
+            possibleBlockers.length > 0 && (
+              <TaskPicker
+                label="Add a task to wait for"
+                project={project}
+                candidates={possibleBlockers}
+                onPick={(blockerId) => {
+                  void commands.addDependency(task.id, blockerId);
+                }}
+              />
+            )
+          }
+        >
+          {blockers.length === 0 ? (
+            <p className={styles.nothing}>Nothing. This task can start at any time.</p>
+          ) : (
+            <TaskLinks
+              project={project}
+              tasks={blockers}
+              onOpen={navigation.openTask}
+              onRemove={(blockerId) => {
+                void commands.removeDependency(task.id, blockerId);
+              }}
+              removeLabel="Stop waiting for this task"
+            />
+          )}
         </Section>
 
         <Section title="Subtasks">
@@ -219,7 +294,9 @@ export function TaskDrawer({ project, task, tasks, onClose }: TaskDrawerProps) {
           setIsConfirmingDeletion(false);
         }}
       >
-        <p>The task and its subtasks will be removed. This cannot be undone.</p>
+        <p className={styles.warning}>
+          The task and its subtasks will be removed. This cannot be undone.
+        </p>
         <div className={styles.dialogActions}>
           <Button
             variant="ghost"
@@ -260,21 +337,31 @@ function assigneeOf(value: string): Assignee | null {
   return value === MANAGER ? { kind: 'manager' } : { kind: 'member', memberId: value };
 }
 
-/** One labeled property of the task. */
+/** One property of the task: its name on the left, its value on the right. */
 function Property({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <label className={styles.property}>
-      <span className={styles.propertyLabel}>{label}</span>
-      {children}
-    </label>
+    <div className={styles.property}>
+      <span className={classNames('label', styles.propertyName)}>{label}</span>
+      <div className={styles.propertyValue}>{children}</div>
+    </div>
   );
 }
 
+interface SectionProps {
+  title: string;
+  /** A control shown at the end of the heading, such as an add button. */
+  action?: ReactNode;
+  children: ReactNode;
+}
+
 /** A titled part of the panel. */
-function Section({ title, children }: { title: string; children: ReactNode }) {
+function Section({ title, action, children }: SectionProps) {
   return (
     <section className={styles.section}>
-      <h3 className={styles.sectionTitle}>{title}</h3>
+      <header className={styles.sectionHeader}>
+        <h3 className="label">{title}</h3>
+        {action}
+      </header>
       {children}
     </section>
   );
@@ -334,10 +421,11 @@ function DescriptionEditor({ description, onDescribe }: DescriptionEditorProps) 
   const [draft, setDraft] = useState(description);
 
   return (
-    <TextArea
+    <textarea
+      className={styles.description}
       value={draft}
-      rows={5}
-      placeholder="Details, acceptance criteria, links…"
+      rows={3}
+      placeholder="Add details, acceptance criteria, links…"
       aria-label="Description"
       onChange={(event) => {
         setDraft(event.target.value);
@@ -370,12 +458,15 @@ function EstimateEditor({ minutes, onEstimate }: EstimateEditorProps) {
   const isUnderstood = parsed !== undefined;
 
   return (
-    <TextInput
+    <input
+      className={classNames(styles.estimate, !isUnderstood && styles.notUnderstood)}
       value={draft}
-      placeholder="2h 30m"
+      placeholder="None"
+      aria-label="Estimate"
       aria-invalid={!isUnderstood}
-      title={isUnderstood ? undefined : 'Write it like 90m, 2h or 1h 30m'}
-      className={isUnderstood ? undefined : styles.notUnderstood}
+      title={
+        isUnderstood ? 'Write it like 90m, 2h or 1h 30m' : 'Not understood. Try 90m, 2h or 1h 30m'
+      }
       onChange={(event) => {
         setDraft(event.target.value);
       }}
@@ -396,56 +487,6 @@ function EstimateEditor({ minutes, onEstimate }: EstimateEditorProps) {
   );
 }
 
-interface DependenciesProps {
-  project: Project;
-  task: Task;
-  tasks: Task[];
-  commands: TaskCommands;
-}
-
-/** The tasks this task waits for, with a menu to add one. */
-function Dependencies({ project, task, tasks, commands }: DependenciesProps) {
-  const navigation = useNavigation();
-  const blockers = tasks
-    .filter((other) => task.blockedBy.includes(other.id))
-    .sort((first, second) => first.number - second.number);
-  const candidates = tasks
-    .filter((other) => other.id !== task.id && !task.blockedBy.includes(other.id))
-    .sort((first, second) => first.number - second.number);
-
-  return (
-    <>
-      <TaskLinks
-        project={project}
-        tasks={blockers}
-        onOpen={navigation.openTask}
-        onRemove={(blockerId) => {
-          void commands.removeDependency(task.id, blockerId);
-        }}
-        removeLabel="Stop waiting for this task"
-      />
-      {candidates.length > 0 && (
-        <SelectInput
-          value=""
-          aria-label="Add a task to wait for"
-          onChange={(event) => {
-            void commands.addDependency(task.id, event.target.value);
-          }}
-        >
-          <option value="" disabled>
-            Add a task to wait for…
-          </option>
-          {candidates.map((candidate) => (
-            <option key={candidate.id} value={candidate.id}>
-              {taskReference(project, candidate)} {candidate.title}
-            </option>
-          ))}
-        </SelectInput>
-      )}
-    </>
-  );
-}
-
 interface TaskLinksProps {
   project: Project;
   tasks: Task[];
@@ -455,7 +496,7 @@ interface TaskLinksProps {
   removeLabel?: string;
 }
 
-/** A short list of tasks that can be opened, each with its status. */
+/** A short list of tasks that can be opened, each with the mark of its status. */
 function TaskLinks({ project, tasks, onOpen, onRemove, removeLabel = 'Remove' }: TaskLinksProps) {
   if (tasks.length === 0) {
     return null;
@@ -469,17 +510,19 @@ function TaskLinks({ project, tasks, onOpen, onRemove, removeLabel = 'Remove' }:
             <button
               type="button"
               className={styles.linkTarget}
+              title={status?.name}
               onClick={() => {
                 onOpen(linked.id);
               }}
             >
+              {status && <StatusMark status={status} />}
               <span className={styles.linkReference}>{taskReference(project, linked)}</span>
               <span className={styles.linkTitle}>{linked.title}</span>
-              {status && <StatusPill status={status} />}
             </button>
             {onRemove && (
               <IconButton
                 label={removeLabel}
+                className={styles.linkRemove}
                 onClick={() => {
                   onRemove(linked.id);
                 }}

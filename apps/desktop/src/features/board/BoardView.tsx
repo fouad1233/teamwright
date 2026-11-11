@@ -18,7 +18,7 @@ import type { Id, Project, Task } from '@/shared/api/types';
 
 import { indexById, unfinishedBlockers } from '../tasks/taskModel';
 import { useTaskCommands } from '../tasks/taskQueries';
-import { BoardColumn } from './BoardColumn';
+import { BoardLane } from './BoardLane';
 import { arrangementOf, locate, moveCard, statusUnder, type Arrangement } from './boardModel';
 import styles from './BoardView.module.css';
 import { TaskCard } from './TaskCard';
@@ -126,7 +126,7 @@ export function BoardView({ project, tasks }: BoardViewProps) {
     >
       <div className={styles.board}>
         {project.statuses.map((status) => (
-          <BoardColumn
+          <BoardLane
             key={status.id}
             project={project}
             status={status}

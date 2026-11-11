@@ -1,44 +1,56 @@
-import { Columns3, List } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { Plus } from 'lucide-react';
+import { useState } from 'react';
 
 import { useNavigation, type ProjectView } from '@/app/navigation';
 import type { Project } from '@/shared/api/types';
 import { classNames } from '@/shared/lib/classNames';
+import { Button } from '@/shared/ui/Button';
 import { describeFailure } from '@/shared/ui/Toast';
 
 import { BoardView } from '../board/BoardView';
-import { TaskDrawer } from '../tasks/TaskDrawer';
 import { TaskListView } from '../tasks/TaskListView';
+import { TaskPanel } from '../tasks/TaskPanel';
 import { useTasks } from '../tasks/taskQueries';
+import { NewTaskDialog } from './NewTaskDialog';
 import styles from './ProjectWorkspace.module.css';
+import { TaskTally } from './TaskTally';
 
 /** The ways a project can be looked at, in the order of their tabs. */
-const VIEWS: { view: ProjectView; label: string; icon: ReactNode }[] = [
-  { view: 'board', label: 'Board', icon: <Columns3 /> },
-  { view: 'list', label: 'List', icon: <List /> },
+const VIEWS: { view: ProjectView; label: string }[] = [
+  { view: 'board', label: 'Board' },
+  { view: 'list', label: 'List' },
 ];
 
-/** One project: its name, the tabs to switch views, and the chosen view. */
+/** One project: its name and state, the tabs to switch views, and the chosen view. */
 export function ProjectWorkspace({ project }: { project: Project }) {
   const navigation = useNavigation();
   const tasks = useTasks(project.id);
+  const [isAddingTask, setIsAddingTask] = useState(false);
   const openTask = tasks.data?.find((task) => task.id === navigation.taskId);
 
   return (
     <div className={styles.workspace}>
       <header className={styles.header}>
         <div className={styles.heading}>
-          <span className={styles.key}>{project.key}</span>
-          <h1 className={styles.name}>{project.name}</h1>
+          <h1 className={styles.name} title={project.description || undefined}>
+            {project.name}
+          </h1>
+          <span className={classNames('label', styles.key)}>{project.key}</span>
+          <span className={styles.space} />
+          {tasks.data && <TaskTally project={project} tasks={tasks.data} />}
+          <Button
+            variant="primary"
+            icon={<Plus />}
+            onClick={() => {
+              setIsAddingTask(true);
+            }}
+          >
+            New task
+          </Button>
         </div>
-        {project.description !== '' && (
-          <p className={styles.description} data-selectable>
-            {project.description}
-          </p>
-        )}
 
         <div className={styles.tabs} role="tablist" aria-label="Views">
-          {VIEWS.map(({ view, label, icon }) => (
+          {VIEWS.map(({ view, label }) => (
             <button
               key={view}
               type="button"
@@ -49,7 +61,6 @@ export function ProjectWorkspace({ project }: { project: Project }) {
                 navigation.showView(view);
               }}
             >
-              {icon}
               {label}
             </button>
           ))}
@@ -71,7 +82,7 @@ export function ProjectWorkspace({ project }: { project: Project }) {
           ))}
 
         {tasks.data && openTask && (
-          <TaskDrawer
+          <TaskPanel
             project={project}
             task={openTask}
             tasks={tasks.data}
@@ -79,6 +90,14 @@ export function ProjectWorkspace({ project }: { project: Project }) {
           />
         )}
       </div>
+
+      <NewTaskDialog
+        open={isAddingTask}
+        project={project}
+        onClose={() => {
+          setIsAddingTask(false);
+        }}
+      />
     </div>
   );
 }

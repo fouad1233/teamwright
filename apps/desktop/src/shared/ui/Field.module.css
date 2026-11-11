@@ -1,53 +1,43 @@
 .field {
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
+  gap: 6px;
   min-width: 0;
 }
 
-.label {
-  color: var(--text-secondary);
-  font-size: var(--font-size-sm);
-  font-weight: 600;
-}
-
 .hint {
-  color: var(--text-muted);
-  font-size: var(--font-size-sm);
+  color: var(--ink-faint);
+  font-size: var(--text-small);
 }
 
 .control {
   width: 100%;
-  min-height: 32px;
-  padding: var(--space-1) var(--space-2);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-md);
-  background: var(--surface-app);
-  color: var(--text-primary);
-  transition: border-color 120ms ease;
+  min-height: var(--control-height);
+  padding: 0 var(--space-2);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius-control);
+  background: var(--ground);
+  color: var(--ink);
+  transition: border-color 100ms ease;
 }
 
 .control::placeholder {
-  color: var(--text-muted);
+  color: var(--ink-faint);
 }
 
 .control:hover {
-  border-color: var(--text-muted);
+  border-color: var(--ink-faint);
 }
 
 .control:focus-visible {
-  border-color: var(--accent);
-  outline: 2px solid var(--focus-ring);
+  border-color: var(--brass);
+  outline: 2px solid var(--brass-soft);
   outline-offset: 0;
 }
 
 .textArea {
-  min-height: 96px;
+  min-height: 88px;
   padding: var(--space-2);
   line-height: 1.5;
   resize: vertical;
-}
-
-.select {
-  padding-right: var(--space-5);
 }

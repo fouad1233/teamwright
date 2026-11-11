@@ -1,9 +1,4 @@
-import type {
-  InputHTMLAttributes,
-  ReactNode,
-  SelectHTMLAttributes,
-  TextareaHTMLAttributes,
-} from 'react';
+import type { ComponentProps, ReactNode } from 'react';
 
 import { classNames } from '@/shared/lib/classNames';
 
@@ -16,36 +11,23 @@ interface FieldProps {
   children: ReactNode;
 }
 
-/** A labeled form control. The label and the control are linked, so clicking the label focuses it. */
+/** A labeled form control. Clicking the label focuses the control. */
 export function Field({ label, hint, children }: FieldProps) {
   return (
     <label className={styles.field}>
-      <span className={styles.label}>{label}</span>
+      <span className="label">{label}</span>
       {children}
-      {hint && <span className={styles.hint}>{hint}</span>}
+      {hint !== undefined && <span className={styles.hint}>{hint}</span>}
     </label>
   );
 }
 
 /** A single-line text input. */
-export function TextInput({ className, ...rest }: InputHTMLAttributes<HTMLInputElement>) {
+export function TextInput({ className, ...rest }: ComponentProps<'input'>) {
   return <input className={classNames(styles.control, className)} {...rest} />;
 }
 
 /** A multi-line text input. */
-export function TextArea({ className, ...rest }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
+export function TextArea({ className, ...rest }: ComponentProps<'textarea'>) {
   return <textarea className={classNames(styles.control, styles.textArea, className)} {...rest} />;
-}
-
-/** A drop-down list. */
-export function SelectInput({
-  className,
-  children,
-  ...rest
-}: SelectHTMLAttributes<HTMLSelectElement>) {
-  return (
-    <select className={classNames(styles.control, styles.select, className)} {...rest}>
-      {children}
-    </select>
-  );
 }

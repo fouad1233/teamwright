@@ -1,16 +1,15 @@
 .board {
   display: flex;
-  align-items: flex-start;
-  gap: var(--space-3);
   height: 100%;
-  padding: var(--space-4) var(--space-5) var(--space-5);
+  /* With the padding of a lane, the first card lines up with the title of
+     the project above it. */
+  padding-left: 14px;
   overflow-x: auto;
 }
 
 /* The card under the pointer while it is dragged. */
 .dragged {
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-drag);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-lifted);
   cursor: grabbing;
-  transform: rotate(1.5deg);
 }

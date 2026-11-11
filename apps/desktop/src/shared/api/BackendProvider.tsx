@@ -15,13 +15,19 @@ export interface BackendConnection {
 
 /**
  * Chooses the backend: the desktop shell when the interface runs inside it,
- * and the in-browser demo with a sample project otherwise.
+ * and the in-browser demo otherwise.
+ *
+ * The demo starts with a sample project. Opening it with `?demo=empty` in
+ * the address starts it with nothing, which shows the first screen a new
+ * user sees.
  */
 export function connectToBackend(): BackendConnection {
   if (isTauri()) {
     return { backend: new TauriBackend(), isDemo: false };
   }
-  return { backend: new DemoBackend(sampleWorkspace()), isDemo: true };
+  const startsEmpty = new URLSearchParams(window.location.search).get('demo') === 'empty';
+  const workspace = startsEmpty ? undefined : sampleWorkspace();
+  return { backend: new DemoBackend(workspace), isDemo: true };
 }
 
 const BackendContext = createContext<BackendConnection | null>(null);

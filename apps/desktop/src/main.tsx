@@ -6,6 +6,14 @@ import { App } from '@/app/App';
 import { NavigationProvider } from '@/app/navigation';
 import { BackendProvider, connectToBackend } from '@/shared/api/BackendProvider';
 import { ToastProvider } from '@/shared/ui/Toast';
+import { TooltipProvider } from '@/shared/ui/Tooltip';
+
+// The three typefaces of the interface ship with the application, so it
+// looks the same on every computer and needs no network.
+import '@fontsource-variable/instrument-sans/wght.css';
+import '@fontsource/instrument-serif/400.css';
+import '@fontsource/ibm-plex-mono/400.css';
+import '@fontsource/ibm-plex-mono/500.css';
 
 import '@/shared/styles/tokens.css';
 import '@/shared/styles/base.css';
@@ -33,11 +41,13 @@ createRoot(rootElement).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <BackendProvider connection={connection}>
-        <ToastProvider>
-          <NavigationProvider>
-            <App />
-          </NavigationProvider>
-        </ToastProvider>
+        <TooltipProvider>
+          <ToastProvider>
+            <NavigationProvider>
+              <App />
+            </NavigationProvider>
+          </ToastProvider>
+        </TooltipProvider>
       </BackendProvider>
     </QueryClientProvider>
   </StrictMode>,

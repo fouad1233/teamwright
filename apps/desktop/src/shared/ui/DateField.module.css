@@ -1,0 +1,85 @@
+.popover {
+  z-index: 150;
+  padding: var(--space-3);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius-overlay);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-overlay);
+  animation: appear 110ms ease-out;
+}
+
+@keyframes appear {
+  from {
+    transform: translateY(-3px);
+    opacity: 0;
+  }
+}
+
+/* The calendar comes from a library with its own look. These variables and
+   rules bring it into the language of the interface. */
+.popover :global(.rdp-root) {
+  --rdp-accent-color: var(--ink);
+  --rdp-accent-background-color: var(--hover);
+  --rdp-day-width: 32px;
+  --rdp-day-height: 32px;
+  --rdp-nav-height: 32px;
+  --rdp-today-color: var(--brass);
+  --rdp-selected-border: none;
+  --rdp-weekday-opacity: 1;
+  --rdp-outside-opacity: 0.35;
+  --rdp-disabled-opacity: 0.25;
+
+  font-size: var(--text-small);
+}
+
+.popover :global(.rdp-month_caption) {
+  height: 32px;
+  padding-left: var(--space-2);
+  font-size: var(--text-body);
+  font-weight: 600;
+}
+
+.popover :global(.rdp-weekday) {
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.popover :global(.rdp-day_button) {
+  border-radius: var(--radius-control);
+  font-variant-numeric: tabular-nums;
+}
+
+.popover :global(.rdp-day_button:hover:not(:disabled)) {
+  background: var(--hover);
+}
+
+.popover :global(.rdp-selected .rdp-day_button),
+.popover :global(.rdp-selected .rdp-day_button:hover) {
+  border: none;
+  background: var(--ink);
+  color: var(--ink-inverse);
+  font-size: inherit;
+  font-weight: 600;
+}
+
+.popover :global(.rdp-today:not(.rdp-selected) .rdp-day_button) {
+  font-weight: 700;
+}
+
+.popover :global(.rdp-chevron) {
+  width: 16px;
+  height: 16px;
+  fill: var(--ink-soft);
+}
+
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: var(--space-2);
+  margin-top: var(--space-2);
+  border-top: 1px solid var(--rule);
+}

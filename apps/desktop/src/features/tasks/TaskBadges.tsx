@@ -1,4 +1,4 @@
-import { Bot, CircleDashed, Flag, UserRound } from 'lucide-react';
+import { Bot, Flag, UserRound } from 'lucide-react';
 
 import type { Assignee, Priority, Status, StatusColor } from '@/shared/api/types';
 import { classNames } from '@/shared/lib/classNames';
@@ -15,10 +15,11 @@ const PRIORITY_LABELS: Record<Priority, string> = {
   low: 'Low',
 };
 
+/** Only the priorities that call for attention get a pigment. */
 const PRIORITY_TONES: Record<Priority, StatusColor> = {
   urgent: 'red',
   high: 'amber',
-  normal: 'blue',
+  normal: 'gray',
   low: 'gray',
 };
 
@@ -35,11 +36,70 @@ export function assigneeLabel(assignee: Assignee | null): string {
   return assignee.kind === 'manager' ? 'You' : 'Team member';
 }
 
-/** The name of a status in its color. */
-export function StatusPill({ status }: { status: Status }) {
+/**
+ * The mark of a status: a small block in the pigment of the status, filled
+ * according to how far the work is. Empty for work that has not started,
+ * half filled for work under way, a block within a block for work that
+ * waits for a check, and solid with a tick for work that is done.
+ */
+export function StatusMark({ status }: { status: Pick<Status, 'category' | 'color'> }) {
+  const outline = (
+    <rect
+      x="1.25"
+      y="1.25"
+      width="9.5"
+      height="9.5"
+      rx="2"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+    />
+  );
+
   return (
-    <span className={styles.statusPill} data-tone={status.color}>
-      <span className={styles.statusDot} />
+    <svg
+      className={styles.statusMark}
+      data-tone={status.color}
+      width="12"
+      height="12"
+      viewBox="0 0 12 12"
+      aria-hidden
+    >
+      {status.category === 'todo' && outline}
+      {status.category === 'active' && (
+        <>
+          {outline}
+          <path d="M2 6h8v2.5A1.5 1.5 0 0 1 8.5 10h-5A1.5 1.5 0 0 1 2 8.5Z" fill="currentColor" />
+        </>
+      )}
+      {status.category === 'review' && (
+        <>
+          {outline}
+          <rect x="4" y="4" width="4" height="4" rx="0.75" fill="currentColor" />
+        </>
+      )}
+      {status.category === 'done' && (
+        <>
+          <rect x="0.5" y="0.5" width="11" height="11" rx="2.5" fill="currentColor" />
+          <path
+            d="M3.4 6.2 5.2 8l3.4-3.7"
+            fill="none"
+            stroke="var(--ground)"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </>
+      )}
+    </svg>
+  );
+}
+
+/** The mark of a status followed by its name. */
+export function StatusLabel({ status }: { status: Status }) {
+  return (
+    <span className={styles.statusLabel}>
+      <StatusMark status={status} />
       {status.name}
     </span>
   );
@@ -51,30 +111,30 @@ interface PriorityFlagProps {
   withLabel?: boolean;
 }
 
-/** A flag in the color of a priority. */
+/** A flag for the priority of a task. High and urgent flags are colored. */
 export function PriorityFlag({ priority, withLabel = false }: PriorityFlagProps) {
   const label = priorityLabel(priority);
+  const callsForAttention = priority === 'urgent' || priority === 'high';
   return (
     <span
-      className={styles.priority}
+      className={classNames(styles.priority, callsForAttention && styles.raised)}
       data-tone={PRIORITY_TONES[priority]}
       title={withLabel ? undefined : `${label} priority`}
     >
-      <Flag className={styles.priorityIcon} aria-hidden={withLabel} aria-label={label} />
+      <Flag aria-hidden={withLabel} aria-label={label} />
       {withLabel && label}
     </span>
   );
 }
 
-/** A small round picture of who is responsible for a task. */
+/**
+ * A small round picture of who is responsible for a task. The manager is
+ * brass, like the keystone of the logo.
+ */
 export function AssigneeAvatar({ assignee }: { assignee: Assignee | null }) {
   const label = assigneeLabel(assignee);
   if (assignee === null) {
-    return (
-      <span className={classNames(styles.avatar, styles.unassigned)} title={label}>
-        <CircleDashed aria-label={label} />
-      </span>
-    );
+    return <span className={classNames(styles.avatar, styles.unassigned)} title={label} />;
   }
   const Icon = assignee.kind === 'manager' ? UserRound : Bot;
   return (

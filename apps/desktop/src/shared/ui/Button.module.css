@@ -3,55 +3,56 @@
   align-items: center;
   justify-content: center;
   gap: var(--space-2);
-  height: 32px;
+  height: var(--control-height);
   padding: 0 var(--space-3);
   border: 1px solid transparent;
-  border-radius: var(--radius-md);
-  font-size: var(--font-size-md);
-  font-weight: 600;
+  border-radius: var(--radius-control);
+  font-size: var(--text-body);
+  font-weight: 550;
   white-space: nowrap;
   transition:
-    background-color 120ms ease,
-    border-color 120ms ease,
-    color 120ms ease;
+    background-color 100ms ease,
+    border-color 100ms ease,
+    color 100ms ease,
+    opacity 100ms ease;
 }
 
 .button:disabled {
-  opacity: 0.5;
+  opacity: 0.4;
 }
 
 .button svg {
-  flex: none;
-  width: 16px;
-  height: 16px;
+  width: 15px;
+  height: 15px;
+  stroke-width: 1.75;
 }
 
+/* The main action is ink on the ground: it needs no color to be seen. */
 .primary {
-  background: var(--accent);
-  color: var(--text-on-accent);
+  background: var(--ink);
+  color: var(--ink-inverse);
 }
 
 .primary:hover:not(:disabled) {
-  background: var(--accent-hover);
+  opacity: 0.86;
 }
 
 .secondary {
-  border-color: var(--border-strong);
-  background: transparent;
-  color: var(--text-primary);
+  border-color: var(--rule-strong);
+  color: var(--ink);
 }
 
 .secondary:hover:not(:disabled) {
-  background: var(--surface-hover);
+  background: var(--hover);
 }
 
 .ghost {
-  color: var(--text-secondary);
+  color: var(--ink-soft);
 }
 
 .ghost:hover:not(:disabled) {
-  background: var(--surface-hover);
-  color: var(--text-primary);
+  background: var(--hover);
+  color: var(--ink);
 }
 
 .danger {
@@ -68,21 +69,55 @@
   flex: none;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: var(--radius-sm);
-  color: var(--text-secondary);
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-control);
+  color: var(--ink-faint);
   transition:
-    background-color 120ms ease,
-    color 120ms ease;
+    background-color 100ms ease,
+    color 100ms ease;
 }
 
-.iconButton:hover:not(:disabled) {
-  background: var(--surface-hover);
-  color: var(--text-primary);
+.iconButton:hover:not(:disabled),
+.iconButton[data-state='open'] {
+  background: var(--hover);
+  color: var(--ink);
 }
 
 .iconButton svg {
-  width: 16px;
-  height: 16px;
+  width: 15px;
+  height: 15px;
+  stroke-width: 1.75;
+}
+
+.valueButton {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  max-width: 100%;
+  height: 28px;
+  padding: 0 var(--space-2);
+  /* The text lines up with the labels around it; only the hover area
+     reaches into the margin. */
+  margin-left: calc(-1 * var(--space-2));
+  border-radius: var(--radius-control);
+  color: var(--ink);
+  white-space: nowrap;
+  transition: background-color 100ms ease;
+}
+
+.valueButton:hover,
+.valueButton[data-state='open'] {
+  background: var(--hover);
+}
+
+.valueButton svg {
+  width: 14px;
+  height: 14px;
+  stroke-width: 1.75;
+}
+
+.emptyValue {
+  color: var(--ink-faint);
 }
