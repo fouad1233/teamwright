@@ -1,0 +1,23 @@
+[package]
+name = "teamwright-desktop"
+description = "The Teamwright desktop application: the shell that connects the interface to the use cases."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+teamwright-application.workspace = true
+teamwright-domain.workspace = true
+teamwright-storage.workspace = true
+
+chrono.workspace = true
+serde.workspace = true
+tauri = { version = "2", features = [] }
+thiserror.workspace = true
+
+[lints]
+workspace = true

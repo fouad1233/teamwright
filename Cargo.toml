@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/*"]
+members = ["crates/*", "apps/desktop/src-tauri"]
 
 [workspace.package]
 version = "0.1.0"
@@ -25,9 +25,16 @@ thiserror = "2"
 uuid = { version = "1", features = ["v7"] }
 
 [workspace.lints.rust]
-unsafe_code = "forbid"
+# An exception needs `#[expect(unsafe_code, reason = "...")]` and a review.
+unsafe_code = "deny"
 missing_docs = "warn"
 
 [workspace.lints.clippy]
 unwrap_used = "deny"
 expect_used = "deny"
+
+[profile.release]
+# Smaller and faster release builds at the price of a longer build.
+codegen-units = 1
+lto = true
+strip = true
