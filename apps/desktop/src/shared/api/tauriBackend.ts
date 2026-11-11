@@ -1,0 +1,123 @@
+import { invoke } from '@tauri-apps/api/core';
+
+import { BackendError, type Backend } from './backend';
+import type {
+  Assignee,
+  CalendarDate,
+  Id,
+  NewProject,
+  NewTask,
+  Priority,
+  Project,
+  Task,
+} from './types';
+
+/**
+ * The backend of the desktop application. Every method calls one command of
+ * the Tauri shell (`src-tauri/src/commands`).
+ */
+export class TauriBackend implements Backend {
+  listProjects(): Promise<Project[]> {
+    return call('list_projects');
+  }
+
+  createProject(project: NewProject): Promise<Project> {
+    return call('create_project', { input: project });
+  }
+
+  renameProject(projectId: Id, name: string): Promise<Project> {
+    return call('rename_project', { projectId, name });
+  }
+
+  describeProject(projectId: Id, description: string): Promise<Project> {
+    return call('describe_project', { projectId, description });
+  }
+
+  archiveProject(projectId: Id): Promise<Project> {
+    return call('archive_project', { projectId });
+  }
+
+  listTasks(projectId: Id): Promise<Task[]> {
+    return call('list_tasks', { projectId });
+  }
+
+  createTask(task: NewTask): Promise<Task> {
+    return call('create_task', { input: task });
+  }
+
+  renameTask(taskId: Id, title: string): Promise<Task> {
+    return call('rename_task', { taskId, title });
+  }
+
+  describeTask(taskId: Id, description: string): Promise<Task> {
+    return call('describe_task', { taskId, description });
+  }
+
+  prioritizeTask(taskId: Id, priority: Priority): Promise<Task> {
+    return call('prioritize_task', { taskId, priority });
+  }
+
+  assignTask(taskId: Id, assignee: Assignee | null): Promise<Task> {
+    return call('assign_task', { taskId, assignee });
+  }
+
+  estimateTask(taskId: Id, minutes: number | null): Promise<Task> {
+    return call('estimate_task', { taskId, minutes });
+  }
+
+  rescheduleTask(
+    taskId: Id,
+    startOn: CalendarDate | null,
+    dueOn: CalendarDate | null,
+  ): Promise<Task> {
+    return call('reschedule_task', { taskId, startOn, dueOn });
+  }
+
+  moveTask(taskId: Id, statusId: Id, index: number): Promise<Task> {
+    return call('move_task', { taskId, statusId, index });
+  }
+
+  addTaskDependency(taskId: Id, blockerId: Id): Promise<Task> {
+    return call('add_task_dependency', { taskId, blockerId });
+  }
+
+  removeTaskDependency(taskId: Id, blockerId: Id): Promise<Task> {
+    return call('remove_task_dependency', { taskId, blockerId });
+  }
+
+  deleteTask(taskId: Id): Promise<void> {
+    return call('delete_task', { taskId });
+  }
+}
+
+/** Calls a command of the shell and turns its failure into a `BackendError`. */
+async function call<Result>(command: string, args?: Record<string, unknown>): Promise<Result> {
+  try {
+    return await invoke<Result>(command, args);
+  } catch (failure) {
+    throw toBackendError(failure);
+  }
+}
+
+/** The shape of the error a command reports (`src-tauri/src/error.rs`). */
+interface CommandError {
+  code: string;
+  message: string;
+}
+
+function isCommandError(value: unknown): value is CommandError {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+  const candidate = value as Partial<CommandError>;
+  return typeof candidate.code === 'string' && typeof candidate.message === 'string';
+}
+
+function toBackendError(failure: unknown): BackendError {
+  if (isCommandError(failure)) {
+    return new BackendError(failure.code, failure.message);
+  }
+  // The shell itself failed, for example because a command does not exist.
+  const detail = typeof failure === 'string' ? failure : 'The request failed unexpectedly.';
+  return new BackendError('unexpected', detail);
+}
