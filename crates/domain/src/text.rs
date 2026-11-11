@@ -89,6 +89,14 @@ define_text!(
     max_length = 200
 );
 
+define_text!(
+    /// What a member of a team is called: a role such as "Hardware
+    /// engineer", or the name of a person.
+    MemberName,
+    field = "name of the team member",
+    max_length = 60
+);
+
 /// Removes surrounding whitespace and turns every run of whitespace inside
 /// the text, line breaks included, into one space.
 fn join_words_with_single_spaces(raw: &str) -> String {

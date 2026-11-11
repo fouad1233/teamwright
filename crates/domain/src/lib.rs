@@ -1,8 +1,9 @@
 //! The Teamwright domain model.
 //!
 //! This crate holds the concepts a manager works with (projects, workflows,
-//! tasks) and the rules that keep them consistent. It performs no input or
-//! output: nothing here reads a file, opens a database or talks to an agent.
+//! tasks, team members) and the rules that keep them consistent. It performs
+//! no input or output: nothing here reads a file, opens a database or talks
+//! to an agent.
 //!
 //! Two properties follow from that and the rest of the system relies on them:
 //!
@@ -18,6 +19,7 @@ pub mod color;
 pub mod dependencies;
 pub mod error;
 pub mod ids;
+pub mod member;
 pub mod project;
 pub mod task;
 pub mod text;
@@ -28,8 +30,9 @@ pub use color::Color;
 pub use dependencies::DependencyGraph;
 pub use error::DomainError;
 pub use ids::{MemberId, ProjectId, StatusId, TaskId};
+pub use member::{Member, MemberKind, MemberSnapshot};
 pub use project::{Project, ProjectKey, ProjectSnapshot};
 pub use task::{Assignee, Priority, Rank, Schedule, Task, TaskDraft, TaskSnapshot};
-pub use text::{ProjectName, StatusName, TaskTitle};
+pub use text::{MemberName, ProjectName, StatusName, TaskTitle};
 pub use time::{CalendarDate, Timestamp};
 pub use workflow::{Status, StatusCategory, Workflow};

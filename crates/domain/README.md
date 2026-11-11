@@ -1,7 +1,7 @@
 # teamwright-domain
 
 The Teamwright model and its rules. This crate knows what a project, a
-workflow and a task are, and what may and may not be done with them. It does
+workflow, a task and a team member are, and what may and may not be done with them. It does
 no input or output.
 
 ## What is in it
@@ -9,12 +9,13 @@ no input or output.
 | Module | Concepts |
 |---|---|
 | `ids` | `ProjectId`, `StatusId`, `TaskId`, `MemberId`: one identifier type per kind of thing |
-| `text` | `ProjectName`, `StatusName`, `TaskTitle`: names that are never empty, never multi-line, never too long |
+| `text` | `ProjectName`, `StatusName`, `TaskTitle`, `MemberName`: names that are never empty, never multi-line, never too long |
 | `color` | `Color`: the named colors a status or a team member can have |
 | `workflow` | `Workflow`, `Status`, `StatusCategory` |
 | `project` | `Project`, `ProjectKey` |
 | `task` | `Task`, `TaskDraft`, `Priority`, `Assignee`, `Schedule`, `Rank` |
 | `dependencies` | `DependencyGraph`: which task waits for which |
+| `member` | `Member`, `MemberKind`: an AI agent or a person on the team of a project |
 | `error` | `DomainError`: every rule that can be broken |
 | `time` | `Timestamp`, `CalendarDate` |
 
@@ -31,6 +32,8 @@ no input or output.
 - A schedule does not start after it is due.
 - A task cannot wait for itself or be its own parent, and a new dependency
   must not close a loop.
+- A newcomer to a team gets a color that no other member has, as long as
+  there is one left. Gray, amber and red are never handed out.
 
 ## How to work in it
 
