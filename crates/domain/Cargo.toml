@@ -1,0 +1,15 @@
+[package]
+name = "teamwright-domain"
+description = "The Teamwright model and its rules: projects, workflows and tasks."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+chrono.workspace = true
+thiserror.workspace = true
+uuid.workspace = true
+
+[lints]
+workspace = true
