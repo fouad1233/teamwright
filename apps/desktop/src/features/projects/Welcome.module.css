@@ -1,0 +1,37 @@
+.welcome {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  height: 100%;
+  padding: var(--space-7);
+  text-align: center;
+}
+
+.logo {
+  width: 72px;
+  height: 72px;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-overlay);
+}
+
+.headline {
+  max-width: 560px;
+  font-size: var(--font-size-display);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+.text {
+  max-width: 520px;
+  color: var(--text-secondary);
+  font-size: var(--font-size-lg);
+}
+
+.note {
+  max-width: 520px;
+  margin-bottom: var(--space-2);
+  color: var(--text-muted);
+}

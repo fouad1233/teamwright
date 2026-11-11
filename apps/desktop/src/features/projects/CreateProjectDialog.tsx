@@ -1,0 +1,166 @@
+import { useState, type FormEvent } from 'react';
+
+import { useNavigation } from '@/app/navigation';
+import type { WorkflowTemplate } from '@/shared/api/types';
+import { classNames } from '@/shared/lib/classNames';
+import { Button } from '@/shared/ui/Button';
+import { Dialog } from '@/shared/ui/Dialog';
+import { Field, TextArea, TextInput } from '@/shared/ui/Field';
+import { describeFailure } from '@/shared/ui/Toast';
+
+import styles from './CreateProjectDialog.module.css';
+import { useCreateProject } from './projectQueries';
+
+interface WorkflowChoice {
+  template: WorkflowTemplate;
+  name: string;
+  /** The statuses of the workflow, in order. */
+  statuses: string[];
+}
+
+const WORKFLOW_CHOICES: WorkflowChoice[] = [
+  {
+    template: 'standard',
+    name: 'Standard',
+    statuses: ['To do', 'In progress', 'In review', 'Done'],
+  },
+  {
+    template: 'engineering',
+    name: 'Engineering',
+    statuses: ['To do', 'In progress', 'In revision', 'In test', 'Done'],
+  },
+];
+
+interface CreateProjectDialogProps {
+  open: boolean;
+  onClose: () => void;
+}
+
+/** The dialog in which a project is started. */
+export function CreateProjectDialog({ open, onClose }: CreateProjectDialogProps) {
+  return (
+    <Dialog open={open} title="New project" onClose={onClose}>
+      <CreateProjectForm onDone={onClose} />
+    </Dialog>
+  );
+}
+
+/**
+ * The form inside the dialog. It is a component of its own so that its
+ * fields start empty every time the dialog opens.
+ */
+function CreateProjectForm({ onDone }: { onDone: () => void }) {
+  const createProject = useCreateProject();
+  const navigation = useNavigation();
+  const [name, setName] = useState('');
+  const [key, setKey] = useState('');
+  const [description, setDescription] = useState('');
+  const [workflow, setWorkflow] = useState<WorkflowTemplate>('standard');
+  const [refusal, setRefusal] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  async function submit() {
+    setIsSubmitting(true);
+    setRefusal(null);
+    try {
+      const project = await createProject({
+        name,
+        key: key.trim() || undefined,
+        description,
+        workflow,
+      });
+      navigation.openProject(project.id);
+      onDone();
+    } catch (failure) {
+      setRefusal(describeFailure(failure));
+      setIsSubmitting(false);
+    }
+  }
+
+  function handleSubmit(event: FormEvent) {
+    event.preventDefault();
+    void submit();
+  }
+
+  return (
+    <form className={styles.form} onSubmit={handleSubmit}>
+      <Field label="Name">
+        <TextInput
+          value={name}
+          onChange={(event) => {
+            setName(event.target.value);
+          }}
+          placeholder="Smart sensor node"
+          data-initial-focus
+          required
+        />
+      </Field>
+
+      <Field
+        label="Key"
+        hint="Prefixes the task numbers, as in IOT-12. Leave it empty to derive it from the name."
+      >
+        <TextInput
+          value={key}
+          onChange={(event) => {
+            setKey(event.target.value.toUpperCase());
+          }}
+          placeholder="IOT"
+          maxLength={6}
+          className={styles.keyInput}
+        />
+      </Field>
+
+      <Field label="Description">
+        <TextArea
+          value={description}
+          onChange={(event) => {
+            setDescription(event.target.value);
+          }}
+          placeholder="What is this project for?"
+          rows={3}
+        />
+      </Field>
+
+      <fieldset className={styles.workflows}>
+        <legend className={styles.legend}>Workflow</legend>
+        {WORKFLOW_CHOICES.map((choice) => (
+          <label
+            key={choice.template}
+            className={classNames(
+              styles.workflow,
+              workflow === choice.template && styles.selectedWorkflow,
+            )}
+          >
+            <input
+              type="radio"
+              name="workflow"
+              className={styles.radio}
+              checked={workflow === choice.template}
+              onChange={() => {
+                setWorkflow(choice.template);
+              }}
+            />
+            <span className={styles.workflowName}>{choice.name}</span>
+            <span className={styles.workflowStatuses}>{choice.statuses.join('  →  ')}</span>
+          </label>
+        ))}
+      </fieldset>
+
+      {refusal && (
+        <p className={styles.refusal} role="alert">
+          {refusal}
+        </p>
+      )}
+
+      <div className={styles.actions}>
+        <Button variant="ghost" onClick={onDone}>
+          Cancel
+        </Button>
+        <Button variant="primary" type="submit" disabled={isSubmitting || name.trim() === ''}>
+          Create project
+        </Button>
+      </div>
+    </form>
+  );
+}

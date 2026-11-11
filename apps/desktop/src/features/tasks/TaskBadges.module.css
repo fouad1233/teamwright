@@ -1,0 +1,72 @@
+.statusPill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 22px;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--tone-soft);
+  color: var(--tone);
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.statusDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--tone);
+}
+
+.priority {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--tone);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.priorityIcon {
+  width: 14px;
+  height: 14px;
+  fill: var(--tone-soft);
+}
+
+.avatar {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+}
+
+.avatar svg {
+  width: 13px;
+  height: 13px;
+}
+
+.unassigned {
+  color: var(--text-muted);
+}
+
+.unassigned svg {
+  width: 20px;
+  height: 20px;
+}
+
+.manager {
+  background: var(--accent);
+  color: var(--text-on-accent);
+}
+
+.member {
+  background: var(--tone-teal-soft);
+  color: var(--tone-teal);
+}

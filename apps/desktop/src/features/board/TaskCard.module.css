@@ -1,0 +1,82 @@
+.item {
+  border-radius: var(--radius-md);
+  list-style: none;
+  cursor: grab;
+  touch-action: none;
+}
+
+/* The place a dragged card came from stays visible as a faint outline. */
+.lifted {
+  opacity: 0.35;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  box-shadow: var(--shadow-card);
+  transition: border-color 120ms ease;
+}
+
+.item:hover .card {
+  border-color: var(--border-strong);
+}
+
+.heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.reference {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+}
+
+.title {
+  font-weight: 500;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.details {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  min-height: 22px;
+}
+
+.detail {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.detail svg {
+  width: 13px;
+  height: 13px;
+}
+
+.waiting {
+  color: var(--tone-amber);
+}
+
+.overdue {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.assignee {
+  display: inline-flex;
+  margin-left: auto;
+}

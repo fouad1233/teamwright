@@ -1,0 +1,16 @@
+.board {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  height: 100%;
+  padding: var(--space-4) var(--space-5) var(--space-5);
+  overflow-x: auto;
+}
+
+/* The card under the pointer while it is dragged. */
+.dragged {
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-drag);
+  cursor: grabbing;
+  transform: rotate(1.5deg);
+}

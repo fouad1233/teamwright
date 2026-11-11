@@ -1,0 +1,15 @@
+.app {
+  display: flex;
+  height: 100%;
+}
+
+.main {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+}
+
+.note {
+  padding: var(--space-6);
+  color: var(--text-secondary);
+}

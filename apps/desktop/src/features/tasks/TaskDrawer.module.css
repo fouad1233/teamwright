@@ -1,0 +1,203 @@
+.drawer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  width: min(var(--drawer-width), 100%);
+  border-left: 1px solid var(--border-strong);
+  background: var(--surface-overlay);
+  box-shadow: var(--shadow-overlay);
+  animation: slide-in 180ms ease-out;
+}
+
+.drawer:focus-visible {
+  outline: none;
+}
+
+@keyframes slide-in {
+  from {
+    transform: translateX(24px);
+    opacity: 0;
+  }
+}
+
+.header {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.reference {
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+}
+
+.parent {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  height: 24px;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.parent:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.parent svg {
+  width: 13px;
+  height: 13px;
+}
+
+.headerSpace {
+  flex: 1;
+}
+
+.body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-5);
+  padding: var(--space-4) var(--space-5) var(--space-6);
+  overflow-y: auto;
+}
+
+/* The body scrolls when its parts do not fit. Without this, the parts would
+   be squeezed instead, and the title field would shrink to a sliver. */
+.body > * {
+  flex: none;
+}
+
+.title {
+  width: 100%;
+  padding: var(--space-1) var(--space-2);
+  margin: 0 calc(-1 * var(--space-2));
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-primary);
+  font-size: var(--font-size-xl);
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+  resize: none;
+  /* Lets the field grow with a title that wraps onto several lines. */
+  field-sizing: content;
+}
+
+.title:hover {
+  border-color: var(--border-subtle);
+}
+
+.title:focus-visible {
+  border-color: var(--accent);
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 0;
+}
+
+.properties {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3) var(--space-4);
+}
+
+.property {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.propertyLabel {
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+}
+
+.notUnderstood,
+.notUnderstood:hover,
+.notUnderstood:focus-visible {
+  border-color: var(--danger);
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.sectionTitle {
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.links {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.link {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.linkTarget {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  height: 34px;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-md);
+  text-align: left;
+}
+
+.linkTarget:hover {
+  background: var(--surface-hover);
+}
+
+.linkReference {
+  flex: none;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
+}
+
+.linkTitle {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history {
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.dialogActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}

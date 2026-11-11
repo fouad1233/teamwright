@@ -1,0 +1,90 @@
+.workspace {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-width: 0;
+}
+
+.header {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-5) var(--space-5) 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.heading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.key {
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+}
+
+.name {
+  overflow: hidden;
+  font-size: var(--font-size-xl);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.description {
+  max-width: 880px;
+  color: var(--text-secondary);
+}
+
+.tabs {
+  display: flex;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+}
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 36px;
+  padding: 0 var(--space-3);
+  /* The line under the active tab sits on the header's own border. */
+  margin-bottom: -1px;
+  border-bottom: 2px solid transparent;
+  color: var(--text-secondary);
+  font-weight: 600;
+  transition: color 120ms ease;
+}
+
+.tab:hover {
+  color: var(--text-primary);
+}
+
+.tab svg {
+  width: 15px;
+  height: 15px;
+}
+
+.activeTab {
+  border-bottom-color: var(--accent);
+  color: var(--text-primary);
+}
+
+.content {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+.note {
+  padding: var(--space-5);
+  color: var(--text-secondary);
+}
