@@ -96,9 +96,14 @@
   font-weight: 500;
 }
 
-.assignee {
-  display: inline-flex;
+/* A mark and its word are centered in the row as one piece. As inline boxes
+   they would sit on the baseline of the text, a little too high. */
+.row td > span {
+  display: flex;
   align-items: center;
+}
+
+.assignee {
   gap: var(--space-2);
 }
 
