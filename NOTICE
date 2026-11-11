@@ -1,0 +1,10 @@
+Teamwright
+Copyright 2026 The Teamwright Authors
+
+Licensed under the Apache License, Version 2.0 (see the LICENSE file).
+
+Teamwright is an independent open-source project. It is not affiliated with,
+endorsed by, or sponsored by Anthropic. "Claude" and "Claude Code" are
+trademarks of Anthropic, PBC. Teamwright drives the Claude Code installation
+that already exists on the user's own machine; it does not modify, bundle, or
+redistribute it.
