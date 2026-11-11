@@ -10,21 +10,24 @@ use std::sync::Arc;
 use chrono::{TimeDelta, TimeZone, Utc};
 use teamwright_application::in_memory::ManualClock;
 use teamwright_application::{
-    NewProject, NewTask, ProjectRepository, ProjectService, TaskRepository, TaskService,
-    WorkflowTemplate,
+    MemberRepository, NewProject, NewTask, ProjectRepository, ProjectService, TaskRepository,
+    TaskService, WorkflowTemplate,
 };
 use teamwright_domain::{
-    Assignee, CalendarDate, Color, MemberId, Priority, Project, ProjectKey, ProjectName, Rank,
-    Schedule, Status, StatusCategory, StatusName, Task, TaskDraft, TaskId, TaskTitle, Timestamp,
-    Workflow,
+    Assignee, CalendarDate, Color, Member, MemberId, MemberKind, MemberName, Priority, Project,
+    ProjectKey, ProjectName, Rank, Schedule, Status, StatusCategory, StatusName, Task, TaskDraft,
+    TaskId, TaskTitle, Timestamp, Workflow,
 };
-use teamwright_storage::{Database, SqliteProjectRepository, SqliteTaskRepository};
+use teamwright_storage::{
+    Database, SqliteMemberRepository, SqliteProjectRepository, SqliteTaskRepository,
+};
 
-/// A database with both repositories working on it.
+/// A database with the repositories working on it.
 struct Store {
     database: Arc<Database>,
     projects: SqliteProjectRepository,
     tasks: SqliteTaskRepository,
+    members: SqliteMemberRepository,
 }
 
 impl Store {
@@ -33,6 +36,7 @@ impl Store {
         Self {
             projects: SqliteProjectRepository::new(database.clone()),
             tasks: SqliteTaskRepository::new(database.clone()),
+            members: SqliteMemberRepository::new(database.clone()),
             database,
         }
     }
@@ -54,6 +58,13 @@ impl Store {
         self.tasks.save(&task).unwrap();
         task
     }
+
+    /// Stores an agent on the team of the project and returns it.
+    fn member(&self, project: &Project, name: &str) -> Member {
+        let member = new_member(project, name);
+        self.members.save(&member).unwrap();
+        member
+    }
 }
 
 fn moment(hour: u32) -> Timestamp {
@@ -72,6 +83,17 @@ fn new_project(name: &str) -> Project {
         key,
         "A small connected device.".to_owned(),
         Workflow::engineering(),
+        moment(9),
+    )
+}
+
+fn new_member(project: &Project, name: &str) -> Member {
+    Member::create(
+        project.id(),
+        MemberName::parse(name).unwrap(),
+        MemberKind::Agent,
+        "The schematic, the parts and the board.".to_owned(),
+        Color::Teal,
         moment(9),
     )
 }
@@ -354,6 +376,128 @@ fn deleting_tasks_removes_them_and_the_dependencies_that_mention_them() {
     assert!(firmware.blocked_by().is_empty());
 }
 
+// Team members
+
+#[test]
+fn a_saved_member_is_found_again_unchanged() {
+    let store = Store::in_memory();
+    let project = store.project("Smart sensor node");
+    let member = store.member(&project, "Hardware engineer");
+
+    let found = store.members.find(member.id()).unwrap();
+
+    assert_eq!(found, Some(member));
+}
+
+#[test]
+fn a_person_on_a_team_is_found_again_as_a_person() {
+    let store = Store::in_memory();
+    let project = store.project("Smart sensor node");
+    let person = Member::create(
+        project.id(),
+        MemberName::parse("Dana").unwrap(),
+        MemberKind::Human,
+        String::new(),
+        Color::Pink,
+        moment(9),
+    );
+    store.members.save(&person).unwrap();
+
+    let found = store.members.find(person.id()).unwrap().unwrap();
+
+    assert_eq!(found.kind(), MemberKind::Human);
+    assert_eq!(found.color(), Color::Pink);
+    assert_eq!(found.responsibility(), "");
+}
+
+#[test]
+fn a_member_that_was_never_saved_is_not_found() {
+    let store = Store::in_memory();
+
+    assert_eq!(store.members.find(MemberId::generate()).unwrap(), None);
+}
+
+#[test]
+fn saving_a_member_again_replaces_what_was_stored() {
+    let store = Store::in_memory();
+    let project = store.project("Smart sensor node");
+    let mut member = store.member(&project, "Hardware engineer");
+
+    member.rename(
+        MemberName::parse("Electronics engineer").unwrap(),
+        moment(10),
+    );
+    member.set_responsibility("Everything on the board.".to_owned(), moment(11));
+    store.members.save(&member).unwrap();
+
+    let team = store.members.list_for_project(project.id()).unwrap();
+    assert_eq!(team, [member]);
+}
+
+#[test]
+fn members_are_listed_for_the_team_of_their_own_project_only() {
+    let store = Store::in_memory();
+    let sensor = store.project("Smart sensor node");
+    let film = store.project("Product film");
+    let engineer = store.member(&sensor, "Hardware engineer");
+    let editor = store.member(&film, "Video editor");
+
+    assert_eq!(
+        store.members.list_for_project(sensor.id()).unwrap(),
+        [engineer]
+    );
+    assert_eq!(store.members.list_for_project(film.id()).unwrap(), [editor]);
+}
+
+#[test]
+fn a_deleted_member_is_gone_and_the_others_stay() {
+    let store = Store::in_memory();
+    let project = store.project("Smart sensor node");
+    let hardware = store.member(&project, "Hardware engineer");
+    let firmware = store.member(&project, "Firmware engineer");
+
+    store.members.delete(hardware.id()).unwrap();
+
+    assert_eq!(store.members.find(hardware.id()).unwrap(), None);
+    assert_eq!(
+        store.members.list_for_project(project.id()).unwrap(),
+        [firmware]
+    );
+}
+
+#[test]
+fn changes_to_a_member_are_logged_with_the_complete_new_state() {
+    let store = Store::in_memory();
+    let project = store.project("Smart sensor node");
+    let member = store.member(&project, "Hardware engineer");
+    store.members.delete(member.id()).unwrap();
+    store.members.delete(MemberId::generate()).unwrap();
+
+    let log = store.database.operations().unwrap();
+
+    let summary: Vec<(&str, &str)> = log
+        .iter()
+        .map(|op| (op.entity.as_str(), op.kind.as_str()))
+        .collect();
+    assert_eq!(
+        summary,
+        [
+            ("project", "upsert"),
+            ("member", "upsert"),
+            ("member", "delete")
+        ]
+    );
+    let state: serde_json::Value =
+        serde_json::from_str(log[1].payload.as_deref().unwrap()).unwrap();
+    assert_eq!(state["name"], "Hardware engineer");
+    assert_eq!(state["kind"], "agent");
+    assert_eq!(state["color"], "teal");
+    assert_eq!(state["project_id"], project.id().to_string());
+    assert_eq!(state["joined_at"], "2026-11-11T09:00:00.000Z");
+    assert_eq!(log[2].entity_id, member.id().to_string());
+    assert_eq!(log[2].payload, None);
+}
+
 // The operation log
 
 #[test]
@@ -438,12 +582,13 @@ fn everything_survives_closing_and_reopening_the_file() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("teamwright.db");
 
-    let (project, task, stamp_before) = {
+    let (project, task, member, stamp_before) = {
         let store = Store::on(Database::open(&path).unwrap());
         let project = store.project("Smart sensor node");
         let task = store.task(&project, 1, "Design the board");
+        let member = store.member(&project, "Hardware engineer");
         let last_stamp = store.database.operations().unwrap().pop().unwrap().stamp;
-        (project, task, last_stamp)
+        (project, task, member, last_stamp)
     };
 
     let reopened = Store::on(Database::open(&path).unwrap());
@@ -452,6 +597,7 @@ fn everything_survives_closing_and_reopening_the_file() {
         Some(project.clone())
     );
     assert_eq!(reopened.tasks.find(task.id()).unwrap(), Some(task));
+    assert_eq!(reopened.members.find(member.id()).unwrap(), Some(member));
 
     // The clock carries on from where the log ends.
     reopened.projects.save(&project).unwrap();

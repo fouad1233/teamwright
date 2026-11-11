@@ -71,6 +71,8 @@ pub(crate) enum Entity {
     Project,
     /// A task together with its dependencies.
     Task,
+    /// A member of a team.
+    Member,
 }
 
 impl Entity {
@@ -79,6 +81,7 @@ impl Entity {
         match self {
             Self::Project => "project",
             Self::Task => "task",
+            Self::Member => "member",
         }
     }
 }

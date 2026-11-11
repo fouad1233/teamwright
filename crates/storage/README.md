@@ -1,10 +1,10 @@
 # teamwright-storage
 
-Stores Teamwright's projects and tasks in SQLite, and appends every change to
-an operation log.
+Stores Teamwright's projects, tasks and teams in SQLite, and appends every
+change to an operation log.
 
-It implements the interfaces `ProjectRepository` and `TaskRepository` that the
-application crate declares. Nothing outside this crate knows that SQLite is
+It implements the interfaces `ProjectRepository`, `TaskRepository` and
+`MemberRepository` that the application crate declares. Nothing outside this crate knows that SQLite is
 involved.
 
 ## What is in it
@@ -16,6 +16,7 @@ involved.
 | `schema/` | One SQL file per migration |
 | `projects` | `SqliteProjectRepository` |
 | `tasks` | `SqliteTaskRepository` |
+| `members` | `SqliteMemberRepository` |
 | `operations` | The operation log, the hybrid logical clock, `DeviceId` |
 | `codec` | The text forms of moments, dates, identifiers and enumerations |
 | `error` | The crate's internal error type and its conversion to `StorageError` |
@@ -23,8 +24,9 @@ involved.
 ## How data is kept
 
 - **Current state** is in ordinary tables: `projects`, `statuses`, `tasks`,
-  `task_dependencies`. The schema with its conventions is in
-  [`schema/0001_initial.sql`](src/schema/0001_initial.sql).
+  `task_dependencies`, `members`. The schema with its conventions is in
+  [`schema/0001_initial.sql`](src/schema/0001_initial.sql); later files in
+  that folder add to it.
 - **Every write also appends to `operations`**, in the same transaction. An
   operation records which computer made the change, a clock stamp, and for
   an upsert the complete new state as JSON. State and log therefore cannot
@@ -57,7 +59,9 @@ A released migration is never edited.
 2. Append it to `MIGRATIONS` in `src/migrations.rs`.
 3. Update the record types and queries in the repository it affects.
 4. Add tests. `a_new_database_gets_every_table_and_the_latest_version` keeps
-   the table list honest.
+   the table list honest, and
+   `a_database_of_an_older_version_is_brought_up_to_date_with_its_data_kept`
+   proves that people who already use the program keep their data.
 
 A database written by a newer program is refused with a clear message instead
 of being read wrongly.

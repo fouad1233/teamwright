@@ -9,7 +9,10 @@ use rusqlite::Connection;
 use crate::error::DatabaseError;
 
 /// Every migration, in the order it is applied.
-const MIGRATIONS: &[&str] = &[include_str!("schema/0001_initial.sql")];
+const MIGRATIONS: &[&str] = &[
+    include_str!("schema/0001_initial.sql"),
+    include_str!("schema/0002_team_members.sql"),
+];
 
 /// Applies the migrations a database has not seen yet. Each one runs in its
 /// own transaction, so a failure leaves the database at the last complete
@@ -66,6 +69,7 @@ mod tests {
         );
         let tables = table_names(&connection);
         for expected in [
+            "members",
             "meta",
             "operations",
             "projects",
@@ -78,6 +82,34 @@ mod tests {
                 "missing table {expected}"
             );
         }
+    }
+
+    #[test]
+    fn a_database_of_an_older_version_is_brought_up_to_date_with_its_data_kept() {
+        let mut connection = Connection::open_in_memory().unwrap();
+        connection.execute_batch(MIGRATIONS[0]).unwrap();
+        connection.pragma_update(None, "user_version", 1).unwrap();
+        connection
+            .execute(
+                "INSERT INTO projects (id, key, name, description, next_task_number, created_at)
+                 VALUES ('p1', 'SSN', 'Smart sensor node', '', 1, '2026-11-11T09:00:00.000Z')",
+                [],
+            )
+            .unwrap();
+
+        migrate(&mut connection).unwrap();
+
+        assert_eq!(
+            version_of(&connection),
+            i64::try_from(MIGRATIONS.len()).unwrap()
+        );
+        assert!(table_names(&connection).contains(&"members".to_owned()));
+        let kept: String = connection
+            .query_row("SELECT name FROM projects WHERE id = 'p1'", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(kept, "Smart sensor node");
     }
 
     #[test]
