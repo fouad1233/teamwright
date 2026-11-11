@@ -76,6 +76,8 @@ const SAMPLE_TASKS: SampleTask[] = [
     number: 4,
     title: 'Draw the schematic',
     status: 'progress',
+    description:
+      'Power, microcontroller, sensors on I2C, display on SPI. Keep the board under 40 by 60 mm.',
     priority: 'high',
     waitsFor: [2, 3],
     estimateHours: 8,

@@ -62,6 +62,17 @@ This starts the built application on an empty temporary data folder, drives
 its window, and checks that the interface, the commands and the database work
 together, including after a restart. Windows only for now.
 
+## Pictures for the documentation
+
+```bash
+node tools/screenshots/capture-screenshots.mjs target/debug/teamwright-desktop.exe
+```
+
+This takes the pictures in [`docs/screenshots`](../screenshots/README.md)
+again: the built application on a sample project, in the dark and in the
+light theme. Run it after a change to the interface that the pictures would
+show, and commit the new pictures with the change. Windows only for now.
+
 ## Where the data lives
 
 The application keeps its database in the folder the operating system assigns
@@ -77,8 +88,8 @@ to use another folder.
 | `crates/storage` | SQLite storage and the operation log. |
 | `apps/desktop/src-tauri` | The desktop shell: commands that wrap the use cases. |
 | `apps/desktop/src` | The interface: React and TypeScript. |
-| `docs` | Product, architecture, decisions, design, story. |
-| `tools` | Scripts for development: the key visual, the smoke test. |
+| `docs` | Product, architecture, decisions, design, story, screenshots. |
+| `tools` | Scripts for development: the key visual, the smoke test, the screenshots. |
 
 Each crate and the interface have a README of their own. The
 [architecture overview](../architecture/overview.md) explains how they fit
