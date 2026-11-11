@@ -1,0 +1,5 @@
+# `unwrap` and `expect` are denied in product code (see Cargo.toml) because
+# they turn an error into a crash. Tests may use them: a failed test is the
+# right outcome there.
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true

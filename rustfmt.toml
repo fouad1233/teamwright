@@ -1,0 +1,3 @@
+# Formatting is not a matter of taste in this repository: run `cargo fmt`.
+edition = "2024"
+max_width = 100

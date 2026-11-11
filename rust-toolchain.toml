@@ -1,0 +1,5 @@
+# Every contributor and the build servers use the same Rust release channel
+# and the same formatting and lint tools.
+[toolchain]
+channel = "stable"
+components = ["rustfmt", "clippy"]
