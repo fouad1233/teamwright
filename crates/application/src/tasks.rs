@@ -9,7 +9,7 @@ use teamwright_domain::{
 };
 
 use crate::error::ApplicationError;
-use crate::ports::{Clock, ProjectRepository, TaskRepository};
+use crate::ports::{Clock, MemberRepository, ProjectRepository, TaskRepository};
 
 /// What is needed to open a task.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -61,6 +61,7 @@ impl NewTask {
 pub struct TaskService {
     projects: Arc<dyn ProjectRepository>,
     tasks: Arc<dyn TaskRepository>,
+    members: Arc<dyn MemberRepository>,
     clock: Arc<dyn Clock>,
 }
 
@@ -70,11 +71,13 @@ impl TaskService {
     pub fn new(
         projects: Arc<dyn ProjectRepository>,
         tasks: Arc<dyn TaskRepository>,
+        members: Arc<dyn MemberRepository>,
         clock: Arc<dyn Clock>,
     ) -> Self {
         Self {
             projects,
             tasks,
+            members,
             clock,
         }
     }
@@ -83,9 +86,10 @@ impl TaskService {
     ///
     /// # Errors
     ///
-    /// Returns an error if the project, the status or the parent task does
-    /// not exist, if the parent belongs to another project, if the title or
-    /// the dates are not valid, or if storage fails.
+    /// Returns an error if the project, the status, the parent task or the
+    /// assignee does not exist, if the parent or the assignee belongs to
+    /// another project, if the title or the dates are not valid, or if
+    /// storage fails.
     pub fn create(&self, new_task: NewTask) -> Result<Task, ApplicationError> {
         let mut project = self.require_project(new_task.project_id)?;
         let title = TaskTitle::parse(&new_task.title)?;
@@ -100,6 +104,7 @@ impl TaskService {
                 return Err(ApplicationError::DifferentProjects);
             }
         }
+        self.check_assignee(new_task.assignee, project.id())?;
 
         let last_rank_in_status = self
             .tasks
@@ -199,9 +204,12 @@ impl TaskService {
     ///
     /// # Errors
     ///
-    /// Returns an error if there is no such task or if storage fails.
+    /// Returns an error if there is no such task, if the assignee is a team
+    /// member that does not exist or is on the team of another project, or
+    /// if storage fails.
     pub fn assign(&self, id: TaskId, assignee: Option<Assignee>) -> Result<Task, ApplicationError> {
         self.change(id, |task, now| {
+            self.check_assignee(assignee, task.project_id())?;
             task.assign(assignee, now);
             Ok(())
         })
@@ -380,6 +388,29 @@ impl TaskService {
         Ok(task)
     }
 
+    /// Makes sure that a task of a project can be given to an assignee: a
+    /// team member must exist and be on the team of that project.
+    fn check_assignee(
+        &self,
+        assignee: Option<Assignee>,
+        project_id: ProjectId,
+    ) -> Result<(), ApplicationError> {
+        let Some(Assignee::Member(member_id)) = assignee else {
+            return Ok(());
+        };
+        let member = self
+            .members
+            .find(member_id)?
+            .ok_or_else(|| ApplicationError::NotFound {
+                kind: "team member",
+                id: member_id.to_string(),
+            })?;
+        if member.project_id() != project_id {
+            return Err(ApplicationError::AssigneeFromAnotherTeam);
+        }
+        Ok(())
+    }
+
     /// Loads a project, or reports that it does not exist.
     fn require_project(&self, id: ProjectId) -> Result<Project, ApplicationError> {
         self.projects
@@ -444,17 +475,21 @@ fn reference(project: &Project, task: &Task) -> String {
 #[cfg(test)]
 mod tests {
     use chrono::{TimeDelta, TimeZone};
-    use teamwright_domain::{DomainError, MemberId, StatusCategory};
+    use teamwright_domain::{DomainError, Member, MemberId, MemberKind, StatusCategory};
 
     use super::*;
-    use crate::in_memory::{InMemoryProjectRepository, InMemoryTaskRepository, ManualClock};
+    use crate::in_memory::{
+        InMemoryMemberRepository, InMemoryProjectRepository, InMemoryTaskRepository, ManualClock,
+    };
     use crate::projects::{NewProject, ProjectService};
+    use crate::team::{NewMember, TeamService};
 
     /// The services under test, sharing storage and a clock that the test
     /// controls.
     struct Workspace {
         projects: ProjectService,
         tasks: TaskService,
+        team: TeamService,
         clock: Arc<ManualClock>,
     }
 
@@ -469,10 +504,22 @@ mod tests {
     fn workspace() -> Workspace {
         let project_repository = Arc::new(InMemoryProjectRepository::default());
         let task_repository = Arc::new(InMemoryTaskRepository::default());
+        let member_repository = Arc::new(InMemoryMemberRepository::default());
         let clock = Arc::new(ManualClock::starting_at(start_of_day()));
         Workspace {
             projects: ProjectService::new(project_repository.clone(), clock.clone()),
-            tasks: TaskService::new(project_repository, task_repository, clock.clone()),
+            tasks: TaskService::new(
+                project_repository.clone(),
+                task_repository.clone(),
+                member_repository.clone(),
+                clock.clone(),
+            ),
+            team: TeamService::new(
+                project_repository,
+                member_repository,
+                task_repository,
+                clock.clone(),
+            ),
             clock,
         }
     }
@@ -490,6 +537,17 @@ mod tests {
         fn task(&self, project: &Project, title: &str) -> Task {
             self.tasks
                 .create(NewTask::titled(project.id(), title))
+                .unwrap()
+        }
+
+        fn member(&self, project: &Project, name: &str) -> Member {
+            self.team
+                .add(NewMember {
+                    project_id: project.id(),
+                    name: name.to_owned(),
+                    kind: MemberKind::Agent,
+                    responsibility: String::new(),
+                })
                 .unwrap()
         }
 
@@ -572,7 +630,7 @@ mod tests {
     fn a_task_takes_everything_that_was_given_for_it() {
         let workspace = workspace();
         let project = workspace.project("Smart sensor node");
-        let engineer = Assignee::Member(MemberId::generate());
+        let engineer = Assignee::Member(workspace.member(&project, "Hardware engineer").id());
 
         let task = workspace
             .tasks
@@ -734,7 +792,7 @@ mod tests {
         let workspace = workspace();
         let project = workspace.project("Smart sensor node");
         let task = workspace.task(&project, "Choose the microcontroler");
-        let engineer = Assignee::Member(MemberId::generate());
+        let engineer = Assignee::Member(workspace.member(&project, "Hardware engineer").id());
         workspace.clock.advance(TimeDelta::hours(2));
 
         workspace
@@ -765,6 +823,68 @@ mod tests {
         assert_eq!(stored.schedule().due_on(), Some(day(13)));
         assert_eq!(stored.created_at(), start_of_day());
         assert_eq!(stored.updated_at(), start_of_day() + TimeDelta::hours(2));
+    }
+
+    #[test]
+    fn a_task_can_be_given_to_a_member_of_the_team_and_then_to_the_manager() {
+        let workspace = workspace();
+        let project = workspace.project("Smart sensor node");
+        let engineer = Assignee::Member(workspace.member(&project, "Hardware engineer").id());
+        let task = workspace.task(&project, "Draw the schematic");
+
+        let given = workspace.tasks.assign(task.id(), Some(engineer)).unwrap();
+        assert_eq!(given.assignee(), Some(engineer));
+
+        let taken_back = workspace
+            .tasks
+            .assign(task.id(), Some(Assignee::Manager))
+            .unwrap();
+        assert_eq!(taken_back.assignee(), Some(Assignee::Manager));
+    }
+
+    #[test]
+    fn a_task_cannot_be_given_to_a_member_of_the_team_of_another_project() {
+        let workspace = workspace();
+        let sensor = workspace.project("Smart sensor node");
+        let film = workspace.project("Product film");
+        let editor = Assignee::Member(workspace.member(&film, "Video editor").id());
+        let task = workspace.task(&sensor, "Draw the schematic");
+
+        let on_assigning = workspace.tasks.assign(task.id(), Some(editor)).unwrap_err();
+        let on_opening = workspace
+            .tasks
+            .create(NewTask {
+                assignee: Some(editor),
+                ..NewTask::titled(sensor.id(), "Route the board")
+            })
+            .unwrap_err();
+
+        for error in [on_assigning, on_opening] {
+            assert_eq!(error.code(), "assignee_from_another_team");
+        }
+        assert_eq!(workspace.tasks.get(task.id()).unwrap().assignee(), None);
+        assert_eq!(
+            workspace.tasks.list_for_project(sensor.id()).unwrap().len(),
+            1
+        );
+    }
+
+    #[test]
+    fn a_task_cannot_be_given_to_a_member_that_does_not_exist() {
+        let workspace = workspace();
+        let project = workspace.project("Smart sensor node");
+        let task = workspace.task(&project, "Draw the schematic");
+        let nobody = Assignee::Member(MemberId::generate());
+
+        let error = workspace.tasks.assign(task.id(), Some(nobody)).unwrap_err();
+
+        assert!(matches!(
+            error,
+            ApplicationError::NotFound {
+                kind: "team member",
+                ..
+            }
+        ));
     }
 
     #[test]

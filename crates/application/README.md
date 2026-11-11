@@ -54,6 +54,8 @@ project, two members of one team cannot have the same name.
   name, whatever the capitals.
 - A newcomer to a team gets a color that sets it apart from the others.
 - Taking a member off a team gives the member's tasks to nobody.
+- A task can be given to the manager or to a member of the team of its own
+  project, and to nobody else.
 
 ## Adding a use case
 

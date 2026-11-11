@@ -10,8 +10,8 @@ use std::sync::Arc;
 use chrono::{TimeDelta, TimeZone, Utc};
 use teamwright_application::in_memory::ManualClock;
 use teamwright_application::{
-    MemberRepository, NewProject, NewTask, ProjectRepository, ProjectService, TaskRepository,
-    TaskService, WorkflowTemplate,
+    MemberRepository, NewMember, NewProject, NewTask, ProjectRepository, ProjectService,
+    TaskRepository, TaskService, TeamService, WorkflowTemplate,
 };
 use teamwright_domain::{
     Assignee, CalendarDate, Color, Member, MemberId, MemberKind, MemberName, Priority, Project,
@@ -611,10 +611,22 @@ fn everything_survives_closing_and_reopening_the_file() {
 fn the_use_cases_work_on_the_real_database() {
     let database = Arc::new(Database::open_in_memory().unwrap());
     let project_repository = Arc::new(SqliteProjectRepository::new(database.clone()));
-    let task_repository = Arc::new(SqliteTaskRepository::new(database));
+    let task_repository = Arc::new(SqliteTaskRepository::new(database.clone()));
+    let member_repository = Arc::new(SqliteMemberRepository::new(database));
     let clock = Arc::new(ManualClock::starting_at(moment(9)));
     let projects = ProjectService::new(project_repository.clone(), clock.clone());
-    let tasks = TaskService::new(project_repository, task_repository, clock.clone());
+    let tasks = TaskService::new(
+        project_repository.clone(),
+        task_repository.clone(),
+        member_repository.clone(),
+        clock.clone(),
+    );
+    let team = TeamService::new(
+        project_repository,
+        member_repository,
+        task_repository,
+        clock.clone(),
+    );
 
     let project = projects
         .create(NewProject {
@@ -650,4 +662,29 @@ fn the_use_cases_work_on_the_real_database() {
     assert_eq!(titles, ["Design the board", "Write the firmware"]);
     assert_eq!(projects.get(project.id()).unwrap().next_task_number(), 4);
     assert!(tasks.add_dependency(hardware.id(), firmware.id()).is_err());
+
+    // A team: a member is given a task, and leaves.
+    let engineer = team
+        .add(NewMember {
+            project_id: project.id(),
+            name: "Firmware engineer".to_owned(),
+            kind: MemberKind::Agent,
+            responsibility: "Everything that runs on the device.".to_owned(),
+        })
+        .unwrap();
+    let given = tasks
+        .assign(firmware.id(), Some(Assignee::Member(engineer.id())))
+        .unwrap();
+    assert_eq!(given.assignee(), Some(Assignee::Member(engineer.id())));
+    assert_eq!(
+        team.list_for_project(project.id()).unwrap(),
+        std::slice::from_ref(&engineer)
+    );
+
+    team.remove(engineer.id()).unwrap();
+
+    assert_eq!(tasks.get(firmware.id()).unwrap().assignee(), None);
+    assert!(team.list_for_project(project.id()).unwrap().is_empty());
+    let nobody = Some(Assignee::Member(engineer.id()));
+    assert!(tasks.assign(firmware.id(), nobody).is_err());
 }

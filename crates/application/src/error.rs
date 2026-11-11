@@ -47,6 +47,10 @@ pub enum ApplicationError {
         name: String,
     },
 
+    /// A task was to be given to a member of the team of another project.
+    #[error("a task can only be given to a member of the team of its own project")]
+    AssigneeFromAnotherTeam,
+
     /// Stored data could not be read or written.
     #[error("the data could not be read or written: {0}")]
     Storage(#[from] StorageError),
@@ -66,6 +70,7 @@ impl ApplicationError {
             Self::DifferentProjects => "different_projects",
             Self::DependencyCycle { .. } => "dependency_cycle",
             Self::MemberNameTaken { .. } => "member_name_taken",
+            Self::AssigneeFromAnotherTeam => "assignee_from_another_team",
             Self::Storage(_) => "storage_failed",
         }
     }
