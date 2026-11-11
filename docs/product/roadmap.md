@@ -11,21 +11,27 @@ Status marks: ✅ done · 🚧 in progress · ⬜ not started.
 The ground everything else stands on.
 
 - ✅ Repository, Apache-2.0 license, notice of independence from Anthropic
-- 🚧 Vision, landscape survey, decision records, the project story
-- 🚧 Architecture overview and contributing guide
-- ⬜ Development toolchain documented for Windows without administrator rights
+- ✅ Vision, landscape survey, decision records, the project story
+- ✅ Architecture overview and contributing guide
+- ✅ Design philosophy and key visual
+- ✅ Development documented, including Windows without administrator rights
 - ⬜ Continuous integration: format, lint, test, build
 
-## M1 · Walking skeleton ⬜
+## M1 · Walking skeleton 🚧
 
 A desktop app that opens and manages projects and tasks without any AI.
 
-- ⬜ Rust workspace: domain model, application services, SQLite storage
-- ⬜ Desktop shell (Tauri) with a React and TypeScript interface
-- ⬜ Projects, tasks, subtasks, priorities, dates, estimates
-- ⬜ Workflows with custom statuses
-- ⬜ Board view with drag and drop, list view, task detail with activity
-- ⬜ Demo backend so the interface also runs in a plain browser
+- ✅ Rust workspace: domain model, application services, SQLite storage
+- ✅ Operation log with device identity, as the base for sync
+- ✅ Desktop shell (Tauri) with a React and TypeScript interface
+- ✅ Projects with a workflow from a template
+- ✅ Tasks: priority, assignee, dates, estimate, subtasks, dependencies
+- ✅ Board with drag and drop, list view, task panel
+- ✅ Demo backend, so the interface also runs in a plain browser
+- ✅ Smoke test that drives the real application
+- ⬜ Editing the statuses of a workflow
+- ⬜ Activity history of a task
+- ⬜ Renaming and archiving a project from the interface
 
 ## M2 · One teammate ⬜
 
@@ -76,15 +82,13 @@ Several specialists working together with the manager in the loop.
 
 ## M7 · Many computers ⬜
 
-- ⬜ Device identity on every change
-- ⬜ Operation log and sync through a folder the user owns
+- ⬜ Sync through a folder the user owns
 - ⬜ Conflict handling
 - ⬜ View a project that is running on another computer
 
 ## M8 · Release ⬜
 
 - ⬜ Installer and updates
-- ⬜ Logo and visual identity
 - ⬜ User manual
 - ⬜ Public demo in the browser
 

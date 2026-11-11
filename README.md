@@ -2,6 +2,8 @@
 
 **You manage. A right-sized team of AI specialists does the work.**
 
+![Plate 01: the Teamwright logo taken apart into five parts, and a plan drawn as bars on a scale](docs/design/key-visual.png)
+
 Teamwright is an open-source desktop app for running a project the way a
 manager runs a team, where the team members are AI agents working through
 [Claude Code](https://code.claude.com/docs) on your own computer.
@@ -12,10 +14,13 @@ waits for your approval. Then the specialists start working. They move their
 tasks across a real project board, hand results to each other, and come to you
 with a clear decision request whenever a choice is yours to make.
 
-> **Status: pre-alpha.** The project started on 11 November 2026. The design is
-> being written down and the code is being built in the open, one small commit
-> at a time. There is nothing to install yet. Follow the
-> [roadmap](docs/product/roadmap.md) to see what works today.
+> **Status: pre-alpha.** The project started on 11 November 2026 and is built
+> in the open, one small commit at a time. What works today is the ground
+> floor: a desktop app that keeps projects and tasks in a local database and
+> shows them on a board and in a list. The AI team described below is the
+> next milestone and does not exist yet. There is no installer; the app can
+> be [built from source](docs/development/README.md). The
+> [roadmap](docs/product/roadmap.md) says exactly what is done.
 
 ## The problem
 
@@ -107,6 +112,8 @@ Anthropic, PBC.
 | [Landscape](docs/product/landscape.md) | Which similar tools exist and how Teamwright differs |
 | [Roadmap](docs/product/roadmap.md) | What is built and what is next |
 | [Architecture](docs/architecture/overview.md) | How the pieces fit together |
+| [Development](docs/development/README.md) | How to build, run and check the code |
+| [Design](docs/design/README.md) | The visual language of the interface and the logo |
 | [Decisions](docs/decisions/README.md) | Why each significant choice was made |
 | [Story](docs/story/README.md) | The project's history, written for a future film |
 
