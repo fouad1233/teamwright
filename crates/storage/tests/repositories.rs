@@ -14,8 +14,8 @@ use teamwright_application::{
     WorkflowTemplate,
 };
 use teamwright_domain::{
-    Assignee, CalendarDate, MemberId, Priority, Project, ProjectKey, ProjectName, Rank, Schedule,
-    Status, StatusCategory, StatusColor, StatusName, Task, TaskDraft, TaskId, TaskTitle, Timestamp,
+    Assignee, CalendarDate, Color, MemberId, Priority, Project, ProjectKey, ProjectName, Rank,
+    Schedule, Status, StatusCategory, StatusName, Task, TaskDraft, TaskId, TaskTitle, Timestamp,
     Workflow,
 };
 use teamwright_storage::{Database, SqliteProjectRepository, SqliteTaskRepository};
@@ -310,7 +310,7 @@ fn several_tasks_are_saved_together_or_not_at_all() {
     let unknown_status = Status::new(
         StatusName::parse("Nowhere").unwrap(),
         StatusCategory::Todo,
-        StatusColor::Gray,
+        Color::Gray,
     );
     let invalid = Task::create(
         project.id(),

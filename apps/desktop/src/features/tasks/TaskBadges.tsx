@@ -1,6 +1,6 @@
 import { Bot, Flag, UserRound } from 'lucide-react';
 
-import type { Assignee, Priority, Status, StatusColor } from '@/shared/api/types';
+import type { Assignee, Priority, Status, Color } from '@/shared/api/types';
 import { classNames } from '@/shared/lib/classNames';
 
 import styles from './TaskBadges.module.css';
@@ -16,7 +16,7 @@ const PRIORITY_LABELS: Record<Priority, string> = {
 };
 
 /** Only the priorities that call for attention get a pigment. */
-const PRIORITY_TONES: Record<Priority, StatusColor> = {
+const PRIORITY_TONES: Record<Priority, Color> = {
   urgent: 'red',
   high: 'amber',
   normal: 'gray',

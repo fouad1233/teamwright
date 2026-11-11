@@ -10,7 +10,8 @@ no input or output.
 |---|---|
 | `ids` | `ProjectId`, `StatusId`, `TaskId`, `MemberId`: one identifier type per kind of thing |
 | `text` | `ProjectName`, `StatusName`, `TaskTitle`: names that are never empty, never multi-line, never too long |
-| `workflow` | `Workflow`, `Status`, `StatusCategory`, `StatusColor` |
+| `color` | `Color`: the named colors a status or a team member can have |
+| `workflow` | `Workflow`, `Status`, `StatusCategory` |
 | `project` | `Project`, `ProjectKey` |
 | `task` | `Task`, `TaskDraft`, `Priority`, `Assignee`, `Schedule`, `Rank` |
 | `dependencies` | `DependencyGraph`: which task waits for which |

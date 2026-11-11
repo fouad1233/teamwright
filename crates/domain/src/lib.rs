@@ -14,6 +14,7 @@
 
 mod macros;
 
+pub mod color;
 pub mod dependencies;
 pub mod error;
 pub mod ids;
@@ -23,6 +24,7 @@ pub mod text;
 pub mod time;
 pub mod workflow;
 
+pub use color::Color;
 pub use dependencies::DependencyGraph;
 pub use error::DomainError;
 pub use ids::{MemberId, ProjectId, StatusId, TaskId};
@@ -30,4 +32,4 @@ pub use project::{Project, ProjectKey, ProjectSnapshot};
 pub use task::{Assignee, Priority, Rank, Schedule, Task, TaskDraft, TaskSnapshot};
 pub use text::{ProjectName, StatusName, TaskTitle};
 pub use time::{CalendarDate, Timestamp};
-pub use workflow::{Status, StatusCategory, StatusColor, Workflow};
+pub use workflow::{Status, StatusCategory, Workflow};

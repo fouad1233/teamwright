@@ -2,6 +2,7 @@
 
 use std::collections::HashSet;
 
+use crate::color::Color;
 use crate::error::DomainError;
 use crate::ids::StatusId;
 use crate::macros::text_enum;
@@ -31,54 +32,19 @@ text_enum!(StatusCategory, kind = "status category", {
     Done => "done",
 });
 
-/// The color of a status, by name.
-///
-/// The domain only says which color. The interface decides the exact shade
-/// for its light and its dark theme.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum StatusColor {
-    /// A neutral gray, usual for work that has not started.
-    Gray,
-    /// Blue, usual for work under way.
-    Blue,
-    /// Purple.
-    Purple,
-    /// Amber, usual for work that waits for a check.
-    Amber,
-    /// Green, usual for finished work.
-    Green,
-    /// Red.
-    Red,
-    /// Pink.
-    Pink,
-    /// Teal.
-    Teal,
-}
-
-text_enum!(StatusColor, kind = "status color", {
-    Gray => "gray",
-    Blue => "blue",
-    Purple => "purple",
-    Amber => "amber",
-    Green => "green",
-    Red => "red",
-    Pink => "pink",
-    Teal => "teal",
-});
-
 /// One step of a workflow.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Status {
     id: StatusId,
     name: StatusName,
     category: StatusCategory,
-    color: StatusColor,
+    color: Color,
 }
 
 impl Status {
     /// Creates a status with a new identifier.
     #[must_use]
-    pub fn new(name: StatusName, category: StatusCategory, color: StatusColor) -> Self {
+    pub fn new(name: StatusName, category: StatusCategory, color: Color) -> Self {
         Self::restore(StatusId::generate(), name, category, color)
     }
 
@@ -89,7 +55,7 @@ impl Status {
         id: StatusId,
         name: StatusName,
         category: StatusCategory,
-        color: StatusColor,
+        color: Color,
     ) -> Self {
         Self {
             id,
@@ -119,7 +85,7 @@ impl Status {
 
     /// The color the status is shown in.
     #[must_use]
-    pub const fn color(&self) -> StatusColor {
+    pub const fn color(&self) -> Color {
         self.color
     }
 }
@@ -168,10 +134,10 @@ impl Workflow {
     #[must_use]
     pub fn standard() -> Self {
         Self::from_template(&[
-            ("To do", StatusCategory::Todo, StatusColor::Gray),
-            ("In progress", StatusCategory::Active, StatusColor::Blue),
-            ("In review", StatusCategory::Review, StatusColor::Amber),
-            ("Done", StatusCategory::Done, StatusColor::Green),
+            ("To do", StatusCategory::Todo, Color::Gray),
+            ("In progress", StatusCategory::Active, Color::Blue),
+            ("In review", StatusCategory::Review, Color::Amber),
+            ("Done", StatusCategory::Done, Color::Green),
         ])
     }
 
@@ -180,18 +146,18 @@ impl Workflow {
     #[must_use]
     pub fn engineering() -> Self {
         Self::from_template(&[
-            ("To do", StatusCategory::Todo, StatusColor::Gray),
-            ("In progress", StatusCategory::Active, StatusColor::Blue),
-            ("In revision", StatusCategory::Active, StatusColor::Purple),
-            ("In test", StatusCategory::Review, StatusColor::Amber),
-            ("Done", StatusCategory::Done, StatusColor::Green),
+            ("To do", StatusCategory::Todo, Color::Gray),
+            ("In progress", StatusCategory::Active, Color::Blue),
+            ("In revision", StatusCategory::Active, Color::Purple),
+            ("In test", StatusCategory::Review, Color::Amber),
+            ("Done", StatusCategory::Done, Color::Green),
         ])
     }
 
     /// Builds one of the workflows that ship with the program. The templates
     /// are written above and are known to follow the rules; a test passes
     /// each of them through [`Workflow::new`] to prove it.
-    fn from_template(template: &[(&'static str, StatusCategory, StatusColor)]) -> Self {
+    fn from_template(template: &[(&'static str, StatusCategory, Color)]) -> Self {
         let statuses = template
             .iter()
             .map(|&(name, category, color)| {
@@ -249,11 +215,7 @@ mod tests {
     use super::*;
 
     fn status(name: &str, category: StatusCategory) -> Status {
-        Status::new(
-            StatusName::parse(name).unwrap(),
-            category,
-            StatusColor::Gray,
-        )
+        Status::new(StatusName::parse(name).unwrap(), category, Color::Gray)
     }
 
     #[test]

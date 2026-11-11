@@ -17,8 +17,8 @@ export type CalendarDate = string;
 /** What a status means for the progress of a task, whatever it is called. */
 export type StatusCategory = 'todo' | 'active' | 'review' | 'done';
 
-/** The color of a status, by name. The theme decides the exact shade. */
-export type StatusColor = 'gray' | 'blue' | 'purple' | 'amber' | 'green' | 'red' | 'pink' | 'teal';
+/** A color, by name. A status has one. The theme decides the exact shade. */
+export type Color = 'gray' | 'blue' | 'purple' | 'amber' | 'green' | 'red' | 'pink' | 'teal';
 
 export type Priority = 'low' | 'normal' | 'high' | 'urgent';
 
@@ -29,7 +29,7 @@ export interface Status {
   id: Id;
   name: string;
   category: StatusCategory;
-  color: StatusColor;
+  color: Color;
 }
 
 export interface Project {
