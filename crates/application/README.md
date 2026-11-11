@@ -9,7 +9,8 @@ window or agent runtime.
 |---|---|
 | `projects` | `ProjectService`: start, find, list, rename, describe and archive projects |
 | `tasks` | `TaskService`: open, change, move, connect and remove tasks |
-| `ports` | The interfaces the services need: `ProjectRepository`, `TaskRepository`, `Clock` |
+| `team` | `TeamService`: put members on the team of a project, change them, take them off |
+| `ports` | The interfaces the services need: `ProjectRepository`, `TaskRepository`, `MemberRepository`, `Clock` |
 | `error` | `ApplicationError`, with a stable `code()` for interfaces |
 | `clock` | `SystemClock`, the real clock |
 | `in_memory` | In-memory repositories and a settable clock, for tests and demos |
@@ -35,7 +36,7 @@ pub fn rename(&self, id: TaskId, title: &str) -> Result<Task, ApplicationError> 
 Rules that concern a single value live in the domain. Rules that need to look
 at several stored things live here: a project key must be unique, a
 dependency must not close a loop, a subtask and its parent must share a
-project.
+project, two members of one team cannot have the same name.
 
 ## What the services guarantee
 
@@ -49,6 +50,10 @@ project.
   the error names both tasks the way the manager knows them (`IOT-3`).
 - Deleting a task deletes its subtasks and releases the tasks that waited for
   any of them.
+- Every project has a team of its own. No two members of a team share a
+  name, whatever the capitals.
+- A newcomer to a team gets a color that sets it apart from the others.
+- Taking a member off a team gives the member's tasks to nobody.
 
 ## Adding a use case
 

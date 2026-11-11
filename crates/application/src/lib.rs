@@ -1,9 +1,10 @@
 //! Teamwright's use cases.
 //!
 //! This crate says what the program can do: start a project, open a task,
-//! move it across the board, make it wait for another task. Each use case is
-//! a method of a service ([`ProjectService`], [`TaskService`]) that loads what
-//! it needs, lets the domain apply its rules, and stores the result.
+//! move it across the board, make it wait for another task, put someone on
+//! the team. Each use case is a method of a service ([`ProjectService`],
+//! [`TaskService`], [`TeamService`]) that loads what it needs, lets the
+//! domain apply its rules, and stores the result.
 //!
 //! The crate reaches the outside world only through the traits in [`ports`]:
 //! it does not know which database stores a task or where the time comes
@@ -16,9 +17,11 @@ pub mod in_memory;
 pub mod ports;
 pub mod projects;
 pub mod tasks;
+pub mod team;
 
 pub use clock::SystemClock;
 pub use error::ApplicationError;
-pub use ports::{Clock, ProjectRepository, StorageError, TaskRepository};
+pub use ports::{Clock, MemberRepository, ProjectRepository, StorageError, TaskRepository};
 pub use projects::{NewProject, ProjectService, WorkflowTemplate};
 pub use tasks::{NewTask, TaskService};
+pub use team::{NewMember, TeamService};

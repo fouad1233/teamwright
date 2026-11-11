@@ -7,9 +7,9 @@ use std::collections::BTreeMap;
 use std::sync::{Mutex, MutexGuard, PoisonError};
 
 use chrono::TimeDelta;
-use teamwright_domain::{Project, ProjectId, Task, TaskId, Timestamp};
+use teamwright_domain::{Member, MemberId, Project, ProjectId, Task, TaskId, Timestamp};
 
-use crate::ports::{Clock, ProjectRepository, StorageError, TaskRepository};
+use crate::ports::{Clock, MemberRepository, ProjectRepository, StorageError, TaskRepository};
 
 /// Locks a mutex, and keeps working even if another thread panicked while it
 /// held the lock. The values guarded here are valid after every single
@@ -78,6 +78,36 @@ impl TaskRepository for InMemoryTaskRepository {
         for id in ids {
             stored.remove(id);
         }
+        Ok(())
+    }
+}
+
+/// Keeps the members of the teams in memory.
+#[derive(Debug, Default)]
+pub struct InMemoryMemberRepository {
+    members: Mutex<BTreeMap<MemberId, Member>>,
+}
+
+impl MemberRepository for InMemoryMemberRepository {
+    fn save(&self, member: &Member) -> Result<(), StorageError> {
+        lock(&self.members).insert(member.id(), member.clone());
+        Ok(())
+    }
+
+    fn find(&self, id: MemberId) -> Result<Option<Member>, StorageError> {
+        Ok(lock(&self.members).get(&id).cloned())
+    }
+
+    fn list_for_project(&self, project_id: ProjectId) -> Result<Vec<Member>, StorageError> {
+        Ok(lock(&self.members)
+            .values()
+            .filter(|member| member.project_id() == project_id)
+            .cloned()
+            .collect())
+    }
+
+    fn delete(&self, id: MemberId) -> Result<(), StorageError> {
+        lock(&self.members).remove(&id);
         Ok(())
     }
 }

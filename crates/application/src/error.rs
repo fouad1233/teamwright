@@ -40,6 +40,13 @@ pub enum ApplicationError {
         blocker: String,
     },
 
+    /// Another member of the team already has the requested name.
+    #[error("the team already has a member called \"{name}\"")]
+    MemberNameTaken {
+        /// The name that was requested.
+        name: String,
+    },
+
     /// Stored data could not be read or written.
     #[error("the data could not be read or written: {0}")]
     Storage(#[from] StorageError),
@@ -58,6 +65,7 @@ impl ApplicationError {
             Self::ProjectKeyTaken { .. } => "project_key_taken",
             Self::DifferentProjects => "different_projects",
             Self::DependencyCycle { .. } => "dependency_cycle",
+            Self::MemberNameTaken { .. } => "member_name_taken",
             Self::Storage(_) => "storage_failed",
         }
     }

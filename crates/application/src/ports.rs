@@ -6,7 +6,7 @@
 
 use std::error::Error;
 
-use teamwright_domain::{Project, ProjectId, Task, TaskId, Timestamp};
+use teamwright_domain::{Member, MemberId, Project, ProjectId, Task, TaskId, Timestamp};
 
 /// A failure to read or write stored data.
 #[derive(Debug, thiserror::Error)]
@@ -102,6 +102,38 @@ pub trait TaskRepository: Send + Sync {
     ///
     /// Returns an error if the tasks could not be removed.
     fn delete(&self, ids: &[TaskId]) -> Result<(), StorageError>;
+}
+
+/// Stores the members of the teams.
+pub trait MemberRepository: Send + Sync {
+    /// Stores a member, replacing a stored member with the same identifier.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the member could not be written.
+    fn save(&self, member: &Member) -> Result<(), StorageError>;
+
+    /// Finds a member by its identifier.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if stored data could not be read.
+    fn find(&self, id: MemberId) -> Result<Option<Member>, StorageError>;
+
+    /// Lists the members of the team of a project in no particular order.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if stored data could not be read.
+    fn list_for_project(&self, project_id: ProjectId) -> Result<Vec<Member>, StorageError>;
+
+    /// Removes a member. The identifier of a member that is not stored is
+    /// ignored.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the member could not be removed.
+    fn delete(&self, id: MemberId) -> Result<(), StorageError>;
 }
 
 /// Tells the time.
