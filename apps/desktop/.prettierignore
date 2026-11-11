@@ -1,3 +1,7 @@
 dist
 src-tauri/target
 src-tauri/gen
+
+# The documents of this repository are written by hand in one style, with
+# compact tables. The formatter would pad the tables of this folder only.
+*.md
