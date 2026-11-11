@@ -61,7 +61,8 @@ Scopes are crate or feature names: `domain`, `storage`, `runtime`, `bus`,
 ### Rust
 
 - Format with `cargo fmt`. Lint with `cargo clippy --all-targets -- -D warnings`.
-- `unsafe` is forbidden.
+- `unsafe` is denied. An exception needs `#[expect(unsafe_code, reason = "…")]`
+  and has to convince a reviewer.
 - No `unwrap` or `expect` outside tests. Return a typed error.
 - Each crate has its own error type built with `thiserror`.
 - Public items have documentation comments.
@@ -80,10 +81,19 @@ Scopes are crate or feature names: `domain`, `storage`, `runtime`, `bus`,
 - Components stay small and contain no business rules.
 - The backend is reached only through the `Backend` interface.
 
+### The interface
+
+- Follow the [design philosophy](docs/design/philosophy.md). Use the design
+  tokens; never a raw color or size.
+- Use the existing components for menus, dialogs, dates and tooltips. Do not
+  put a browser's own drop-down or date field on screen.
+- Look at what you built, in both themes, before you call it done.
+
 ## Working on the code
 
-Build and test instructions will be added here as soon as the first code
-lands. Until then the repository contains documentation only.
+[Development](docs/development/README.md) explains how to build, run and check
+the project. Every crate and the interface have a README that says how that
+part is organized and how to extend it.
 
 ## License
 
