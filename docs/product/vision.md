@@ -9,9 +9,9 @@ project-management tools give human teams.
 ## Who it is for
 
 **The solo builder with a project bigger than one conversation.** An engineer,
-maker or founder who knows what the result should be and can judge whether it
-is right, but cannot be the hardware designer, the firmware developer, the
-mechanical designer and the project manager at the same time.
+maker, creator or founder who knows what the result should be and can judge
+whether it is right, but cannot be the hardware designer, the firmware
+developer, the mechanical designer and the project manager at the same time.
 
 The reference scenario throughout the design is a small connected device: a
 custom board around a low-cost Wi-Fi microcontroller, a display, several
@@ -19,7 +19,9 @@ sensors, firmware, and an enclosure. It was chosen because one agent cannot
 finish it in one sitting. It has disciplines, ordering constraints, and
 choices that only the owner can make.
 
-Software-only projects are a subset of this and work the same way.
+Software-only projects are a subset of this and work the same way. So does
+work outside engineering: a creator's team might have a script writer and a
+video editor where the device project has a hardware and a firmware designer.
 
 ## The roles
 
@@ -32,6 +34,10 @@ Software-only projects are a subset of this and work the same way.
 The **coordinator** is neither a role nor an AI. It is program logic inside
 Teamwright that starts tasks when their dependencies are done, delivers
 messages, and enforces budgets.
+
+A task is assigned to a team member, and a team member is either an AI agent
+or a person. Today the only person is the manager. The model leaves room for
+human teammates who take tasks next to the agents.
 
 ## Principles
 
@@ -80,8 +86,9 @@ messages, and enforces budgets.
   limits), or in a workflow of statuses that you define.
 - Let tasks start automatically when they are unblocked, or start them one by
   one.
-- Create a task yourself and assign it to a specialist, as you would to a
-  person. Specialists can also propose tasks to you.
+- Create a task yourself at any time, for example a quick to-do, and assign it
+  to a specialist, as you would to a person. Specialists can also propose
+  tasks to you.
 
 **Stay in the loop**
 

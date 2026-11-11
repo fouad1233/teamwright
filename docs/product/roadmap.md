@@ -90,6 +90,11 @@ Several specialists working together with the manager in the loop.
 
 ## Later
 
-Ideas that are recorded but not scheduled: voice conversation with the
-Advisor, calendar view, whiteboards and documents inside projects, automation
-rules, more agent runtimes than Claude Code.
+Ideas that are recorded but not scheduled:
+
+- Human teammates: other people on a project who can be assigned tasks next
+  to the agents
+- Voice conversation with the Advisor
+- Calendar view, whiteboards and documents inside projects
+- Automation rules
+- More agent runtimes than Claude Code
