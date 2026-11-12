@@ -24,6 +24,7 @@ was considered.
 | [0006](0006-team-layer-in-the-app.md) | Keep the team layer in Teamwright and coordinate in code | Accepted |
 | [0007](0007-local-first-storage.md) | Store locally and sync through a user-owned folder | Accepted |
 | [0008](0008-budgets-in-tokens.md) | Measure usage and budgets in tokens | Accepted |
+| [0009](0009-a-team-per-project.md) | Give every project a team of its own, with agents and people as one kind of member | Accepted |
 
 ## Template
 
