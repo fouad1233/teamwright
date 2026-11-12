@@ -8,8 +8,10 @@ import { classNames } from '@/shared/lib/classNames';
 import { IconButton } from '@/shared/ui/Button';
 import { Logo } from '@/shared/ui/Logo';
 
+import { ArchivedProjectsDialog } from './ArchivedProjectsDialog';
 import { CreateProjectDialog } from './CreateProjectDialog';
 import styles from './Sidebar.module.css';
+import { useArchivedProjects } from './projectQueries';
 
 interface SidebarProps {
   projects: Project[];
@@ -21,7 +23,10 @@ interface SidebarProps {
 export function Sidebar({ projects, activeProjectId }: SidebarProps) {
   const navigation = useNavigation();
   const isDemo = useIsDemo();
+  const archived = useArchivedProjects();
   const [isCreatingProject, setIsCreatingProject] = useState(false);
+  const [isShowingArchive, setIsShowingArchive] = useState(false);
+  const archivedCount = archived.data?.length ?? 0;
 
   return (
     <aside className={styles.sidebar}>
@@ -67,6 +72,19 @@ export function Sidebar({ projects, activeProjectId }: SidebarProps) {
             })}
           </ul>
         )}
+
+        {archivedCount > 0 && (
+          <button
+            type="button"
+            className={styles.archive}
+            onClick={() => {
+              setIsShowingArchive(true);
+            }}
+          >
+            Archived
+            <span className={styles.archiveCount}>{archivedCount}</span>
+          </button>
+        )}
       </nav>
 
       {isDemo && (
@@ -81,6 +99,13 @@ export function Sidebar({ projects, activeProjectId }: SidebarProps) {
         open={isCreatingProject}
         onClose={() => {
           setIsCreatingProject(false);
+        }}
+      />
+      <ArchivedProjectsDialog
+        open={isShowingArchive}
+        projects={archived.data ?? []}
+        onClose={() => {
+          setIsShowingArchive(false);
         }}
       />
     </aside>

@@ -107,6 +107,33 @@
   color: var(--ink-faint);
 }
 
+/* The way to the projects that were put away: quiet, under the list. */
+.archive {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 28px;
+  padding: 0 var(--space-2) 0 10px;
+  margin-top: var(--space-2);
+  border-radius: var(--radius-control);
+  color: var(--ink-faint);
+  font-size: var(--text-small);
+  text-align: left;
+  transition:
+    background-color 100ms ease,
+    color 100ms ease;
+}
+
+.archive:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+
+.archiveCount {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+}
+
 .demoNote {
   padding: 0 var(--space-2);
   line-height: 1.7;

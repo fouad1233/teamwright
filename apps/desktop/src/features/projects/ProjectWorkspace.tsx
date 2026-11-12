@@ -18,6 +18,7 @@ import { TeamStrip } from '../team/TeamStrip';
 import { TeamView } from '../team/TeamView';
 import { useTeam } from '../team/teamQueries';
 import { NewTaskDialog } from './NewTaskDialog';
+import { ProjectMenu } from './ProjectMenu';
 import styles from './ProjectWorkspace.module.css';
 import { TaskTally } from './TaskTally';
 
@@ -57,6 +58,7 @@ export function ProjectWorkspace({ project }: { project: Project }) {
             />
             <span className={styles.space} />
             {tasks.data && <TaskTally project={project} tasks={tasks.data} />}
+            <ProjectMenu project={project} taskCount={tasks.data?.length ?? 0} />
             <Button
               variant="primary"
               icon={<Plus />}

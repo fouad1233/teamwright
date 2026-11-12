@@ -26,6 +26,12 @@
   animation: rise 160ms ease-out;
 }
 
+.wide {
+  top: 12vh;
+  width: min(640px, calc(100vw - 2 * var(--space-5)));
+  max-height: calc(88vh - var(--space-5));
+}
+
 .header {
   display: flex;
   align-items: center;
