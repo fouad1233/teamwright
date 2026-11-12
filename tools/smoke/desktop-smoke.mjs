@@ -43,7 +43,9 @@ const FOLDER_DIALOG_TITLE = 'Teamwright smoke test: choose a folder';
 let failures = 0;
 
 function check(description, passed, detail = '') {
-  console.log(`${passed ? 'ok  ' : 'FAIL'}  ${description}${passed || !detail ? '' : `  (${detail})`}`);
+  console.log(
+    `${passed ? 'ok  ' : 'FAIL'}  ${description}${passed || !detail ? '' : `  (${detail})`}`,
+  );
   if (!passed) {
     failures += 1;
   }
@@ -77,11 +79,18 @@ try {
   const board = await task('Design the board');
   const firmware = await task('Write the firmware');
   const enclosure = await task('Design the enclosure');
-  check('tasks are numbered from one', [board, firmware, enclosure].map((t) => t?.number).join() === '1,2,3');
+  check(
+    'tasks are numbered from one',
+    [board, firmware, enclosure].map((t) => t?.number).join() === '1,2,3',
+  );
 
   await window.command('assign_task', { taskId: board.id, assignee: { kind: 'manager' } });
   await window.command('prioritize_task', { taskId: board.id, priority: 'high' });
-  await window.command('reschedule_task', { taskId: board.id, startOn: '2026-11-12', dueOn: '2026-11-20' });
+  await window.command('reschedule_task', {
+    taskId: board.id,
+    startOn: '2026-11-12',
+    dueOn: '2026-11-20',
+  });
   await window.command('add_task_dependency', { taskId: firmware.id, blockerId: board.id });
   await window.command('add_task_dependency', { taskId: enclosure.id, blockerId: firmware.id });
 
@@ -92,12 +101,17 @@ try {
   check(
     'a dependency that would close a loop is refused by name',
     cycle.refused?.code === 'dependency_cycle' &&
-      cycle.refused?.message === 'SSN-1 cannot wait for SSN-3, because SSN-3 already waits for SSN-1',
+      cycle.refused?.message ===
+        'SSN-1 cannot wait for SSN-3, because SSN-3 already waits for SSN-1',
     JSON.stringify(cycle),
   );
 
   const done = project.statuses.find((status) => status.category === 'done');
-  const moved = await window.command('move_task', { taskId: board.id, statusId: done.id, index: 0 });
+  const moved = await window.command('move_task', {
+    taskId: board.id,
+    statusId: done.id,
+    index: 0,
+  });
   check('moving a task to a done status completes it', typeof moved.ok?.completedAt === 'string');
 
   const history = (await window.command('list_task_history', { taskId: board.id })).ok;
@@ -222,7 +236,8 @@ try {
     .map((stored) => stored.title);
   check(
     'a subtask is stored with its parent and is not counted among the cards of a status',
-    part?.parentId === enclosure.id && mainTasksToDo?.join(', ') === 'Design the enclosure, Write the firmware',
+    part?.parentId === enclosure.id &&
+      mainTasksToDo?.join(', ') === 'Design the enclosure, Write the firmware',
     JSON.stringify(mainTasksToDo),
   );
 
@@ -241,13 +256,19 @@ try {
   const inProgress = project.statuses.find((status) => status.category === 'active');
   await window.command('move_task', { taskId: firmware.id, statusId: waiting.id, index: 0 });
   const storedTask = async (id) =>
-    (await window.command('list_tasks', { projectId: project.id })).ok?.find((stored) => stored.id === id);
+    (await window.command('list_tasks', { projectId: project.id })).ok?.find(
+      (stored) => stored.id === id,
+    );
 
   const sameName = await window.command('add_status', {
     projectId: project.id,
     status: { name: 'in TEST', category: 'review', color: 'amber' },
   });
-  check('a second status with the same name is refused', sameName.refused?.code === 'rule_broken', JSON.stringify(sameName));
+  check(
+    'a second status with the same name is refused',
+    sameName.refused?.code === 'rule_broken',
+    JSON.stringify(sameName),
+  );
 
   const noTodo = await window.command('remove_status', {
     projectId: project.id,
@@ -280,7 +301,8 @@ try {
   });
   check(
     'a status that becomes a done status completes its tasks',
-    names(accepted.ok)?.includes('Accepted') && typeof (await storedTask(firmware.id))?.completedAt === 'string',
+    names(accepted.ok)?.includes('Accepted') &&
+      typeof (await storedTask(firmware.id))?.completedAt === 'string',
     JSON.stringify(accepted),
   );
 
@@ -311,10 +333,17 @@ try {
 
   // A second project is put away, brought back, and deleted for good.
   const spare = (
-    await window.command('create_project', { input: { name: 'Display driver', workflow: 'standard' } })
+    await window.command('create_project', {
+      input: { name: 'Display driver', workflow: 'standard' },
+    })
   ).ok;
-  await window.command('create_task', { input: { projectId: spare.id, title: 'Write the driver' } });
-  await window.command('rename_project', { projectId: spare.id, name: 'Display driver, second try' });
+  await window.command('create_task', {
+    input: { projectId: spare.id, title: 'Write the driver' },
+  });
+  await window.command('rename_project', {
+    projectId: spare.id,
+    name: 'Display driver, second try',
+  });
   await window.command('archive_project', { projectId: spare.id });
   const openProjects = (await window.command('list_projects')).ok;
   const archived = (await window.command('list_archived_projects')).ok;
@@ -345,7 +374,10 @@ try {
   await window.reload();
   const shown = await window.waitForText('Write the firmware');
   check('the board shows the project', shown.includes('Smart sensor node'));
-  check('the board shows every task', ['Design the board', 'Design the enclosure'].every((title) => shown.includes(title)));
+  check(
+    'the board shows every task',
+    ['Design the board', 'Design the enclosure'].every((title) => shown.includes(title)),
+  );
   check('the header counts the tasks', shown.includes('4 tasks · 1 done'), shown.slice(0, 200));
   check(
     'the board shows a subtask behind the fold of its parent, not as a card of its own',
@@ -354,9 +386,7 @@ try {
   );
   check(
     'the views of a project are offered as tabs',
-    ['Board', 'List', 'Gantt', 'Calendar', 'Team', 'Advisor'].every((view) =>
-      shown.includes(view),
-    ),
+    ['Board', 'List', 'Gantt', 'Calendar', 'Team', 'Advisor'].every((view) => shown.includes(view)),
   );
   check(
     'the board shows who a task is given to',
@@ -441,7 +471,8 @@ try {
     'single files are copied into the work folder, and a name that is taken gets a number',
     JSON.stringify(copied.ok) === '["sheet.txt","sheet (2).txt"]' &&
       existsSync(join(chosenFolder, 'references', 'sheet (2).txt')) &&
-      readFileSync(join(chosenFolder, 'references', 'sheet.txt'), 'utf8') === 'The supply is 3.3 V.',
+      readFileSync(join(chosenFolder, 'references', 'sheet.txt'), 'utf8') ===
+        'The supply is 3.3 V.',
     JSON.stringify(copied),
   );
 
@@ -532,6 +563,151 @@ try {
       approvalOfNothing.refused?.code === 'not_found',
     JSON.stringify([answersToNothing, approvalOfNothing]),
   );
+
+  // Sprints and the backlog: a sprint is planned, filled, started and
+  // completed, and what it must not do is refused by name.
+  const tasksOf = async () => (await window.command('list_tasks', { projectId: project.id })).ok;
+  const sprintsOf = async () =>
+    (await window.command('list_sprints', { projectId: project.id })).ok;
+  check(
+    'a project starts without sprints: every task is in the backlog, without points',
+    (await sprintsOf())?.length === 0 &&
+      (await tasksOf())?.every((stored) => stored.sprintId === null && stored.points === null),
+  );
+  const sprint = (await window.command('create_sprint', { input: { projectId: project.id } })).ok;
+  check(
+    'a sprint without a name is called by its number, and is planned without dates',
+    sprint?.name === 'Sprint 1' &&
+      sprint.state === 'planned' &&
+      sprint.startOn === null &&
+      sprint.endOn === null,
+    JSON.stringify(sprint),
+  );
+  const firstSprint = {
+    name: 'First board',
+    goal: 'A board that can be ordered',
+    startOn: '2026-11-12',
+    endOn: '2026-11-25',
+  };
+  const startedEmpty = await window.command('start_sprint', {
+    sprintId: sprint.id,
+    input: firstSprint,
+  });
+  check(
+    'a sprint without tasks is not started',
+    startedEmpty.refused?.code === 'sprint_empty' &&
+      startedEmpty.refused.message ===
+        '"Sprint 1" has no tasks; plan some into it before you start it',
+    JSON.stringify(startedEmpty),
+  );
+  const plannedInto = await window.command('plan_task', {
+    taskId: enclosure.id,
+    sprintId: sprint.id,
+  });
+  await window.command('plan_task', { taskId: firmware.id, sprintId: sprint.id });
+  const subtaskAlone = await window.command('plan_task', { taskId: part.id, sprintId: null });
+  check(
+    'a task goes into a sprint with its subtasks, and a subtask is not planned by itself',
+    plannedInto.ok?.sprintId === sprint.id &&
+      (await tasksOf())?.find((stored) => stored.id === part.id)?.sprintId === sprint.id &&
+      subtaskAlone.refused?.code === 'subtask_planned_alone' &&
+      subtaskAlone.refused.message === 'SSN-4 is a part of SSN-3 and goes where it goes',
+    JSON.stringify([plannedInto, subtaskAlone]),
+  );
+  const withPoints = await window.command('set_task_points', { taskId: firmware.id, points: 5 });
+  const withHalfAPoint = await window.command('set_task_points', {
+    taskId: firmware.id,
+    points: 2.5,
+  });
+  check(
+    'a task is given story points, and half a point is refused',
+    withPoints.ok?.points === 5 &&
+      withHalfAPoint.refused?.code === 'rule_broken' &&
+      withHalfAPoint.refused.message === 'story points are a whole number from 0 to 999',
+    JSON.stringify([withPoints, withHalfAPoint]),
+  );
+  const started = await window.command('start_sprint', { sprintId: sprint.id, input: firstSprint });
+  check(
+    'a sprint starts with its name, its goal and its dates',
+    started.ok?.state === 'active' &&
+      started.ok.name === 'First board' &&
+      started.ok.goal === 'A board that can be ordered' &&
+      started.ok.startOn === '2026-11-12' &&
+      started.ok.endOn === '2026-11-25' &&
+      started.ok.startedAt !== null,
+    JSON.stringify(started),
+  );
+  const next = (await window.command('create_sprint', { input: { projectId: project.id } })).ok;
+  const startedBeside = await window.command('start_sprint', {
+    sprintId: next.id,
+    input: { name: 'Sprint 2', goal: '', startOn: '2026-11-26', endOn: '2026-12-09' },
+  });
+  const deletedWhileRunning = await window.command('delete_sprint', { sprintId: sprint.id });
+  check(
+    'one sprint runs at a time, and a running sprint is not deleted',
+    next?.name === 'Sprint 2' &&
+      startedBeside.refused?.code === 'another_sprint_active' &&
+      startedBeside.refused.message ===
+        '"First board" is still running; complete it before you start another sprint' &&
+      deletedWhileRunning.refused?.code === 'sprint_active',
+    JSON.stringify([startedBeside, deletedWhileRunning]),
+  );
+  check(
+    'the sprint that runs is listed first',
+    (await sprintsOf())?.map((stored) => stored.name).join(', ') === 'First board, Sprint 2',
+  );
+  await window.command('move_task', { taskId: firmware.id, statusId: done.id, index: 0 });
+  const course = (await window.command('sprint_report', { sprintId: sprint.id })).ok;
+  check(
+    'the report of a sprint has a day for each of its dates and counts in points',
+    course?.unit === 'points' && course.total === 5 && course.days.length === 14,
+    JSON.stringify(course)?.slice(0, 300),
+  );
+  const completed = await window.command('complete_sprint', {
+    sprintId: sprint.id,
+    input: { moveUnfinishedTo: next.id },
+  });
+  const afterSprint = await tasksOf();
+  check(
+    'a sprint is completed with what it took on and what it finished',
+    completed.ok?.state === 'completed' &&
+      completed.ok.completedAt !== null &&
+      completed.ok.summary?.unit === 'points' &&
+      completed.ok.summary.committed === 5 &&
+      completed.ok.summary.completed === 5,
+    JSON.stringify(completed),
+  );
+  check(
+    'its finished task stays in it, and the unfinished one moves on with its subtask',
+    afterSprint?.find((stored) => stored.id === firmware.id)?.sprintId === sprint.id &&
+      afterSprint.find((stored) => stored.id === enclosure.id)?.sprintId === next.id &&
+      afterSprint.find((stored) => stored.id === part.id)?.sprintId === next.id,
+    JSON.stringify(afterSprint?.map((stored) => [stored.number, stored.sprintId])),
+  );
+  const deletedRecord = await window.command('delete_sprint', { sprintId: sprint.id });
+  const plannedIntoRecord = await window.command('plan_task', {
+    taskId: board.id,
+    sprintId: sprint.id,
+  });
+  check(
+    'a completed sprint is kept as a record and takes no more tasks',
+    deletedRecord.refused?.code === 'sprint_completed' &&
+      deletedRecord.refused.message === '"First board" is completed and is kept as a record' &&
+      plannedIntoRecord.refused?.code === 'sprint_completed',
+    JSON.stringify([deletedRecord, plannedIntoRecord]),
+  );
+  await window.reload();
+  await window.waitForText('Smart sensor node');
+  await window.click(
+    `[...document.querySelectorAll('[role="tab"]')].find((entry) => entry.innerText.trim() === 'Backlog')`,
+  );
+  const backlogShown = await window.waitForText('COMPLETED SPRINTS');
+  check(
+    'the Backlog view shows the planned sprint, its task and the completed sprint',
+    backlogShown.includes('Sprint 2') &&
+      backlogShown.includes('First board') &&
+      backlogShown.includes('Design the enclosure'),
+  );
   window.close();
 
   // Second run: what was stored is still there.
@@ -561,8 +737,7 @@ try {
       team[0].effort === 'high',
     JSON.stringify(team),
   );
-  const storedPlaces = (await window.command('project_places', { projectId: projects[0]?.id }))
-    .ok;
+  const storedPlaces = (await window.command('project_places', { projectId: projects[0]?.id })).ok;
   check(
     'the folders of the project survive a restart',
     storedPlaces?.isWorkFolderChosen === true && storedPlaces.referenceFolders.length === 1,
@@ -584,6 +759,24 @@ try {
   check(
     'dependencies survive a restart',
     tasks?.find((stored) => stored.number === 2)?.blockedBy.length === 1,
+  );
+  const storedSprints = (await window.command('list_sprints', { projectId: projects[0]?.id })).ok;
+  const record = storedSprints?.find((stored) => stored.state === 'completed');
+  check(
+    'the sprints survive a restart, the planned one before the completed one',
+    storedSprints?.map((stored) => `${stored.name}: ${stored.state}`).join(', ') ===
+      'Sprint 2: planned, First board: completed' &&
+      record?.summary?.committed === 5 &&
+      record.summary.completed === 5,
+    JSON.stringify(storedSprints),
+  );
+  check(
+    'the tasks are still in their sprints, with their points',
+    tasks?.find((stored) => stored.number === 2)?.sprintId === record?.id &&
+      tasks.find((stored) => stored.number === 2)?.points === 5 &&
+      tasks.find((stored) => stored.number === 3)?.sprintId === storedSprints?.[0]?.id &&
+      tasks.find((stored) => stored.number === 1)?.sprintId === null,
+    JSON.stringify(tasks?.map((stored) => [stored.number, stored.sprintId, stored.points])),
   );
   window.close();
 } catch (failure) {
