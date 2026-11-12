@@ -2,9 +2,14 @@
  * Design tokens: every color, size and radius the interface uses.
  *
  * They follow the design philosophy in docs/design/philosophy.md. The ground
- * is graphite or paper, the text is ink, hairline rules do the work of
- * shadows, brass marks the one point of attention, and pigment is used only
- * to tell things apart.
+ * is night or paper, the text is ink, hairline rules do the work of shadows,
+ * gold marks the one point of attention, and pigment is used only to tell
+ * things apart. Light falls only where something happens or waits for the
+ * manager (decision 0015).
+ *
+ * The colors are the Onyx and Gilded palette: obsidian #12100E, burnished
+ * gold #C9A96E, smoky parchment #E8E0D0 and charred umber #3D2F25. The gold
+ * keeps its old name, brass, so that no component had to change for it.
  *
  * Components refer to these names and never to raw values. A theme is a
  * different set of values for the same names.
@@ -46,34 +51,110 @@
   --lane-width: 292px;
   --control-height: 30px;
 
-  /* Graphite: the ground, from the back of the window to the front. */
-  --ground: #181715;
-  --ground-sunken: #121110;
-  --surface: #201e1b;
-  --surface-raised: #292622;
-  --rule: rgb(243 239 230 / 9%);
-  --rule-strong: rgb(243 239 230 / 18%);
-  --hover: rgb(243 239 230 / 5%);
-  --pressed: rgb(243 239 230 / 10%);
+  /* Night: the ground, from the back of the window to the front. The rules
+     and washes are the ink, thinned. */
+  --ground: #12100e;
+  --ground-sunken: #0d0c0a;
+  --surface: #1a1714;
+  --surface-raised: #221d19;
+  --rule: rgb(232 224 208 / 9%);
+  --rule-strong: rgb(232 224 208 / 18%);
+  --hover: rgb(232 224 208 / 5%);
+  --pressed: rgb(232 224 208 / 10%);
   --backdrop: rgb(10 9 8 / 62%);
 
-  /* Ink */
-  --ink: #f0ede5;
-  --ink-soft: #b5b0a5;
-  --ink-faint: #7f7a6f;
-  --ink-inverse: #181715;
+  /* Ink: parchment at night. */
+  --ink: #e8e0d0;
+  --ink-soft: #b9af9d;
+  --ink-faint: #9a907f;
+  --ink-inverse: #12100e;
 
-  /* Brass: the one metal. */
-  --brass: #d3a43d;
-  --brass-soft: rgb(211 164 61 / 16%);
+  /* Gold, the one metal. `--brass` is for marks: rules, blocks, rings.
+     `--brass-text` is for words, which need more contrast than a mark on
+     paper. At night the two are the same. */
+  --brass: #c9a96e;
+  --brass-text: #c9a96e;
+  --brass-rgb: 201 169 110;
+  --brass-soft: rgb(201 169 110 / 16%);
 
-  --danger: #e2674f;
-  --danger-soft: rgb(226 103 79 / 14%);
+  /* Umber: where gold has cooled and night has not yet come. */
+  --umber: #3d2f25;
+
+  /* The primary button is ink. Under the pointer it warms: lighter at
+     night, umber on paper. */
+  --primary-hover: #f4eee3;
+
+  --danger: #e8735c;
+  --danger-soft: rgb(232 115 92 / 14%);
+
+  /*
+   * Light (decision 0015). It falls only where something happens or is the
+   * manager's to do, and always next to a mark that says the same thing.
+   */
+
+  /* The lamp that follows the pointer over a card or a button: how strong
+     it is on a surface, how strong on the rim, and how far it reaches. */
+  --glow-strength: 0.12;
+  --rim-strength: 0.7;
+  --lamp-reach: 220px;
+  --rim-reach: 140px;
+  --lamp-reach-small: 90px;
+  /* The lamp on a surface of ink, the primary button: a warm white at
+     night, gold on paper. */
+  --lamp-on-ink: rgb(255 248 230 / 55%);
+
+  /* The sun in the corner of a card a specialist works on. */
+  --sun-at-work: 0.1;
+
+  /* The gilded sun of the decision card: the light at its peak, the colors
+     the surface fades from and to, and a fine grain that keeps the long fade
+     from breaking into bands on screens of eight bits a color. */
+  --sun-peak: 0.24;
+  --sun-from: #2a211a;
+  --sun-to: #12100e;
+  --grain-strength: 0.07;
+  --grain-texture: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+
+  /* The joints at the corners of a card that waits for the manager. Two
+     pixels, so that they land on whole pixels at every scale of the
+     screen. */
+  --joint-length: 9px;
+  --joint-weight: 2px;
+
+  /*
+   * Motion (decision 0015). Things arrive by slowing down and leave by
+   * speeding up. Leaving is quicker than arriving. Nothing bounces, and
+   * nothing takes longer than 300 ms except work that really goes on.
+   */
+  --ease-settle: cubic-bezier(0.2, 0, 0, 1);
+  --ease-arrive: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-leave: cubic-bezier(0.4, 0, 1, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+  --duration-quick: 120ms;
+  --duration-lift: 140ms;
+  --duration-leave: 180ms;
+  --duration-settle: 200ms;
+  --duration-room: 220ms;
+  --duration-arrive: 240ms;
+  --duration-panel: 280ms;
+  /* Something new in a lane is outlined in gold, which then lets go. */
+  --duration-welcome: 1400ms;
+  /* Work that goes on: the block that comes and goes, and one turn of the
+     light round the edge of a card. */
+  --duration-at-work: 1100ms;
+  --duration-orbit: 3600ms;
+  /* How far things travel: a card that is lifted, a card or a line that
+     comes into place, and a panel that opens. */
+  --lift-rise: 3px;
+  --lift-scale: 1.015;
+  --lift-tilt: -1deg;
+  --arrive-travel: 6px;
+  --panel-travel: 16px;
 
   /* Pigments: a solid tone, a tone for text, and a wash of the same hue. */
   --pigment-gray: #8a857a;
   --pigment-gray-text: #b5b0a5;
-  --pigment-gray-wash: rgb(243 239 230 / 6%);
+  --pigment-gray-wash: rgb(232 224 208 / 6%);
   --pigment-blue: #5b8fd9;
   --pigment-blue-text: #8fb6ee;
   --pigment-blue-wash: rgb(91 143 217 / 14%);
@@ -97,8 +178,8 @@
   --pigment-teal-wash: rgb(63 168 160 / 14%);
 
   /* Depth is used only for things that float above the sheet. */
-  --shadow-overlay: 0 12px 32px rgb(0 0 0 / 45%);
-  --shadow-lifted: 0 10px 24px rgb(0 0 0 / 50%);
+  --shadow-overlay: 0 18px 44px rgb(0 0 0 / 50%);
+  --shadow-lifted: 0 14px 32px rgb(0 0 0 / 55%), 0 2px 6px rgb(0 0 0 / 40%);
 }
 
 @media (prefers-color-scheme: light) {
@@ -106,30 +187,45 @@
     color-scheme: light;
 
     /* Paper */
-    --ground: #f7f4ed;
-    --ground-sunken: #efebe2;
-    --surface: #fffdf8;
-    --surface-raised: #fffefb;
-    --rule: rgb(33 31 27 / 10%);
-    --rule-strong: rgb(33 31 27 / 20%);
-    --hover: rgb(33 31 27 / 5%);
-    --pressed: rgb(33 31 27 / 9%);
-    --backdrop: rgb(33 31 27 / 36%);
+    --ground: #ece5d7;
+    --ground-sunken: #e4dccb;
+    --surface: #faf7f0;
+    --surface-raised: #fffdf8;
+    --rule: rgb(18 16 14 / 11%);
+    --rule-strong: rgb(18 16 14 / 22%);
+    --hover: rgb(18 16 14 / 5%);
+    --pressed: rgb(18 16 14 / 9%);
+    --backdrop: rgb(18 16 14 / 36%);
 
-    --ink: #211f1b;
-    --ink-soft: #5f5a50;
-    --ink-faint: #8d887c;
-    --ink-inverse: #f7f4ed;
+    /* Ink: obsidian on paper. */
+    --ink: #12100e;
+    --ink-soft: #4b4036;
+    --ink-faint: #6b5f50;
+    --ink-inverse: #e8e0d0;
 
-    --brass: #a8791c;
-    --brass-soft: rgb(168 121 28 / 14%);
+    /* Raw gold on paper is 2.1 to 1: too faint even for a mark. These two
+       are the gold darkened until a mark reaches 3 to 1 and a word 4.5. */
+    --brass: #a07a35;
+    --brass-text: #6f5220;
+    --brass-soft: rgb(160 122 53 / 14%);
 
-    --danger: #bf3f2a;
-    --danger-soft: rgb(191 63 42 / 10%);
+    --primary-hover: var(--umber);
+
+    --danger: #b23823;
+    --danger-soft: rgb(178 56 35 / 10%);
+
+    /* Light reads less well on paper than at night, so it is stronger. */
+    --glow-strength: 0.2;
+    --lamp-on-ink: rgb(var(--brass-rgb) / 30%);
+    --sun-at-work: 0.14;
+    --sun-peak: 0.32;
+    --sun-from: #f2e8d5;
+    --sun-to: #faf6ee;
+    --grain-strength: 0.05;
 
     --pigment-gray: #8d887c;
     --pigment-gray-text: #5f5a50;
-    --pigment-gray-wash: rgb(33 31 27 / 5%);
+    --pigment-gray-wash: rgb(18 16 14 / 5%);
     --pigment-blue: #3f73c4;
     --pigment-blue-text: #2f5fa8;
     --pigment-blue-wash: rgb(63 115 196 / 11%);
@@ -137,7 +233,7 @@
     --pigment-purple-text: #6447a6;
     --pigment-purple-wash: rgb(122 90 192 / 11%);
     --pigment-amber: #c9761d;
-    --pigment-amber-text: #9c5a10;
+    --pigment-amber-text: #91530e;
     --pigment-amber-wash: rgb(201 118 29 / 13%);
     --pigment-green: #2f8f63;
     --pigment-green-text: #23724e;
@@ -152,8 +248,10 @@
     --pigment-teal-text: #186c65;
     --pigment-teal-wash: rgb(35 135 127 / 11%);
 
-    --shadow-overlay: 0 12px 32px rgb(33 31 27 / 16%);
-    --shadow-lifted: 0 10px 24px rgb(33 31 27 / 20%);
+    /* On paper a shadow is umber, not ink, so a lifted card casts a warm
+       shadow. */
+    --shadow-overlay: 0 16px 40px rgb(61 47 37 / 16%);
+    --shadow-lifted: 0 12px 28px rgb(61 47 37 / 18%), 0 2px 6px rgb(61 47 37 / 10%);
   }
 }
 

@@ -126,7 +126,7 @@
   align-items: center;
   gap: 6px;
   margin-left: var(--space-3);
-  color: var(--brass);
+  color: var(--brass-text);
 }
 
 .working::before {
@@ -145,7 +145,7 @@
   align-items: center;
   gap: 6px;
   margin-left: var(--space-3);
-  color: var(--brass);
+  color: var(--brass-text);
 }
 
 .waiting::before {

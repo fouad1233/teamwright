@@ -8,7 +8,7 @@ interface LogoProps {
  * holds the others together, the keystone, is brass.
  *
  * The mark takes its colors from the theme, so it is ink on paper in the
- * light theme and paper on graphite in the dark one.
+ * light theme and parchment on night in the dark one.
  */
 export function Logo({ size = 22 }: LogoProps) {
   // Three columns and three rows of 6 by 6 blocks with a gap of 1.5.

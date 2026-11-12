@@ -108,7 +108,7 @@
 }
 
 .today .dayNumber {
-  color: var(--brass);
+  color: var(--brass-text);
   font-weight: 600;
 }
 

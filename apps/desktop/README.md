@@ -148,6 +148,9 @@ The interface follows the design philosophy in
 - Every color, size and radius is a token in `shared/styles/tokens.css`.
   Components never use raw values. The dark and the light theme are two sets
   of values for the same tokens and follow the operating system.
+- The gold has two tokens: `--brass` for marks (a rule, a block, a ring)
+  and `--brass-text` for words. On paper the gold of a mark is too light to
+  be read, so words in gold always use `--brass-text`.
 - A status, a priority or a person gets its color through a `data-tone`
   attribute, which sets `--tone`, `--tone-text` and `--tone-wash`.
 - Styles are CSS Modules, one file next to each component.

@@ -23,7 +23,7 @@
   --rdp-day-width: 32px;
   --rdp-day-height: 32px;
   --rdp-nav-height: 32px;
-  --rdp-today-color: var(--brass);
+  --rdp-today-color: var(--brass-text);
   --rdp-selected-border: none;
   --rdp-weekday-opacity: 1;
   --rdp-outside-opacity: 0.35;

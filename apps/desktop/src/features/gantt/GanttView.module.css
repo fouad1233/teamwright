@@ -112,7 +112,7 @@
 
 /* Today is the one point of attention of the chart, so it gets the brass. */
 .today {
-  color: var(--brass);
+  color: var(--brass-text);
   font-weight: 600;
   opacity: 1;
 }

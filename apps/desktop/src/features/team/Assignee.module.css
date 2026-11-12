@@ -42,9 +42,11 @@
   border-style: solid;
 }
 
+/* The figure in the circle is the color of a card, so it stands out from the
+   gold by 3 to 1 in both themes. */
 .manager {
   background: var(--brass);
-  color: var(--ink-inverse);
+  color: var(--surface);
 }
 
 /* A member wears its own pigment: a wash for the ground, a hairline of the
