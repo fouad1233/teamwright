@@ -1,16 +1,24 @@
+import { ChevronDown, History } from 'lucide-react';
 import { useState } from 'react';
 
-import type { Project, Task } from '@/shared/api/types';
+import type { Project, Sprint, Task } from '@/shared/api/types';
 import { classNames } from '@/shared/lib/classNames';
 import { today } from '@/shared/lib/format';
+import { Button } from '@/shared/ui/Button';
+import { ChoiceMenu } from '@/shared/ui/Menu';
 
 import { BoardView } from '../board/BoardView';
 import styles from './SprintBoard.module.css';
-import { daysLeft, formatDaysLeft, formatSprintDates, layoutOf } from './sprintModel';
+import {
+  daysLeft,
+  formatDaysLeft,
+  formatSprintDates,
+  formatSummary,
+  layoutOf,
+  previousSprintOf,
+  type BoardScope,
+} from './sprintModel';
 import { useSprintCommands, useSprints } from './sprintQueries';
-
-/** What the board shows while a sprint runs: the tasks of the sprint, or all tasks. */
-type Scope = 'sprint' | 'all';
 
 interface SprintBoardProps {
   project: Project;
@@ -19,60 +27,95 @@ interface SprintBoardProps {
 
 /**
  * The board of a project. While a sprint is active it shows the tasks of
- * that sprint, and a switch in its header shows all tasks again. Without an
- * active sprint it is the board of all tasks.
+ * that sprint, and a switch in its header shows all tasks again. A menu in
+ * the header chooses a sprint that is over, and the board then shows the
+ * tasks it finished. Without any sprint it is the board of all tasks.
  */
 export function SprintBoard({ project, tasks }: SprintBoardProps) {
   const sprints = useSprints(project.id);
   const commands = useSprintCommands(project.id);
-  const [scope, setScope] = useState<Scope>('sprint');
-  const active = layoutOf(sprints.data ?? []).active;
+  const [scope, setScope] = useState<BoardScope>({ kind: 'current' });
+  const { active, completed } = layoutOf(sprints.data ?? []);
+  const previous = previousSprintOf(scope, completed);
 
-  if (!active) {
+  if (!active && completed.length === 0) {
     return <BoardView project={project} tasks={tasks} />;
   }
 
-  const isSprintShown = scope === 'sprint';
+  // A completed sprint takes no tasks, so a task made while one is shown
+  // is not planned into it. The sprint that runs takes the tasks made on its board.
+  const sprintShown = previous ?? (scope.kind === 'current' ? active : undefined);
+  const isRunningShown = sprintShown !== undefined && sprintShown === active;
+  const backLabel = active ? `Back to ${active.name}` : 'Back to all tasks';
+
   return (
     <div className={styles.frame}>
       <header className={styles.header}>
         <span className={styles.sprint}>
-          <span className={styles.name}>{active.name}</span>
-          <span className={styles.facts}>
-            {formatSprintDates(active)}
-            {active.endOn !== null && (
-              <>
-                <span className={styles.separator} aria-hidden />
-                {formatDaysLeft(daysLeft(active.endOn, today()))}
-              </>
-            )}
-          </span>
+          {previous ? (
+            <PreviousSprintFacts sprint={previous} />
+          ) : active ? (
+            <ActiveSprintFacts sprint={active} />
+          ) : (
+            <>
+              <span className={styles.name}>All tasks</span>
+              <span className={styles.facts}>No sprint is running</span>
+            </>
+          )}
         </span>
         <span className={styles.space} />
-        <div className={styles.switch} role="group" aria-label="Tasks on the board">
-          {(['sprint', 'all'] as const).map((choice) => (
-            <button
-              key={choice}
-              type="button"
-              className={classNames(styles.choice, scope === choice && styles.chosen)}
-              aria-pressed={scope === choice}
-              onClick={() => {
-                setScope(choice);
-              }}
-            >
-              {choice === 'sprint' ? 'Sprint' : 'All tasks'}
-            </button>
-          ))}
-        </div>
+        {previous && (
+          <Button
+            onClick={() => {
+              setScope({ kind: 'current' });
+            }}
+          >
+            {backLabel}
+          </Button>
+        )}
+        {!previous && active && (
+          <div className={styles.switch} role="group" aria-label="Tasks on the board">
+            {(['current', 'all'] as const).map((choice) => (
+              <button
+                key={choice}
+                type="button"
+                className={classNames(styles.choice, scope.kind === choice && styles.chosen)}
+                aria-pressed={scope.kind === choice}
+                onClick={() => {
+                  setScope({ kind: choice });
+                }}
+              >
+                {choice === 'current' ? 'Sprint' : 'All tasks'}
+              </button>
+            ))}
+          </div>
+        )}
+        {completed.length > 0 && (
+          <ChoiceMenu
+            label="Previous sprints"
+            choices={completed.map((sprint) => ({
+              value: sprint.id,
+              label: `${sprint.name} · ${formatSprintDates(sprint)}`,
+            }))}
+            value={previous?.id ?? ''}
+            onChoose={(sprintId) => {
+              setScope({ kind: 'previous', sprintId });
+            }}
+          >
+            <Button icon={<History />}>
+              Previous sprints
+              <ChevronDown />
+            </Button>
+          </ChoiceMenu>
+        )}
       </header>
       <div className={styles.board}>
         <BoardView
           project={project}
           tasks={tasks}
-          shows={isSprintShown ? (task) => task.sprintId === active.id : undefined}
-          // A task opened on the board of the sprint is meant for the sprint.
+          shows={sprintShown ? (task) => task.sprintId === sprintShown.id : undefined}
           onCreated={
-            isSprintShown
+            isRunningShown && active
               ? (task) => {
                   void commands.plan(task.id, active.id);
                 }
@@ -81,5 +124,42 @@ export function SprintBoard({ project, tasks }: SprintBoardProps) {
         />
       </div>
     </div>
+  );
+}
+
+/** Which sprint runs, its dates and how long it still runs. */
+function ActiveSprintFacts({ sprint }: { sprint: Sprint }) {
+  return (
+    <>
+      <span className={styles.name}>{sprint.name}</span>
+      <span className={styles.facts}>
+        {formatSprintDates(sprint)}
+        {sprint.endOn !== null && (
+          <>
+            <span className={styles.separator} aria-hidden />
+            {formatDaysLeft(daysLeft(sprint.endOn, today()))}
+          </>
+        )}
+      </span>
+    </>
+  );
+}
+
+/** A sprint that is over: that it is, its dates and what it finished. */
+function PreviousSprintFacts({ sprint }: { sprint: Sprint }) {
+  return (
+    <>
+      <span className={styles.name}>{sprint.name}</span>
+      <span className="label">Completed</span>
+      <span className={styles.facts}>
+        {formatSprintDates(sprint)}
+        {sprint.summary && (
+          <>
+            <span className={styles.separator} aria-hidden />
+            {formatSummary(sprint.summary)}
+          </>
+        )}
+      </span>
+    </>
   );
 }
