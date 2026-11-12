@@ -126,6 +126,9 @@ Several specialists working together with the manager in the loop.
 - 🚧 Burndown of a sprint, and the completed sprints side by side. The
   burndown does not yet follow tasks that join or leave a sprint while it
   runs. Velocity as a forecast is not planned yet
+- ✅ A completed sprint opens in the Backlog view, with its burndown and
+  its tasks, and the board can show a previous sprint. Which tasks moved
+  on when a sprint was completed is not recorded
 - ⬜ Work-in-progress limits, custom fields, tags, checklists
 - ⬜ Templates: Scrum, Kanban, hardware product
 

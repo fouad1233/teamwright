@@ -524,9 +524,27 @@ out leaves no trace. It does not yet follow such changes day by day.
 *13 of 15 points*. The bar beside it shows the same on one scale for all
 of them, so you can see the pace from sprint to sprint.
 
+Press the line of a completed sprint to open it where it stands, and press
+it again to fold it. Opened, it shows its goal, its dates, when it was
+started and completed, what it took on and what it finished, its burndown
+as it ended, and its tasks. The tasks in it are the ones it finished:
+the unfinished ones moved on when it was completed, and the program does
+not keep which they were, so it only says that some did. Press a task to
+open it. The rows cannot be dragged or moved, and their points cannot be
+changed: the sprint is over.
+
 **The board** shows the tasks of the sprint that runs. The switch at the
 top right, *Sprint* and *All tasks*, shows every task again. A task you
 add on the board of the sprint goes into the sprint.
+
+*Previous sprints*, next to the switch, lists the sprints that are over.
+Choose one and the board shows the tasks it finished. The header names the
+sprint, says that it is completed and gives its dates and its result. The
+key at its right, *Back to* the sprint that runs or *Back to all tasks*,
+leads back. A task you add while a previous sprint is shown is not put into
+it, because a completed sprint takes no tasks. Without a running sprint the
+board shows all tasks, and *Previous sprints* is there as long as one sprint
+is over.
 
 **The task's panel** shows the sprint of the task and lets you move it to
 another, or to the backlog, and shows its points.

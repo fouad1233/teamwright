@@ -103,7 +103,7 @@ src/
     work/             The work of AI specialists: starting it, following it, answering
     inbox/            What waits for the manager in every project: questions to decide
     advisor/          Planning a project with the Advisor: its questions, its proposal
-    sprints/          The Backlog view, sprints and points, the burndown, the board of a sprint
+    sprints/          The Backlog view, sprints and points, the burndown, the board of a sprint, completed sprints opened
   shared/
     api/              The Backend interface and its two implementations
     ui/               Buttons, menus, dialogs, the calendar field, tooltips
