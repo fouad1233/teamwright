@@ -195,6 +195,16 @@ user's plan on the cheapest model:
 cargo test -p teamwright-runtime --test real_program -- --ignored --nocapture --test-threads 1
 ```
 
+One of them is the proof of what a session can reach
+(`a_real_session_reaches_its_folders_and_nothing_else`). It gives a session
+its working folder, a folder to read and a folder it was not given, and asks
+it to try everything. It passes if the folder to read was read and searched
+and not written to, and the third folder was neither read nor written to.
+Run it after every change to the permissions of a turn and after a new
+version of Claude Code. A specialist that runs through Teamwright cannot
+stand in for this test: it is told which folders are its own, and declines
+to leave them without trying.
+
 ### Recordings
 
 Each file in `tests/recordings/` is the standard output of one real turn of
