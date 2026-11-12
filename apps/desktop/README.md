@@ -178,6 +178,7 @@ src/
     inbox/            What waits for the manager in every project: questions to decide
     advisor/          Planning a project with the Advisor: its questions, its proposal
     sprints/          The Backlog view, sprints and points, the burndown, the board of a sprint, completed sprints opened
+    sync/             Computers: syncing through a folder, the line at the foot of the sidebar, conversations elsewhere
   shared/
     api/              The Backend interface and its two implementations
     ui/               Buttons, menus, dialogs, the calendar field, tooltips
@@ -209,6 +210,23 @@ Rules of the interface:
   (`useConversations`). The interface puts it in the place of the one it
   had, and loads the tasks again when a turn starts or ends, because that
   moves a task.
+- **What another computer did is asked for again.** Syncing
+  ([decision 0017](../../docs/decisions/0017-sync-through-a-folder.md))
+  sends `data-changed` with the projects a round changed;
+  `useFreshDataFromOtherComputers`, mounted once in `App`, asks again for
+  every query of those projects and for those that are not of one project
+  (`isStaleAfterChanges` in `sync/syncModel.ts`). `sync-changed` replaces
+  the state of syncing (`useSyncState`), which the line at the foot of the
+  sidebar and Computers show. The words of that line, and of "heard 2 min
+  ago", are worked out in `syncModel.ts`. Whether another computer uses this
+  one's identity is read from the words of the state's `problem`, because
+  the state carries no code for it.
+- **A conversation is continued only where it runs.** A conversation whose
+  `isHere` is false is read, never continued: `ConversationView`, the
+  Advisor's page and the inbox leave out the reply box, Stop and Open in
+  Claude, show a question with its options but nothing to pick
+  (`DecisionCard` with `answeredOn`), and put `RunsElsewhere` in their
+  place, with the name of the computer from the state of syncing.
 - **What belongs to the window stays in the window.** Which view is open
   (`app/navigation.tsx`) and which tasks show their subtasks
   (`features/tasks/subtaskFolds.ts`) say something about the window and

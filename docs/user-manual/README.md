@@ -701,6 +701,78 @@ missing in a sentence and leaves those parts out. The dashboard does not
 show what Teamwright does not know: the limits of your plan, how long
 anything will still take, or a list of the latest changes.
 
+## Several computers
+
+You can work on your projects from more than one computer: a desk at home
+and a laptop, for example. Teamwright keeps them in step through a folder
+that you own and that every one of them can reach, such as a folder that a
+cloud drive keeps in step. There is no account and no server: each computer
+writes what changed into that folder, and takes in what the others wrote.
+
+**Starting.** *Computers*, at the foot of the sidebar, is where syncing is
+set up. *Choose a folder* opens the folder window of your system. Then
+Teamwright asks for the name of this computer, with the name the system
+gives it filled in. The name is written into the folder, where your other
+computers show it. The name the system gives a computer often holds your
+own name, so you may want one that only says which computer it is, such as
+"Desk". *Keep in step* starts. Do the same on your other computer, with the
+same folder.
+
+**A new computer.** When another computer first writes into the folder, it
+appears under *Other computers* with *Take in* and *Ignore*, held by the
+gold corners of something that waits for you, and the line at the foot of
+the sidebar says that it waits. *Take in* brings in its projects and its
+work, and from then on everything it changes. *Ignore* takes in nothing of
+it; you can change your mind with *Take in after all*. This is so that two
+libraries of projects are never mixed up by mistake.
+
+**The line at the foot of the sidebar** says how syncing stands, in words:
+*In step* and since when, *Writing to the folder*, *The folder cannot be
+reached*, or *Stopped* with the reason. It turns gold only when something
+is wrong or waits for you. Pressing it opens *Computers*.
+
+**On Computers** you see the name of this computer, which you can change by
+clicking it; the folder, with *Stop syncing*; when the last round was, with
+*Sync now* to run one at once instead of waiting; and the other computers,
+with their version of Teamwright and when they were last heard from. A
+quiet line under a computer says when its clock is more than five minutes
+ahead of this one, or when it runs a newer Teamwright whose files this one
+cannot read yet. Stopping removes nothing from the folder; choosing it
+again goes on where it stopped.
+
+**What you are told.** Now and then two computers do something at the same
+time that cannot both stand: both give a new task the same number, for
+example. Teamwright repairs it by itself and says so under *Notices*, in a
+sentence such as "SSN-21 is now SSN-22: another computer gave the number 21
+to another task at the same time." Each notice leads to its task or project
+and can be dismissed. When two computers change the same field of the same
+thing, the later change wins, and nothing is announced.
+
+**Conversations live where they started.** A specialist works as Claude
+Code on the computer where its conversation was started, in a folder of
+that computer. On your other computers you can read the conversation as it
+goes on, step by step, but not continue it. Where the box to reply would
+be, it says which computer it runs on and when it last had news. A
+question a specialist asked there shows its options, and says that it is
+answered on that computer; it also appears in your inbox. The same holds
+for the Advisor. You can start new work on any computer.
+
+**A copied computer.** If you copied Teamwright's data folder from one
+computer to another, both write into the sync folder as the same computer.
+Teamwright notices, stops syncing, and explains it on *Computers*. Press
+*Give this computer a new identity* on the computer the data folder was
+copied to, not on the one where your conversations with the specialists
+were started: those conversations stay with the old identity. Then start
+Teamwright again. Nothing is lost.
+
+**What leaves your computer.** Everything of your projects goes into the
+folder: projects, tasks, teams, sprints, and the full text of the
+conversations with the specialists, which can quote files they read. Also
+the name of each computer and its version of Teamwright. The folders of a
+project and the files in them do not. Nothing in the folder is encrypted,
+so choose a folder only you can read. Whatever the cloud drive does with
+the folder is between you and the cloud drive.
+
 ## Keyboard
 
 | Key | Where | What it does |
@@ -725,7 +797,9 @@ system gives to the application (`%APPDATA%\dev.teamwright.app` on Windows).
 What the specialists produce are files in the folders of the projects,
 `Teamwright` in your documents.
 
-Teamwright itself sends nothing anywhere. A specialist that works is Claude
+Teamwright itself sends nothing anywhere. When you keep several computers
+in step, it writes into the folder you chose, and nowhere else (see
+[Several computers](#several-computers)). A specialist that works is Claude
 Code at work: it sends what it reads and writes to Anthropic under your
 account, as it does when you use it yourself.
 

@@ -152,20 +152,24 @@ Several specialists working together with the manager in the loop.
 ## M7 · Many computers 🚧
 
 - 🚧 Sync through a folder the user owns
-  ([decision 0017](../decisions/0017-sync-through-a-folder.md)). The Rust
-  side is built: a computer has a name, writes what it did into the
-  folder, and takes in what computers it accepted did, every 20 seconds
-  or when asked. Run with two copies of the built program on one computer
-  through one folder. The interface is not built yet, and two real
-  computers with a real cloud drive between them were never tried
+  ([decision 0017](../decisions/0017-sync-through-a-folder.md)): a
+  computer has a name, writes what it did into the folder, and takes in
+  what computers it accepted did, every 20 seconds or when asked. The
+  place Computers and a line at the foot of the navigation show how it
+  stands. The Rust side was run with two copies of the built program on
+  one computer through one folder; the interface was seen on demo data
+  only. Two real computers with a real cloud drive between them were
+  never tried
 - 🚧 Conflict handling: two changes to different fields of one thing both
   hold; a deletion is final, and the computer whose change was dropped is
-  told; a task number or a project key used twice and two running sprints
-  are repaired. Seen with two copies of the program for a task; the
-  repairs only in tests
+  told in a notice; a task number or a project key used twice and two
+  running sprints are repaired. Seen with two copies of the program for a
+  task; the repairs only in tests. The computer beside each version in
+  the history of a task is not shown yet
 - 🚧 View a project that is running on another computer: a conversation
-  knows the computer it runs on and can only be continued there. Not seen
-  in the program yet: it needs the interface and a real specialist
+  knows the computer it runs on, is read there and continued only on that
+  computer, which is named where the reply box would be. Seen on demo
+  data only: it needs a real specialist on a second computer
 
 ## M8 · Release ⬜
 
