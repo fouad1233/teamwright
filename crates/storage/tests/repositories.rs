@@ -1282,6 +1282,8 @@ fn the_use_cases_work_on_the_real_database() {
             name: "Firmware engineer".to_owned(),
             kind: MemberKind::Agent,
             responsibility: "Everything that runs on the device.".to_owned(),
+            model: None,
+            effort: None,
         })
         .unwrap();
     let given = tasks
@@ -1399,6 +1401,8 @@ fn the_workflow_and_removal_use_cases_work_on_the_real_database() {
         name: "Hardware engineer".to_owned(),
         kind: MemberKind::Agent,
         responsibility: String::new(),
+        model: None,
+        effort: None,
     })
     .unwrap();
     projects.archive(project.id()).unwrap();
@@ -1479,6 +1483,8 @@ fn the_work_of_a_specialist_is_kept_on_the_real_database() {
             name: "Hardware engineer".to_owned(),
             kind: MemberKind::Agent,
             responsibility: String::new(),
+            model: None,
+            effort: None,
         })
         .unwrap();
     let schematic = tasks

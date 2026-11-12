@@ -13,7 +13,7 @@ use teamwright_application::{
     WorkflowTemplate,
 };
 use teamwright_domain::{
-    Assignee, CalendarDate, Color, Conversation, DomainError, Member, MemberKind, Priority,
+    Assignee, CalendarDate, Color, Conversation, DomainError, Effort, Member, MemberKind, Priority,
     Project, Schedule, Status, StatusCategory, Step, StepContent, Task, TaskChange, TaskChangeKind,
     Timestamp, TokenCounts, Turn,
 };
@@ -305,6 +305,8 @@ pub struct MemberDto {
     name: String,
     kind: &'static str,
     responsibility: String,
+    model: Option<String>,
+    effort: Option<&'static str>,
     color: &'static str,
     joined_at: String,
     updated_at: String,
@@ -318,6 +320,8 @@ impl From<&Member> for MemberDto {
             name: member.name().to_string(),
             kind: member.kind().as_str(),
             responsibility: member.responsibility().to_owned(),
+            model: member.model().map(ToString::to_string),
+            effort: member.effort().map(|effort| effort.as_str()),
             color: member.color().as_str(),
             joined_at: moment_to_text(member.joined_at()),
             updated_at: moment_to_text(member.updated_at()),
@@ -516,6 +520,10 @@ pub struct NewMemberInput {
     kind: String,
     #[serde(default)]
     responsibility: String,
+    #[serde(default)]
+    model: Option<String>,
+    #[serde(default)]
+    effort: Option<String>,
 }
 
 impl TryFrom<NewMemberInput> for NewMember {
@@ -527,8 +535,23 @@ impl TryFrom<NewMemberInput> for NewMember {
             name: input.name,
             kind: input.kind.parse::<MemberKind>()?,
             responsibility: input.responsibility,
+            model: input.model,
+            effort: input.effort.as_deref().map(parse_effort).transpose()?,
         })
     }
+}
+
+/// What the interface sends to say which model an AI specialist runs on and
+/// how hard it thinks. Either may be absent, which leaves it to the program.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MemberProfileInput {
+    /// The model, by a name the program understands. Empty means none.
+    #[serde(default)]
+    pub model: Option<String>,
+    /// The effort, in its text form, such as `high`.
+    #[serde(default)]
+    pub effort: Option<String>,
 }
 
 /// What the interface sends to add or change a status: its name, category
@@ -654,6 +677,13 @@ where
 /// Reads a priority the interface sent.
 pub fn parse_priority(text: &str) -> Result<Priority, CommandError> {
     Ok(text.parse::<Priority>()?)
+}
+
+/// Reads an effort the interface sent. The interface only offers the known
+/// ones, so another one is a request that cannot be understood.
+pub fn parse_effort(text: &str) -> Result<Effort, CommandError> {
+    text.parse::<Effort>()
+        .map_err(|error| CommandError::invalid_request(error.to_string()))
 }
 
 /// Reads a calendar date the interface sent, if it sent one.

@@ -621,6 +621,8 @@ mod tests {
                     name: name.to_owned(),
                     kind: MemberKind::Agent,
                     responsibility: String::new(),
+                    model: None,
+                    effort: None,
                 })
                 .unwrap()
         }

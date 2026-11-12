@@ -486,8 +486,8 @@ impl WorkService {
             working_folder: ports.folders.folder_of(project)?,
             prompt: turn.request().to_owned(),
             session,
-            model: None,
-            effort: None,
+            model: member.model().map(ToString::to_string),
+            effort: member.effort(),
             extra_instructions: Some(instructions_for(member, project)),
             permissions: PermissionProfile::specialist(),
         };
@@ -1006,7 +1006,7 @@ mod tests {
 
     use chrono::{TimeDelta, TimeZone};
     use teamwright_domain::{
-        CalendarDate, StatusId, StepContent, StepKind, Timestamp, ToolOutcome,
+        CalendarDate, Effort, StatusId, StepContent, StepKind, Timestamp, ToolOutcome,
     };
 
     use super::*;
@@ -1115,6 +1115,8 @@ mod tests {
                 name: "Hardware engineer".to_owned(),
                 kind: MemberKind::Agent,
                 responsibility: "The schematic, the parts and the board.".to_owned(),
+                model: None,
+                effort: None,
             })
             .unwrap();
         let schematic = tasks
@@ -1157,6 +1159,8 @@ mod tests {
                     name: name.to_owned(),
                     kind: MemberKind::Human,
                     responsibility: String::new(),
+                    model: None,
+                    effort: None,
                 })
                 .unwrap()
         }
@@ -1370,6 +1374,33 @@ mod tests {
                 .prompt
                 .starts_with("Your task is SSN-1: Draw the schematic")
         );
+    }
+
+    #[test]
+    fn a_turn_runs_on_the_model_and_at_the_effort_of_the_specialist() {
+        let workspace = workspace();
+        workspace
+            .team
+            .set_profile(workspace.engineer.id(), Some("opus"), Some(Effort::High))
+            .unwrap();
+
+        workspace.work.start_work(workspace.schematic.id()).unwrap();
+
+        let request = &workspace.ports.runtime.requests()[0];
+        assert_eq!(request.model.as_deref(), Some("opus"));
+        assert_eq!(request.effort, Some(Effort::High));
+    }
+
+    #[test]
+    fn a_specialist_without_a_profile_leaves_the_model_and_the_effort_to_the_program() {
+        let workspace = workspace();
+        assert!(workspace.engineer.profile().is_empty());
+
+        workspace.work.start_work(workspace.schematic.id()).unwrap();
+
+        let request = &workspace.ports.runtime.requests()[0];
+        assert_eq!(request.model, None);
+        assert_eq!(request.effort, None);
     }
 
     #[test]

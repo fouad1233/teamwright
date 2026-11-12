@@ -3,7 +3,8 @@
 use std::sync::Arc;
 
 use teamwright_domain::{
-    Assignee, Color, Member, MemberId, MemberKind, MemberName, Project, ProjectId, Task, Timestamp,
+    Assignee, Color, Effort, Member, MemberId, MemberKind, MemberName, MemberProfile, ModelName,
+    Project, ProjectId, Task, Timestamp,
 };
 
 use crate::error::ApplicationError;
@@ -23,6 +24,12 @@ pub struct NewMember {
     pub kind: MemberKind,
     /// What the member is on the team for. May be empty.
     pub responsibility: String,
+    /// The model of an AI specialist. Absent, empty or only whitespace, it
+    /// is left to the program. A person must not have one.
+    pub model: Option<String>,
+    /// The effort of an AI specialist. Absent, it is left to the program.
+    /// A person must not have one.
+    pub effort: Option<Effort>,
 }
 
 /// The use cases that put members on a team, change them and take them off.
@@ -64,23 +71,32 @@ impl TeamService {
     /// # Errors
     ///
     /// Returns an error if there is no such project, if the name is not
-    /// valid, if another member of the team has the same name, or if storage
-    /// fails.
+    /// valid, if another member of the team has the same name, if a person
+    /// is given a model or an effort (`no_specialist`), if the name of the
+    /// model is not valid, or if storage fails.
     pub fn add(&self, new_member: NewMember) -> Result<Member, ApplicationError> {
         let project = self.require_project(new_member.project_id)?;
         let name = MemberName::parse(&new_member.name)?;
         let team = self.members.list_for_project(project.id())?;
         refuse_name_in_use(&team, &name, None)?;
+        let profile = profile_for(
+            new_member.kind,
+            &name,
+            new_member.model.as_deref(),
+            new_member.effort,
+        )?;
 
         let colors_in_use: Vec<Color> = team.iter().map(Member::color).collect();
-        let member = Member::create(
+        let now = self.clock.now();
+        let mut member = Member::create(
             project.id(),
             name,
             new_member.kind,
             new_member.responsibility.trim().to_owned(),
             Member::color_for_newcomer(&colors_in_use),
-            self.clock.now(),
+            now,
         );
+        member.set_profile(profile, now)?;
         self.members.save(&member)?;
         Ok(member)
     }
@@ -134,6 +150,31 @@ impl TeamService {
     ) -> Result<Member, ApplicationError> {
         self.change(id, |member, _team, now| {
             member.set_responsibility(responsibility.trim().to_owned(), now);
+            Ok(())
+        })
+    }
+
+    /// Says which model an AI specialist runs on and how hard it thinks.
+    /// A model that is absent, empty or only whitespace, and an absent
+    /// effort, are left to the program.
+    ///
+    /// A person has neither. Giving a person the empty profile is allowed
+    /// and changes nothing but the time of the last change.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if there is no such member, if the member is a
+    /// person and the profile is not empty (`no_specialist`), if the name of
+    /// the model is not valid, or if storage fails.
+    pub fn set_profile(
+        &self,
+        id: MemberId,
+        model: Option<&str>,
+        effort: Option<Effort>,
+    ) -> Result<Member, ApplicationError> {
+        self.change(id, |member, _team, now| {
+            let profile = profile_for(member.kind(), member.name(), model, effort)?;
+            member.set_profile(profile, now)?;
             Ok(())
         })
     }
@@ -214,6 +255,29 @@ impl TeamService {
                 id: id.to_string(),
             })
     }
+}
+
+/// Tidies the model and the effort a member is to have into a profile.
+///
+/// A model that is empty or only whitespace means none. A person is refused
+/// before the name of the model is checked, so that a manager who gives a
+/// person a model hears first that a person has none.
+fn profile_for(
+    kind: MemberKind,
+    name: &MemberName,
+    model: Option<&str>,
+    effort: Option<Effort>,
+) -> Result<MemberProfile, ApplicationError> {
+    let model = model.map(str::trim).filter(|model| !model.is_empty());
+    if kind != MemberKind::Agent && (model.is_some() || effort.is_some()) {
+        return Err(ApplicationError::NotASpecialist {
+            name: name.to_string(),
+        });
+    }
+    Ok(MemberProfile {
+        model: model.map(ModelName::parse).transpose()?,
+        effort,
+    })
 }
 
 /// Reports a name that another member of the team already has. Capital and
@@ -329,6 +393,8 @@ mod tests {
             name: name.to_owned(),
             kind: MemberKind::Agent,
             responsibility: String::new(),
+            model: None,
+            effort: None,
         }
     }
 
@@ -344,6 +410,8 @@ mod tests {
                 name: "  Hardware engineer ".to_owned(),
                 kind: MemberKind::Agent,
                 responsibility: " The schematic, the parts and the board. \n".to_owned(),
+                model: None,
+                effort: None,
             })
             .unwrap();
 
@@ -560,6 +628,118 @@ mod tests {
     }
 
     #[test]
+    fn leaves_the_model_and_the_effort_of_a_new_specialist_to_the_program() {
+        let workspace = workspace();
+        let project = workspace.project("Smart sensor node");
+
+        let member = workspace.agent(&project, "Hardware engineer");
+
+        assert_eq!(member.model(), None);
+        assert_eq!(member.effort(), None);
+    }
+
+    #[test]
+    fn puts_a_specialist_on_the_team_with_a_model_and_an_effort() {
+        let workspace = workspace();
+        let project = workspace.project("Smart sensor node");
+
+        let member = workspace
+            .team
+            .add(NewMember {
+                model: Some(" haiku ".to_owned()),
+                effort: Some(Effort::Low),
+                ..new_agent(&project, "Tester")
+            })
+            .unwrap();
+
+        assert_eq!(member.model().map(ModelName::as_str), Some("haiku"));
+        assert_eq!(member.effort(), Some(Effort::Low));
+        assert_eq!(workspace.team.get(member.id()).unwrap(), member);
+    }
+
+    #[test]
+    fn gives_a_specialist_another_model_and_effort_and_takes_them_away_again() {
+        let workspace = workspace();
+        let project = workspace.project("Smart sensor node");
+        let member = workspace.agent(&project, "Hardware engineer");
+
+        let profiled = workspace
+            .team
+            .set_profile(member.id(), Some("opus"), Some(Effort::High))
+            .unwrap();
+        assert_eq!(profiled.model().map(ModelName::as_str), Some("opus"));
+        assert_eq!(profiled.effort(), Some(Effort::High));
+        assert_eq!(profiled.updated_at(), workspace.clock.now());
+        assert_eq!(workspace.team.get(member.id()).unwrap(), profiled);
+
+        let left = workspace
+            .team
+            .set_profile(member.id(), Some("  "), None)
+            .unwrap();
+        assert_eq!(left.model(), None);
+        assert_eq!(left.effort(), None);
+    }
+
+    #[test]
+    fn takes_the_full_name_of_a_model_as_it_is_and_refuses_one_with_a_space_in_it() {
+        let workspace = workspace();
+        let project = workspace.project("Smart sensor node");
+        let member = workspace.agent(&project, "Hardware engineer");
+
+        let named = workspace
+            .team
+            .set_profile(member.id(), Some("claude-sonnet-5-5"), None)
+            .unwrap();
+        assert_eq!(
+            named.model().map(ModelName::as_str),
+            Some("claude-sonnet-5-5")
+        );
+
+        let error = workspace
+            .team
+            .set_profile(member.id(), Some("the best one"), None)
+            .unwrap_err();
+        assert_eq!(error.code(), "rule_broken");
+        assert_eq!(
+            error.to_string(),
+            "the name of a model is one word of at most 80 characters"
+        );
+    }
+
+    #[test]
+    fn gives_a_person_neither_a_model_nor_an_effort() {
+        let workspace = workspace();
+        let project = workspace.project("Smart sensor node");
+        let dana = workspace
+            .team
+            .add(NewMember {
+                kind: MemberKind::Human,
+                ..new_agent(&project, "Dana")
+            })
+            .unwrap();
+
+        let with_model = workspace
+            .team
+            .set_profile(dana.id(), Some("sonnet"), None)
+            .unwrap_err();
+        assert_eq!(with_model.code(), "no_specialist");
+        assert_eq!(with_model.to_string(), "Dana is not an AI specialist");
+        let from_the_start = workspace
+            .team
+            .add(NewMember {
+                kind: MemberKind::Human,
+                effort: Some(Effort::High),
+                ..new_agent(&project, "Eli")
+            })
+            .unwrap_err();
+        assert_eq!(from_the_start.code(), "no_specialist");
+        // An empty profile is what a person has, so setting it changes
+        // nothing and is allowed.
+        let unchanged = workspace.team.set_profile(dana.id(), None, None).unwrap();
+        assert_eq!(unchanged.model(), None);
+    }
+
+    #[test]
     fn removing_a_member_gives_its_tasks_to_nobody_and_leaves_the_others_alone() {
         let workspace = workspace();
         let project = workspace.project("Smart sensor node");
@@ -597,6 +777,7 @@ mod tests {
             workspace.team.get(nobody).unwrap_err(),
             workspace.team.rename(nobody, "Tester").unwrap_err(),
             workspace.team.set_responsibility(nobody, "").unwrap_err(),
+            workspace.team.set_profile(nobody, None, None).unwrap_err(),
             workspace.team.remove(nobody).unwrap_err(),
         ] {
             assert!(matches!(

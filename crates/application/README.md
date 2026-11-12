@@ -66,6 +66,10 @@ project, two members of one team cannot have the same name.
   name, whatever the capitals.
 - A newcomer to a team gets a color that sets it apart from the others.
 - Taking a member off a team gives the member's tasks to nobody.
+- `TeamService::set_profile` (and `add`) give an AI specialist a model and
+  an effort; an empty model means none. A person given either is refused
+  (`no_specialist`). A turn runs on the specialist's model and effort, or on
+  the program's defaults when it has none.
 - A task can be given to the manager or to a member of the team of its own
   project, and to nobody else.
 - Work in progress is protected. A member with a running turn cannot leave

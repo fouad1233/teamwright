@@ -57,6 +57,7 @@ fn main() -> ExitCode {
             commands::team::add_member,
             commands::team::rename_member,
             commands::team::set_member_responsibility,
+            commands::team::set_member_profile,
             commands::team::remove_member,
             commands::work::agent_program,
             commands::work::list_conversations,

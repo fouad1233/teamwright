@@ -2,7 +2,7 @@
 
 use tauri::State;
 
-use crate::dto::{MemberDto, NewMemberInput, parse_id};
+use crate::dto::{MemberDto, MemberProfileInput, NewMemberInput, parse_effort, parse_id};
 use crate::error::CommandError;
 use crate::state::AppState;
 
@@ -47,6 +47,21 @@ pub async fn set_member_responsibility(
     let member = state
         .team
         .set_responsibility(parse_id(&member_id)?, &responsibility)?;
+    Ok(MemberDto::from(&member))
+}
+
+/// Says which model an AI specialist runs on and how hard it thinks. A
+/// person can only be given the empty profile.
+#[tauri::command]
+pub async fn set_member_profile(
+    state: State<'_, AppState>,
+    member_id: String,
+    profile: MemberProfileInput,
+) -> Result<MemberDto, CommandError> {
+    let effort = profile.effort.as_deref().map(parse_effort).transpose()?;
+    let member = state
+        .team
+        .set_profile(parse_id(&member_id)?, profile.model.as_deref(), effort)?;
     Ok(MemberDto::from(&member))
 }
 
