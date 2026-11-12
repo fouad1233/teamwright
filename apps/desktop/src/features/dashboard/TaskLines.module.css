@@ -1,0 +1,105 @@
+.lines {
+  container: lines / inline-size;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.title {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding: 0 var(--space-2);
+  color: var(--ink-faint);
+}
+
+.count {
+  font-variant-numeric: tabular-nums;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+}
+
+/* A line is a row of the sheet on a hairline, like a row of the backlog. */
+.line {
+  display: grid;
+  grid-template-columns: 8px auto minmax(0, 1fr) minmax(0, 132px) 92px;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  height: 34px;
+  padding: 0 var(--space-2);
+  border-bottom: 1px solid var(--rule);
+  text-align: left;
+  transition: background-color var(--duration-quick) ease;
+}
+
+.line:hover {
+  background: var(--hover);
+}
+
+/* The status as a small block of its pigment. */
+.mark {
+  width: 8px;
+  height: 8px;
+  border-radius: 1px;
+  background: var(--tone);
+}
+
+.reference,
+.date {
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.holder {
+  display: flex;
+  min-width: 0;
+  color: var(--ink-soft);
+  font-size: var(--text-small);
+}
+
+.holder > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.date {
+  text-align: right;
+}
+
+.late {
+  color: var(--danger);
+}
+
+.empty {
+  display: flex;
+  align-items: center;
+  height: 34px;
+  padding: 0 var(--space-2);
+  border-bottom: 1px solid var(--rule);
+  color: var(--ink-faint);
+}
+
+@container lines (width < 520px) {
+  .line {
+    grid-template-columns: 8px auto minmax(0, 1fr) 92px;
+  }
+
+  .holder {
+    display: none;
+  }
+}

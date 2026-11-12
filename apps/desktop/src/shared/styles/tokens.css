@@ -52,6 +52,10 @@
   /* A bench of the office, and the title block beside the room. */
   --office-place-width: 248px;
   --office-aside-width: 264px;
+  /* The manager's note beside the summary of the dashboard, and the
+     height of a bar of its charts. */
+  --dashboard-note-width: 320px;
+  --dashboard-bar-height: 12px;
   --control-height: 30px;
 
   /* Night: the ground, from the back of the window to the front. The rules

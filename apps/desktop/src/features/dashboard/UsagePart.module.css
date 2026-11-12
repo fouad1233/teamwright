@@ -1,0 +1,57 @@
+.total {
+  color: var(--ink-soft);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.users {
+  display: flex;
+  flex-direction: column;
+}
+
+.user {
+  display: grid;
+  grid-template-columns: minmax(0, 164px) minmax(0, 1fr) 132px;
+  align-items: center;
+  gap: var(--space-3);
+  height: 36px;
+  padding: 0 var(--space-2);
+  border-bottom: 1px solid var(--rule);
+}
+
+.name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.track {
+  position: relative;
+  height: var(--dashboard-bar-height);
+}
+
+/* Tokens are counted, not judged: the bar is a quiet ink, not a pigment. */
+.bar {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: calc(var(--share) * 100%);
+  border-radius: 1px;
+  background: var(--ink-faint);
+}
+
+.tokens {
+  color: var(--ink-soft);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.quiet {
+  padding: 0 var(--space-2);
+  color: var(--ink-faint);
+}

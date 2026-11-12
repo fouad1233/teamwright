@@ -1,0 +1,118 @@
+/* The work by status. */
+.statusChart {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: 0 var(--space-2);
+}
+
+/* One bar, parted where one status meets the next by a gap of the ground,
+   the way parts are set side by side with a constant reveal. */
+.statusBar {
+  display: flex;
+  gap: 2px;
+  height: var(--dashboard-bar-height);
+}
+
+.segment {
+  flex-basis: 0;
+  min-width: 2px;
+  border-radius: 1px;
+  background: var(--tone);
+}
+
+/* The counts follow the segments in the same order, each with its pigment. */
+.statusCounts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-5);
+}
+
+.statusCount {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.swatch {
+  width: 8px;
+  height: 8px;
+  border-radius: 1px;
+  background: var(--tone);
+}
+
+.statusName {
+  color: var(--ink-soft);
+}
+
+.number {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The work by member: one row for each, on a hairline. */
+.holders {
+  display: flex;
+  flex-direction: column;
+}
+
+.holder {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 140px) minmax(0, 1fr) 132px;
+  align-items: center;
+  gap: var(--space-3);
+  height: 36px;
+  padding: 0 var(--space-2);
+  border-bottom: 1px solid var(--rule);
+}
+
+.holderName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A bar is what is given, as a hollow part, filled in ink as far as it is
+   finished, like the bars of the completed sprints. */
+.track {
+  position: relative;
+  height: var(--dashboard-bar-height);
+}
+
+.given,
+.finished {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  border-radius: 1px;
+}
+
+.given {
+  width: calc(var(--given) * 100%);
+  border: 1px solid var(--ink-faint);
+}
+
+.finished {
+  width: calc(var(--finished) * 100%);
+  background: var(--ink);
+}
+
+.figures {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  color: var(--ink-soft);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Figures are parted by a short upright rule, as the facts of a sprint are. */
+.separator {
+  width: 1px;
+  height: 9px;
+  margin: 0 var(--space-2);
+  background: var(--rule-strong);
+}

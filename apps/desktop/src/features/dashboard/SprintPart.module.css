@@ -1,0 +1,91 @@
+/* The running sprint, headed the way the Backlog view heads it, with its
+   burndown at the right. */
+.running {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-4) var(--space-6);
+  padding: 0 var(--space-2) var(--space-2);
+}
+
+.heading {
+  display: flex;
+  flex: 1 1 320px;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.titleLine {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+}
+
+.name {
+  overflow: hidden;
+  font-size: var(--text-strong);
+  font-weight: 650;
+  letter-spacing: -0.005em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* In the Backlog view the state of the running sprint is set in gold. Here
+   the gold is kept for what waits for the manager, so it stays ink. */
+.state {
+  color: var(--ink-soft);
+}
+
+.facts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+
+.fact {
+  display: inline-flex;
+  align-items: center;
+}
+
+.separator {
+  width: 1px;
+  height: 9px;
+  margin: 0 var(--space-2);
+  background: var(--rule-strong);
+}
+
+.goal {
+  max-width: 64ch;
+  color: var(--ink-soft);
+  line-height: 1.5;
+}
+
+/* The way onwards, set small in the heading so that the rule stays where
+   the rules of the other parts are. */
+.onwards {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--ink-soft);
+  font-size: var(--text-small);
+  transition: color var(--duration-quick) ease;
+}
+
+.onwards:hover {
+  color: var(--ink);
+}
+
+.onwards svg {
+  width: 13px;
+  height: 13px;
+}
+
+.quiet {
+  padding: 0 var(--space-2);
+  color: var(--ink-faint);
+}

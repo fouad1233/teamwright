@@ -1,0 +1,79 @@
+/* The numbers stand in the cells of one block, like the counts in the
+   title block of the office: parted by hairlines, boxed by a stronger one. */
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  border: 1px solid var(--rule-strong);
+  background: var(--surface);
+}
+
+.tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  padding: var(--space-3) var(--space-3) var(--space-3);
+  color: var(--ink-faint);
+}
+
+.tile + .tile {
+  border-left: 1px solid var(--rule);
+}
+
+.value {
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: var(--text-title);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+
+.danger {
+  color: var(--danger);
+}
+
+/* The cell that leads to the inbox is pressed as a whole. */
+.waiting {
+  padding: 0;
+}
+
+.press {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  width: 100%;
+  height: 100%;
+  padding: var(--space-3);
+  color: inherit;
+  text-align: left;
+  transition: background-color var(--duration-quick) ease;
+}
+
+.press:hover {
+  background: var(--hover);
+}
+
+.waitingLabel {
+  color: var(--brass-text);
+}
+
+/* The corners of a waiting card (decision 0015), here because something
+   waits for the manager. */
+.joints {
+  composes: joints from '../board/TaskCard.module.css';
+}
+
+@container dashboard (width < 820px) {
+  .tiles {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .tile:nth-child(4) {
+    border-left: none;
+  }
+
+  .tile:nth-child(n + 4) {
+    border-top: 1px solid var(--rule);
+  }
+}

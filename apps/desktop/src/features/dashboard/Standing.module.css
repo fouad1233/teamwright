@@ -1,0 +1,26 @@
+.standing {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.standing > h2 {
+  color: var(--ink-faint);
+}
+
+/* The one gesture of the serif in this view: the summary reads like the
+   opening lines of a report. */
+.words {
+  max-width: 52ch;
+  margin-bottom: var(--space-3);
+  font-family: var(--font-serif);
+  font-size: var(--text-title);
+  font-weight: 400;
+  line-height: 1.35;
+}
+
+/* Every sentence on a line of its own, so that each can be read alone. */
+.sentence {
+  display: block;
+}

@@ -9,6 +9,7 @@ export const PROJECT_VIEWS = [
   'list',
   'gantt',
   'calendar',
+  'dashboard',
   'team',
   'office',
   'advisor',

@@ -9,6 +9,7 @@ import { describeFailure } from '@/shared/ui/Toast';
 
 import { AdvisorView } from '../advisor/AdvisorView';
 import { CalendarView } from '../calendar/CalendarView';
+import { DashboardView } from '../dashboard/DashboardView';
 import { GanttView } from '../gantt/GanttView';
 import { OfficeView } from '../office/OfficeView';
 import { BacklogView } from '../sprints/BacklogView';
@@ -35,6 +36,7 @@ const VIEWS: { view: ProjectView; label: string }[] = [
   { view: 'list', label: 'List' },
   { view: 'gantt', label: 'Gantt' },
   { view: 'calendar', label: 'Calendar' },
+  { view: 'dashboard', label: 'Dashboard' },
   { view: 'team', label: 'Team' },
   { view: 'office', label: 'Office' },
   { view: 'advisor', label: 'Advisor' },
@@ -179,6 +181,8 @@ function ChosenView({ view, project, tasks }: ChosenViewProps) {
       return <GanttView project={project} tasks={tasks} />;
     case 'calendar':
       return <CalendarView project={project} tasks={tasks} />;
+    case 'dashboard':
+      return <DashboardView project={project} tasks={tasks} />;
     case 'team':
       return <TeamView project={project} tasks={tasks} />;
     case 'office':
