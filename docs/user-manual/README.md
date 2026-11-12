@@ -28,6 +28,52 @@ or *Create a project* on the first screen.
 **Switch projects** by choosing one in the sidebar. A small brass line marks
 the project that is open. Teamwright reopens the last project you worked in.
 
+**Change a project** from the menu with the three dots in its header.
+
+- *Name and description* opens a form for both. The key stays as it is,
+  because it is part of the number of every task.
+- *Statuses* opens the list of the project's [statuses](#statuses).
+- *Archive project* puts the project away. Nothing is lost: the sidebar
+  then shows *Archived* under the list of projects, and from there a
+  project is brought back, or deleted.
+- *Delete project* removes the project for good, with its tasks and its
+  team. Teamwright says what goes with it, and asks first.
+
+### Statuses
+
+The statuses are the steps a task goes through, and the lanes of the
+board. A project starts with the statuses of its workflow, and you can
+make them your own under *Statuses* in the menu of the project.
+
+Every status has a name, a color, and a meaning. The meaning is one of
+four, and it is what Teamwright goes by, whatever the status is called:
+
+| Meaning | What it says about a task |
+|---|---|
+| Not started | Work on the task has not started. |
+| In progress | Work on the task is under way. |
+| In review | The work waits to be checked. |
+| Done | The task is finished. |
+
+- **Rename** a status by typing over its name. Enter or leaving the field
+  saves, Escape undoes.
+- **Change the color** with the mark in front of the name, and **the
+  meaning** with the word behind it. A status that becomes *Done* finishes
+  the tasks in it, and one that stops being *Done* reopens them.
+- **Move** a status by dragging the dots at the front of its row. The board
+  follows.
+- **Add** a status with *Add status*. It appears with the other steps of
+  the work, in front of the ones for review and done, with a name ready to
+  be typed over.
+- **Remove** a status with the bin at the end of its row. If tasks are in
+  it, Teamwright asks which status they should go to.
+
+A project always keeps one status in which work has not started and one in
+which it is done. The last one of each kind cannot be removed or given
+another meaning.
+
+Changes are saved as you make them.
+
 ## The header of a project
 
 Next to the name of the project are its key and, if the project has a team,

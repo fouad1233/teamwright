@@ -34,9 +34,11 @@ A desktop app that opens and manages projects and tasks without any AI.
 - ✅ Screenshots of the real application, taken by a tool
 - ✅ Subtasks shown under their task on the board and in the list, behind a
   fold
-- ⬜ Editing the statuses of a workflow
+- ✅ Editing the statuses of a workflow: add, rename, recolor, reorder,
+  remove
+- ✅ Renaming, archiving, restoring and deleting a project from the
+  interface
 - ⬜ Activity history of a task
-- ⬜ Renaming and archiving a project from the interface
 
 ## M2 · One teammate ⬜
 
