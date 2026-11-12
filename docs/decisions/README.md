@@ -36,6 +36,7 @@ was considered.
 | [0018](0018-the-office-as-a-plan-of-a-workshop.md) | Show the team at work as a workshop drawn in plan | Accepted |
 | [0019](0019-people-in-the-office.md) | Put people in the office, drawn as pixel characters | Accepted |
 | [0020](0020-a-dashboard-worked-out-not-written.md) | Work the dashboard out by rules, and have nothing written for it | Accepted |
+| [0021](0021-views-the-manager-can-add.md) | Let the manager add, name, filter, order and remove the views of a project | Accepted |
 
 ## Template
 

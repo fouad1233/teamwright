@@ -128,6 +128,11 @@ Several specialists working together with the manager in the loop.
   Seen in the built program on stored data, with nobody at work there.
   Plan limits are not shown, because they are not known, and there is no
   latest activity yet
+- 🚧 Views the manager adds, names, filters, orders and removes, next to
+  the fixed places Team, Office and Advisor
+  ([decision 0021](../decisions/0021-views-the-manager-can-add.md)).
+  Built in the interface and the demo only: the shell does not serve the
+  views yet, so the built program shows none
 - ⬜ Project report at completion
 
 ## M6 · Agile 🚧

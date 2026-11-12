@@ -406,6 +406,45 @@ it. What an Advisor wants needs more room: *Open* leads to its page.
 
 ## Views
 
+The row of tabs under the name of a project has two parts. First come the
+**views**, which show the tasks of the project and are yours to arrange.
+Each carries the small mark of its kind. After a thin divider come the
+**places**: Team, Office and Advisor. They are about the project itself
+and are always there.
+
+A new project starts with six views: Board, Backlog, List, Gantt, Calendar
+and Dashboard. You can change them:
+
+- **Add a view** with the **+** at the end of the views. Choose a kind;
+  each line says what it is for. The new view opens with its name ready to
+  be typed over; press Enter to keep it. Without a name of your own it is
+  called after its kind, with a number if that name is taken:
+  *Board 2*. A project can have as many boards, lists, Gantt charts and
+  calendars as you like, and one backlog and one dashboard. Those two are
+  not offered while the project has them.
+- **The menu of a view** opens from the small arrow at the end of its tab,
+  or with a right click on the tab. It renames the view, sets its filter,
+  moves it one place left or right, and removes it. A double click on a
+  tab renames it too, and you can drag a tab to another place in the row.
+  The last view of a project cannot be removed.
+- **The filter** of a board, a list, a Gantt chart or a calendar says
+  whose tasks it shows (everybody's, yours, those of one member, or those
+  given to nobody) and whether it hides the finished ones. A task is
+  finished when its status means done, whatever the status is called. A
+  task stays in the view when one of its subtasks passes the filter, and
+  its subtasks always stay with it. A filtered view has a small mark on
+  its tab, and a line at its top says what it shows, for example *Shows
+  the tasks of Firmware engineer*. *Show every task* clears the filter.
+  When a member leaves the team, a view that showed only their tasks shows
+  everybody's again.
+- **When the row is full**, the views that do not fit the window are
+  behind *N more* at the end of the row. The view that is open always
+  keeps its tab.
+
+Views are kept with the project. Which view is open is remembered on this
+computer; if that view has been removed, the project opens on its first
+view.
+
 **Board.** One lane for every status. Drag a card to another lane to change
 its status, or up and down to change its place. An overdue date is shown in
 red. The number next to the name of a status counts the tasks in its lane.
@@ -465,10 +504,9 @@ are not on the calendar: their number is shown at the top right.
 **Dashboard.** How the project is going, on one page. See
 [the dashboard](#the-dashboard).
 
-**Team.** You and the members of the team, each with its tasks. See
-[the team](#the-team).
-
-**Office.** The team at work, at a glance. See [the office](#the-office).
+The places are described where they belong: **Team** in
+[the team](#the-team), **Office** in [the office](#the-office) and
+**Advisor** in [planning with the Advisor](#planning-with-the-advisor).
 
 ## Sprints and the backlog
 
@@ -650,7 +688,7 @@ bench says.
 
 ## The dashboard
 
-The *Dashboard* tab says how the project is going, on one page that reads
+The *Dashboard* view says how the project is going, on one page that reads
 from top to bottom. There is nothing to set up.
 
 <picture>
@@ -689,8 +727,8 @@ or already late. Press a line to open its task.
 
 **The sprint.** For a project that uses sprints: the running sprint with
 its dates, its goal and its burndown, and the completed sprints with what
-each took on and what it finished. *Open the backlog* goes to the Backlog
-view.
+each took on and what it finished. *Open the backlog* goes to the backlog
+view; it is left out when the project has removed its backlog.
 
 **Usage.** The tokens the Advisor and every AI specialist have used in
 this project, and the project as a whole. A person uses none and is not

@@ -191,6 +191,7 @@ src/
     advisor/          Planning a project with the Advisor: its questions, its proposal
     sprints/          The Backlog view, sprints and points, the burndown, the board of a sprint, completed sprints opened
     sync/             Computers: syncing through a folder, the line at the foot of the sidebar, conversations elsewhere
+    views/            The row of views and places, the chooser, the menu and filter of a view
   shared/
     api/              The Backend interface and its two implementations
     ui/               Buttons, menus, dialogs, the calendar field, tooltips
@@ -206,7 +207,7 @@ Rules of the interface:
 - **One way to the backend.** Components use `useBackend()` or the hooks
   built on it (`useProjects`, `useTasks`, `useTaskCommands`, `useTeam`,
   `useTeamCommands`, `useConversations`, `useWorkCommands`, `useSprints`,
-  `useSprintCommands`). Nothing calls
+  `useSprintCommands`, `useViews`, `useViewCommands`). Nothing calls
   Tauri directly except `shared/api/tauriBackend.ts`.
 - **The team of the open project is known everywhere.** `TeamProvider` puts
   it in a context, so a card, a row or a menu can show who a task is given
@@ -239,11 +240,21 @@ Rules of the interface:
   Claude, show a question with its options but nothing to pick
   (`DecisionCard` with `answeredOn`), and put `RunsElsewhere` in their
   place, with the name of the computer from the state of syncing.
-- **What belongs to the window stays in the window.** Which view is open
-  (`app/navigation.tsx`) and which tasks show their subtasks
+- **What belongs to the window stays in the window.** Which view or place
+  is open (`app/navigation.tsx`) and which tasks show their subtasks
   (`features/tasks/subtaskFolds.ts`) say something about the window and
   nothing about the project. They are kept in the storage of the web view
-  and never sent to the backend.
+  and never sent to the backend. The views themselves belong to the
+  project and are asked of the backend. A view is remembered by its
+  identifier; when it is gone, the project opens on its first view.
+- **Views are drawn through one table of kinds.** `views/viewKinds.tsx`
+  gives each kind its label, what it is for, its mark and the component
+  that draws it; a new kind is one entry. The filter of a view is applied
+  in the workspace, where the tasks are handed to the view
+  (`views/viewModel.ts`), so a view draws fewer tasks without knowing why.
+  The board alone keeps every task and is told which ones get a card,
+  because it places a dropped card among all the tasks of its status and
+  counts the tasks a card waits for.
 - **Two backends.** `TauriBackend` calls the shell. `DemoBackend` runs in the
   browser's memory with a sample project, so the interface can be developed
   and tested without Rust.
