@@ -18,6 +18,7 @@ import {
   NOBODY_NAME,
 } from '../team/Assignee';
 import { useTeamMembers } from '../team/TeamContext';
+import { TaskWork } from '../work/TaskWork';
 import { PRIORITIES, PriorityFlag, StatusLabel, StatusMark, priorityLabel } from './TaskBadges';
 import { TaskComposer } from './TaskComposer';
 import styles from './TaskPanel.module.css';
@@ -238,6 +239,10 @@ export function TaskPanel({ project, task, tasks, onClose }: TaskPanelProps) {
             description={task.description}
             onDescribe={(description) => commands.describe(task.id, description)}
           />
+        </Section>
+
+        <Section title="Work">
+          <TaskWork project={project} task={task} />
         </Section>
 
         <Section

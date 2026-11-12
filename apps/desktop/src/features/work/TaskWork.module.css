@@ -1,0 +1,17 @@
+.nothing {
+  color: var(--ink-faint);
+}
+
+/* Before work has started: the button, and a sentence that says what it
+   does or why it cannot be pressed. */
+.start {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.hint {
+  color: var(--ink-faint);
+  font-size: var(--text-small);
+  line-height: 1.5;
+}

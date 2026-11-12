@@ -24,8 +24,8 @@ const KIND_CHOICES: KindChoice[] = [
   {
     kind: 'agent',
     meaning:
-      'Will carry out its tasks itself, through Claude Code. That is not built yet: ' +
-      'for now a specialist can be given tasks, and nothing more.',
+      'Carries out the tasks you give it and answers your questions, through the Claude Code ' +
+      'on this computer. It reads and writes files in the folder of the project, nothing else.',
     example: 'Hardware engineer',
   },
   {

@@ -15,6 +15,8 @@ interface Location {
   view: ProjectView;
   /** The task whose details are open, if any. */
   taskId: Id | null;
+  /** The specialist whose conversation with the manager is open, if any. */
+  chatMemberId: Id | null;
 }
 
 /**
@@ -28,12 +30,20 @@ export interface Navigation extends Location {
   showView: (view: ProjectView) => void;
   openTask: (taskId: Id) => void;
   closeTask: () => void;
+  /** Opens the conversation with a specialist. It takes the place of an open task. */
+  openChat: (memberId: Id) => void;
+  closeChat: () => void;
 }
 
 /** Where the last project and view are remembered between sessions. */
 const STORAGE_KEY = 'teamwright.navigation';
 
-const STARTING_LOCATION: Location = { projectId: null, view: 'board', taskId: null };
+const STARTING_LOCATION: Location = {
+  projectId: null,
+  view: 'board',
+  taskId: null,
+  chatMemberId: null,
+};
 
 /** Reads where the user was when the application was last closed. */
 function restoreLocation(): Location {
@@ -47,6 +57,7 @@ function restoreLocation(): Location {
       projectId: typeof projectId === 'string' ? projectId : null,
       view: PROJECT_VIEWS.find((known) => known === view) ?? STARTING_LOCATION.view,
       taskId: null,
+      chatMemberId: null,
     };
   } catch {
     // Storage that is unavailable or holds something unreadable only means
@@ -55,7 +66,7 @@ function restoreLocation(): Location {
   }
 }
 
-/** Remembers the project and the view. An open task is not remembered. */
+/** Remembers the project and the view. An open task or conversation is not remembered. */
 function rememberLocation(location: Location): void {
   try {
     const remembered = { projectId: location.projectId, view: location.view };
@@ -85,16 +96,24 @@ export function NavigationProvider({ children }: { children: ReactNode }) {
     return {
       ...location,
       openProject: (projectId) => {
-        go({ projectId, taskId: null });
+        go({ projectId, taskId: null, chatMemberId: null });
       },
       showView: (view) => {
         go({ view });
       },
+      // The task and the conversation share one place at the side of the
+      // window, so opening the one closes the other.
       openTask: (taskId) => {
-        go({ taskId });
+        go({ taskId, chatMemberId: null });
       },
       closeTask: () => {
         go({ taskId: null });
+      },
+      openChat: (chatMemberId) => {
+        go({ chatMemberId, taskId: null });
+      },
+      closeChat: () => {
+        go({ chatMemberId: null });
       },
     };
   }, [location]);

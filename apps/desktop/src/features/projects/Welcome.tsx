@@ -36,8 +36,8 @@ export function Welcome() {
           </Button>
         </div>
         <p className={styles.note}>
-          This version plans and tracks projects. The AI team that carries out the tasks is the next
-          milestone.
+          This version plans and tracks projects, and an AI specialist on your team can carry out a
+          task. A team that plans the project with you and works together is still to come.
         </p>
       </div>
 

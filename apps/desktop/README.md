@@ -10,8 +10,8 @@ use case. It contains no rules of its own.
 
 | File | Contents |
 |---|---|
-| `src/main.rs` | Starts the application and lists the commands |
-| `src/state.rs` | Opens the database and builds the services |
+| `src/main.rs` | Starts the application, lists the commands, and stops the specialists when it closes |
+| `src/state.rs` | Opens the database, builds the services, and decides what stands behind each of their interfaces |
 | `src/commands/` | One function per command: read the arguments, call one use case, answer |
 | `src/dto.rs` | The data that travels between the interface and the commands |
 | `src/error.rs` | The error a command reports: a stable code and a readable message |
@@ -20,6 +20,32 @@ use case. It contains no rules of its own.
 To add a command: add the use case to the application crate, add a function
 in `src/commands`, list it in `main.rs`, and add the matching method to the
 `Backend` interface on the TypeScript side.
+
+### The work of the specialists
+
+The shell is where the work of an AI specialist meets the outside world
+([decision 0010](../../docs/decisions/0010-one-process-for-each-turn.md),
+[decision 0011](../../docs/decisions/0011-what-a-specialist-may-do.md)):
+
+- **The program.** `state.rs` hands the application crate the user's own
+  Claude Code (`teamwright-runtime`) as its agent runtime. The shell never
+  reads how the user is signed in; it only asks the program whether they
+  are.
+- **The folder of a project.** A specialist works in
+  `Teamwright/<key of the project>` in the user's documents. The folder is
+  created when a turn first needs it. When `TEAMWRIGHT_DATA_DIR` names a
+  data folder, the folders of the projects are in `projects` inside it
+  instead, so a test never writes into the user's documents.
+- **Slow commands.** Asking the program whether it is there, and starting a
+  turn, take seconds. Those commands are declared `async`, so they run on a
+  thread of their own and the window stays alive.
+- **One event.** Every change to a conversation is sent to the interface as
+  the event `conversation-changed`, with the whole conversation. The
+  interface replaces what it shows; it never has to put steps together.
+- **Closing.** When the program closes, the specialists that are still
+  working are stopped and their turns end as failed, with a text that says
+  why. A turn that was cut off harder than that, for example by a crash, is
+  ended the same way at the next start.
 
 ## The interface: `src`
 
@@ -34,6 +60,7 @@ src/
     calendar/         The calendar: a month of weeks with the tasks on their days
     tasks/            The task panel, the list, badges, the fold of subtasks, task logic
     team/             The team: avatars, the Team view, adding and changing a member
+    work/             The work of AI specialists: starting it, following it, answering
   shared/
     api/              The Backend interface and its two implementations
     ui/               Buttons, menus, dialogs, the calendar field, tooltips
@@ -48,11 +75,18 @@ Rules of the interface:
   repeats the backend's arithmetic and corrects itself if the answer differs.
 - **One way to the backend.** Components use `useBackend()` or the hooks
   built on it (`useProjects`, `useTasks`, `useTaskCommands`, `useTeam`,
-  `useTeamCommands`). Nothing calls Tauri directly except
-  `shared/api/tauriBackend.ts`.
+  `useTeamCommands`, `useConversations`, `useWorkCommands`). Nothing calls
+  Tauri directly except `shared/api/tauriBackend.ts`.
 - **The team of the open project is known everywhere.** `TeamProvider` puts
   it in a context, so a card, a row or a menu can show who a task is given
-  to without the team being handed down to it.
+  to without the team being handed down to it. `WorkProvider` does the same
+  for the conversations with the specialists, so a card can show that
+  somebody is working on its task.
+- **A conversation is replaced, never patched.** While a specialist works,
+  the backend sends the whole conversation with every step
+  (`useConversations`). The interface puts it in the place of the one it
+  had, and loads the tasks again when a turn starts or ends, because that
+  moves a task.
 - **What belongs to the window stays in the window.** Which view is open
   (`app/navigation.tsx`) and which tasks show their subtasks
   (`features/tasks/subtaskFolds.ts`) say something about the window and

@@ -1,13 +1,18 @@
-import { Ellipsis, Pencil, Plus, UserMinus } from 'lucide-react';
+import { Ellipsis, MessageSquare, Pencil, Plus, UserMinus } from 'lucide-react';
 import { useState } from 'react';
 
+import { useNavigation } from '@/app/navigation';
 import type { Member, Project, Task } from '@/shared/api/types';
+import { taskReference } from '@/shared/lib/format';
 import { classNames } from '@/shared/lib/classNames';
 import { Button, IconButton } from '@/shared/ui/Button';
 import { Dialog } from '@/shared/ui/Dialog';
 import { ActionMenu } from '@/shared/ui/Menu';
 
 import { TaskTally } from '../projects/TaskTally';
+import { ProgramStatus } from '../work/ProgramStatus';
+import { useConversationsOfProject } from '../work/WorkContext';
+import { whatMemberIsWorkingOn } from '../work/workModel';
 import { MANAGER_NAME, ManagerAvatar, MemberAvatar } from './Assignee';
 import { MemberDialog } from './MemberDialog';
 import { useTeamMembers } from './TeamContext';
@@ -19,6 +24,26 @@ interface TeamViewProps {
   project: Project;
   /** Every task of the project, to show what each member has on its plate. */
   tasks: Task[];
+}
+
+interface WorkingOnProps {
+  project: Project;
+  tasks: Task[];
+  /** What the member is working on at this moment: a task, a question, or nothing. */
+  work: ReturnType<typeof whatMemberIsWorkingOn>;
+}
+
+/** Says, next to the name of a member, what it is working on at this moment. */
+function WorkingOn({ project, tasks, work }: WorkingOnProps) {
+  if (work === undefined) {
+    return null;
+  }
+  const task = work.taskId === null ? undefined : tasks.find((other) => other.id === work.taskId);
+  return (
+    <span className={classNames('label', styles.working)}>
+      Working on {task ? taskReference(project, task) : 'a question'}
+    </span>
+  );
 }
 
 /**
@@ -39,6 +64,8 @@ const CLOSED: MemberDialogState = { isOpen: false };
 export function TeamView({ project, tasks }: TeamViewProps) {
   const members = useTeamMembers();
   const commands = useTeamCommands(project.id);
+  const navigation = useNavigation();
+  const conversations = useConversationsOfProject();
   const [form, setForm] = useState(CLOSED);
   const [removal, setRemoval] = useState(CLOSED);
   const hasSpecialists = members.some((member) => member.kind === 'agent');
@@ -91,7 +118,14 @@ export function TeamView({ project, tasks }: TeamViewProps) {
                 <div className={styles.who}>
                   <MemberAvatar member={member} size="large" />
                   <div className={styles.words}>
-                    <span className={styles.name}>{member.name}</span>
+                    <span className={styles.name}>
+                      {member.name}
+                      <WorkingOn
+                        project={project}
+                        tasks={tasks}
+                        work={whatMemberIsWorkingOn(conversations, member.id)}
+                      />
+                    </span>
                     {member.responsibility !== '' && (
                       <span className={styles.responsibility}>{member.responsibility}</span>
                     )}
@@ -106,6 +140,17 @@ export function TeamView({ project, tasks }: TeamViewProps) {
                 <ActionMenu
                   label={`Actions for ${member.name}`}
                   actions={[
+                    ...(member.kind === 'agent'
+                      ? [
+                          {
+                            label: 'Ask something',
+                            icon: <MessageSquare />,
+                            onSelect: () => {
+                              navigation.openChat(member.id);
+                            },
+                          },
+                        ]
+                      : []),
                     {
                       label: 'Change',
                       icon: <Pencil />,
@@ -151,12 +196,7 @@ export function TeamView({ project, tasks }: TeamViewProps) {
         Add member
       </button>
 
-      {hasSpecialists && (
-        <p className={styles.note}>
-          AI specialists cannot carry out their tasks yet. That is the next milestone. Until then a
-          specialist is a member that tasks can be given to.
-        </p>
-      )}
+      {hasSpecialists && <ProgramStatus />}
 
       <MemberDialog
         open={form.isOpen}

@@ -1,0 +1,16 @@
+.name {
+  font-weight: 600;
+}
+
+.responsibility {
+  color: var(--ink-soft);
+}
+
+.hint {
+  color: var(--ink-faint);
+  line-height: 1.55;
+}
+
+.startOver {
+  align-self: flex-start;
+}

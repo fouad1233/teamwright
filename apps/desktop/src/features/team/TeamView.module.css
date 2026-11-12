@@ -112,6 +112,31 @@
   color: var(--ink);
 }
 
+/* What a member is working on at this moment, next to its name: the point
+   of attention of the row, so it gets the brass. */
+.working {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: var(--space-3);
+  color: var(--brass);
+}
+
+.working::before {
+  width: 7px;
+  height: 7px;
+  border-radius: 1.5px;
+  background: var(--brass);
+  animation: at-work 1.1s ease-in-out infinite alternate;
+  content: '';
+}
+
+@keyframes at-work {
+  to {
+    opacity: 0.25;
+  }
+}
+
 .add svg {
   width: 15px;
   height: 15px;
