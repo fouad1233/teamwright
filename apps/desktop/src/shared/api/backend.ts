@@ -5,6 +5,7 @@ import type {
   Conversation,
   Id,
   Member,
+  MemberProfile,
   NewMember,
   NewProject,
   NewTask,
@@ -88,6 +89,11 @@ export interface Backend {
   renameMember(memberId: Id, name: string): Promise<Member>;
   /** Replaces what a member is on the team for. */
   setMemberResponsibility(memberId: Id, responsibility: string): Promise<Member>;
+  /**
+   * Says which model an AI specialist runs on and how hard it thinks. It
+   * holds from the next turn on. A person has no profile.
+   */
+  setMemberProfile(memberId: Id, profile: MemberProfile): Promise<Member>;
   /** Takes a member off the team. The member's tasks are given to nobody. */
   removeMember(memberId: Id): Promise<void>;
 

@@ -9,6 +9,7 @@ import type {
   Conversation,
   Id,
   Member,
+  MemberProfile,
   NewMember,
   NewProject,
   NewTask,
@@ -142,6 +143,10 @@ export class TauriBackend implements Backend {
 
   setMemberResponsibility(memberId: Id, responsibility: string): Promise<Member> {
     return call('set_member_responsibility', { memberId, responsibility });
+  }
+
+  setMemberProfile(memberId: Id, profile: MemberProfile): Promise<Member> {
+    return call('set_member_profile', { memberId, profile });
   }
 
   removeMember(memberId: Id): Promise<void> {

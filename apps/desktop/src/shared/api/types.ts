@@ -57,6 +57,22 @@ export interface Project {
 /** Whether a member of a team is an AI agent or a person. */
 export type MemberKind = 'agent' | 'human';
 
+/** How hard the model of a specialist thinks. More effort uses more tokens. */
+export type Effort = 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+
+/**
+ * How an AI specialist runs. Nothing in a field means: the way the program
+ * that runs the specialists does it by default.
+ */
+export interface MemberProfile {
+  /**
+   * The model, by a name that program understands: a short name for the
+   * latest model of a family, such as `sonnet`, or the full name of a model.
+   */
+  model: string | null;
+  effort: Effort | null;
+}
+
 /**
  * Someone on the team of a project who can be given tasks. The manager is not
  * a member.
@@ -69,6 +85,10 @@ export interface Member {
   kind: MemberKind;
   /** What the member is on the team for. May be empty. */
   responsibility: string;
+  /** The model an AI specialist runs on. Always nothing for a person. */
+  model: string | null;
+  /** How hard the model of an AI specialist thinks. Always nothing for a person. */
+  effort: Effort | null;
   /** The color the member is shown in. The backend chooses it. */
   color: Color;
   joinedAt: Moment;
@@ -249,6 +269,10 @@ export interface NewMember {
   name: string;
   kind: MemberKind;
   responsibility?: string;
+  /** The model of an AI specialist. Left out, it is the default of the program. */
+  model?: string | null;
+  /** The effort of an AI specialist. Left out, it is the default of the program. */
+  effort?: Effort | null;
 }
 
 export interface NewTask {

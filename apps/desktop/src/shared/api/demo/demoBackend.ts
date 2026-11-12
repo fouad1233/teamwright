@@ -7,8 +7,11 @@ import type {
   CalendarDate,
   Color,
   Conversation,
+  Effort,
   Id,
   Member,
+  MemberKind,
+  MemberProfile,
   Moment,
   NewMember,
   NewProject,
@@ -541,6 +544,10 @@ export class DemoBackend implements Backend {
       const name = tidyName(newMember.name, 'name of the team member', MEMBER_NAME_MAX_LENGTH);
       const team = this.teamOf(project.id);
       refuseNameInUse(team, name);
+      const profile = tidyProfile(newMember.kind, name, {
+        model: newMember.model ?? null,
+        effort: newMember.effort ?? null,
+      });
       const now = this.nowAsText();
       const member: Member = {
         id: this.environment.newId(),
@@ -548,6 +555,7 @@ export class DemoBackend implements Backend {
         name,
         kind: newMember.kind,
         responsibility: newMember.responsibility?.trim() ?? '',
+        ...profile,
         color: colorForNewcomer(team.map((other) => other.color)),
         joinedAt: now,
         updatedAt: now,
@@ -575,6 +583,15 @@ export class DemoBackend implements Backend {
     return this.answer(() => {
       const member = this.requireMember(memberId);
       member.responsibility = responsibility.trim();
+      member.updatedAt = this.nowAsText();
+      return member;
+    });
+  }
+
+  setMemberProfile(memberId: Id, profile: MemberProfile): Promise<Member> {
+    return this.answer(() => {
+      const member = this.requireMember(memberId);
+      Object.assign(member, tidyProfile(member.kind, member.name, profile));
       member.updatedAt = this.nowAsText();
       return member;
     });
@@ -1162,6 +1179,35 @@ function asArranged(first: Task, second: Task): number {
 }
 
 /** Trims a name, puts it on one line, and checks that it is not empty or too long. */
+/** The efforts a model can be asked for. */
+const EFFORTS: readonly Effort[] = ['low', 'medium', 'high', 'xhigh', 'max'];
+
+/** The most characters the name of a model can have. */
+const MODEL_NAME_MAX_LENGTH = 80;
+
+/**
+ * Checks the profile a member is to get. Only an AI specialist runs on a
+ * model, so a person can only be given an empty profile. The name of a
+ * model is one word; an empty one means the default.
+ */
+function tidyProfile(kind: MemberKind, name: string, profile: MemberProfile): MemberProfile {
+  const model = profile.model?.trim() ?? '';
+  const tidy: MemberProfile = { model: model === '' ? null : model, effort: profile.effort };
+  if (kind !== 'agent' && (tidy.model !== null || tidy.effort !== null)) {
+    throw new BackendError('no_specialist', `${name} is not an AI specialist`);
+  }
+  if (tidy.model !== null && (/\s/.test(tidy.model) || tidy.model.length > MODEL_NAME_MAX_LENGTH)) {
+    throw new BackendError(
+      'rule_broken',
+      `the name of a model is one word of at most ${MODEL_NAME_MAX_LENGTH.toString()} characters`,
+    );
+  }
+  if (tidy.effort !== null && !EFFORTS.includes(tidy.effort)) {
+    throw new BackendError('invalid_request', 'the effort is not one of the known ones');
+  }
+  return tidy;
+}
+
 function tidyName(raw: string, field: string, maxLength: number): string {
   const name = raw.trim().split(/\s+/).join(' ');
   if (name === '') {

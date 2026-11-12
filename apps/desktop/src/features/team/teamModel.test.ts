@@ -2,7 +2,15 @@ import { describe, expect, it } from 'vitest';
 
 import type { Assignee, Member, Task } from '@/shared/api/types';
 
-import { indexMembers, initialsOf, tasksOfManager, tasksOfMember } from './teamModel';
+import {
+  effortLabel,
+  indexMembers,
+  initialsOf,
+  modelLabel,
+  profileInWords,
+  tasksOfManager,
+  tasksOfMember,
+} from './teamModel';
 
 function member(id: string, name: string): Member {
   return {
@@ -11,6 +19,8 @@ function member(id: string, name: string): Member {
     name,
     kind: 'agent',
     responsibility: '',
+    model: null,
+    effort: null,
     color: 'teal',
     joinedAt: '2026-11-11T09:00:00.000Z',
     updatedAt: '2026-11-11T09:00:00.000Z',
@@ -93,5 +103,25 @@ describe('the tasks of someone', () => {
 
   it('are, for the manager, the tasks the manager keeps', () => {
     expect(tasksOfManager(tasks).map((found) => found.number)).toEqual([1]);
+  });
+});
+
+describe('modelLabel, effortLabel and profileInWords', () => {
+  it('write a short name of a model with a capital and leave a full name as it is', () => {
+    expect(modelLabel('sonnet')).toBe('Sonnet');
+    expect(modelLabel('claude-sonnet-5-5')).toBe('claude-sonnet-5-5');
+  });
+
+  it('name the efforts', () => {
+    expect(effortLabel('low')).toBe('Low');
+    expect(effortLabel('xhigh')).toBe('Extra high');
+    expect(effortLabel('max')).toBe('Maximum');
+  });
+
+  it('say how a specialist runs, or nothing if that is left to the program', () => {
+    expect(profileInWords({ model: 'sonnet', effort: 'high' })).toBe('Sonnet, high effort');
+    expect(profileInWords({ model: 'haiku', effort: null })).toBe('Haiku');
+    expect(profileInWords({ model: null, effort: 'xhigh' })).toBe('extra high effort');
+    expect(profileInWords({ model: null, effort: null })).toBeNull();
   });
 });

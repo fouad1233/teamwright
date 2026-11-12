@@ -1,6 +1,16 @@
 import { evenlySpacedRanks } from '@/shared/lib/rank';
 
-import type { Assignee, CalendarDate, Id, Member, Priority, Project, Status, Task } from '../types';
+import type {
+  Assignee,
+  CalendarDate,
+  Id,
+  Member,
+  MemberProfile,
+  Priority,
+  Project,
+  Status,
+  Task,
+} from '../types';
 import type { DemoWorkspace } from './demoBackend';
 
 /** The statuses of the sample project, by a short name used in this file. */
@@ -29,12 +39,15 @@ const TEAM = {
     name: 'Hardware engineer',
     responsibility: 'The parts, the schematic and the board.',
     color: 'teal',
+    model: 'opus',
+    effort: 'high',
   },
   firmware: {
     id: 'demo-member-firmware',
     name: 'Firmware engineer',
     responsibility: 'Everything that runs on the device.',
     color: 'blue',
+    model: 'sonnet',
   },
   mechanical: {
     id: 'demo-member-mechanical',
@@ -42,7 +55,10 @@ const TEAM = {
     responsibility: 'The enclosure, and how the board sits in it.',
     color: 'purple',
   },
-} as const satisfies Record<string, Pick<Member, 'id' | 'name' | 'responsibility' | 'color'>>;
+} as const satisfies Record<
+  string,
+  Pick<Member, 'id' | 'name' | 'responsibility' | 'color'> & Partial<MemberProfile>
+>;
 
 type TeamMemberName = keyof typeof TEAM;
 
@@ -267,6 +283,10 @@ export function sampleWorkspace(today: Date = new Date()): DemoWorkspace {
   };
 
   const members = Object.values(TEAM).map((member): Member => ({
+    // The way a specialist runs is left to the program, unless the sample
+    // says otherwise.
+    model: null,
+    effort: null,
     ...member,
     projectId: project.id,
     kind: 'agent',

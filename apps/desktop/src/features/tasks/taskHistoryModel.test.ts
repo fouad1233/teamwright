@@ -23,6 +23,8 @@ const engineer: Member = {
   name: 'Hardware engineer',
   kind: 'agent',
   responsibility: '',
+  model: null,
+  effort: null,
   color: 'teal',
   joinedAt: '2026-11-11T09:00:00.000Z',
   updatedAt: '2026-11-11T09:00:00.000Z',

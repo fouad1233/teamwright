@@ -395,6 +395,71 @@ describe('the team in the DemoBackend', () => {
     expect(error.code).toBe('member_name_taken');
   });
 
+  it('leaves the model and the effort of a new specialist to the program', async () => {
+    const member = await agent('Hardware engineer');
+
+    expect(member.model).toBeNull();
+    expect(member.effort).toBeNull();
+  });
+
+  it('puts a specialist on the team with a model and an effort', async () => {
+    const member = await backend.addMember({
+      projectId: project.id,
+      name: 'Tester',
+      kind: 'agent',
+      model: ' haiku ',
+      effort: 'low',
+    });
+
+    expect(member.model).toBe('haiku');
+    expect(member.effort).toBe('low');
+  });
+
+  it('gives a specialist another model and effort, and takes them away again', async () => {
+    const member = await agent('Hardware engineer');
+
+    const profiled = await backend.setMemberProfile(member.id, { model: 'opus', effort: 'high' });
+    expect([profiled.model, profiled.effort]).toEqual(['opus', 'high']);
+    expect(profiled.updatedAt).toBe('2026-11-11T10:00:00.000Z');
+
+    const left = await backend.setMemberProfile(member.id, { model: '  ', effort: null });
+    expect([left.model, left.effort]).toEqual([null, null]);
+  });
+
+  it('takes the full name of a model as it is, and refuses one with a space in it', async () => {
+    const member = await agent('Hardware engineer');
+
+    const named = await backend.setMemberProfile(member.id, {
+      model: 'claude-sonnet-5-5',
+      effort: null,
+    });
+    expect(named.model).toBe('claude-sonnet-5-5');
+
+    const error = await refusal(
+      backend.setMemberProfile(member.id, { model: 'the best one', effort: null }),
+    );
+    expect(error.code).toBe('rule_broken');
+    expect(error.message).toBe('the name of a model is one word of at most 80 characters');
+  });
+
+  it('gives a person neither a model nor an effort', async () => {
+    const dana = await backend.addMember({ projectId: project.id, name: 'Dana', kind: 'human' });
+
+    const withModel = await refusal(
+      backend.setMemberProfile(dana.id, { model: 'sonnet', effort: null }),
+    );
+    expect(withModel.code).toBe('no_specialist');
+    expect(withModel.message).toBe('Dana is not an AI specialist');
+    const fromTheStart = await refusal(
+      backend.addMember({ projectId: project.id, name: 'Eli', kind: 'human', effort: 'high' }),
+    );
+    expect(fromTheStart.code).toBe('no_specialist');
+    // An empty profile is what a person has, so setting it changes nothing and is allowed.
+    expect(
+      (await backend.setMemberProfile(dana.id, { model: null, effort: null })).model,
+    ).toBeNull();
+  });
+
   it('gives a task to a member, and to nobody when the member leaves', async () => {
     const hardware = await agent('Hardware engineer');
     const firmware = await agent('Firmware engineer');
