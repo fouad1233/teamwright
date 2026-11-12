@@ -116,9 +116,9 @@ Several specialists working together with the manager in the loop.
   default, at a desk of its own, larger in a wide window, who works, waits
   with a hand raised, does small things when free and walks the aisles to
   a shared place; a portrait at the bench and in the Team view.
-  The first, smaller people were seen in the built program with a real
-  specialist at work; the larger ones, and walking, waiting and the small
-  things, in a browser on demo data only
+  Seen in the built program with a real specialist at work at its desk;
+  walking, waiting and the small things were seen in a browser on demo
+  data only
   ([decision 0019](../decisions/0019-people-in-the-office.md))
 - 🚧 Dashboards: usage per teammate, plan limits, workload by status. A
   Dashboard view of a project: where it stands in sentences worked out by
