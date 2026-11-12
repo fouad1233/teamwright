@@ -32,8 +32,18 @@ import {
  * turned down. The room is measured only when its size changes.
  */
 
-/** The size of a pixel of a character, in pixels of the page, as it was drawn to be seen. */
-export const CHARACTER_SCALE = 2;
+/**
+ * The size of a pixel of a character, in pixels of the page, when the
+ * style sheet does not say: `--office-scale` is 3 in a wide window and 2
+ * in a narrow one, and the aisles are as deep as that scale needs.
+ */
+const DEFAULT_SCALE = 2;
+
+/** The scale the style sheet asks the people of a room to be drawn at. */
+function scaleOf(room: HTMLElement): number {
+  const scale = Number.parseFloat(getComputedStyle(room).getPropertyValue('--office-scale'));
+  return Number.isNaN(scale) || scale < 1 ? DEFAULT_SCALE : Math.round(scale);
+}
 /** How many times a second the room is drawn while people move. Pixel figures need few. */
 const FRAMES_PER_SECOND = 15;
 /** The longest step of time the room takes at once, so that a hidden window does not jump. */
@@ -162,7 +172,7 @@ export class RoomPainter {
     };
     const commons = this.room.querySelector('[data-commons]');
     const pixelRatio = window.devicePixelRatio || 1;
-    const device = deviceUnit(CHARACTER_SCALE, pixelRatio);
+    const device = deviceUnit(scaleOf(this.room), pixelRatio);
     if (device !== this.device || pixelRatio !== this.pixelRatio) {
       this.cache.clear();
     }

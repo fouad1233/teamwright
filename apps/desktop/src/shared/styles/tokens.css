@@ -144,6 +144,9 @@
   /* The frame of a portrait: the head and shoulders of a character, the
      size of a large avatar. */
   --portrait-size: 32px;
+  /* How many pixels of the page one pixel of a character of the office
+     takes. In a wide window it is three, and the aisles deepen to fit. */
+  --office-scale: 2;
 
   /* A mask that keeps all it covers. Two of them, one cut out of the other,
      leave only the rim of an element for a light to fall on. */
@@ -292,6 +295,19 @@
        shadow. */
     --shadow-overlay: 0 16px 40px rgb(61 47 37 / 16%);
     --shadow-lifted: 0 12px 28px rgb(61 47 37 / 18%), 0 2px 6px rgb(61 47 37 / 10%);
+  }
+}
+
+/*
+ * In a wide window the people of the office are drawn at three times
+ * rather than two (decision 0019), and the aisles and the band of shared
+ * places deepen in proportion, so that nobody walks over a word.
+ */
+@media (min-width: 1280px) {
+  :root {
+    --office-scale: 3;
+    --office-aisle: 120px;
+    --office-commons-height: 160px;
   }
 }
 
