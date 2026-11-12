@@ -89,7 +89,10 @@ export function useAssigneeName(assignee: Assignee | null): string {
   return member?.name ?? UNKNOWN_MEMBER_NAME;
 }
 
-/** The name of who is responsible for a task. */
+/**
+ * The name of who is responsible for a task. A name that is too long for its
+ * place is cut with an ellipsis.
+ */
 export function AssigneeName({ assignee }: { assignee: Assignee | null }) {
-  return useAssigneeName(assignee);
+  return <span className={styles.name}>{useAssigneeName(assignee)}</span>;
 }
