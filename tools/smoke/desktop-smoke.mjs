@@ -92,6 +92,24 @@ try {
   const moved = await window.command('move_task', { taskId: board.id, statusId: done.id, index: 0 });
   check('moving a task to a done status completes it', typeof moved.ok?.completedAt === 'string');
 
+  const history = (await window.command('list_task_history', { taskId: board.id })).ok;
+  check(
+    'the history of a task tells what happened to it, the oldest first',
+    history?.map((change) => change.kind).join(', ') ===
+      'created, assigned, prioritized, rescheduled, moved',
+    JSON.stringify(history),
+  );
+  check(
+    'a change in the history says from what to what',
+    history?.[1]?.to?.kind === 'manager' &&
+      history[2].from === 'normal' &&
+      history[2].to === 'high' &&
+      history[3].to.dueOn === '2026-11-20' &&
+      history[4].fromStatusId === board.statusId &&
+      history[4].toStatusId === done.id,
+    JSON.stringify(history),
+  );
+
   const badDate = await window.command('reschedule_task', {
     taskId: firmware.id,
     startOn: 'tomorrow',

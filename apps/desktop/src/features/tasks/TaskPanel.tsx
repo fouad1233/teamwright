@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNod
 import { useNavigation } from '@/app/navigation';
 import type { Assignee, Id, Project, Task } from '@/shared/api/types';
 import { classNames } from '@/shared/lib/classNames';
-import { formatEstimate, formatMoment, parseEstimate, taskReference } from '@/shared/lib/format';
+import { formatEstimate, parseEstimate, taskReference } from '@/shared/lib/format';
 import { Button, IconButton, ValueButton } from '@/shared/ui/Button';
 import { DateField } from '@/shared/ui/DateField';
 import { Dialog } from '@/shared/ui/Dialog';
@@ -21,6 +21,7 @@ import { useTeamMembers } from '../team/TeamContext';
 import { TaskWork } from '../work/TaskWork';
 import { PRIORITIES, PriorityFlag, StatusLabel, StatusMark, priorityLabel } from './TaskBadges';
 import { TaskComposer } from './TaskComposer';
+import { TaskHistory } from './TaskHistory';
 import styles from './TaskPanel.module.css';
 import { TaskPicker } from './TaskPicker';
 import { indexById, statusOf, subtasksOf } from './taskModel';
@@ -289,10 +290,9 @@ export function TaskPanel({ project, task, tasks, onClose }: TaskPanelProps) {
           />
         </Section>
 
-        <p className={styles.history}>
-          Created {formatMoment(task.createdAt)} · Changed {formatMoment(task.updatedAt)}
-          {task.completedAt !== null && ` · Completed ${formatMoment(task.completedAt)}`}
-        </p>
+        <Section title="History">
+          <TaskHistory project={project} task={task} tasks={tasks} />
+        </Section>
       </div>
 
       <Dialog

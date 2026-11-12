@@ -19,6 +19,18 @@ export function useTasks(projectId: Id) {
 }
 
 /**
+ * What has happened to a task since it was opened, the oldest change first.
+ * It is asked for again whenever the task has changed.
+ */
+export function useTaskHistory(task: Pick<Task, 'id' | 'updatedAt'>) {
+  const backend = useBackend();
+  return useQuery({
+    queryKey: ['task-history', task.id, task.updatedAt] as const,
+    queryFn: () => backend.listTaskHistory(task.id),
+  });
+}
+
+/**
  * Everything the interface can do to the tasks of one project.
  *
  * Each command sends a request to the backend and brings the tasks on screen

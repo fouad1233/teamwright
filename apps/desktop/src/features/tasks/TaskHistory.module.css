@@ -1,0 +1,47 @@
+.note {
+  color: var(--ink-faint);
+}
+
+.history {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.changes {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* A change is a line of a log: when, in the monospace, and what. */
+.change {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+}
+
+.when {
+  flex: none;
+  width: 132px;
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+
+.what {
+  min-width: 0;
+  color: var(--ink-soft);
+  overflow-wrap: anywhere;
+}
+
+.more {
+  align-self: flex-start;
+  color: var(--ink-faint);
+  font-size: var(--text-small);
+}
+
+.more:hover {
+  color: var(--ink);
+}
