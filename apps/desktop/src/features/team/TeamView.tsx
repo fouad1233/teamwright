@@ -9,11 +9,12 @@ import { Button, IconButton } from '@/shared/ui/Button';
 import { Dialog } from '@/shared/ui/Dialog';
 import { ActionMenu } from '@/shared/ui/Menu';
 
+import { Portrait } from '../office/characters/Portrait';
 import { TaskTally } from '../projects/TaskTally';
 import { ProgramStatus } from '../work/ProgramStatus';
 import { useConversationsOfProject } from '../work/WorkContext';
 import { whatMemberIsWorkingOn, whatMemberWaitsFor } from '../work/workModel';
-import { MANAGER_NAME, ManagerAvatar, MemberAvatar } from './Assignee';
+import { MANAGER_NAME } from './Assignee';
 import { MemberDialog } from './MemberDialog';
 import { useTeamMembers } from './TeamContext';
 import styles from './TeamView.module.css';
@@ -110,7 +111,7 @@ export function TeamView({ project, tasks }: TeamViewProps) {
           <tr className={styles.row}>
             <td>
               <div className={styles.who}>
-                <ManagerAvatar size="large" />
+                <Portrait sitter={{ kind: 'manager' }} name={MANAGER_NAME} />
                 <div className={styles.words}>
                   <span className={styles.name}>{MANAGER_NAME}</span>
                   <span className={styles.responsibility}>
@@ -130,7 +131,11 @@ export function TeamView({ project, tasks }: TeamViewProps) {
             <tr key={member.id} className={styles.row}>
               <td>
                 <div className={styles.who}>
-                  <MemberAvatar member={member} size="large" />
+                  <Portrait
+                    sitter={{ kind: 'member', member }}
+                    name={member.name}
+                    isPerson={member.kind === 'human'}
+                  />
                   <div className={styles.words}>
                     <span className={styles.name}>
                       {member.name}
