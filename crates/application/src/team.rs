@@ -307,6 +307,7 @@ mod tests {
     use teamwright_domain::DomainError;
 
     use super::*;
+    use crate::in_memory::InMemorySprintRepository;
     use crate::in_memory::{
         InMemoryConversationRepository, InMemoryMemberRepository, InMemoryPlacesRepository,
         InMemoryProjectRepository, InMemoryTaskRepository, ManualClock,
@@ -337,6 +338,7 @@ mod tests {
                 members.clone(),
                 conversations.clone(),
                 Arc::new(InMemoryPlacesRepository::default()),
+                Arc::new(InMemorySprintRepository::new(tasks.clone())),
                 clock.clone(),
             ),
             team: TeamService::new(
@@ -346,7 +348,14 @@ mod tests {
                 conversations.clone(),
                 clock.clone(),
             ),
-            tasks: TaskService::new(projects, tasks, members, conversations, clock.clone()),
+            tasks: TaskService::new(
+                projects,
+                tasks.clone(),
+                members,
+                conversations,
+                Arc::new(InMemorySprintRepository::new(tasks.clone())),
+                clock.clone(),
+            ),
             clock,
         }
     }

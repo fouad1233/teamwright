@@ -15,10 +15,10 @@ use teamwright_application::in_memory::{
 use teamwright_application::{
     AgentEvent, ApprovedMember, ApprovedOwner, ApprovedProposal, ApprovedTask, ChosenPlaces,
     ConversationRepository, ManagerQuestion, MemberRepository, ModelUsage, NewMember, NewProject,
-    NewTask, PlacesRepository, PlanProposal, PlannedMember, PlannedOwner, PlannedTask,
-    ProjectRepository, ProjectService, QuestionOption, SessionId, SprintRepository,
-    StatusProperties, TaskRepository, TaskService, TeamService, TurnOutcome, WorkPorts,
-    WorkService, WorkflowTemplate,
+    NewSprint, NewTask, PlacesRepository, PlanProposal, PlannedMember, PlannedOwner, PlannedTask,
+    ProjectRepository, ProjectService, QuestionOption, SessionId, SprintRepository, SprintService,
+    SprintStart, StatusProperties, TaskRepository, TaskService, TeamService, TurnOutcome,
+    WorkPorts, WorkService, WorkflowTemplate,
 };
 use teamwright_domain::{
     Assignee, CalendarDate, Color, Conversation, ConversationId, DecisionOption, DecisionRequest,
@@ -1862,12 +1862,148 @@ fn everything_survives_closing_and_reopening_the_file() {
 // The use cases on the real database
 
 #[test]
+fn the_sprint_use_cases_work_on_the_real_database_and_are_logged() {
+    let database = Arc::new(Database::open_in_memory().unwrap());
+    let project_repository = Arc::new(SqliteProjectRepository::new(database.clone()));
+    let task_repository = Arc::new(SqliteTaskRepository::new(database.clone()));
+    let member_repository = Arc::new(SqliteMemberRepository::new(database.clone()));
+    let places_repository = Arc::new(SqlitePlacesRepository::new(database.clone()));
+    let sprint_repository = Arc::new(SqliteSprintRepository::new(database.clone()));
+    let conversation_repository = Arc::new(SqliteConversationRepository::new(database.clone()));
+    let clock = Arc::new(ManualClock::starting_at(moment(9)));
+    let projects = ProjectService::new(
+        project_repository.clone(),
+        task_repository.clone(),
+        member_repository.clone(),
+        conversation_repository.clone(),
+        places_repository,
+        sprint_repository.clone(),
+        clock.clone(),
+    );
+    let tasks = TaskService::new(
+        project_repository.clone(),
+        task_repository.clone(),
+        member_repository,
+        conversation_repository,
+        sprint_repository.clone(),
+        clock.clone(),
+    );
+    let sprints = SprintService::new(
+        project_repository.clone(),
+        task_repository,
+        sprint_repository,
+        clock.clone(),
+    );
+    let project = projects
+        .create(NewProject {
+            name: "Smart sensor node".to_owned(),
+            workflow: WorkflowTemplate::Engineering,
+            ..NewProject::default()
+        })
+        .unwrap();
+    let board = tasks
+        .create(NewTask::titled(project.id(), "Design the board"))
+        .unwrap();
+    let part = tasks
+        .create(NewTask {
+            parent_id: Some(board.id()),
+            ..NewTask::titled(project.id(), "Power supply")
+        })
+        .unwrap();
+    let firmware = tasks
+        .create(NewTask::titled(project.id(), "Write the firmware"))
+        .unwrap();
+
+    // A sprint is planned, filled, started and completed.
+    let first = sprints.create(NewSprint::in_project(project.id())).unwrap();
+    let next = sprints.create(NewSprint::in_project(project.id())).unwrap();
+    tasks.plan(board.id(), Some(first.id())).unwrap();
+    tasks.plan(firmware.id(), Some(first.id())).unwrap();
+    tasks.set_points(board.id(), Some(5.0)).unwrap();
+    tasks.set_points(firmware.id(), Some(3.0)).unwrap();
+    sprints
+        .start(
+            first.id(),
+            SprintStart {
+                name: "Bring-up".to_owned(),
+                goal: "Power on".to_owned(),
+                start_on: day(11),
+                end_on: day(13),
+            },
+        )
+        .unwrap();
+    let done = status_named(&project, "Done");
+    tasks.move_to(firmware.id(), done, 0).unwrap();
+    clock.advance(TimeDelta::days(1));
+    let completed = sprints.complete(first.id(), Some(next.id())).unwrap();
+
+    assert_eq!(
+        completed.summary(),
+        Some(SprintSummary {
+            unit: SprintUnit::Points,
+            committed: 8,
+            completed: 3
+        })
+    );
+    assert_eq!(sprints.get(first.id()).unwrap(), completed);
+    assert_eq!(tasks.get(board.id()).unwrap().sprint_id(), Some(next.id()));
+    assert_eq!(tasks.get(part.id()).unwrap().sprint_id(), Some(next.id()));
+    assert_eq!(
+        tasks.get(firmware.id()).unwrap().sprint_id(),
+        Some(first.id())
+    );
+    let report = sprints.report(first.id()).unwrap();
+    assert_eq!(report.total, 3);
+    let remaining: Vec<Option<u32>> = report.days.iter().map(|day| day.remaining).collect();
+    assert_eq!(remaining, [Some(0), Some(0), None]);
+    let listed: Vec<SprintId> = sprints
+        .list_for_project(project.id())
+        .unwrap()
+        .iter()
+        .map(Sprint::id)
+        .collect();
+    assert_eq!(listed, [next.id(), first.id()]);
+    assert_eq!(
+        project_repository
+            .find(project.id())
+            .unwrap()
+            .unwrap()
+            .next_sprint_number(),
+        3
+    );
+    // Planning and points are changes to a task and are kept in its
+    // versions, but they are not part of its history.
+    assert_eq!(tasks.history(board.id()).unwrap().len(), 1);
+
+    let start = database.operations().unwrap().len();
+    projects.delete(project.id()).unwrap();
+
+    let removed: Vec<(String, String)> = database.operations().unwrap()[start..]
+        .iter()
+        .map(|op| (op.entity.clone(), op.kind.clone()))
+        .collect();
+    assert_eq!(
+        removed,
+        pairs(&[
+            ("task", "delete"),
+            ("task", "delete"),
+            ("task", "delete"),
+            ("sprint", "delete"),
+            ("sprint", "delete"),
+            ("project", "delete"),
+        ])
+    );
+    assert!(sprints.get(first.id()).is_err());
+}
+
+#[test]
 fn the_use_cases_work_on_the_real_database() {
     let database = Arc::new(Database::open_in_memory().unwrap());
     let project_repository = Arc::new(SqliteProjectRepository::new(database.clone()));
     let task_repository = Arc::new(SqliteTaskRepository::new(database.clone()));
     let member_repository = Arc::new(SqliteMemberRepository::new(database.clone()));
     let places_repository = Arc::new(SqlitePlacesRepository::new(database.clone()));
+    let sprint_repository = Arc::new(SqliteSprintRepository::new(database.clone()));
     let conversation_repository = Arc::new(SqliteConversationRepository::new(database));
     let clock = Arc::new(ManualClock::starting_at(moment(9)));
     let projects = ProjectService::new(
@@ -1876,6 +2012,7 @@ fn the_use_cases_work_on_the_real_database() {
         member_repository.clone(),
         conversation_repository.clone(),
         places_repository.clone(),
+        sprint_repository.clone(),
         clock.clone(),
     );
     let tasks = TaskService::new(
@@ -1883,6 +2020,7 @@ fn the_use_cases_work_on_the_real_database() {
         task_repository.clone(),
         member_repository.clone(),
         conversation_repository.clone(),
+        sprint_repository.clone(),
         clock.clone(),
     );
     let team = TeamService::new(
@@ -1963,6 +2101,7 @@ fn the_workflow_and_removal_use_cases_work_on_the_real_database() {
     let task_repository = Arc::new(SqliteTaskRepository::new(database.clone()));
     let member_repository = Arc::new(SqliteMemberRepository::new(database.clone()));
     let places_repository = Arc::new(SqlitePlacesRepository::new(database.clone()));
+    let sprint_repository = Arc::new(SqliteSprintRepository::new(database.clone()));
     let conversation_repository = Arc::new(SqliteConversationRepository::new(database.clone()));
     let clock = Arc::new(ManualClock::starting_at(moment(9)));
     let projects = ProjectService::new(
@@ -1971,6 +2110,7 @@ fn the_workflow_and_removal_use_cases_work_on_the_real_database() {
         member_repository.clone(),
         conversation_repository.clone(),
         places_repository.clone(),
+        sprint_repository.clone(),
         clock.clone(),
     );
     let tasks = TaskService::new(
@@ -1978,6 +2118,7 @@ fn the_workflow_and_removal_use_cases_work_on_the_real_database() {
         task_repository.clone(),
         member_repository.clone(),
         conversation_repository.clone(),
+        sprint_repository.clone(),
         clock.clone(),
     );
     let team = TeamService::new(
@@ -2090,6 +2231,7 @@ fn the_work_of_a_specialist_is_kept_on_the_real_database() {
     let task_repository = Arc::new(SqliteTaskRepository::new(database.clone()));
     let member_repository = Arc::new(SqliteMemberRepository::new(database.clone()));
     let places_repository = Arc::new(SqlitePlacesRepository::new(database.clone()));
+    let sprint_repository = Arc::new(SqliteSprintRepository::new(database.clone()));
     let conversation_repository = Arc::new(SqliteConversationRepository::new(database.clone()));
     let planning_repository = Arc::new(SqlitePlanningRepository::new(database.clone()));
     let clock = Arc::new(ManualClock::starting_at(moment(9)));
@@ -2115,6 +2257,7 @@ fn the_work_of_a_specialist_is_kept_on_the_real_database() {
         member_repository.clone(),
         conversation_repository.clone(),
         places_repository.clone(),
+        sprint_repository.clone(),
         clock.clone(),
     );
     let tasks = TaskService::new(
@@ -2122,6 +2265,7 @@ fn the_work_of_a_specialist_is_kept_on_the_real_database() {
         task_repository.clone(),
         member_repository.clone(),
         conversation_repository.clone(),
+        sprint_repository.clone(),
         clock.clone(),
     );
     let team = TeamService::new(
@@ -2301,6 +2445,7 @@ fn approving_a_proposal_creates_the_team_and_the_plan_in_one_logged_write() {
     let member_repository = Arc::new(SqliteMemberRepository::new(database.clone()));
     let conversation_repository = Arc::new(SqliteConversationRepository::new(database.clone()));
     let places_repository = Arc::new(SqlitePlacesRepository::new(database.clone()));
+    let sprint_repository = Arc::new(SqliteSprintRepository::new(database.clone()));
     let clock = Arc::new(ManualClock::starting_at(moment(9)));
     let runtime = Arc::new(ScriptedRuntime::new());
     let projects = ProjectService::new(
@@ -2309,6 +2454,7 @@ fn approving_a_proposal_creates_the_team_and_the_plan_in_one_logged_write() {
         member_repository.clone(),
         conversation_repository.clone(),
         places_repository.clone(),
+        sprint_repository.clone(),
         clock.clone(),
     );
     let work = WorkService::new(WorkPorts {

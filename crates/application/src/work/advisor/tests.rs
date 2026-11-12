@@ -18,6 +18,7 @@ use crate::agent_runtime::{
     PlanProposal, PlannedMember, PlannedOwner, PlannedTask, QuestionOption, SessionId,
     SessionStarted, TeamTool, TokenCounts, TurnOutcome,
 };
+use crate::in_memory::InMemorySprintRepository;
 use crate::in_memory::{
     FixedProjectFolders, InMemoryConversationRepository, InMemoryMemberRepository,
     InMemoryPlacesRepository, InMemoryPlanningRepository, InMemoryProjectRepository,
@@ -66,6 +67,7 @@ fn planning() -> Planning {
         members_store.clone(),
         conversations_store.clone(),
         places.clone(),
+        Arc::new(InMemorySprintRepository::new(tasks_store.clone())),
         clock.clone(),
     );
     let tasks = TaskService::new(
@@ -73,6 +75,7 @@ fn planning() -> Planning {
         tasks_store.clone(),
         members_store.clone(),
         conversations_store.clone(),
+        Arc::new(InMemorySprintRepository::new(tasks_store.clone())),
         clock.clone(),
     );
     let team = TeamService::new(
@@ -992,6 +995,12 @@ fn adds_the_members_to_the_team_and_creates_the_tasks_when_it_is_approved() {
     assert_eq!(numbers, (1..=12).collect::<Vec<_>>());
     let first_status = planning.project.workflow().statuses()[0].id();
     assert!(tasks.iter().all(|task| task.status_id() == first_status));
+    // The plan lands in the backlog, without points.
+    assert!(
+        tasks
+            .iter()
+            .all(|task| task.sprint_id().is_none() && task.points().is_none())
+    );
     assert_eq!(
         tasks[0].title().as_str(),
         "Agree on what the device must do"

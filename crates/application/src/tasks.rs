@@ -4,13 +4,15 @@ use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use teamwright_domain::{
-    Assignee, CalendarDate, DependencyGraph, Priority, Project, ProjectId, Rank, Schedule, Status,
-    StatusId, Task, TaskChange, TaskDraft, TaskId, TaskTitle, Timestamp, history_of,
+    Assignee, CalendarDate, DependencyGraph, Priority, Project, ProjectId, Rank, Schedule,
+    SprintId, Status, StatusId, StoryPoints, Task, TaskChange, TaskDraft, TaskId, TaskTitle,
+    Timestamp, history_of,
 };
 
 use crate::error::ApplicationError;
 use crate::ports::{
-    Clock, ConversationRepository, MemberRepository, ProjectRepository, TaskRepository,
+    Clock, ConversationRepository, MemberRepository, ProjectRepository, SprintRepository,
+    TaskRepository,
 };
 use crate::work::WorkInProgress;
 
@@ -59,26 +61,29 @@ impl NewTask {
     }
 }
 
-/// The use cases that open, change, move, connect and remove tasks.
+/// The use cases that open, change, plan, move, connect and remove tasks.
 #[derive(Clone)]
 pub struct TaskService {
     projects: Arc<dyn ProjectRepository>,
     tasks: Arc<dyn TaskRepository>,
     members: Arc<dyn MemberRepository>,
     conversations: Arc<dyn ConversationRepository>,
+    sprints: Arc<dyn SprintRepository>,
     clock: Arc<dyn Clock>,
 }
 
 impl TaskService {
     /// Creates the service. The conversations are needed because the record
     /// of the work on a task goes with the task, and a task a specialist is
-    /// working on is not removed.
+    /// working on is not removed. The sprints are needed to plan a task
+    /// into one.
     #[must_use]
     pub fn new(
         projects: Arc<dyn ProjectRepository>,
         tasks: Arc<dyn TaskRepository>,
         members: Arc<dyn MemberRepository>,
         conversations: Arc<dyn ConversationRepository>,
+        sprints: Arc<dyn SprintRepository>,
         clock: Arc<dyn Clock>,
     ) -> Self {
         Self {
@@ -86,11 +91,14 @@ impl TaskService {
             tasks,
             members,
             conversations,
+            sprints,
             clock,
         }
     }
 
-    /// Opens a task at the bottom of its status.
+    /// Opens a task at the bottom of its status. It starts in the backlog
+    /// without points, or, as a subtask, in the sprint of the task it is a
+    /// part of.
     ///
     /// # Errors
     ///
@@ -106,11 +114,15 @@ impl TaskService {
             Some(status_id) => project.workflow().require_status(status_id)?.clone(),
             None => project.workflow().initial_status().clone(),
         };
-        if let Some(parent_id) = new_task.parent_id {
-            let parent = self.require_task(parent_id)?;
-            if parent.project_id() != project.id() {
-                return Err(ApplicationError::DifferentProjects);
-            }
+        let parent = new_task
+            .parent_id
+            .map(|parent_id| self.require_task(parent_id))
+            .transpose()?;
+        if parent
+            .as_ref()
+            .is_some_and(|parent| parent.project_id() != project.id())
+        {
+            return Err(ApplicationError::DifferentProjects);
         }
         self.check_assignee(new_task.assignee, project.id())?;
 
@@ -131,14 +143,19 @@ impl TaskService {
             schedule,
         };
         let number = project.allocate_task_number();
-        let task = Task::create(
+        let now = self.clock.now();
+        let mut task = Task::create(
             project.id(),
             number,
             &status,
             Rank::between(last_rank_in_status, None),
             draft,
-            self.clock.now(),
+            now,
         );
+        // A subtask goes where the task it is a part of goes.
+        if let Some(sprint_id) = parent.as_ref().and_then(Task::sprint_id) {
+            task.plan_into(Some(sprint_id), now);
+        }
 
         // The project is stored first. If storing the task then fails, one
         // number is skipped, which is harmless. In the other order a failure
@@ -251,6 +268,77 @@ impl TaskService {
     pub fn estimate(&self, id: TaskId, minutes: Option<u32>) -> Result<Task, ApplicationError> {
         self.change(id, |task, now| {
             task.estimate(minutes, now);
+            Ok(())
+        })
+    }
+
+    /// Puts a task into a planned or an active sprint, or with `None` back
+    /// into the backlog. Its subtasks go with it. A subtask is not planned
+    /// by itself: it goes where the task it is a part of goes.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the task or the sprint does not exist, if the
+    /// task is a subtask, if the sprint belongs to another project or is
+    /// completed, or if storage fails.
+    pub fn plan(&self, id: TaskId, sprint_id: Option<SprintId>) -> Result<Task, ApplicationError> {
+        let task = self.require_task(id)?;
+        let project = self.require_project(task.project_id())?;
+        if let Some(parent) = task
+            .parent_id()
+            .map(|parent_id| self.tasks.find(parent_id))
+            .transpose()?
+            .flatten()
+        {
+            return Err(ApplicationError::SubtaskPlannedAlone {
+                task: reference(&project, &task),
+                parent: reference(&project, &parent),
+            });
+        }
+        if let Some(sprint_id) = sprint_id {
+            let sprint =
+                self.sprints
+                    .find(sprint_id)?
+                    .ok_or_else(|| ApplicationError::NotFound {
+                        kind: "sprint",
+                        id: sprint_id.to_string(),
+                    })?;
+            if sprint.project_id() != task.project_id() {
+                return Err(ApplicationError::SprintOfAnotherProject);
+            }
+            sprint.check_takes_tasks()?;
+        }
+
+        let now = self.clock.now();
+        let tasks_of_project = self.tasks.list_for_project(task.project_id())?;
+        let moving = subtree_of(id, &tasks_of_project);
+        let planned: Vec<Task> = tasks_of_project
+            .into_iter()
+            .filter(|other| moving.contains(&other.id()) && other.sprint_id() != sprint_id)
+            .map(|mut other| {
+                other.plan_into(sprint_id, now);
+                other
+            })
+            .collect();
+        self.tasks.save_all(&planned)?;
+        Ok(planned
+            .into_iter()
+            .find(|planned| planned.id() == id)
+            .unwrap_or(task))
+    }
+
+    /// Gives a task story points, or with `None` takes them away. The points
+    /// come as any number, as the interface sends them, and must be a whole
+    /// number from 0 to 999.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the points are not a whole number from 0 to 999,
+    /// if there is no such task, or if storage fails.
+    pub fn set_points(&self, id: TaskId, points: Option<f64>) -> Result<Task, ApplicationError> {
+        let points = points.map(StoryPoints::from_number).transpose()?;
+        self.change(id, |task, now| {
+            task.set_points(points, now);
             Ok(())
         })
     }
@@ -513,7 +601,7 @@ fn space_out(tasks_of_status: &mut [Task], status: &Status, now: Timestamp) {
 }
 
 /// The task and every task below it in the hierarchy of subtasks.
-fn subtree_of(root: TaskId, tasks: &[Task]) -> BTreeSet<TaskId> {
+pub(crate) fn subtree_of(root: TaskId, tasks: &[Task]) -> BTreeSet<TaskId> {
     let mut members = BTreeSet::from([root]);
     loop {
         let size_before = members.len();
@@ -532,7 +620,7 @@ fn subtree_of(root: TaskId, tasks: &[Task]) -> BTreeSet<TaskId> {
 }
 
 /// The name a manager knows a task by, such as `IOT-12`.
-fn reference(project: &Project, task: &Task) -> String {
+pub(crate) fn reference(project: &Project, task: &Task) -> String {
     format!("{}-{}", project.key(), task.number())
 }
 
@@ -542,6 +630,7 @@ mod tests {
     use teamwright_domain::{DomainError, Member, MemberId, MemberKind, StatusCategory};
 
     use super::*;
+    use crate::in_memory::InMemorySprintRepository;
     use crate::in_memory::{
         InMemoryConversationRepository, InMemoryMemberRepository, InMemoryPlacesRepository,
         InMemoryProjectRepository, InMemoryTaskRepository, ManualClock,
@@ -579,6 +668,7 @@ mod tests {
                 member_repository.clone(),
                 conversation_repository.clone(),
                 Arc::new(InMemoryPlacesRepository::default()),
+                Arc::new(InMemorySprintRepository::new(task_repository.clone())),
                 clock.clone(),
             ),
             tasks: TaskService::new(
@@ -586,6 +676,7 @@ mod tests {
                 task_repository.clone(),
                 member_repository.clone(),
                 conversation_repository.clone(),
+                Arc::new(InMemorySprintRepository::new(task_repository.clone())),
                 clock.clone(),
             ),
             team: TeamService::new(

@@ -202,6 +202,45 @@ pub enum ApplicationError {
         reference_folder: String,
     },
 
+    /// A sprint was to start while another sprint of its project runs. A
+    /// project has one active sprint at a time.
+    #[error("\"{name}\" is still running; complete it before you start another sprint")]
+    AnotherSprintActive {
+        /// The name of the sprint that runs.
+        name: String,
+    },
+
+    /// A sprint without tasks was to start.
+    #[error("\"{name}\" has no tasks; plan some into it before you start it")]
+    SprintEmpty {
+        /// The name of the sprint.
+        name: String,
+    },
+
+    /// A subtask was to be planned into a sprint, or out of one, by
+    /// itself. It goes where the task it is a part of goes.
+    #[error("{task} is a part of {parent} and goes where it goes")]
+    SubtaskPlannedAlone {
+        /// The subtask, as the manager knows it (`IOT-4`).
+        task: String,
+        /// The task it is a part of.
+        parent: String,
+    },
+
+    /// A task was to be planned into a sprint of another project.
+    #[error("a task can only be planned into a sprint of its own project")]
+    SprintOfAnotherProject,
+
+    /// The unfinished tasks of a sprint that is completed were to go to a
+    /// sprint of another project.
+    #[error("the unfinished tasks can only go to a sprint of the same project")]
+    UnfinishedToAnotherProject,
+
+    /// The unfinished tasks of a sprint that is completed were to stay in
+    /// it.
+    #[error("the unfinished tasks cannot stay in the sprint that is completed")]
+    UnfinishedStayInSprint,
+
     /// A file to copy was named by a path that has no file name, such as
     /// the root of a drive.
     #[error("a file to copy has no name")]
@@ -243,11 +282,17 @@ impl ApplicationError {
             | Self::ReferenceInsideWorkFolder { .. }
             | Self::WorkFolderInsideReference { .. }
             | Self::FileWithoutName
-            | Self::OwnerNotThere { .. } => "rule_broken",
+            | Self::OwnerNotThere { .. }
+            | Self::UnfinishedStayInSprint => "rule_broken",
             Self::FolderNotFound { .. } => "folder_not_found",
             Self::NotFound { .. } => "not_found",
             Self::ProjectKeyTaken { .. } => "project_key_taken",
-            Self::DifferentProjects => "different_projects",
+            Self::DifferentProjects
+            | Self::SprintOfAnotherProject
+            | Self::UnfinishedToAnotherProject => "different_projects",
+            Self::AnotherSprintActive { .. } => "another_sprint_active",
+            Self::SprintEmpty { .. } => "sprint_empty",
+            Self::SubtaskPlannedAlone { .. } => "subtask_planned_alone",
             Self::DependencyCycle { .. } => "dependency_cycle",
             Self::MemberNameTaken { .. } => "member_name_taken",
             Self::AssigneeFromAnotherTeam => "assignee_from_another_team",

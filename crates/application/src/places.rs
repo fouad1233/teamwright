@@ -424,6 +424,7 @@ mod tests {
     use teamwright_domain::{Assignee, MemberKind};
 
     use super::*;
+    use crate::in_memory::InMemorySprintRepository;
     use crate::in_memory::{
         FixedProjectFolders, InMemoryConversationRepository, InMemoryMemberRepository,
         InMemoryPlacesRepository, InMemoryPlanningRepository, InMemoryProjectRepository,
@@ -478,6 +479,7 @@ mod tests {
             members.clone(),
             conversations.clone(),
             places.clone(),
+            Arc::new(InMemorySprintRepository::new(tasks.clone())),
             clock.clone(),
         );
         let project = project_service
@@ -502,6 +504,7 @@ mod tests {
                 tasks.clone(),
                 members.clone(),
                 conversations.clone(),
+                Arc::new(InMemorySprintRepository::new(tasks.clone())),
                 clock.clone(),
             ),
             team: TeamService::new(

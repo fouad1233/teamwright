@@ -15,7 +15,8 @@ use teamwright_domain::{Conversation, Project, Turn};
 use teamwright_runtime::ClaudeCode;
 use teamwright_storage::{
     Database, SqliteConversationRepository, SqliteMemberRepository, SqlitePlacesRepository,
-    SqlitePlanningRepository, SqliteProjectRepository, SqliteTaskRepository,
+    SqlitePlanningRepository, SqliteProjectRepository, SqliteSprintRepository,
+    SqliteTaskRepository,
 };
 
 use crate::dto::ConversationDto;
@@ -107,6 +108,7 @@ impl AppState {
         let task_repository = Arc::new(SqliteTaskRepository::new(database.clone()));
         let member_repository = Arc::new(SqliteMemberRepository::new(database.clone()));
         let places_repository = Arc::new(SqlitePlacesRepository::new(database.clone()));
+        let sprint_repository = Arc::new(SqliteSprintRepository::new(database.clone()));
         let conversation_repository = Arc::new(SqliteConversationRepository::new(database.clone()));
         let planning_repository = Arc::new(SqlitePlanningRepository::new(database));
         let runtime: Arc<dyn AgentRuntime> = Arc::new(agent_program());
@@ -138,6 +140,7 @@ impl AppState {
                 member_repository.clone(),
                 conversation_repository.clone(),
                 places_repository.clone(),
+                sprint_repository.clone(),
                 clock.clone(),
             ),
             places: PlacesService::new(
@@ -154,6 +157,7 @@ impl AppState {
                 task_repository.clone(),
                 member_repository.clone(),
                 conversation_repository.clone(),
+                sprint_repository,
                 clock.clone(),
             ),
             team: TeamService::new(

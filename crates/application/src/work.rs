@@ -1424,6 +1424,7 @@ mod tests {
 
     use super::*;
     use crate::agent_runtime::{ModelUsage, PermissionDenial, QuestionOption, SessionStarted};
+    use crate::in_memory::InMemorySprintRepository;
     use crate::in_memory::{
         FixedProjectFolders, InMemoryConversationRepository, InMemoryMemberRepository,
         InMemoryPlacesRepository, InMemoryPlanningRepository, InMemoryProjectRepository,
@@ -1524,6 +1525,7 @@ mod tests {
             ports.members.clone(),
             ports.conversations.clone(),
             ports.places.clone(),
+            Arc::new(InMemorySprintRepository::new(ports.tasks.clone())),
             ports.clock.clone(),
         );
         let tasks = TaskService::new(
@@ -1531,6 +1533,7 @@ mod tests {
             ports.tasks.clone(),
             ports.members.clone(),
             ports.conversations.clone(),
+            Arc::new(InMemorySprintRepository::new(ports.tasks.clone())),
             ports.clock.clone(),
         );
         let team = TeamService::new(

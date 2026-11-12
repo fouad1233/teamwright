@@ -11,7 +11,7 @@ use teamwright_domain::{
 use crate::error::ApplicationError;
 use crate::ports::{
     Clock, ConversationRepository, MemberRepository, PlacesRepository, ProjectRepository,
-    TaskRepository,
+    SprintRepository, TaskRepository,
 };
 use crate::work::WorkInProgress;
 
@@ -70,6 +70,7 @@ pub struct ProjectService {
     members: Arc<dyn MemberRepository>,
     conversations: Arc<dyn ConversationRepository>,
     places: Arc<dyn PlacesRepository>,
+    sprints: Arc<dyn SprintRepository>,
     clock: Arc<dyn Clock>,
 }
 
@@ -78,10 +79,10 @@ impl ProjectService {
     /// unique (`IOT2` … `IOT9999`).
     const LAST_KEY_SUFFIX: u32 = 9999;
 
-    /// Creates the service. The tasks, the members, the conversations and
-    /// the folders are needed because removing a project removes them too,
-    /// changing the workflow can move or complete tasks, and a project in
-    /// which a specialist works is neither put away nor removed.
+    /// Creates the service. The tasks, the members, the conversations, the
+    /// folders and the sprints are needed because removing a project removes
+    /// them too, changing the workflow can move or complete tasks, and a
+    /// project in which a specialist works is neither put away nor removed.
     #[must_use]
     pub fn new(
         projects: Arc<dyn ProjectRepository>,
@@ -89,6 +90,7 @@ impl ProjectService {
         members: Arc<dyn MemberRepository>,
         conversations: Arc<dyn ConversationRepository>,
         places: Arc<dyn PlacesRepository>,
+        sprints: Arc<dyn SprintRepository>,
         clock: Arc<dyn Clock>,
     ) -> Self {
         Self {
@@ -97,6 +99,7 @@ impl ProjectService {
             members,
             conversations,
             places,
+            sprints,
             clock,
         }
     }
@@ -239,8 +242,8 @@ impl ProjectService {
         })
     }
 
-    /// Removes a project for good, with its tasks, its team, the
-    /// conversations with its specialists and what it knew about its
+    /// Removes a project for good, with its tasks, its sprints, its team,
+    /// the conversations with its specialists and what it knew about its
     /// folders. The folders themselves stay where they are. Its key is free
     /// for a new project afterwards.
     ///
@@ -263,6 +266,11 @@ impl ProjectService {
             .map(Task::id)
             .collect();
         self.tasks.delete(&task_ids)?;
+        // The sprints go after their tasks, so that no task is left in a
+        // sprint that is gone.
+        for sprint in self.sprints.list_for_project(project.id())? {
+            self.sprints.delete(sprint.id(), &[])?;
+        }
         for member in self.members.list_for_project(project.id())? {
             self.members.delete(member.id())?;
         }
@@ -488,6 +496,7 @@ mod tests {
     use teamwright_domain::{DomainError, MemberKind, TaskId, Timestamp};
 
     use super::*;
+    use crate::in_memory::InMemorySprintRepository;
     use crate::in_memory::{
         InMemoryConversationRepository, InMemoryMemberRepository, InMemoryPlacesRepository,
         InMemoryProjectRepository, InMemoryTaskRepository, ManualClock,
@@ -521,6 +530,7 @@ mod tests {
                 members.clone(),
                 conversations.clone(),
                 Arc::new(InMemoryPlacesRepository::default()),
+                Arc::new(InMemorySprintRepository::new(tasks.clone())),
                 clock.clone(),
             ),
             tasks: TaskService::new(
@@ -528,6 +538,7 @@ mod tests {
                 tasks.clone(),
                 members.clone(),
                 conversations.clone(),
+                Arc::new(InMemorySprintRepository::new(tasks.clone())),
                 clock.clone(),
             ),
             team: TeamService::new(projects, members, tasks, conversations, clock.clone()),
