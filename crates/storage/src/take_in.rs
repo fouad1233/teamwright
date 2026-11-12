@@ -17,7 +17,9 @@ use chrono::Utc;
 use rusqlite::{ErrorCode, OptionalExtension, Transaction, named_params};
 use serde_json::{Map, Value};
 use teamwright_application::{ExchangedChange, ExchangedOperation, NoticeKind, TakeInReport};
-use teamwright_domain::{Assignee, Project, Sprint, Status, StatusCategory, Task, TaskId};
+use teamwright_domain::{
+    Assignee, Project, Sprint, Status, StatusCategory, Task, TaskId, View, ViewAssignee, ViewName,
+};
 
 use crate::apply;
 use crate::codec;
@@ -29,6 +31,7 @@ use crate::operations::{Entity, OperationRecorder, Stamp, latest_changes_seen, w
 use crate::projects;
 use crate::sprints;
 use crate::tasks;
+use crate::views;
 
 /// Why an operation waits: it refers to something that has not arrived.
 pub(crate) const WAITING_FOR_PARENT: &str = "parent";
@@ -41,11 +44,12 @@ pub(crate) const DAMAGED: &str = "damaged";
 pub(crate) const NEVER: &str = "never";
 
 /// The kinds of things whose dropped changes the manager is told about.
-const TOLD_WHEN_DROPPED: [Entity; 5] = [
+const TOLD_WHEN_DROPPED: [Entity; 6] = [
     Entity::Project,
     Entity::Task,
     Entity::Member,
     Entity::Sprint,
+    Entity::View,
     Entity::Conversation,
 ];
 
@@ -375,7 +379,7 @@ fn parents_of(
 
 /// The other things a state refers to: what a task waits for, its parent,
 /// who it is given to, its sprint; the member and the task of a
-/// conversation.
+/// conversation; the member whose tasks a view shows.
 fn references_of(entity: Entity, state: &Map<String, Value>) -> Vec<(Entity, String)> {
     let mut references = Vec::new();
     match entity {
@@ -406,6 +410,13 @@ fn references_of(entity: Entity, state: &Map<String, Value>) -> Vec<(Entity, Str
             }
             if let Some(task) = text_of(state, "task_id") {
                 references.push((Entity::Task, task.to_owned()));
+            }
+        }
+        Entity::View => {
+            if text_of(state, "assignee_kind") == Some("member")
+                && let Some(member) = text_of(state, "assignee_member_id")
+            {
+                references.push((Entity::Member, member.to_owned()));
             }
         }
         _ => {}
@@ -653,6 +664,20 @@ impl Round {
                 }
                 conversations::write_conversation_state(transaction, state)
             }
+            Entity::View => {
+                let mut view = views::view_from_state(state)?;
+                if let ViewAssignee::Member(member_id) = view.filter().assignee
+                    && presence(transaction, Entity::Member, &member_id.to_string())?
+                        == Presence::Deleted
+                {
+                    // A view that shows only the tasks of a member who left
+                    // the team on another computer shows everybody's again,
+                    // as it does when the member leaves here.
+                    view.forget_member(member_id);
+                    return views::store_view(transaction, operations, &view);
+                }
+                views::write_state(transaction, state)
+            }
             other => apply::write_state(transaction, other, state),
         }
     }
@@ -852,6 +877,7 @@ impl Round {
             Entity::Task => format!("the task \"{name}\""),
             Entity::Member => format!("the member \"{name}\""),
             Entity::Sprint => format!("the sprint \"{name}\""),
+            Entity::View => format!("the view \"{name}\""),
             _ => "a conversation".to_owned(),
         };
         let project_id = match entity {
@@ -873,7 +899,8 @@ impl Round {
     }
 
     /// Repairs, with logged changes of this computer, what refers to a
-    /// thing about to be deleted: the tasks and conversations of a member,
+    /// thing about to be deleted: the tasks, conversations and views of a
+    /// member,
     /// the tasks of a sprint, the subtasks of a task, the tasks that wait
     /// for it and the conversations about it. What the same batch deletes
     /// itself is left to its own deletion.
@@ -953,6 +980,12 @@ impl Round {
                     if !going(Entity::Conversation, &conversation.id().to_string()) {
                         conversation.forget_member();
                         conversations::store_conversation(transaction, operations, &conversation)?;
+                    }
+                }
+                for mut view in views::views_showing_member(transaction, id)? {
+                    if !going(Entity::View, &view.id().to_string()) {
+                        view.forget_member(member_id);
+                        views::store_view(transaction, operations, &view)?;
                     }
                 }
             }
@@ -1046,7 +1079,11 @@ impl Round {
         };
         let project = match entity {
             Entity::Project => Some(id.to_owned()),
-            Entity::Task | Entity::Member | Entity::Sprint | Entity::Conversation => state
+            Entity::Task
+            | Entity::Member
+            | Entity::Sprint
+            | Entity::View
+            | Entity::Conversation => state
                 .and_then(|state| text_of(state, "project_id"))
                 .map(str::to_owned),
             _ => match &conversation {
@@ -1087,7 +1124,8 @@ impl Round {
 
     /// Repairs the rules of one project: one active sprint, unique task
     /// numbers, no task that waits for itself or is a part of itself
-    /// through a chain.
+    /// through a chain, one backlog and one dashboard, and views with names
+    /// of their own.
     fn repair_project(
         &mut self,
         transaction: &Transaction<'_>,
@@ -1191,6 +1229,64 @@ impl Round {
                 tasks::store_task(transaction, operations, &task)?;
             }
         }
+
+        self.repair_views(transaction, operations, project_id)
+    }
+
+    /// Repairs the views of a project after two computers added or renamed
+    /// views at the same time. Of two backlogs, or two dashboards, the
+    /// younger is removed. Of two views with one name, whatever the
+    /// capitals, the older keeps it and the younger gets the name with the
+    /// first free number from 2 on, as a new view would. A view is as old as
+    /// its first change in the log.
+    ///
+    /// Every computer that sees the same views repairs them the same way,
+    /// so two computers that both repair agree. No notice is kept: no kind
+    /// of notice is about views, and the change shows in the row of views.
+    fn repair_views(
+        &mut self,
+        transaction: &Transaction<'_>,
+        operations: &mut OperationRecorder<'_>,
+        project_id: &str,
+    ) -> Result<(), DatabaseError> {
+        let mut aged: Vec<(String, View)> = Vec::new();
+        for view in views::views_of_project(transaction, project_id)? {
+            let created = first_stamp(transaction, Entity::View, &view.id().to_string())?;
+            aged.push((created, view));
+        }
+        aged.sort_by(|(one_stamp, one), (other_stamp, other)| {
+            one_stamp
+                .cmp(other_stamp)
+                .then_with(|| one.id().cmp(&other.id()))
+        });
+
+        let mut kinds_seen = BTreeSet::new();
+        let mut kept: Vec<View> = Vec::new();
+        for (_, view) in aged {
+            if view.kind().is_single() && !kinds_seen.insert(view.kind()) {
+                views::delete_view(transaction, operations, &view.id().to_string())?;
+            } else {
+                kept.push(view);
+            }
+        }
+
+        let mut names: Vec<String> = kept
+            .iter()
+            .map(|view| view.name().as_str().to_lowercase())
+            .collect();
+        let mut names_kept: BTreeSet<String> = BTreeSet::new();
+        for mut view in kept {
+            if names_kept.insert(view.name().as_str().to_lowercase()) {
+                continue;
+            }
+            let renamed = ViewName::numbered(view.name().as_str(), &|candidate: &str| {
+                !names.contains(&candidate.to_lowercase())
+            });
+            names.push(renamed.as_str().to_lowercase());
+            names_kept.insert(renamed.as_str().to_lowercase());
+            view.rename(renamed);
+            views::store_view(transaction, operations, &view)?;
+        }
         Ok(())
     }
 
@@ -1281,6 +1377,21 @@ impl Round {
             .optional()?;
         Ok(creator.as_deref() == Some(self.this_computer.as_str()))
     }
+}
+
+/// The stamp of the first change of a thing in the log, or nothing if the
+/// log has none.
+fn first_stamp(
+    transaction: &Transaction<'_>,
+    entity: Entity,
+    id: &str,
+) -> Result<String, DatabaseError> {
+    let first: Option<String> = transaction.query_row(
+        "SELECT min(stamp) FROM operations WHERE entity = :entity AND entity_id = :entity_id",
+        named_params! { ":entity": entity.as_str(), ":entity_id": id },
+        |row| row.get(0),
+    )?;
+    Ok(first.unwrap_or_default())
 }
 
 /// The status a task goes to whose status was removed: the first status of

@@ -241,11 +241,15 @@ in one transaction:
    logged change of this computer: the task moves to the first status of
    the same category (else the first status), and loses its deleted parent,
    blocker, member or sprint; a conversation about a deleted task is
-   deleted, and one with a deleted member forgets it.
+   deleted, and one with a deleted member forgets it, as does a view that
+   showed only the tasks of a deleted member: it shows everybody's again
+   and keeps hiding finished tasks if it did. A view of a deleted project is
+   dropped like a task of one.
 5. A deletion first repairs, with logged changes of this computer, what
    still refers to the thing (the subtasks and the tasks that wait for a
-   task, the conversations about it, the tasks given to a member, the tasks
-   of a sprint), then removes its rows. If it throws away a change this
+   task, the conversations about it, the tasks given to a member and the
+   views that show only theirs, the tasks of a sprint), then removes its
+   rows. If it throws away a change this
    computer made that it had not seen, the manager gets a notice. Two
    deletions of one thing keep the earlier stamp.
 6. An operation whose state breaks a rule, or that the database refuses, is
@@ -260,10 +264,14 @@ in one transaction:
    | Two tasks of a project have one number | the task whose number was set later gets the next free number | only the computer that created that task |
    | Two projects have one key | the project whose key was set later gets the key with the next number (`SSN2` gives `SSN3`) | only the computer that created it |
    | A chain of waiting or of parts closes on itself | the link whose field was set last is removed | any computer |
+   | A project has two backlogs, or two dashboards | the younger is removed | any computer |
+   | Two views of a project have one name, whatever the capitals | the younger gets the name with the first free number from 2 on (`Board` gives `Board 2`) | any computer |
 
    "Set later" is decided by the stamp of the field, and the creator of a
-   thing is the computer of its first operation. A renumbered task and a
-   project with a new key leave a notice.
+   thing is the computer of its first operation. A view is as old as its
+   first operation. A renumbered task and a project with a new key leave a
+   notice; a repaired view does not, because no kind of notice is about
+   views.
 
 `TakeInReport` says how many operations were new, which projects and
 conversations changed, which turns that ran here were deleted elsewhere

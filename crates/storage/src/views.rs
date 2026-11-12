@@ -186,6 +186,26 @@ pub(crate) fn views_of_project(
     records.into_iter().map(ViewRecord::into_view).collect()
 }
 
+/// Reads the views of every project that show only the tasks of a member,
+/// inside a transaction.
+pub(crate) fn views_showing_member(
+    connection: &Connection,
+    member_id: &str,
+) -> Result<Vec<View>, DatabaseError> {
+    let query = format!(
+        "SELECT {VIEW_COLUMNS} FROM views
+         WHERE assignee_kind = 'member' AND assignee_member_id = :member_id"
+    );
+    let mut statement = connection.prepare(&query)?;
+    let records = statement
+        .query_map(
+            named_params! { ":member_id": member_id },
+            ViewRecord::from_row,
+        )?
+        .collect::<Result<Vec<_>, _>>()?;
+    records.into_iter().map(ViewRecord::into_view).collect()
+}
+
 /// Writes one view and logs the change.
 pub(crate) fn store_view(
     transaction: &Transaction<'_>,
@@ -222,7 +242,7 @@ pub(crate) fn remove_view(transaction: &Transaction<'_>, id: &str) -> Result<boo
 
 /// Rebuilds a view from a state the log keeps, checking it against the
 /// rules of the domain.
-fn view_from_state(state: &Map<String, Value>) -> Result<View, DatabaseError> {
+pub(crate) fn view_from_state(state: &Map<String, Value>) -> Result<View, DatabaseError> {
     let record: ViewRecord = codec::record_from_state("view", state)?;
     record.into_view()
 }

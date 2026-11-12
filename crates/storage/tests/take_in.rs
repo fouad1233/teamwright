@@ -11,11 +11,14 @@ use chrono::{TimeZone, Utc};
 use teamwright_application::in_memory::ManualClock;
 use teamwright_application::{
     ChosenPlaces, ConversationRepository, ExchangedChange, ExchangedOperation, MemberRepository,
-    NewMember, NewProject, NewSprint, NewTask, NoticeKind, PlacesRepository, ProjectRepository,
-    ProjectService, SprintRepository, SprintService, SprintStart, TaskRepository, TaskService,
-    TeamService, WorkflowTemplate,
+    NewMember, NewProject, NewSprint, NewTask, NewView, NoticeKind, PlacesRepository,
+    ProjectRepository, ProjectService, SprintRepository, SprintService, SprintStart,
+    TaskRepository, TaskService, TeamService, ViewRepository, ViewService, WorkflowTemplate,
 };
-use teamwright_domain::{Assignee, ComputerId, MemberKind, Priority, Project, Task, Timestamp};
+use teamwright_domain::{
+    Assignee, ComputerId, MemberKind, Priority, Project, Task, Timestamp, View, ViewAssignee,
+    ViewFilter, ViewKind,
+};
 use teamwright_storage::{
     Database, SqliteConversationRepository, SqliteMemberRepository, SqlitePlacesRepository,
     SqliteProjectRepository, SqliteSprintRepository, SqliteTaskRepository, SqliteViewRepository,
@@ -28,6 +31,7 @@ struct Computer {
     tasks: TaskService,
     team: TeamService,
     sprints: SprintService,
+    views: ViewService,
     places: SqlitePlacesRepository,
 }
 
@@ -66,6 +70,7 @@ impl Computer {
                 clock.clone(),
             ),
             sprints: SprintService::new(projects.clone(), tasks.clone(), sprints, clock.clone()),
+            views: ViewService::new(projects.clone(), members.clone(), views.clone()),
             team: TeamService::new(projects, members, tasks, conversations, views, clock),
             places: SqlitePlacesRepository::new(database.clone()),
             database,
@@ -79,7 +84,8 @@ impl Computer {
     }
 
     /// Everything the manager works with, in a form that can be compared:
-    /// every project with its tasks and its team, sorted.
+    /// every project with its tasks, its team, its sprints, its
+    /// conversations and its views, sorted.
     fn everything(&self) -> String {
         let projects = SqliteProjectRepository::new(self.database.clone());
         let tasks = SqliteTaskRepository::new(self.database.clone());
@@ -108,6 +114,9 @@ impl Computer {
             }
             for conversation in conversations.list_for_project(project.id()).unwrap() {
                 text.push_str(&format!("  {conversation:?}\n"));
+            }
+            for view in self.views.list_for_project(project.id()).unwrap() {
+                text.push_str(&format!("  {view:?}\n"));
             }
         }
         text
@@ -650,6 +659,195 @@ fn a_conversation_about_a_task_deleted_elsewhere_goes_with_it() {
 
     assert_eq!(report.turns_to_stop, [turn.id()]);
     assert!(conversations.find(conversation.id()).unwrap().is_none());
+    assert_eq!(laptop.everything(), desk.everything());
+}
+
+/// The names of the views of a project on a computer, in their order.
+fn view_names(computer: &Computer, project: &Project) -> Vec<String> {
+    computer
+        .views
+        .list_for_project(project.id())
+        .unwrap()
+        .iter()
+        .map(|view| view.name().to_string())
+        .collect()
+}
+
+/// The view of a project on a computer that has a name.
+fn view_named(computer: &Computer, project: &Project, name: &str) -> View {
+    computer
+        .views
+        .list_for_project(project.id())
+        .unwrap()
+        .into_iter()
+        .find(|view| view.name().as_str() == name)
+        .unwrap()
+}
+
+/// Waits a little, so that what the other computer does next has a later
+/// stamp than what this one did: two computers that have not taken in from
+/// each other may otherwise stamp two changes in the same millisecond.
+fn let_the_clock_move_on() {
+    std::thread::sleep(std::time::Duration::from_millis(5));
+}
+
+fn add_view(computer: &Computer, project: &Project, kind: ViewKind, name: Option<&str>) -> View {
+    computer
+        .views
+        .add(NewView {
+            project_id: project.id(),
+            kind,
+            name: name.map(str::to_owned),
+        })
+        .unwrap()
+}
+
+#[test]
+fn the_views_of_a_new_project_reach_the_other_computer() {
+    let (desk, laptop, project, _) = desk_and_laptop();
+
+    assert_eq!(
+        view_names(&laptop, &project),
+        ["Board", "Backlog", "List", "Gantt", "Calendar", "Dashboard"]
+    );
+    assert_eq!(
+        laptop.views.list_for_project(project.id()).unwrap(),
+        desk.views.list_for_project(project.id()).unwrap()
+    );
+}
+
+#[test]
+fn a_view_renamed_on_one_computer_and_moved_on_the_other_keeps_both_changes() {
+    let (desk, laptop, project, _) = desk_and_laptop();
+    let gantt = view_named(&desk, &project, "Gantt");
+    desk.views.rename(gantt.id(), "Schedule").unwrap();
+    laptop.views.move_to(gantt.id(), 0).unwrap();
+
+    keep_in_step(&desk, &laptop);
+
+    assert_eq!(
+        view_names(&desk, &project),
+        [
+            "Schedule",
+            "Board",
+            "Backlog",
+            "List",
+            "Calendar",
+            "Dashboard"
+        ]
+    );
+    assert_eq!(laptop.everything(), desk.everything());
+}
+
+#[test]
+fn a_view_added_to_a_project_deleted_elsewhere_goes_with_it() {
+    let (desk, laptop, project, _) = desk_and_laptop();
+    let added = add_view(&laptop, &project, ViewKind::Board, Some("Firmware only"));
+    desk.projects.delete(project.id()).unwrap();
+
+    keep_in_step(&desk, &laptop);
+
+    let views = SqliteViewRepository::new(laptop.database.clone());
+    assert!(views.find(added.id()).unwrap().is_none());
+    assert!(views.list_for_project(project.id()).unwrap().is_empty());
+    assert!(
+        SqliteViewRepository::new(desk.database.clone())
+            .find(added.id())
+            .unwrap()
+            .is_none()
+    );
+    assert_eq!(laptop.everything(), desk.everything());
+}
+
+#[test]
+fn a_view_that_showed_a_member_who_left_elsewhere_shows_everybody_again() {
+    let (desk, laptop, project, _) = desk_and_laptop();
+    let engineer = desk
+        .team
+        .add(NewMember {
+            project_id: project.id(),
+            name: "Hardware engineer".to_owned(),
+            kind: MemberKind::Agent,
+            responsibility: String::new(),
+            model: None,
+            effort: None,
+        })
+        .unwrap();
+    laptop.take_in_from(&desk);
+    let board = view_named(&laptop, &project, "Board");
+    laptop
+        .views
+        .set_filter(
+            board.id(),
+            ViewFilter {
+                assignee: ViewAssignee::Member(engineer.id()),
+                hides_finished: true,
+            },
+        )
+        .unwrap();
+    desk.team.remove(engineer.id()).unwrap();
+
+    keep_in_step(&desk, &laptop);
+
+    let shown = ViewFilter {
+        assignee: ViewAssignee::Anyone,
+        hides_finished: true,
+    };
+    assert_eq!(view_named(&desk, &project, "Board").filter(), shown);
+    assert_eq!(view_named(&laptop, &project, "Board").filter(), shown);
+    assert_eq!(laptop.everything(), desk.everything());
+}
+
+#[test]
+fn of_two_views_named_alike_the_older_keeps_the_name_and_the_younger_is_numbered() {
+    let (desk, laptop, project, _) = desk_and_laptop();
+    let older = add_view(&desk, &project, ViewKind::List, Some("Firmware"));
+    let_the_clock_move_on();
+    let younger = add_view(&laptop, &project, ViewKind::Board, Some("FIRMWARE"));
+
+    keep_in_step(&desk, &laptop);
+
+    let views = desk.views.list_for_project(project.id()).unwrap();
+    let name_of = |id| {
+        views
+            .iter()
+            .find(|view| view.id() == id)
+            .map(|view| view.name().to_string())
+            .unwrap()
+    };
+    assert_eq!(name_of(older.id()), "Firmware");
+    assert_eq!(name_of(younger.id()), "FIRMWARE 2");
+    assert_eq!(laptop.everything(), desk.everything());
+}
+
+#[test]
+fn of_two_backlogs_added_apart_the_younger_is_removed() {
+    let (desk, laptop, project, _) = desk_and_laptop();
+    let backlog = view_named(&desk, &project, "Backlog");
+    desk.views.remove(backlog.id()).unwrap();
+    let older = add_view(&desk, &project, ViewKind::Backlog, None);
+    let_the_clock_move_on();
+    laptop.views.remove(backlog.id()).unwrap();
+    let younger = add_view(&laptop, &project, ViewKind::Backlog, None);
+
+    keep_in_step(&desk, &laptop);
+
+    let backlogs: Vec<View> = desk
+        .views
+        .list_for_project(project.id())
+        .unwrap()
+        .into_iter()
+        .filter(|view| view.kind() == ViewKind::Backlog)
+        .collect();
+    assert_eq!(backlogs.len(), 1);
+    assert_eq!(backlogs[0].id(), older.id());
+    assert_eq!(backlogs[0].name().as_str(), "Backlog");
+    assert!(
+        SqliteViewRepository::new(laptop.database.clone())
+            .find(younger.id())
+            .unwrap()
+            .is_none()
+    );
     assert_eq!(laptop.everything(), desk.everything());
 }
 
