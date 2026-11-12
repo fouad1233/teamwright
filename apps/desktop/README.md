@@ -103,6 +103,7 @@ src/
     work/             The work of AI specialists: starting it, following it, answering
     inbox/            What waits for the manager in every project: questions to decide
     advisor/          Planning a project with the Advisor: its questions, its proposal
+    sprints/          The Backlog view, sprints and points, the burndown, the board of a sprint
   shared/
     api/              The Backend interface and its two implementations
     ui/               Buttons, menus, dialogs, the calendar field, tooltips
@@ -117,7 +118,8 @@ Rules of the interface:
   repeats the backend's arithmetic and corrects itself if the answer differs.
 - **One way to the backend.** Components use `useBackend()` or the hooks
   built on it (`useProjects`, `useTasks`, `useTaskCommands`, `useTeam`,
-  `useTeamCommands`, `useConversations`, `useWorkCommands`). Nothing calls
+  `useTeamCommands`, `useConversations`, `useWorkCommands`, `useSprints`,
+  `useSprintCommands`). Nothing calls
   Tauri directly except `shared/api/tauriBackend.ts`.
 - **The team of the open project is known everywhere.** `TeamProvider` puts
   it in a context, so a card, a row or a menu can show who a task is given
@@ -142,8 +144,16 @@ Rules of the interface:
   browser's memory with a sample project, so the interface can be developed
   and tested without Rust.
 - **Logic is tested without rendering.** Pure functions live in `*Model.ts`
-  and `shared/lib`, next to their tests. The Gantt chart and the calendar
-  only draw what `ganttModel.ts` and `calendarModel.ts` work out.
+  and `shared/lib`, next to their tests. The Gantt chart, the calendar and
+  the burndown chart only draw what `ganttModel.ts`, `calendarModel.ts` and
+  `burndownModel.ts` work out.
+- **Sprints are in the contract before they are in the shell.** The
+  `TauriBackend` calls the commands of sprints and points (`list_sprints`,
+  `create_sprint`, `change_sprint`, `delete_sprint`, `start_sprint`,
+  `complete_sprint`, `plan_task`, `set_task_points`, `sprint_report`),
+  which the shell does not serve yet. Until it does, they work only on the
+  demo data; `demoSprints.test.ts` says what the shell is to do
+  ([decision 0016](../../docs/decisions/0016-sprints-and-a-backlog.md)).
 - **Dates are counted, not clocked.** A calendar date is a whole number of
   days (`shared/lib/days.ts`), so adding days never meets a time zone or a
   change of the clocks.

@@ -114,10 +114,15 @@ Several specialists working together with the manager in the loop.
 - ⬜ Dashboards: usage per teammate, plan limits, workload by status
 - ⬜ Project report at completion
 
-## M6 · Agile ⬜
+## M6 · Agile 🚧
 
-- ⬜ Backlog, sprints, story points
-- ⬜ Burndown and velocity
+- 🚧 Backlog, sprints, story points
+  ([decision 0016](../decisions/0016-sprints-and-a-backlog.md)): the
+  interface, the contract and the demo backend are built and shown on demo
+  data; the program itself does not have them until the Rust side follows
+- 🚧 Burndown of a sprint, and the completed sprints side by side: built
+  the same way. The burndown does not yet follow tasks that join or leave
+  a sprint while it runs. Velocity as a forecast is not planned yet
 - ⬜ Work-in-progress limits, custom fields, tags, checklists
 - ⬜ Templates: Scrum, Kanban, hardware product
 

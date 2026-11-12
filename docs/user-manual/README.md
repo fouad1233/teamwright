@@ -416,6 +416,9 @@ red. The number next to the name of a status counts the tasks in its lane.
   <img alt="The board of a project, with one lane for each of its five statuses" src="../screenshots/board-light.png">
 </picture>
 
+**Backlog.** The sprints and the backlog. See
+[sprints and the backlog](#sprints-and-the-backlog).
+
 **List.** One table of all tasks, grouped by status, with the subtasks of a
 task set in under it.
 
@@ -464,6 +467,65 @@ are not on the calendar: their number is shown at the top right.
 
 **Office.** The team at work, at a glance. See [the office](#the-office).
 
+## Sprints and the backlog
+
+You can plan the work in sprints, as Scrum does: a sprint is a stretch of
+one to four weeks in which the team works on a chosen part of the
+backlog. You do not have to: without sprints every task is in the backlog
+and the board shows all tasks, as before.
+
+**The Backlog view** reads from top to bottom: the sprint that runs, the
+sprints planned to come, the backlog of everything that is not planned
+yet, and at the foot the sprints that are over. Each sprint shows its
+name, its dates, its goal, how many tasks and points it holds and, while
+it runs, how many days are left. Under it are its tasks: the reference,
+the title, who it is given to, its points and its status. Subtasks are
+not listed: they go where their task goes.
+
+- **New sprint**, at the backlog, plans a sprint. Its name may be left
+  empty: it is then called *Sprint 4*, after the number of sprints the
+  project has had. The goal and the dates can wait until it starts.
+- **Plan a task** by dragging its row into a sprint, or back into the
+  backlog. Or open the menu at the end of the row (it appears when you
+  point at the row or reach it with Tab) and choose *Move to*. A completed
+  sprint takes no more tasks.
+- **Story points** say how big a task is compared with other work: a whole
+  number from 0 to 999. Click the points in a row to change them, or
+  change them in the task's panel. They stand next to the estimate in
+  hours, which stays what it is.
+- **Start sprint** asks for the name, the goal and the dates. It offers
+  today and two weeks later; the keys *1 week*, *2 weeks* and *4 weeks*
+  set the end in one step. A sprint needs at least one task to start, and
+  only one sprint runs at a time.
+- **Complete sprint** says how many of its tasks are finished, and asks
+  where the unfinished ones go: to the backlog or to a planned sprint.
+  Their subtasks go with them. The finished tasks stay in the sprint as
+  its record. A task is finished when its status is of the kind *done*,
+  whatever the status is called.
+- The menu of a sprint changes its name, goal and dates, and deletes a
+  sprint that has not started; its tasks go back to the backlog. A sprint
+  that runs cannot be deleted, and a completed one cannot be changed.
+
+**The burndown chart** stands next to the sprint that runs. The thin line
+falls from all the work of the sprint on its first day to none on its
+last: the pace its dates ask for. The ink line is what really remained at
+the end of each day, in points if any of its tasks has points and in
+tasks otherwise. The brass line is today. The chart counts the tasks that
+are in the sprint now, as if they had been there from the first day: a
+task added in the middle raises the line from the start, and a task taken
+out leaves no trace. It does not yet follow such changes day by day.
+
+**Completed sprints** keep what they took on and what they finished:
+*13 of 15 points*. The bar beside it shows the same on one scale for all
+of them, so you can see the pace from sprint to sprint.
+
+**The board** shows the tasks of the sprint that runs. The switch at the
+top right, *Sprint* and *All tasks*, shows every task again. A task you
+add on the board of the sprint goes into the sprint.
+
+**The task's panel** shows the sprint of the task and lets you move it to
+another, or to the backlog, and shows its points.
+
 ## The office
 
 The *Office* tab draws your project as a workshop seen from above. You and
@@ -508,6 +570,7 @@ lamp and the corners mean.
 |---|---|---|
 | Tab | Everywhere | Moves to the next control |
 | Enter | On a card or a row | Opens the task |
+| Tab | On a row of the Backlog view | Reaches its menu, which moves the task to a sprint |
 | Space | On a card | Picks the card up, and drops it |
 | Arrow keys | While a card is picked up | Move the card |
 | Escape | While a card is picked up | Puts the card back |
