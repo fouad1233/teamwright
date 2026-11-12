@@ -327,8 +327,20 @@ impl TryFrom<ViewAssigneeDto> for ViewAssignee {
 #[derive(Debug, Serialize)]
 pub struct TaskChangeDto {
     at: String,
+    /// The name of the computer that made the change, when it was another
+    /// computer whose name is known; left out otherwise.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    computer: Option<String>,
     #[serde(flatten)]
     change: TaskChangeKindDto,
+}
+
+impl TaskChangeDto {
+    /// Names the computer that made the change.
+    pub fn made_on(mut self, computer: Option<String>) -> Self {
+        self.computer = computer;
+        self
+    }
 }
 
 /// What happened in a change, with its kind as the field `kind`.
@@ -452,6 +464,7 @@ impl From<&TaskChange> for TaskChangeDto {
         };
         Self {
             at: moment_to_text(change.at),
+            computer: None,
             change: kind,
         }
     }
@@ -1597,5 +1610,22 @@ mod tests {
             json["computers"][0]["lastHeard"],
             "2026-11-12T09:00:00.000Z"
         );
+    }
+
+    #[test]
+    fn a_change_names_the_other_computer_that_made_it_and_none_made_here() {
+        let change = TaskChange {
+            at: chrono::Utc.with_ymd_and_hms(2026, 11, 12, 9, 0, 0).unwrap(),
+            kind: TaskChangeKind::Created,
+        };
+
+        let elsewhere =
+            serde_json::to_value(TaskChangeDto::from(&change).made_on(Some("Laptop".to_owned())))
+                .unwrap();
+        let here = serde_json::to_value(TaskChangeDto::from(&change)).unwrap();
+
+        assert_eq!(elsewhere["computer"], "Laptop");
+        assert_eq!(elsewhere["kind"], "created");
+        assert!(here.get("computer").is_none());
     }
 }

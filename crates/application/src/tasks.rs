@@ -4,10 +4,19 @@ use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use teamwright_domain::{
-    Assignee, CalendarDate, DependencyGraph, Priority, Project, ProjectId, Rank, Schedule,
-    SprintId, Status, StatusId, StoryPoints, Task, TaskChange, TaskDraft, TaskId, TaskTitle,
-    Timestamp, history_of,
+    Assignee, CalendarDate, ComputerId, DependencyGraph, Priority, Project, ProjectId, Rank,
+    Schedule, SprintId, Status, StatusId, StoryPoints, Task, TaskChange, TaskDraft, TaskId,
+    TaskTitle, Timestamp, changes_between, history_of,
 };
+
+/// One change of a task, with the computer that made it, if it is known.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HistoryEntry {
+    /// What changed, and when.
+    pub change: TaskChange,
+    /// The computer that made the change.
+    pub computer: Option<ComputerId>,
+}
 
 use crate::error::ApplicationError;
 use crate::ports::{
@@ -205,6 +214,47 @@ impl TaskService {
             versions.push(task);
         }
         Ok(history_of(&versions))
+    }
+
+    /// Tells the history of a task like [`Self::history`], with the
+    /// computer that made each change, where storage knows it.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if there is no such task or if storage fails.
+    pub fn history_with_computers(
+        &self,
+        id: TaskId,
+    ) -> Result<Vec<HistoryEntry>, ApplicationError> {
+        let task = self.require_task(id)?;
+        let versions = self.tasks.versions_of(id)?;
+        let computers = self.tasks.computers_of_versions(id)?;
+        if versions.is_empty() || computers.len() != versions.len() {
+            let versions = if versions.is_empty() {
+                vec![task]
+            } else {
+                versions
+            };
+            return Ok(history_of(&versions)
+                .into_iter()
+                .map(|change| HistoryEntry {
+                    change,
+                    computer: None,
+                })
+                .collect());
+        }
+        let mut history = Vec::new();
+        for (index, (version, computer)) in versions.iter().zip(&computers).enumerate() {
+            let changes = match index.checked_sub(1).and_then(|before| versions.get(before)) {
+                None => history_of(std::slice::from_ref(version)),
+                Some(before) => changes_between(before, version),
+            };
+            history.extend(changes.into_iter().map(|change| HistoryEntry {
+                change,
+                computer: Some(*computer),
+            }));
+        }
+        Ok(history)
     }
 
     /// Gives a task a new title.

@@ -156,7 +156,10 @@ with `id`, `name`, `version`, `acceptance` (`undecided`, `accepted`,
 `ignored`), `lastHeard`, `clockAhead` and `newerFormat`. A
 `SyncNoticeDto` has `id`, `at`, `kind` (`task_renumbered`,
 `project_rekeyed`, `change_dropped`, `task_moved`, `clock_ahead`),
-`projectId`, `taskId` and `message`. The error codes are those of the
+`projectId`, `taskId` and `message`. An entry of the history of a task
+(`list_task_history`) has `computer`, the name of the computer that made
+the change, when it was another computer whose name is known; it is left
+out otherwise. The error codes are those of the
 application: `sync_off`, `sync_folder_unreachable`, `sync_folder_in_data`,
 `identity_in_use`, `folder_not_found`, `rule_broken` (also for an
 identifier that cannot be read, or an empty name), `not_found` and

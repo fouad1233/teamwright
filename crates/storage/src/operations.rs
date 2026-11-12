@@ -227,6 +227,28 @@ pub(crate) fn states_of(
     Ok(states)
 }
 
+/// The computers that made the states [`states_of`] reads, in the same
+/// order: one for each state.
+pub(crate) fn computers_of_states(
+    connection: &Connection,
+    entity: Entity,
+    entity_id: &str,
+) -> Result<Vec<String>, DatabaseError> {
+    let mut statement = connection.prepare(
+        "SELECT device_id FROM operations
+         WHERE entity = :entity AND entity_id = :entity_id AND payload IS NOT NULL
+           AND waiting IS NULL
+         ORDER BY stamp, sequence",
+    )?;
+    let computers = statement
+        .query_map(
+            named_params! { ":entity": entity.as_str(), ":entity_id": entity_id },
+            |row| row.get(0),
+        )?
+        .collect::<Result<_, _>>()?;
+    Ok(computers)
+}
+
 /// The time of day in milliseconds since 1 January 1970, UTC.
 pub(crate) fn wall_clock_millis() -> i64 {
     SystemTime::now()

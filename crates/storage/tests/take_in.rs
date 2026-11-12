@@ -1055,3 +1055,32 @@ fn a_project_saved_from_before_a_take_in_does_not_take_its_counters_back() {
     assert_eq!(laptop.everything(), desk.everything());
     assert!(laptop.database.notices().unwrap().is_empty());
 }
+
+#[test]
+fn the_history_of_a_task_names_the_computer_of_each_change() {
+    let (desk, laptop, _, task) = desk_and_laptop();
+    laptop.tasks.rename(task.id(), "Route the board").unwrap();
+    desk.take_in_from(&laptop);
+
+    let history = desk.tasks.history_with_computers(task.id()).unwrap();
+
+    let made: Vec<_> = history
+        .iter()
+        .map(|entry| (entry.change.kind.clone(), entry.computer))
+        .collect();
+    assert_eq!(made.len(), 2);
+    assert_eq!(
+        made[0],
+        (
+            teamwright_domain::TaskChangeKind::Created,
+            Some(desk.database.device_id())
+        )
+    );
+    assert!(matches!(
+        made[1],
+        (
+            teamwright_domain::TaskChangeKind::Renamed { .. },
+            Some(computer)
+        ) if computer == laptop.database.device_id()
+    ));
+}

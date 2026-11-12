@@ -571,7 +571,14 @@ export interface TaskDates {
  * One change in the life of a task, for its history. A move up or down
  * within a status is not a change of the task and is not listed.
  */
-export type TaskChange = { at: Moment } & (
+export type TaskChange = {
+  at: Moment;
+  /**
+   * The name of the computer that made the change, when it was another
+   * computer whose name is known. Left out for a change made here.
+   */
+  computer?: string;
+} & (
   | { kind: 'created' }
   | { kind: 'renamed'; from: string; to: string }
   | { kind: 'described' }

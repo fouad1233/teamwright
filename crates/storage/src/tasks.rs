@@ -8,8 +8,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use teamwright_application::{StorageError, TaskRepository};
 use teamwright_domain::{
-    Assignee, DomainError, ProjectId, Rank, Schedule, StoryPoints, Task, TaskId, TaskSnapshot,
-    TaskTitle,
+    Assignee, ComputerId, DomainError, ProjectId, Rank, Schedule, StoryPoints, Task, TaskId,
+    TaskSnapshot, TaskTitle,
 };
 
 use crate::codec;
@@ -289,6 +289,15 @@ impl TaskRepository for SqliteTaskRepository {
                     })?;
                     record.into_task()
                 })
+                .collect()
+        })
+    }
+
+    fn computers_of_versions(&self, id: TaskId) -> Result<Vec<ComputerId>, StorageError> {
+        self.database.read(|connection| {
+            operations::computers_of_states(connection, Entity::Task, &id.to_string())?
+                .iter()
+                .map(|computer| codec::parse(computer))
                 .collect()
         })
     }

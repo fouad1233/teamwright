@@ -1,7 +1,7 @@
 //! Commands for tasks.
 
 use tauri::State;
-use teamwright_domain::Assignee;
+use teamwright_domain::{Assignee, ComputerId};
 
 use crate::dto::{
     AssigneeDto, NewTaskInput, TaskChangeDto, TaskDto, parse_id, parse_optional_date,
@@ -157,6 +157,19 @@ pub async fn list_task_history(
     state: State<'_, AppState>,
     task_id: String,
 ) -> Result<Vec<TaskChangeDto>, CommandError> {
-    let history = state.tasks.history(parse_id(&task_id)?)?;
-    Ok(history.iter().map(TaskChangeDto::from).collect())
+    let history = state.tasks.history_with_computers(parse_id(&task_id)?)?;
+    // The other computers by name; a change made here, or on a computer
+    // whose card was never read, names none.
+    let computers = state.sync.state()?.computers;
+    let name_of = |computer: Option<ComputerId>| {
+        let computer = computer.filter(|computer| *computer != state.this_computer)?;
+        computers
+            .iter()
+            .find(|known| known.id == computer)
+            .and_then(|known| known.name.clone())
+    };
+    Ok(history
+        .iter()
+        .map(|entry| TaskChangeDto::from(&entry.change).made_on(name_of(entry.computer)))
+        .collect())
 }

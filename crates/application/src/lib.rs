@@ -52,7 +52,7 @@ pub use sync::{
     SYNC_FORMAT, SyncFolder, SyncLedger, SyncNotice, SyncPhase, SyncPorts, SyncService,
     SyncSettings, SyncState, TakeInReport,
 };
-pub use tasks::{NewTask, TaskService};
+pub use tasks::{HistoryEntry, NewTask, TaskService};
 pub use team::{NewMember, TeamService};
 pub use views::{NewView, ViewService};
 pub use work::{

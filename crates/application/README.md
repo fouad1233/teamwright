@@ -394,6 +394,10 @@ never looks inside the state an operation carries; storage merges.
   from another computer removed while they ran here, and
   `WorkService::conversation` finds one conversation with its turns, to
   tell the interface what changed.
+- `TaskService::history_with_computers` tells the history of a task with
+  the computer that made each change (`HistoryEntry`), from
+  `TaskRepository::computers_of_versions`. Storage that does not know the
+  computers answers with none, and the entries then name none.
 
 ## Adding a use case
 

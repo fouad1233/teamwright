@@ -8,8 +8,8 @@ use std::error::Error;
 use std::path::{Path, PathBuf};
 
 use teamwright_domain::{
-    CalendarDate, Conversation, ConversationId, Member, MemberId, Project, ProjectId, Sprint,
-    SprintId, Task, TaskId, Timestamp, Turn, View, ViewId,
+    CalendarDate, ComputerId, Conversation, ConversationId, Member, MemberId, Project, ProjectId,
+    Sprint, SprintId, Task, TaskId, Timestamp, Turn, View, ViewId,
 };
 
 use crate::places::ChosenPlaces;
@@ -130,6 +130,18 @@ pub trait TaskRepository: Send + Sync {
     ///
     /// Returns an error if stored data could not be read.
     fn versions_of(&self, id: TaskId) -> Result<Vec<Task>, StorageError>;
+
+    /// The computer that made each version [`versions_of`](Self::versions_of)
+    /// lists, in the same order. Storage that does not know them answers
+    /// with none.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if stored data could not be read.
+    fn computers_of_versions(&self, id: TaskId) -> Result<Vec<ComputerId>, StorageError> {
+        let _ = id;
+        Ok(Vec::new())
+    }
 }
 
 /// Stores the sprints of the projects.
