@@ -11,15 +11,16 @@ use chrono::SecondsFormat;
 use serde::{Deserialize, Serialize};
 use teamwright_application::{
     Acceptance, AgentProgram, ApprovedMember, ApprovedOwner, ApprovedProposal, ApprovedTask,
-    ConversationWithTurns, KnownComputer, NewMember, NewProject, NewSprint, NewTask, ProjectPlaces,
-    SprintChanges, SprintReport, SprintStart, StatusProperties, SyncNotice, SyncState,
-    WorkflowTemplate,
+    ConversationWithTurns, KnownComputer, NewMember, NewProject, NewSprint, NewTask, NewView,
+    ProjectPlaces, SprintChanges, SprintReport, SprintStart, StatusProperties, SyncNotice,
+    SyncState, WorkflowTemplate,
 };
 use teamwright_domain::{
     Assignee, CalendarDate, Color, ComputerId, Conversation, DecisionOption, DecisionRequest,
     DomainError, Effort, Interview, InterviewAnswer, Member, MemberKind, Priority, Project,
     Proposal, ProposedOwner, Schedule, Sprint, SprintSummary, Status, StatusCategory, Step,
-    StepContent, StoryPoints, Task, TaskChange, TaskChangeKind, Timestamp, TokenCounts, Turn,
+    StepContent, StoryPoints, Task, TaskChange, TaskChangeKind, Timestamp, TokenCounts, Turn, View,
+    ViewAssignee, ViewFilter, ViewKind,
 };
 
 use crate::error::CommandError;
@@ -220,6 +221,103 @@ impl From<&SprintReport> for SprintReportDto {
                 })
                 .collect(),
         }
+    }
+}
+
+/// A view of a project as the interface sees it.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ViewDto {
+    id: String,
+    project_id: String,
+    kind: &'static str,
+    name: String,
+    filter: ViewFilterDto,
+}
+
+impl From<&View> for ViewDto {
+    fn from(view: &View) -> Self {
+        Self {
+            id: view.id().to_string(),
+            project_id: view.project_id().to_string(),
+            kind: view.kind().as_str(),
+            name: view.name().to_string(),
+            filter: ViewFilterDto::from(view.filter()),
+        }
+    }
+}
+
+/// Which tasks a view shows:
+/// `{"assignee": {"kind": "anyone"}, "hidesFinished": false}`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ViewFilterDto {
+    assignee: ViewAssigneeDto,
+    hides_finished: bool,
+}
+
+impl From<ViewFilter> for ViewFilterDto {
+    fn from(filter: ViewFilter) -> Self {
+        Self {
+            assignee: ViewAssigneeDto::from(filter.assignee),
+            hides_finished: filter.hides_finished,
+        }
+    }
+}
+
+impl TryFrom<ViewFilterDto> for ViewFilter {
+    type Error = CommandError;
+
+    fn try_from(filter: ViewFilterDto) -> Result<Self, Self::Error> {
+        Ok(Self {
+            assignee: ViewAssignee::try_from(filter.assignee)?,
+            hides_finished: filter.hides_finished,
+        })
+    }
+}
+
+/// Whose tasks a view shows: `{"kind": "anyone"}`, `{"kind": "manager"}`,
+/// `{"kind": "member", "memberId": "…"}` or `{"kind": "nobody"}`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum ViewAssigneeDto {
+    /// Everybody's tasks.
+    Anyone,
+    /// The tasks given to the manager.
+    Manager,
+    /// The tasks given to one member of the team.
+    #[serde(rename_all = "camelCase")]
+    Member {
+        /// The identifier of the team member.
+        member_id: String,
+    },
+    /// The tasks given to nobody.
+    Nobody,
+}
+
+impl From<ViewAssignee> for ViewAssigneeDto {
+    fn from(assignee: ViewAssignee) -> Self {
+        match assignee {
+            ViewAssignee::Anyone => Self::Anyone,
+            ViewAssignee::Manager => Self::Manager,
+            ViewAssignee::Member(member_id) => Self::Member {
+                member_id: member_id.to_string(),
+            },
+            ViewAssignee::Nobody => Self::Nobody,
+        }
+    }
+}
+
+impl TryFrom<ViewAssigneeDto> for ViewAssignee {
+    type Error = CommandError;
+
+    fn try_from(assignee: ViewAssigneeDto) -> Result<Self, Self::Error> {
+        Ok(match assignee {
+            ViewAssigneeDto::Anyone => Self::Anyone,
+            ViewAssigneeDto::Manager => Self::Manager,
+            ViewAssigneeDto::Member { member_id } => Self::Member(parse_id(&member_id)?),
+            ViewAssigneeDto::Nobody => Self::Nobody,
+        })
     }
 }
 
@@ -1257,6 +1355,29 @@ impl TryFrom<SprintStartInput> for SprintStart {
 pub struct SprintCompletionInput {
     #[serde(default)]
     pub move_unfinished_to: Option<String>,
+}
+
+/// What the interface sends to add a view to a project. Without a name, or
+/// with an empty one, the view is named after its kind.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NewViewInput {
+    project_id: String,
+    kind: String,
+    #[serde(default)]
+    name: Option<String>,
+}
+
+impl TryFrom<NewViewInput> for NewView {
+    type Error = CommandError;
+
+    fn try_from(input: NewViewInput) -> Result<Self, Self::Error> {
+        Ok(Self {
+            project_id: parse_id(&input.project_id)?,
+            kind: input.kind.parse::<ViewKind>()?,
+            name: input.name,
+        })
+    }
 }
 
 /// Reads an identifier the interface sent.

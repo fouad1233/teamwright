@@ -30,6 +30,18 @@ its `sprintId` and its `points`. `set_task_points` reads the points as any
 number, so that a fraction reaches the use case and is refused there with
 the rule it breaks.
 
+**The views of a project**
+([decision 0021](../../docs/decisions/0021-views-the-manager-can-add.md))
+are the commands in `commands/views.rs`: `list_views`, `add_view`,
+`rename_view`, `set_view_filter`, `move_view` and `remove_view`, which the
+shell serves through `ViewService`. A view on the wire has its `kind`, its
+`name` and its `filter`, whose `assignee` is `{"kind": "anyone"}`,
+`{"kind": "manager"}`, `{"kind": "member", "memberId": "…"}` or
+`{"kind": "nobody"}`. `move_view` reads the place as any number, cut to a
+whole number as the interface's arrays would cut it. A database with
+projects from before views gives each of them the six views a new project
+starts with when it is opened.
+
 ### The work of the specialists
 
 The shell is where the work of an AI specialist meets the outside world
