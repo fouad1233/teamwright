@@ -8,6 +8,7 @@ import { formatMoment } from '@/shared/lib/format';
 import { Button } from '@/shared/ui/Button';
 import { Prose } from '@/shared/ui/Prose';
 
+import { RunsElsewhere, useComputerOf } from '../sync/RunsElsewhere';
 import { MemberAvatar } from '../team/Assignee';
 import { useTeamMember } from '../team/TeamContext';
 import styles from './ConversationView.module.css';
@@ -38,15 +39,19 @@ export function ConversationView({
   const member = useTeamMember(conversation.memberId ?? undefined);
   const commands = useWorkCommands(project.id);
   const isDemo = useIsDemo();
+  const computer = useComputerOf(conversation);
   const working = runningTurn(conversation);
   const question = openDecision(conversation);
   const name = member?.name ?? 'A specialist who has left the team';
+  // A conversation that runs on another computer is read here and
+  // continued there: nothing that acts on it is offered.
+  const isHere = conversation.isHere;
   // The first line names the specialist and holds what can be done about
   // the conversation as a whole. Where there is nothing of either to show,
   // the line is left out instead of standing empty.
   // The demo has no real session behind a conversation, so it has nothing
-  // to open in the Claude app.
-  const canOpenInClaude = !isDemo && hasSession(conversation);
+  // to open in the Claude app; nor has a computer the session is not on.
+  const canOpenInClaude = !isDemo && isHere && hasSession(conversation);
   const hasFirstLine = !hidesMember || working !== undefined || canOpenInClaude;
 
   return (
@@ -62,15 +67,17 @@ export function ConversationView({
         {working ? (
           <>
             <WorkingMark />
-            <Button
-              variant="ghost"
-              icon={<Square />}
-              onClick={() => {
-                void commands.stop(conversation.id);
-              }}
-            >
-              Stop
-            </Button>
+            {isHere && (
+              <Button
+                variant="ghost"
+                icon={<Square />}
+                onClick={() => {
+                  void commands.stop(conversation.id);
+                }}
+              >
+                Stop
+              </Button>
+            )}
           </>
         ) : (
           canOpenInClaude && (
@@ -99,16 +106,21 @@ export function ConversationView({
         <p className={styles.nothing}>The specialist has left the team, so nobody can answer.</p>
       )}
       {/* A question of the specialist takes the place of the line to write
-          in: answering it is the only way to go on. */}
+          in: answering it is the only way to go on. Elsewhere it can be
+          read, and answered on the computer the conversation runs on. */}
       {!working && member && question && (
         <DecisionCard
           key={conversation.turns.length}
           decision={question}
           askedBy={member.name}
           onDecide={(answer) => commands.decide(conversation.id, answer)}
+          answeredOn={isHere ? undefined : computer}
         />
       )}
-      {!working && member && !question && (
+      {!isHere && member && !(question && !working) && (
+        <RunsElsewhere conversation={conversation} />
+      )}
+      {isHere && !working && member && !question && (
         <ReplyBox
           label={`Message to ${member.name}`}
           placeholder={`Answer ${member.name}, or say what to change…`}

@@ -55,3 +55,17 @@
   display: flex;
   justify-content: flex-end;
 }
+
+/* A question asked in a conversation that runs on another computer: in
+   the place of the words and the button, where it is answered. */
+.elsewhere {
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--rule);
+  color: var(--ink-soft);
+  line-height: 1.5;
+}
+
+.elsewhereWhere {
+  color: var(--ink);
+  font-weight: 600;
+}

@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useState, type CSSProperties, type FormEvent } from 'react';
 
 import type { DecisionRequest, NewDecisionAnswer } from '@/shared/api/types';
 import { classNames } from '@/shared/lib/classNames';
@@ -14,6 +14,12 @@ interface DecisionCardProps {
   askedBy: string;
   /** Sends the answer. Resolves to whether it was taken. */
   onDecide: (answer: NewDecisionAnswer) => Promise<boolean>;
+  /**
+   * The name of the computer the question is answered on, when it is not
+   * this one. The question and its options can then be read here, and
+   * nothing can be picked or sent.
+   */
+  answeredOn?: string;
 }
 
 /**
@@ -24,7 +30,7 @@ interface DecisionCardProps {
  * one thing there that carries the gold, and the gilded sun of decision
  * 0015.
  */
-export function DecisionCard({ decision, askedBy, onDecide }: DecisionCardProps) {
+export function DecisionCard({ decision, askedBy, onDecide, answeredOn }: DecisionCardProps) {
   const [pick, setPick] = useState<OptionPick | undefined>(undefined);
   const [note, setNote] = useState('');
   const [isSending, setIsSending] = useState(false);
@@ -73,27 +79,63 @@ export function DecisionCard({ decision, askedBy, onDecide }: DecisionCardProps)
         pick={pick}
         onPick={setPick}
         isAppearing
+        isReadOnly={answeredOn !== undefined}
       />
 
+      {answeredOn !== undefined ? (
+        <p
+          className={classNames(waitsForManager.part, styles.elsewhere)}
+          style={afterTheOptions}
+          role="note"
+        >
+          <span className={styles.elsewhereWhere}>Asked on {answeredOn}.</span> Answer it there: the
+          conversation runs in Teamwright on {answeredOn}.
+        </p>
+      ) : (
+        <AnswerHere
+          pick={pick}
+          note={note}
+          onNote={setNote}
+          canDecide={canDecide}
+          style={afterTheOptions}
+        />
+      )}
+    </form>
+  );
+}
+
+interface AnswerHereProps {
+  pick: OptionPick | undefined;
+  note: string;
+  onNote: (note: string) => void;
+  canDecide: boolean;
+  /** When the words and the button come up. */
+  style: CSSProperties;
+}
+
+/** The words of the manager and the button that sends the answer. */
+function AnswerHere({ pick, note, onNote, canDecide, style }: AnswerHereProps) {
+  return (
+    <>
       <textarea
         className={classNames(waitsForManager.part, styles.note)}
-        style={afterTheOptions}
+        style={style}
         aria-label="Your words"
         placeholder={
           pick === 'own words' ? 'What you decide, in your own words…' : 'Add a note, if you like…'
         }
         value={note}
         onChange={(event) => {
-          setNote(event.target.value);
+          onNote(event.target.value);
         }}
         rows={2}
       />
 
-      <div className={classNames(waitsForManager.part, styles.actions)} style={afterTheOptions}>
+      <div className={classNames(waitsForManager.part, styles.actions)} style={style}>
         <Button variant="primary" type="submit" disabled={!canDecide}>
           Decide
         </Button>
       </div>
-    </form>
+    </>
   );
 }

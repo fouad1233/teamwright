@@ -6,6 +6,7 @@ import { Button } from '@/shared/ui/Button';
 import { describeFailure } from '@/shared/ui/Toast';
 
 import { advisorWaitsFor } from '../advisor/advisorModel';
+import { useComputerOf } from '../sync/RunsElsewhere';
 import { useTasks } from '../tasks/taskQueries';
 import { MemberAvatar } from '../team/Assignee';
 import { useTeam } from '../team/teamQueries';
@@ -92,6 +93,7 @@ interface QuestionProps {
  */
 function FromAdvisor({ project, conversation }: QuestionProps) {
   const navigation = useNavigation();
+  const computer = useComputerOf(conversation);
   const waitsFor = advisorWaitsFor(conversation);
 
   if (waitsFor === null) {
@@ -106,7 +108,10 @@ function FromAdvisor({ project, conversation }: QuestionProps) {
         <span className={classNames(styles.when)}>{formatMoment(askedAt(conversation))}</span>
       </header>
       <div className={classNames(waitsForManager.frame, styles.advisor)}>
-        <p className={classNames(waitsForManager.part, styles.wants)}>The Advisor {waitsFor}.</p>
+        <p className={classNames(waitsForManager.part, styles.wants)}>
+          The Advisor {waitsFor}
+          {conversation.isHere ? '.' : `, on ${computer}.`}
+        </p>
         <Button
           className={waitsForManager.part}
           style={appearsAt(1)}
@@ -128,6 +133,7 @@ function Question({ project, conversation }: QuestionProps) {
   const tasks = useTasks(project.id);
   const team = useTeam(project.id);
   const commands = useWorkCommands(project.id);
+  const computer = useComputerOf(conversation);
   const decision = openDecision(conversation);
   const task = tasks.data?.find((known) => known.id === conversation.taskId);
   const member = team.data?.find((known) => known.id === conversation.memberId);
@@ -161,6 +167,7 @@ function Question({ project, conversation }: QuestionProps) {
         decision={decision}
         askedBy={member?.name ?? 'A specialist'}
         onDecide={(answer) => commands.decide(conversation.id, answer)}
+        answeredOn={conversation.isHere ? undefined : computer}
       />
     </article>
   );

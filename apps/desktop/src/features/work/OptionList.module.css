@@ -35,6 +35,13 @@
   background: var(--brass-soft);
 }
 
+/* Options that are read and not picked: no hover, no pointer. */
+.readOnly,
+.readOnly:hover {
+  background: none;
+  cursor: default;
+}
+
 /* The radio button does the work for the keyboard and for screen readers;
    the card around it shows the choice. */
 .radio {

@@ -10,6 +10,7 @@ import { Button } from '@/shared/ui/Button';
 import { ChoiceInput, Field, TextArea } from '@/shared/ui/Field';
 import { ChoiceMenu } from '@/shared/ui/Menu';
 
+import { RunsElsewhere } from '../sync/RunsElsewhere';
 import { useTeamMembers } from '../team/TeamContext';
 import { EFFORT_CHOICES, LEFT_TO_THE_PROGRAM, modelChoices } from '../team/profileChoices';
 import { effortLabel, modelLabel } from '../team/teamModel';
@@ -67,6 +68,7 @@ export function AdvisorView({ project }: { project: Project }) {
   }
 
   const working = runningTurn(conversation);
+  const isHere = conversation.isHere;
   const interview = openInterview(conversation);
   const proposal = openProposal(conversation);
   const lastPlace = conversation.turns.length - 1;
@@ -80,15 +82,17 @@ export function AdvisorView({ project }: { project: Project }) {
           {working ? (
             <>
               <WorkingMark />
-              <Button
-                variant="ghost"
-                icon={<Square />}
-                onClick={() => {
-                  void commands.stop(conversation.id);
-                }}
-              >
-                Stop
-              </Button>
+              {isHere && (
+                <Button
+                  variant="ghost"
+                  icon={<Square />}
+                  onClick={() => {
+                    void commands.stop(conversation.id);
+                  }}
+                >
+                  Stop
+                </Button>
+              )}
             </>
           ) : (
             <Button
@@ -112,7 +116,22 @@ export function AdvisorView({ project }: { project: Project }) {
           ))}
         </ol>
 
-        {interview && (
+        {/* A conversation that runs on another computer is read here: what
+            the Advisor asks or proposes is answered there. */}
+        {!isHere && (
+          <RunsElsewhere
+            conversation={conversation}
+            whatWaits={
+              interview
+                ? 'The Advisor waits for your answers there. Answer its questions in Teamwright on that computer.'
+                : proposal
+                  ? 'The Advisor waits for a word about its proposal there. Change and approve it in Teamwright on that computer.'
+                  : undefined
+            }
+          />
+        )}
+
+        {isHere && interview && (
           <InterviewCard
             // A card of its own for every interview, so nothing put down for one lingers for the next.
             key={conversation.turns.length}
@@ -122,7 +141,7 @@ export function AdvisorView({ project }: { project: Project }) {
         )}
       </div>
 
-      {proposal && (
+      {isHere && proposal && (
         <div className={styles.wide}>
           <ProposalCard
             key={conversation.turns.length}
@@ -135,7 +154,7 @@ export function AdvisorView({ project }: { project: Project }) {
 
       {/* While the Advisor waits for answers, answering is the only way to
           go on. Otherwise the manager can write to it. */}
-      {!working && !interview && (
+      {isHere && !working && !interview && (
         <div className={styles.column}>
           <ReplyBox
             label="Message to the Advisor"

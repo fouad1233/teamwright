@@ -20,6 +20,11 @@ interface OptionListProps {
   onPick: (pick: OptionPick) => void;
   /** Lets the options come up one after the other, as part of a decision that appears. */
   isAppearing?: boolean;
+  /**
+   * Shows the options to be read and not picked, as on a computer the
+   * question is not answered on. The answer in words is left out.
+   */
+  isReadOnly?: boolean;
 }
 
 /**
@@ -34,11 +39,17 @@ export function OptionList({
   pick,
   onPick,
   isAppearing = false,
+  isReadOnly = false,
 }: OptionListProps) {
   const name = useId();
 
   return (
-    <div className={styles.options} role="radiogroup" aria-label={label}>
+    <div
+      className={styles.options}
+      role="radiogroup"
+      aria-label={label}
+      aria-readonly={isReadOnly || undefined}
+    >
       {options.map((option, place) => (
         <label
           // The options of a question never change, so their place identifies them.
@@ -47,6 +58,7 @@ export function OptionList({
             styles.option,
             pick === place && styles.picked,
             isAppearing && waitsForManager.part,
+            isReadOnly && styles.readOnly,
           )}
           // The options come up after the question, one after the other.
           style={appearsAt(place + 1)}
@@ -56,6 +68,7 @@ export function OptionList({
             name={name}
             className={styles.radio}
             checked={pick === place}
+            disabled={isReadOnly}
             onChange={() => {
               onPick(place);
             }}
@@ -71,26 +84,28 @@ export function OptionList({
           )}
         </label>
       ))}
-      <label
-        className={classNames(
-          styles.option,
-          pick === 'own words' && styles.picked,
-          isAppearing && waitsForManager.part,
-        )}
-        style={appearsAt(options.length + 1)}
-      >
-        <input
-          type="radio"
-          name={name}
-          className={styles.radio}
-          checked={pick === 'own words'}
-          onChange={() => {
-            onPick('own words');
-          }}
-        />
-        <span className={styles.optionLabel}>Something else</span>
-        <span className={styles.consequence}>Say below what you want instead.</span>
-      </label>
+      {!isReadOnly && (
+        <label
+          className={classNames(
+            styles.option,
+            pick === 'own words' && styles.picked,
+            isAppearing && waitsForManager.part,
+          )}
+          style={appearsAt(options.length + 1)}
+        >
+          <input
+            type="radio"
+            name={name}
+            className={styles.radio}
+            checked={pick === 'own words'}
+            onChange={() => {
+              onPick('own words');
+            }}
+          />
+          <span className={styles.optionLabel}>Something else</span>
+          <span className={styles.consequence}>Say below what you want instead.</span>
+        </label>
+      )}
     </div>
   );
 }
