@@ -94,9 +94,11 @@ sequenceDiagram
     R->>A: user message as a JSON line
     A-->>R: events: text, tool use, progress
     A->>B: publish_handoff(summary, files)
-    B->>C: handoff recorded
+    B-->>A: taken
     A->>B: ask_manager(question, options)
-    B->>C: decision request recorded
+    B-->>A: taken, end your turn
+    A-->>R: events: the calls of both tools
+    R->>C: handoff and decision request recorded
     A-->>R: result (token usage)
     R->>C: turn finished
     C->>M: decision request in the inbox
@@ -112,6 +114,14 @@ Points to notice:
 - **Asking does not block.** A team member that needs the manager records a
   decision request and ends its turn. The process can stop. The answer starts
   a new turn in the same session.
+- **The team bus keeps nothing.** It is the Teamwright program itself,
+  started a second time by Claude Code for one turn, and it speaks with the
+  session over standard input and output. It checks a call and answers the
+  session. What the session said reaches Teamwright in the stream of events
+  that the agent runtime reads anyway
+  ([decision 0012](../decisions/0012-a-specialist-asks-through-a-tool.md)).
+  Today the bus has one tool, `ask_manager`. Handoffs and messages are
+  planned to travel the same way.
 - **Nobody polls.** A team member runs only while it has a turn to work on.
 - **Usage is measured, not guessed.** Each finished turn reports its tokens
   per model, which are stored with the turn.
@@ -188,8 +198,11 @@ them.
 
 - Teamwright never reads Claude Code's credentials and has no sign-in of its
   own.
-- The team bus listens on the loopback address only. Each session gets its
-  own token, which also identifies the caller.
+- The team bus opens no network port. Claude Code starts it for one turn and
+  talks to it over standard input and output, and it ends with the turn.
+- A team member reaches the folder of its project and the folders the
+  manager added for reading, and nothing else on the computer
+  ([decision 0011](../decisions/0011-what-a-specialist-may-do.md)).
 - Risky tool use by a team member is not approved by Teamwright on the
   manager's behalf. It is forwarded to the manager.
 - Nothing is sent anywhere except to Claude Code and, if the user sets it up,

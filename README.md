@@ -20,10 +20,12 @@ with a clear decision request whenever a choice is yours to make.
 > in a list, on a Gantt chart and on a calendar, and lets you put together a
 > team. An AI specialist on that team carries out a task through your own
 > Claude Code: it gets a brief, works in the folder of the project, shows
-> every step, reports, and can be answered. What is still missing is the
-> team as a team: the Advisor that proposes it, specialists that hand work
-> to each other, and the inbox for the decisions they bring you. There is no
-> installer; the app can be [built from source](docs/development/README.md).
+> every step, reports, and can be answered. When a choice is yours to make
+> it stops and asks, and its question waits in your inbox with the options
+> and what each leads to. What is still missing is the team as a team: the
+> Advisor that proposes it, and specialists that hand work to each other.
+> There is no installer; the app can be
+> [built from source](docs/development/README.md).
 > The [roadmap](docs/product/roadmap.md) says exactly what is done.
 
 ## What it looks like today
@@ -133,8 +135,10 @@ one place:
 Teamwright does not ship a model and does not ask for your Claude password.
 It starts the Claude Code program that is already installed on your computer
 and that you signed in to yourself, and it talks to it through Claude Code's
-documented headless mode. Your skills, plugins and MCP connectors remain
-available to the team.
+documented headless mode. A specialist is a session of its own. It works
+with what you give its project and does not reach into what you set up in
+Claude Code for yourself: your skills, plugins and connectors stay yours.
+Choosing skills and connectors for a specialist is on the roadmap.
 
 Teamwright is an independent project. It is not affiliated with, endorsed by,
 or sponsored by Anthropic. "Claude" and "Claude Code" are trademarks of

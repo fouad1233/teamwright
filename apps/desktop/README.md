@@ -10,7 +10,7 @@ use case. It contains no rules of its own.
 
 | File | Contents |
 |---|---|
-| `src/main.rs` | Starts the application, lists the commands, and stops the specialists when it closes |
+| `src/main.rs` | Starts the application, lists the commands, and stops the specialists when it closes. Started with `--team-bus`, it serves the team bus instead and opens no window |
 | `src/state.rs` | Opens the database, builds the services, and decides what stands behind each of their interfaces |
 | `src/commands/` | One function per command: read the arguments, call one use case, answer |
 | `src/dto.rs` | The data that travels between the interface and the commands |
@@ -37,6 +37,14 @@ The shell is where the work of an AI specialist meets the outside world
   created when a turn first needs it. When `TEAMWRIGHT_DATA_DIR` names a
   data folder, the folders of the projects are in `projects` inside it
   instead, so a test never writes into the user's documents.
+- **The team bus.** A specialist asks the manager to decide through a tool,
+  `ask_manager`
+  ([decision 0012](../../docs/decisions/0012-a-specialist-asks-through-a-tool.md)).
+  The server of that tool is this very program: `state.rs` tells the
+  runtime to start it with the argument `--team-bus`, and `main.rs` then
+  serves the tool on standard input and output without a window and without
+  the database. The question itself arrives in the events of the turn, like
+  every other step.
 - **Slow commands.** Asking the program whether it is there, and starting a
   turn, take seconds. Those commands are declared `async`, so they run on a
   thread of their own and the window stays alive.
@@ -62,6 +70,7 @@ src/
     tasks/            The task panel, the list, badges, the fold of subtasks, task logic
     team/             The team: avatars, the Team view, adding and changing a member
     work/             The work of AI specialists: starting it, following it, answering
+    inbox/            What waits for the manager in every project: questions to decide
   shared/
     api/              The Backend interface and its two implementations
     ui/               Buttons, menus, dialogs, the calendar field, tooltips
@@ -82,7 +91,11 @@ Rules of the interface:
   it in a context, so a card, a row or a menu can show who a task is given
   to without the team being handed down to it. `WorkProvider` does the same
   for the conversations with the specialists, so a card can show that
-  somebody is working on its task.
+  somebody is working on its task, or waits for a decision about it.
+- **What waits for the manager is asked for across projects.** The inbox
+  and the count next to it in the sidebar come from one question to the
+  backend (`useConversationsWaiting`), which is asked again when a turn
+  ends or starts. The open project does not matter to it.
 - **A conversation is replaced, never patched.** While a specialist works,
   the backend sends the whole conversation with every step
   (`useConversations`). The interface puts it in the place of the one it

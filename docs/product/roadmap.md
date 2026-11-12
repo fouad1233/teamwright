@@ -60,7 +60,9 @@ A single specialist that really works through Claude Code.
 - ⬜ The limits of the plan that the program reports
 - ✅ The model and the effort of a specialist
 - ⬜ Instructions of a specialist's own, and a set of ready-made specialists
-- ⬜ Discover the user's skills, plugins and MCP connectors
+- ⬜ Skills and connectors for a specialist, chosen by the manager. A
+  session sees nothing of what the user set up in Claude Code for their own
+  use
 
 ## M3 · The Advisor ⬜
 
@@ -73,12 +75,13 @@ From a conversation to an approved team and plan.
 - ⬜ Review, edit and approve; apply the approved plan to the board
 - ⬜ Import earlier Claude Code conversations as context digests
 
-## M4 · Teamwork ⬜
+## M4 · Teamwork 🚧
 
 Several specialists working together with the manager in the loop.
 
-- ⬜ Team bus: the tools specialists use to talk to the project
-- ⬜ Decision requests and the manager's inbox
+- 🚧 Team bus: the tools specialists use to talk to the project. It has its
+  first tool, with which a specialist asks the manager to decide
+- ✅ Decision requests and the manager's inbox
 - ⬜ Teammate messages, handoffs and registered artifacts
 - ⬜ Project memory: decisions, facts and interface contracts
 - ⬜ Coordinator: dependency-driven start, concurrency limit, token budgets
