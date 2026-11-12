@@ -148,7 +148,10 @@ The commands are in `commands/sync.rs`:
 
 `SyncStateDto` has `folder`, `thisComputer`, `computerName`,
 `suggestedName`, `phase` (`off`, `in_step`, `writing`, `unreachable`,
-`stopped`), `lastRound`, `problem` and `computers`, each a `ComputerDto`
+`stopped`), `lastRound`, `problem` (in words, for the manager),
+`problemCode` (to decide by: `sync_folder_unreachable`, `identity_in_use`,
+`restart_needed`, `storage_failed`, `sync_off`, or null) and `computers`,
+each a `ComputerDto`
 with `id`, `name`, `version`, `acceptance` (`undecided`, `accepted`,
 `ignored`), `lastHeard`, `clockAhead` and `newerFormat`. A
 `SyncNoticeDto` has `id`, `at`, `kind` (`task_renumbered`,

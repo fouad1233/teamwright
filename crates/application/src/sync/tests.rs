@@ -351,7 +351,9 @@ fn a_round_writes_only_the_operations_not_written_yet() {
         lock(&setup.folder.cards).get(&setup.me).unwrap().name,
         "Desk"
     );
-    assert_eq!(setup.service.state().unwrap().phase, SyncPhase::InStep);
+    let state = setup.service.state().unwrap();
+    assert_eq!(state.phase, SyncPhase::InStep);
+    assert_eq!(state.problem_code, None);
 }
 
 #[test]
@@ -392,6 +394,7 @@ fn a_file_this_computer_did_not_write_in_its_own_folder_stops_the_round() {
     let state = setup.service.state().unwrap();
     assert_eq!(state.phase, SyncPhase::Stopped);
     assert!(state.problem.is_some());
+    assert_eq!(state.problem_code, Some("identity_in_use"));
 }
 
 #[test]
@@ -469,7 +472,9 @@ fn a_new_identity_stops_syncing_until_the_program_starts_again() {
     setup.service.new_identity().unwrap();
 
     assert_eq!(setup.service.round().unwrap_err().code(), "identity_in_use");
-    assert_eq!(setup.service.state().unwrap().phase, SyncPhase::Stopped);
+    let state = setup.service.state().unwrap();
+    assert_eq!(state.phase, SyncPhase::Stopped);
+    assert_eq!(state.problem_code, Some(RESTART_NEEDED));
 }
 
 /// A folder that counts how many rounds work in it at the same moment.

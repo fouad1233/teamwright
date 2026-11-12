@@ -28,24 +28,17 @@ export function sinceInWords(moment: Moment, now: Date = new Date()): string {
   return formatDate(calendarDateOf(then), now);
 }
 
-/** The words the application uses when another computer writes under this one's identity. */
-const IDENTITY_IN_USE_WORDS = 'another computer uses the identity of this computer';
-
-/** The words the application uses once this computer has a new identity. */
-const NEW_IDENTITY_WORDS = 'This computer has a new identity';
-
 /**
  * Whether syncing stopped because another computer writes under the
- * identity of this one: its data folder was copied there. The state says
- * it only in words, so the words are read.
+ * identity of this one: its data folder was copied there.
  */
 export function isIdentityInUse(state: SyncState): boolean {
-  return state.phase === 'stopped' && (state.problem?.startsWith(IDENTITY_IN_USE_WORDS) ?? false);
+  return state.phase === 'stopped' && state.problemCode === 'identity_in_use';
 }
 
 /** Whether this computer got a new identity, which waits for Teamwright to start again. */
 export function waitsForRestart(state: SyncState): boolean {
-  return state.phase === 'stopped' && (state.problem?.startsWith(NEW_IDENTITY_WORDS) ?? false);
+  return state.phase === 'stopped' && state.problemCode === 'restart_needed';
 }
 
 /** The name of a computer as the manager reads it, also before its card was read. */

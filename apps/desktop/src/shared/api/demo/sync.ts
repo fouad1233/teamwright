@@ -1,5 +1,13 @@
 import { BackendError } from '../backend';
-import type { Computer, Id, Moment, SyncNotice, SyncPhase, SyncState } from '../types';
+import type {
+  Computer,
+  Id,
+  Moment,
+  SyncNotice,
+  SyncPhase,
+  SyncProblemCode,
+  SyncState,
+} from '../types';
 
 /**
  * The identity of the computer the demo pretends to run on. It is fixed,
@@ -30,6 +38,19 @@ export const IDENTITY_IN_USE =
 /** What the real application says once this computer has a new identity. */
 export const NEW_IDENTITY_TAKEN =
   'This computer has a new identity. Start Teamwright again to go on.';
+
+/** The code of a refusal as the code of the problem the state names. */
+function problemCodeOf(code: string): SyncProblemCode {
+  switch (code) {
+    case 'sync_folder_unreachable':
+    case 'identity_in_use':
+    case 'restart_needed':
+    case 'sync_off':
+      return code;
+    default:
+      return 'storage_failed';
+  }
+}
 
 /**
  * Something a scenario can make the pretended folder do, to show every
@@ -68,6 +89,7 @@ export class PretendedSync {
   private phase: SyncPhase = 'off';
   private lastRound: Moment | null = null;
   private problem: string | null = null;
+  private problemCode: SyncProblemCode | null = null;
   private readonly computers: Computer[] = [];
   private kept: SyncNotice[] = [];
   private nextNoticeId = 1;
@@ -88,6 +110,7 @@ export class PretendedSync {
       phase: this.restartNeeded ? 'stopped' : this.folder === null ? 'off' : this.phase,
       lastRound: this.lastRound,
       problem: this.problem,
+      problemCode: this.problemCode,
       computers: structuredClone(this.computers),
     };
   }
@@ -119,6 +142,7 @@ export class PretendedSync {
     this.phase = 'off';
     this.lastRound = null;
     this.problem = null;
+    this.problemCode = null;
     this.restartNeeded = false;
     return this.state();
   }
@@ -164,6 +188,7 @@ export class PretendedSync {
     this.restartNeeded = true;
     this.phase = 'stopped';
     this.problem = NEW_IDENTITY_TAKEN;
+    this.problemCode = 'restart_needed';
     return this.state();
   }
 
@@ -232,6 +257,7 @@ export class PretendedSync {
       const changed = this.runRound();
       this.phase = 'in_step';
       this.problem = null;
+      this.problemCode = null;
       this.lastRound = this.nowAsText();
       this.surroundings.stateChanged(this.state());
       if (changed.length > 0) {
@@ -241,6 +267,7 @@ export class PretendedSync {
       if (failure instanceof BackendError) {
         this.phase = failure.code === 'identity_in_use' ? 'stopped' : 'unreachable';
         this.problem = failure.message;
+        this.problemCode = problemCodeOf(failure.code);
         this.lastRound = this.nowAsText();
         this.surroundings.stateChanged(this.state());
       }

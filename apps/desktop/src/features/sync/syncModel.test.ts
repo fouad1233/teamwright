@@ -42,14 +42,21 @@ function state(overrides: Partial<SyncState> = {}): SyncState {
     phase: 'in_step',
     lastRound: minutesBefore(2),
     problem: null,
+    problemCode: null,
     computers: [],
     ...overrides,
   };
 }
 
-const IDENTITY_IN_USE =
-  'another computer uses the identity of this computer; give this computer a new identity and start Teamwright again';
-const NEW_IDENTITY = 'This computer has a new identity. Start Teamwright again to go on.';
+const IDENTITY_IN_USE = {
+  problem:
+    'another computer uses the identity of this computer; give this computer a new identity and start Teamwright again',
+  problemCode: 'identity_in_use',
+} as const;
+const NEW_IDENTITY = {
+  problem: 'This computer has a new identity. Start Teamwright again to go on.',
+  problemCode: 'restart_needed',
+} as const;
 
 describe('sinceInWords', () => {
   it('says "just now" within a minute, also for a moment a little ahead', () => {
@@ -95,18 +102,23 @@ describe('stateLineOf', () => {
   });
 
   it('lights when the folder cannot be reached', () => {
-    expect(stateLineOf(state({ phase: 'unreachable', problem: 'gone' }), NOW)).toEqual({
+    expect(
+      stateLineOf(
+        state({ phase: 'unreachable', problem: 'gone', problemCode: 'sync_folder_unreachable' }),
+        NOW,
+      ),
+    ).toEqual({
       words: 'The folder cannot be reached',
       isLit: true,
     });
   });
 
   it('lights when it stopped, and says why', () => {
-    expect(stateLineOf(state({ phase: 'stopped', problem: IDENTITY_IN_USE }), NOW)).toEqual({
+    expect(stateLineOf(state({ phase: 'stopped', ...IDENTITY_IN_USE }), NOW)).toEqual({
       words: 'Stopped: two computers share one identity',
       isLit: true,
     });
-    expect(stateLineOf(state({ phase: 'stopped', problem: NEW_IDENTITY }), NOW)).toEqual({
+    expect(stateLineOf(state({ phase: 'stopped', ...NEW_IDENTITY }), NOW)).toEqual({
       words: 'Stopped: start Teamwright again',
       isLit: true,
     });
@@ -137,14 +149,27 @@ describe('stateLineOf', () => {
 
 describe('the identity of this computer', () => {
   it('is in use elsewhere only when it stopped for that', () => {
-    expect(isIdentityInUse(state({ phase: 'stopped', problem: IDENTITY_IN_USE }))).toBe(true);
-    expect(isIdentityInUse(state({ phase: 'unreachable', problem: IDENTITY_IN_USE }))).toBe(false);
-    expect(isIdentityInUse(state({ phase: 'stopped', problem: NEW_IDENTITY }))).toBe(false);
+    expect(isIdentityInUse(state({ phase: 'stopped', ...IDENTITY_IN_USE }))).toBe(true);
+    expect(isIdentityInUse(state({ phase: 'unreachable', ...IDENTITY_IN_USE }))).toBe(false);
+    expect(isIdentityInUse(state({ phase: 'stopped', ...NEW_IDENTITY }))).toBe(false);
+  });
+
+  it('decides by the code, not by the words', () => {
+    const reworded = {
+      problem: 'Two computers share one identity.',
+      problemCode: 'identity_in_use',
+    } as const;
+    expect(isIdentityInUse(state({ phase: 'stopped', ...reworded }))).toBe(true);
+    expect(
+      isIdentityInUse(
+        state({ phase: 'stopped', problem: IDENTITY_IN_USE.problem, problemCode: null }),
+      ),
+    ).toBe(false);
   });
 
   it('waits for a restart once it is new', () => {
-    expect(waitsForRestart(state({ phase: 'stopped', problem: NEW_IDENTITY }))).toBe(true);
-    expect(waitsForRestart(state({ phase: 'stopped', problem: IDENTITY_IN_USE }))).toBe(false);
+    expect(waitsForRestart(state({ phase: 'stopped', ...NEW_IDENTITY }))).toBe(true);
+    expect(waitsForRestart(state({ phase: 'stopped', ...IDENTITY_IN_USE }))).toBe(false);
   });
 });
 
@@ -217,7 +242,7 @@ describe('problemInWords', () => {
     expect(problemInWords('the sync folder D:\\Sync cannot be reached')).toBe(
       'The sync folder D:\\Sync cannot be reached.',
     );
-    expect(problemInWords(NEW_IDENTITY)).toBe(NEW_IDENTITY);
+    expect(problemInWords(NEW_IDENTITY.problem)).toBe(NEW_IDENTITY.problem);
   });
 });
 

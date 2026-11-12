@@ -1444,6 +1444,10 @@ pub struct SyncStateDto {
     last_round: Option<String>,
     /// What went wrong in the last round, in words.
     problem: Option<String>,
+    /// What went wrong, as a code to decide by: `sync_folder_unreachable`,
+    /// `identity_in_use`, `restart_needed`, `storage_failed`, or another
+    /// code of an error; nothing when nothing went wrong.
+    problem_code: Option<&'static str>,
     /// The other computers.
     computers: Vec<ComputerDto>,
 }
@@ -1460,6 +1464,7 @@ impl SyncStateDto {
             phase: state.phase.as_str(),
             last_round: state.last_round.map(moment_to_text),
             problem: state.problem.clone(),
+            problem_code: state.problem_code,
             computers: state.computers.iter().map(ComputerDto::from).collect(),
         }
     }
@@ -1576,12 +1581,14 @@ mod tests {
             phase: teamwright_application::SyncPhase::InStep,
             last_round: None,
             problem: None,
+            problem_code: None,
         };
 
         let json =
             serde_json::to_value(SyncStateDto::new(&state, Some("SAMPLE".to_owned()))).unwrap();
 
         assert_eq!(json["phase"], "in_step");
+        assert_eq!(json["problemCode"], serde_json::Value::Null);
         assert_eq!(json["computerName"], "Laptop");
         assert_eq!(json["suggestedName"], "SAMPLE");
         assert_eq!(json["computers"][0]["acceptance"], "undecided");

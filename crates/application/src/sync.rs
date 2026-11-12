@@ -533,7 +533,17 @@ pub struct SyncState {
     pub last_round: Option<Timestamp>,
     /// What went wrong in the last round, in words.
     pub problem: Option<String>,
+    /// What went wrong, as a stable code an interface can decide by: the
+    /// code of the error of the last round (`sync_folder_unreachable`,
+    /// `identity_in_use`, `storage_failed`, ...), or
+    /// [`RESTART_NEEDED`] once this computer got a new identity. Nothing
+    /// when nothing went wrong.
+    pub problem_code: Option<&'static str>,
 }
+
+/// The code of the problem of a computer that got a new identity and waits
+/// for Teamwright to start again with it.
+pub const RESTART_NEEDED: &str = "restart_needed";
 
 /// What one round did.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -605,6 +615,8 @@ struct Status {
     last_round: Option<Timestamp>,
     /// What went wrong in the last round, in words.
     problem: Option<String>,
+    /// The code of what went wrong.
+    problem_code: Option<&'static str>,
 }
 
 impl SyncService {
@@ -646,6 +658,7 @@ impl SyncService {
             phase,
             last_round: status.last_round,
             problem: status.problem,
+            problem_code: status.problem_code,
         })
     }
 
@@ -784,6 +797,7 @@ impl SyncService {
         status.stopped = Some(SyncPhase::Stopped);
         status.problem =
             Some("This computer has a new identity. Start Teamwright again to go on.".to_owned());
+        status.problem_code = Some(RESTART_NEEDED);
         Ok(identity)
     }
 
@@ -829,6 +843,7 @@ impl SyncService {
             Ok(_) => {
                 status.stopped = None;
                 status.problem = None;
+                status.problem_code = None;
             }
             Err(error) => {
                 status.stopped = Some(match error {
@@ -837,6 +852,7 @@ impl SyncService {
                     _ => SyncPhase::Unreachable,
                 });
                 status.problem = Some(error.to_string());
+                status.problem_code = Some(error.code());
             }
         }
         result

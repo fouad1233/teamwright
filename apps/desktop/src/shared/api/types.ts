@@ -680,6 +680,19 @@ export interface SprintCompletion {
 export type SyncPhase = 'off' | 'in_step' | 'writing' | 'unreachable' | 'stopped';
 
 /**
+ * What went wrong in syncing, as a code to decide by:
+ *
+ * - `sync_folder_unreachable`: the folder could not be reached.
+ * - `identity_in_use`: another computer writes under this one's identity.
+ * - `restart_needed`: this computer got a new identity, which waits for
+ *   Teamwright to start again.
+ * - `storage_failed`: the data could not be read or written.
+ * - `sync_off`: a round was asked for while no folder is chosen.
+ */
+export type SyncProblemCode =
+  'sync_folder_unreachable' | 'identity_in_use' | 'restart_needed' | 'storage_failed' | 'sync_off';
+
+/**
  * Whether this computer takes in what another computer writes: not decided
  * yet, taken in, or ignored.
  */
@@ -723,6 +736,8 @@ export interface SyncState {
   lastRound: Moment | null;
   /** What went wrong in the last round, in words. */
   problem: string | null;
+  /** What went wrong, as a code to decide by; nothing when nothing went wrong. */
+  problemCode: SyncProblemCode | null;
   /** The other computers. */
   computers: Computer[];
 }

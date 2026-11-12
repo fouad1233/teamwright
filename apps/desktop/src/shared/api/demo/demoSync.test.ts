@@ -69,6 +69,7 @@ describe('syncing through a folder in the DemoBackend', () => {
         phase: 'off',
         lastRound: null,
         problem: null,
+        problemCode: null,
         computers: [],
       });
     });
@@ -101,6 +102,7 @@ describe('syncing through a folder in the DemoBackend', () => {
         phase: 'in_step',
         lastRound: '2026-11-11T09:00:00.000Z',
         problem: null,
+        problemCode: null,
         computers: [],
       });
       expect(states.at(-1)?.phase).toBe('in_step');
@@ -331,6 +333,7 @@ describe('syncing through a folder in the DemoBackend', () => {
       expect(state).toMatchObject({
         phase: 'unreachable',
         problem: `the sync folder ${FOLDER} cannot be reached`,
+        problemCode: 'sync_folder_unreachable',
         lastRound: '2026-11-11T09:01:00.000Z',
       });
       const refused = await refusal(backend.syncNow());
@@ -345,7 +348,11 @@ describe('syncing through a folder in the DemoBackend', () => {
 
       const state = await backend.pretendSync('identity_in_use');
 
-      expect(state).toMatchObject({ phase: 'stopped', problem: IDENTITY_IN_USE });
+      expect(state).toMatchObject({
+        phase: 'stopped',
+        problem: IDENTITY_IN_USE,
+        problemCode: 'identity_in_use',
+      });
       expect((await refusal(backend.syncNow())).code).toBe('identity_in_use');
     });
 
@@ -369,7 +376,11 @@ describe('syncing through a folder in the DemoBackend', () => {
 
       const state = await backend.giveThisComputerANewIdentity();
 
-      expect(state).toMatchObject({ phase: 'stopped', problem: NEW_IDENTITY_TAKEN });
+      expect(state).toMatchObject({
+        phase: 'stopped',
+        problem: NEW_IDENTITY_TAKEN,
+        problemCode: 'restart_needed',
+      });
       const refused = await refusal(backend.syncNow());
       expect(refused.code).toBe('identity_in_use');
       expect(refused.message).toBe(IDENTITY_IN_USE);

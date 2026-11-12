@@ -48,9 +48,9 @@ pub use projects::{NewProject, ProjectService, StatusProperties, WorkflowTemplat
 pub use sprints::{NewSprint, SprintChanges, SprintDay, SprintReport, SprintService, SprintStart};
 pub use sync::{
     Acceptance, CLOCK_AHEAD_LIMIT_MILLIS, ComputerCard, ExchangedChange, ExchangedOperation,
-    FileContent, FoundComputer, KnownComputer, NoticeKind, RoundReport, SYNC_FORMAT, SyncFolder,
-    SyncLedger, SyncNotice, SyncPhase, SyncPorts, SyncService, SyncSettings, SyncState,
-    TakeInReport,
+    FileContent, FoundComputer, KnownComputer, NoticeKind, RESTART_NEEDED, RoundReport,
+    SYNC_FORMAT, SyncFolder, SyncLedger, SyncNotice, SyncPhase, SyncPorts, SyncService,
+    SyncSettings, SyncState, TakeInReport,
 };
 pub use tasks::{NewTask, TaskService};
 pub use team::{NewMember, TeamService};
