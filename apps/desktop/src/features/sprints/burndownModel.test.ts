@@ -68,6 +68,13 @@ describe('the burndown chart', () => {
     });
   });
 
+  it('has no mark of today without a today, as for a sprint that is over', () => {
+    const chart = burndownOf(REPORT, SIZE, null);
+
+    expect(chart?.todayX).toBeNull();
+    expect(chart?.actual).toBe('M0 0H50V0H100V25');
+  });
+
   it('draws nothing for a report without days', () => {
     expect(burndownOf({ ...REPORT, days: [] }, SIZE, '2026-11-11')).toBeNull();
   });

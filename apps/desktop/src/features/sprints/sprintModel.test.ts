@@ -11,9 +11,12 @@ import {
   formatSummary,
   formatTotals,
   layoutOf,
+  movedOnNote,
   openSprints,
   paceBarsOf,
   parsePoints,
+  previousSprintOf,
+  recordFactsOf,
   reportVersionOf,
   rowsOf,
   suggestedDates,
@@ -272,6 +275,66 @@ describe('the version of a report', () => {
 
     expect(changed).not.toBe(before);
     expect(left).not.toBe(before);
+  });
+});
+
+describe('what a completed sprint did not finish', () => {
+  it('says that the rest moved on, in the unit of the sprint', () => {
+    expect(movedOnNote({ unit: 'points', committed: 10, completed: 5 })).toBe(
+      'It finished 5 of 10 points. The rest moved on when the sprint was completed.',
+    );
+  });
+
+  it('says nothing when everything was finished', () => {
+    expect(movedOnNote({ unit: 'tasks', committed: 3, completed: 3 })).toBeNull();
+  });
+});
+
+describe('the facts of a completed sprint', () => {
+  const completed = sprint({
+    id: 'c',
+    state: 'completed',
+    startOn: '2026-10-26',
+    endOn: '2026-11-08',
+    startedAt: '2026-10-26T09:00:00.000Z',
+    completedAt: '2026-11-08T17:00:00.000Z',
+    summary: { unit: 'points', committed: 10, completed: 1 },
+  });
+  const now = new Date('2026-11-12T12:00:00');
+
+  it('lists the dates, the moments and the work, in the order they happened', () => {
+    const facts = recordFactsOf(completed, now);
+
+    expect(facts.map((fact) => fact.label)).toEqual([
+      'Dates',
+      'Started',
+      'Completed',
+      'Took on',
+      'Finished',
+    ]);
+    expect(facts[0]?.value).toBe(formatSprintDates(completed, now));
+    expect(facts[3]?.value).toBe('10 points');
+    expect(facts[4]?.value).toBe('1 point');
+  });
+
+  it('leaves out what is not known', () => {
+    const facts = recordFactsOf(sprint({ id: 'x', state: 'completed' }), now);
+
+    expect(facts.map((fact) => fact.label)).toEqual(['Dates']);
+  });
+});
+
+describe('the sprint the board shows', () => {
+  const completed = [sprint({ id: 'a', state: 'completed' })];
+
+  it('is the completed sprint a scope asks for', () => {
+    expect(previousSprintOf({ kind: 'previous', sprintId: 'a' }, completed)?.id).toBe('a');
+  });
+
+  it('is nothing for the other scopes, or for a sprint that is gone', () => {
+    expect(previousSprintOf({ kind: 'all' }, completed)).toBeUndefined();
+    expect(previousSprintOf({ kind: 'current' }, completed)).toBeUndefined();
+    expect(previousSprintOf({ kind: 'previous', sprintId: 'gone' }, completed)).toBeUndefined();
   });
 });
 

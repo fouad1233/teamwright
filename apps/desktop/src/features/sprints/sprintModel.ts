@@ -8,7 +8,7 @@ import type {
   Task,
 } from '@/shared/api/types';
 import { addDays, dayNumberOf } from '@/shared/lib/days';
-import { formatDate } from '@/shared/lib/format';
+import { formatDate, formatMoment } from '@/shared/lib/format';
 
 import { asArranged } from '../tasks/taskModel';
 
@@ -204,6 +204,62 @@ export function paceBarsOf(completed: readonly Sprint[]): PaceBar[] {
       },
     ];
   });
+}
+
+/**
+ * Says in a sentence what a completed sprint did not finish, or nothing if
+ * it finished all it took on. Which tasks moved on is not recorded, so
+ * the sentence does not say.
+ */
+export function movedOnNote(summary: SprintSummary): string | null {
+  if (summary.completed >= summary.committed) {
+    return null;
+  }
+  return `It finished ${formatSummary(summary)}. The rest moved on when the sprint was completed.`;
+}
+
+/** One line of the facts of a completed sprint: what it is and its value. */
+export interface RecordFact {
+  label: string;
+  value: string;
+}
+
+/**
+ * The facts a completed sprint shows when it is opened: its dates, when it
+ * was started and completed, and what it took on and finished. A fact that
+ * is not known is left out.
+ */
+export function recordFactsOf(sprint: Sprint, now: Date = new Date()): RecordFact[] {
+  const facts: RecordFact[] = [{ label: 'Dates', value: formatSprintDates(sprint, now) }];
+  if (sprint.startedAt !== null) {
+    facts.push({ label: 'Started', value: formatMoment(sprint.startedAt) });
+  }
+  if (sprint.completedAt !== null) {
+    facts.push({ label: 'Completed', value: formatMoment(sprint.completedAt) });
+  }
+  if (sprint.summary) {
+    facts.push(
+      { label: 'Took on', value: formatWork(sprint.summary.committed, sprint.summary.unit) },
+      { label: 'Finished', value: formatWork(sprint.summary.completed, sprint.summary.unit) },
+    );
+  }
+  return facts;
+}
+
+/** What the board shows: the sprint that runs, all tasks, or a sprint that is over. */
+export type BoardScope = { kind: 'current' } | { kind: 'all' } | { kind: 'previous'; sprintId: Id };
+
+/**
+ * The completed sprint a scope asks for, or nothing if the scope asks for
+ * another view or the sprint is no longer among the completed ones.
+ */
+export function previousSprintOf(
+  scope: BoardScope,
+  completed: readonly Sprint[],
+): Sprint | undefined {
+  return scope.kind === 'previous'
+    ? completed.find((sprint) => sprint.id === scope.sprintId)
+    : undefined;
 }
 
 /**

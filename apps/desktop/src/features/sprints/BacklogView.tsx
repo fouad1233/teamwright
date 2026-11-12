@@ -261,7 +261,12 @@ export function BacklogView({ project, tasks }: BacklogViewProps) {
             }
           />
 
-          <CompletedSprints sprints={completed} />
+          <CompletedSprints
+            project={project}
+            sprints={completed}
+            tasks={tasks}
+            onOpenTask={navigation.openTask}
+          />
         </div>
       </div>
 

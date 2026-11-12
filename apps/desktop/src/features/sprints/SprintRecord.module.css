@@ -1,0 +1,70 @@
+/* The record of a sprint hangs under its line, set in from the left by the
+   width of the fold mark, so that it reads as part of that line. */
+.record {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4) 0 var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--rule);
+}
+
+.top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-4) var(--space-5);
+  padding: 0 var(--space-2);
+}
+
+.about {
+  display: flex;
+  flex: 1 1 320px;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.goal {
+  max-width: 64ch;
+  color: var(--ink-soft);
+  line-height: 1.5;
+}
+
+/* The facts are a small table: the name of each fact in the margin, its
+   value beside it in the monospaced hand. */
+.facts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--space-1) var(--space-4);
+}
+
+.fact {
+  display: contents;
+}
+
+.fact dd {
+  color: var(--ink-soft);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+
+.rows {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--rule);
+}
+
+.empty {
+  display: flex;
+  align-items: center;
+  height: 38px;
+  padding: 0 var(--space-2);
+  color: var(--ink-faint);
+}
+
+.note {
+  padding: 0 var(--space-2);
+  color: var(--ink-faint);
+}

@@ -44,12 +44,13 @@ export interface Burndown {
  *
  * `today` places the mark of today at the end of the band of today, where
  * the line of what remained ends. A sprint that has not reached today, or
- * that is past its last day, has no mark.
+ * that is past its last day, has no mark. Without a `today`, as for a sprint
+ * that is over, there is no mark either.
  */
 export function burndownOf(
   report: SprintReport,
   size: ChartSize,
-  today: CalendarDate,
+  today: CalendarDate | null,
 ): Burndown | null {
   const dayCount = report.days.length;
   if (dayCount === 0) {
@@ -72,7 +73,7 @@ export function burndownOf(
     }
   }
 
-  const todayIndex = report.days.findIndex((day) => day.date === today);
+  const todayIndex = today === null ? -1 : report.days.findIndex((day) => day.date === today);
   return {
     ideal: `M0 ${y(report.total).toString()}L${size.width.toString()} ${y(0).toString()}`,
     actual: steps.length === 0 ? null : `M0 ${y(report.total).toString()}${steps.join('')}`,

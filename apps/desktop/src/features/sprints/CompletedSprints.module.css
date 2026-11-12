@@ -15,13 +15,48 @@
 }
 
 .sprint {
+  display: flex;
+  flex-direction: column;
+}
+
+/* The line of a sprint is a key: it unfolds the sprint under it. The fold
+   mark stands in the first column, and points down while it is open. */
+.line {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 132px 112px minmax(120px, 280px);
+  grid-template-columns: 12px minmax(0, 1fr) 132px 112px minmax(120px, 280px);
   align-items: center;
   gap: 0 var(--space-4);
+  width: 100%;
   height: 36px;
   padding: 0 var(--space-2);
   border-bottom: 1px solid var(--rule);
+  text-align: left;
+  transition: background-color 80ms ease;
+}
+
+.line:hover {
+  background: var(--hover);
+}
+
+.line:focus-visible {
+  outline-offset: -2px;
+}
+
+.fold {
+  width: 12px;
+  height: 12px;
+  color: var(--ink-faint);
+  transition:
+    transform 100ms ease,
+    color 100ms ease;
+}
+
+.line:hover .fold {
+  color: var(--ink);
+}
+
+.open {
+  transform: rotate(90deg);
 }
 
 .name {
@@ -70,8 +105,8 @@
 }
 
 @container backlog (width < 760px) {
-  .sprint {
-    grid-template-columns: minmax(0, 1fr) 96px minmax(64px, 120px);
+  .line {
+    grid-template-columns: 12px minmax(0, 1fr) 96px minmax(64px, 120px);
   }
 
   .dates {

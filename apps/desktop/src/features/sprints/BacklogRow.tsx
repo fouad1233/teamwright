@@ -145,6 +145,47 @@ export function TaskRowFace({ project, task, children }: TaskRowFaceProps) {
   );
 }
 
+/**
+ * A task in the record of a completed sprint. It looks like the other rows
+ * and opens the task, but it cannot be dragged or moved, and its points
+ * cannot be changed: the sprint is over.
+ */
+export function RecordRow({
+  project,
+  task,
+  onOpen,
+}: {
+  project: Project;
+  task: Task;
+  onOpen: (taskId: Id) => void;
+}) {
+  const reference = taskReference(project, task);
+  return (
+    <li
+      className={styles.row}
+      tabIndex={0}
+      role="button"
+      aria-roledescription="task"
+      aria-label={`${reference} ${task.title}`}
+      onClick={() => {
+        onOpen(task.id);
+      }}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter') {
+          onOpen(task.id);
+        }
+      }}
+    >
+      <TaskRowFace project={project} task={task}>
+        <span className={classNames(styles.points, styles.pointsText)}>
+          {task.points === null ? '–' : task.points.toString()}
+        </span>
+      </TaskRowFace>
+      <span className={styles.menu} />
+    </li>
+  );
+}
+
 /** The row as it follows the pointer while it is dragged. */
 export function DraggedRow({ project, task }: { project: Project; task: Task }) {
   return (

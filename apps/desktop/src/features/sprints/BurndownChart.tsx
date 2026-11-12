@@ -15,7 +15,8 @@ const MARGIN = 2;
 
 interface BurndownChartProps {
   report: SprintReport;
-  today: CalendarDate;
+  /** Today, for its mark. Nothing for a sprint that is over, whose chart says so. */
+  today: CalendarDate | null;
 }
 
 /**
@@ -30,10 +31,14 @@ export function BurndownChart({ report, today }: BurndownChartProps) {
   }
   const width = PLOT.width + 2 * MARGIN;
   const height = PLOT.height + TICK_LENGTH + 2 * MARGIN;
+  // The report of a sprint that is over counts only the tasks that stayed in
+  // it, which are the finished ones. "Left" would read against what it took on.
   const left =
-    chart.remaining === null
-      ? 'Not started'
-      : `${chart.remaining.toString()} of ${formatWork(report.total, report.unit)} left`;
+    today === null
+      ? 'Finished tasks only'
+      : chart.remaining === null
+        ? 'Not started'
+        : `${chart.remaining.toString()} of ${formatWork(report.total, report.unit)} left`;
 
   return (
     <figure className={styles.chart}>
