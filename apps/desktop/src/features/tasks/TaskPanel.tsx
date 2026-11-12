@@ -18,6 +18,8 @@ import {
   MemberAvatar,
   NOBODY_NAME,
 } from '../team/Assignee';
+import { PointsEditor } from '../sprints/PointsEditor';
+import { useSprintCommands, useSprints } from '../sprints/sprintQueries';
 import { useTeamMembers } from '../team/TeamContext';
 import { TaskWork } from '../work/TaskWork';
 import { PRIORITIES, PriorityFlag, StatusLabel, StatusMark, priorityLabel } from './TaskBadges';
@@ -46,6 +48,7 @@ interface TaskPanelProps {
 /** The panel that shows one task in full and lets the manager change it. */
 export function TaskPanel({ project, task, tasks, onClose }: TaskPanelProps) {
   const commands = useTaskCommands(project.id);
+  const sprintCommands = useSprintCommands(project.id);
   const navigation = useNavigation();
   const team = useTeamMembers();
   const panel = useRef<HTMLElement>(null);
@@ -236,6 +239,20 @@ export function TaskPanel({ project, task, tasks, onClose }: TaskPanelProps) {
               }}
             />
           </Property>
+
+          <Property label="Sprint">
+            <SprintChoice project={project} task={task} parent={parent} />
+          </Property>
+
+          <Property label="Points">
+            <PointsEditor
+              key={`points:${task.id}:${String(task.points)}`}
+              look="panel"
+              label="Points"
+              points={task.points}
+              onChange={(points) => sprintCommands.setPoints(task.id, points)}
+            />
+          </Property>
         </div>
 
         <Section title="Description">
@@ -330,6 +347,68 @@ export function TaskPanel({ project, task, tasks, onClose }: TaskPanelProps) {
         </div>
       </Dialog>
     </aside>
+  );
+}
+
+/** The value of the sprint menu that stands for the backlog. */
+const BACKLOG = 'backlog';
+
+interface SprintChoiceProps {
+  project: Project;
+  task: Task;
+  /** The task this one is a part of, if it is a subtask. */
+  parent: Task | undefined;
+}
+
+/**
+ * The sprint a task is in, chosen from the sprints it can go to and the
+ * backlog. A subtask goes where its task goes, so it only says where that is.
+ */
+function SprintChoice({ project, task, parent }: SprintChoiceProps) {
+  const sprints = useSprints(project.id);
+  const commands = useSprintCommands(project.id);
+  const all = sprints.data ?? [];
+  const current = all.find((sprint) => sprint.id === task.sprintId);
+  // While the sprints load, a task in a sprint is not called "Backlog".
+  const name = current?.name ?? (task.sprintId === null ? 'Backlog' : '');
+
+  if (parent) {
+    return (
+      <span
+        className={styles.fixedValue}
+        title={`A subtask goes where ${taskReference(project, parent)} goes`}
+      >
+        {name}
+      </span>
+    );
+  }
+
+  // A completed sprint takes no tasks, but the one the task is in is named.
+  const choices: Choice<string>[] = [
+    { value: BACKLOG, label: 'Backlog' },
+    ...all
+      .filter((sprint) => sprint.state !== 'completed' || sprint.id === task.sprintId)
+      .map((sprint) => ({ value: sprint.id, label: sprint.name })),
+  ];
+  return (
+    <ChoiceMenu
+      label="Sprint"
+      choices={choices}
+      value={task.sprintId ?? BACKLOG}
+      onChoose={(value) => {
+        const sprintId = value === BACKLOG ? null : value;
+        if (sprintId !== task.sprintId) {
+          void commands.plan(task.id, sprintId);
+        }
+      }}
+    >
+      <ValueButton aria-label="Sprint" isEmpty={task.sprintId === null}>
+        {name}
+        {current?.state === 'active' && (
+          <span className={classNames('label', styles.sprintState)}>Active</span>
+        )}
+      </ValueButton>
+    </ChoiceMenu>
   );
 }
 
