@@ -2,11 +2,12 @@
 
 use std::fmt;
 
+use crate::color::Color;
 use crate::error::DomainError;
-use crate::ids::ProjectId;
-use crate::text::ProjectName;
+use crate::ids::{ProjectId, StatusId};
+use crate::text::{ProjectName, StatusName};
 use crate::time::Timestamp;
-use crate::workflow::Workflow;
+use crate::workflow::{Status, StatusCategory, Workflow};
 
 /// The short code that prefixes the task numbers of a project, as in
 /// `IOT-12`.
@@ -246,6 +247,56 @@ impl Project {
     pub fn unarchive(&mut self) {
         self.archived_at = None;
     }
+
+    /// Adds a status to the workflow, at the place [`Workflow::add_status`]
+    /// chooses.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if another status already has the name.
+    pub fn add_status(&mut self, status: Status) -> Result<(), DomainError> {
+        self.workflow.add_status(status)
+    }
+
+    /// Gives a status of the workflow a new name, category and color.
+    ///
+    /// The tasks in the status are not touched here. If the status starts or
+    /// stops being a "done" status, the caller completes or reopens them.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the workflow has no such status, if another
+    /// status already has the name, or if the workflow would be left without
+    /// a "todo" or a "done" status.
+    pub fn change_status(
+        &mut self,
+        id: StatusId,
+        name: StatusName,
+        category: StatusCategory,
+        color: Color,
+    ) -> Result<(), DomainError> {
+        self.workflow.change_status(id, name, category, color)
+    }
+
+    /// Moves a status of the workflow to another place.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the workflow has no such status.
+    pub fn move_status(&mut self, id: StatusId, index: usize) -> Result<(), DomainError> {
+        self.workflow.move_status(id, index)
+    }
+
+    /// Takes a status out of the workflow and returns it. The caller finds
+    /// another status for the tasks that were in it.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the workflow has no such status, or if it would be
+    /// left without a "todo" or a "done" status.
+    pub fn remove_status(&mut self, id: StatusId) -> Result<Status, DomainError> {
+        self.workflow.remove_status(id)
+    }
 }
 
 #[cfg(test)]
@@ -361,6 +412,36 @@ mod tests {
         project.unarchive();
 
         assert!(!project.is_archived());
+    }
+
+    #[test]
+    fn the_statuses_of_a_project_can_be_added_changed_moved_and_removed() {
+        let mut project = project("Smart sensor node");
+        let blocked = Status::new(
+            StatusName::parse("Blocked").unwrap(),
+            StatusCategory::Active,
+            Color::Red,
+        );
+        let blocked_id = blocked.id();
+
+        project.add_status(blocked).unwrap();
+        project
+            .change_status(
+                blocked_id,
+                StatusName::parse("On hold").unwrap(),
+                StatusCategory::Active,
+                Color::Pink,
+            )
+            .unwrap();
+        project.move_status(blocked_id, 0).unwrap();
+        let first = project.workflow().statuses()[0].clone();
+        let removed = project.remove_status(blocked_id).unwrap();
+
+        assert_eq!(first.name().as_str(), "On hold");
+        assert_eq!(first.color(), Color::Pink);
+        assert_eq!(removed, first);
+        assert_eq!(project.workflow().statuses().len(), 4);
+        assert!(project.workflow().status(blocked_id).is_none());
     }
 
     #[test]

@@ -13,7 +13,11 @@ use crate::text::StatusName;
 /// A manager is free to name statuses ("In test", "Waiting for parts"). The
 /// program still has to know whether work has started or finished, and the
 /// category tells it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+///
+/// Categories are ordered by how far along the work is: todo comes first,
+/// then active, review and done. The order of the variants below is that
+/// order, and comparisons rely on it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum StatusCategory {
     /// Work has not started.
     Todo,
@@ -112,11 +116,7 @@ impl Workflow {
     /// the "done" category, or if two statuses have the same name. Names are
     /// compared without regard to upper and lower case.
     pub fn new(statuses: Vec<Status>) -> Result<Self, DomainError> {
-        for category in Self::REQUIRED_CATEGORIES {
-            if !statuses.iter().any(|status| status.category == category) {
-                return Err(DomainError::MissingStatusCategory { category });
-            }
-        }
+        Self::require_categories(statuses.iter().map(Status::category))?;
 
         let mut names_seen = HashSet::new();
         for status in &statuses {
@@ -207,6 +207,138 @@ impl Workflow {
         // function free of a panic path.
         self.first_in(StatusCategory::Todo)
             .unwrap_or(&self.statuses[0])
+    }
+
+    /// Adds a status. It goes behind the last status that is as far along
+    /// in the course of the work, or less far, so that a new step of the
+    /// work stands with the other steps and not behind the statuses in which
+    /// work is done.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if another status already has the name. Names are
+    /// compared without regard to upper and lower case.
+    pub fn add_status(&mut self, status: Status) -> Result<(), DomainError> {
+        self.refuse_name_in_use(&status.name, None)?;
+        let place = self.place_for_new_status(status.category);
+        self.statuses.insert(place, status);
+        Ok(())
+    }
+
+    /// Gives a status a new name, category and color in one step. The
+    /// status keeps its place and its identifier.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the workflow has no such status, if another
+    /// status already has the name, or if the change would leave the
+    /// workflow without a "todo" or a "done" status.
+    pub fn change_status(
+        &mut self,
+        id: StatusId,
+        name: StatusName,
+        category: StatusCategory,
+        color: Color,
+    ) -> Result<(), DomainError> {
+        let position = self.position_of(id)?;
+        self.refuse_name_in_use(&name, Some(id))?;
+        Self::require_categories(self.statuses.iter().map(|status| {
+            if status.id == id {
+                category
+            } else {
+                status.category
+            }
+        }))?;
+
+        let status = &mut self.statuses[position];
+        status.name = name;
+        status.category = category;
+        status.color = color;
+        Ok(())
+    }
+
+    /// Moves a status to a place among the other statuses. A place past the
+    /// end means the last place.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the workflow has no such status.
+    pub fn move_status(&mut self, id: StatusId, index: usize) -> Result<(), DomainError> {
+        let position = self.position_of(id)?;
+        let status = self.statuses.remove(position);
+        let index = index.min(self.statuses.len());
+        self.statuses.insert(index, status);
+        Ok(())
+    }
+
+    /// Takes a status out of the workflow and returns it.
+    ///
+    /// The workflow does not know about tasks. Whoever removes a status has
+    /// to find another one for the tasks that are in it.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the workflow has no such status, or if it would be
+    /// left without a "todo" or a "done" status.
+    pub fn remove_status(&mut self, id: StatusId) -> Result<Status, DomainError> {
+        let position = self.position_of(id)?;
+        Self::require_categories(
+            self.statuses
+                .iter()
+                .filter(|status| status.id != id)
+                .map(Status::category),
+        )?;
+        Ok(self.statuses.remove(position))
+    }
+
+    /// Checks that statuses of the given categories make a usable workflow:
+    /// at least one in which work has not started and one in which it is
+    /// done.
+    fn require_categories(
+        categories: impl Iterator<Item = StatusCategory> + Clone,
+    ) -> Result<(), DomainError> {
+        for category in Self::REQUIRED_CATEGORIES {
+            if !categories.clone().any(|present| present == category) {
+                return Err(DomainError::MissingStatusCategory { category });
+            }
+        }
+        Ok(())
+    }
+
+    /// Refuses a name that a status of the workflow already has, except the
+    /// status that is being changed, which may keep its own name.
+    fn refuse_name_in_use(
+        &self,
+        name: &StatusName,
+        changed: Option<StatusId>,
+    ) -> Result<(), DomainError> {
+        let wanted = name.as_str().to_lowercase();
+        let in_use = self.statuses.iter().any(|status| {
+            Some(status.id) != changed && status.name.as_str().to_lowercase() == wanted
+        });
+        if in_use {
+            return Err(DomainError::DuplicateStatusName {
+                name: name.to_string(),
+            });
+        }
+        Ok(())
+    }
+
+    /// The index at which a new status of a category goes: behind the last
+    /// status that is as far along, or less far.
+    fn place_for_new_status(&self, category: StatusCategory) -> usize {
+        self.statuses
+            .iter()
+            .rposition(|status| status.category <= category)
+            .map_or(0, |position| position + 1)
+    }
+
+    /// The index of a status in the board order.
+    fn position_of(&self, id: StatusId) -> Result<usize, DomainError> {
+        self.statuses
+            .iter()
+            .position(|status| status.id == id)
+            .ok_or(DomainError::UnknownStatus { status_id: id })
     }
 }
 
@@ -329,6 +461,305 @@ mod tests {
                 status_id: foreign_id
             }
         );
+    }
+
+    fn names(workflow: &Workflow) -> Vec<&str> {
+        workflow
+            .statuses()
+            .iter()
+            .map(|status| status.name().as_str())
+            .collect()
+    }
+
+    fn named<'workflow>(workflow: &'workflow Workflow, name: &str) -> &'workflow Status {
+        workflow
+            .statuses()
+            .iter()
+            .find(|status| status.name().as_str() == name)
+            .unwrap()
+    }
+
+    fn id_of(workflow: &Workflow, name: &str) -> StatusId {
+        named(workflow, name).id()
+    }
+
+    #[test]
+    fn categories_are_ordered_by_how_far_along_the_work_is() {
+        assert!(StatusCategory::Todo < StatusCategory::Active);
+        assert!(StatusCategory::Active < StatusCategory::Review);
+        assert!(StatusCategory::Review < StatusCategory::Done);
+    }
+
+    #[test]
+    fn a_new_step_of_the_work_goes_behind_the_other_steps_in_front_of_review_and_done() {
+        let mut workflow = Workflow::engineering();
+
+        workflow
+            .add_status(status("Waiting for parts", StatusCategory::Active))
+            .unwrap();
+
+        assert_eq!(
+            names(&workflow),
+            [
+                "To do",
+                "In progress",
+                "In revision",
+                "Waiting for parts",
+                "In test",
+                "Done"
+            ]
+        );
+    }
+
+    #[test]
+    fn a_new_todo_status_goes_behind_the_other_todo_statuses() {
+        let mut workflow = Workflow::engineering();
+
+        workflow
+            .add_status(status("Backlog", StatusCategory::Todo))
+            .unwrap();
+
+        assert_eq!(names(&workflow)[..3], ["To do", "Backlog", "In progress"]);
+    }
+
+    #[test]
+    fn a_second_done_status_goes_to_the_end() {
+        let mut workflow = Workflow::engineering();
+
+        workflow
+            .add_status(status("Cancelled", StatusCategory::Done))
+            .unwrap();
+
+        assert_eq!(names(&workflow).last(), Some(&"Cancelled"));
+    }
+
+    #[test]
+    fn a_new_status_follows_the_last_status_not_further_along_wherever_it_stands() {
+        // A manager may have put a todo status behind the done status.
+        let mut workflow = Workflow::new(vec![
+            status("Doing", StatusCategory::Active),
+            status("Shipped", StatusCategory::Done),
+            status("Ideas", StatusCategory::Todo),
+        ])
+        .unwrap();
+
+        workflow
+            .add_status(status("Waiting", StatusCategory::Active))
+            .unwrap();
+
+        assert_eq!(names(&workflow), ["Doing", "Shipped", "Ideas", "Waiting"]);
+    }
+
+    #[test]
+    fn a_new_status_may_not_take_a_name_in_use_whatever_the_capitals() {
+        let mut workflow = Workflow::engineering();
+
+        let error = workflow
+            .add_status(status("in TEST", StatusCategory::Review))
+            .unwrap_err();
+
+        assert_eq!(
+            error,
+            DomainError::DuplicateStatusName {
+                name: "in TEST".to_owned()
+            }
+        );
+        assert_eq!(workflow.statuses().len(), 5);
+    }
+
+    #[test]
+    fn changing_a_status_replaces_its_name_category_and_color_in_place() {
+        let mut workflow = Workflow::engineering();
+        let in_test = id_of(&workflow, "In test");
+
+        workflow
+            .change_status(
+                in_test,
+                StatusName::parse("On the bench").unwrap(),
+                StatusCategory::Active,
+                Color::Teal,
+            )
+            .unwrap();
+
+        let changed = workflow.status(in_test).unwrap();
+        assert_eq!(changed.name().as_str(), "On the bench");
+        assert_eq!(changed.category(), StatusCategory::Active);
+        assert_eq!(changed.color(), Color::Teal);
+        assert_eq!(names(&workflow)[3], "On the bench");
+    }
+
+    #[test]
+    fn a_changed_status_may_keep_its_own_name() {
+        let mut workflow = Workflow::engineering();
+        let in_test = id_of(&workflow, "In test");
+
+        workflow
+            .change_status(
+                in_test,
+                StatusName::parse("IN TEST").unwrap(),
+                StatusCategory::Review,
+                Color::Red,
+            )
+            .unwrap();
+
+        assert_eq!(workflow.status(in_test).unwrap().color(), Color::Red);
+    }
+
+    #[test]
+    fn a_changed_status_may_not_take_the_name_of_another() {
+        let mut workflow = Workflow::engineering();
+        let in_test = id_of(&workflow, "In test");
+
+        let error = workflow
+            .change_status(
+                in_test,
+                StatusName::parse("Done").unwrap(),
+                StatusCategory::Review,
+                Color::Amber,
+            )
+            .unwrap_err();
+
+        assert_eq!(
+            error,
+            DomainError::DuplicateStatusName {
+                name: "Done".to_owned()
+            }
+        );
+    }
+
+    #[test]
+    fn the_only_todo_and_the_only_done_status_keep_their_categories() {
+        let mut workflow = Workflow::engineering();
+        let original = workflow.clone();
+
+        let todo_error = workflow
+            .change_status(
+                id_of(&original, "To do"),
+                StatusName::parse("To do").unwrap(),
+                StatusCategory::Active,
+                Color::Gray,
+            )
+            .unwrap_err();
+        let done_error = workflow
+            .change_status(
+                id_of(&original, "Done"),
+                StatusName::parse("Done").unwrap(),
+                StatusCategory::Review,
+                Color::Green,
+            )
+            .unwrap_err();
+
+        assert_eq!(
+            todo_error,
+            DomainError::MissingStatusCategory {
+                category: StatusCategory::Todo
+            }
+        );
+        assert_eq!(
+            done_error,
+            DomainError::MissingStatusCategory {
+                category: StatusCategory::Done
+            }
+        );
+        assert_eq!(workflow, original);
+    }
+
+    #[test]
+    fn changing_a_status_the_workflow_lacks_is_an_error() {
+        let mut workflow = Workflow::standard();
+        let foreign_id = StatusId::generate();
+
+        let error = workflow
+            .change_status(
+                foreign_id,
+                StatusName::parse("Elsewhere").unwrap(),
+                StatusCategory::Active,
+                Color::Gray,
+            )
+            .unwrap_err();
+
+        assert_eq!(
+            error,
+            DomainError::UnknownStatus {
+                status_id: foreign_id
+            }
+        );
+    }
+
+    #[test]
+    fn a_status_moves_to_another_place() {
+        let mut workflow = Workflow::engineering();
+
+        workflow
+            .move_status(id_of(&workflow, "In test"), 1)
+            .unwrap();
+
+        assert_eq!(
+            names(&workflow),
+            ["To do", "In test", "In progress", "In revision", "Done"]
+        );
+    }
+
+    #[test]
+    fn a_place_past_the_end_means_the_last_place() {
+        let mut workflow = Workflow::engineering();
+
+        workflow.move_status(id_of(&workflow, "To do"), 99).unwrap();
+
+        assert_eq!(names(&workflow).last(), Some(&"To do"));
+    }
+
+    #[test]
+    fn moving_a_status_the_workflow_lacks_is_an_error() {
+        let mut workflow = Workflow::standard();
+
+        assert!(matches!(
+            workflow.move_status(StatusId::generate(), 0),
+            Err(DomainError::UnknownStatus { .. })
+        ));
+    }
+
+    #[test]
+    fn a_removed_status_is_taken_out_and_returned() {
+        let mut workflow = Workflow::engineering();
+        let in_revision = id_of(&workflow, "In revision");
+
+        let removed = workflow.remove_status(in_revision).unwrap();
+
+        assert_eq!(removed.id(), in_revision);
+        assert_eq!(
+            names(&workflow),
+            ["To do", "In progress", "In test", "Done"]
+        );
+    }
+
+    #[test]
+    fn the_only_todo_status_cannot_be_removed() {
+        let mut workflow = Workflow::engineering();
+
+        let error = workflow
+            .remove_status(id_of(&workflow, "To do"))
+            .unwrap_err();
+
+        assert_eq!(
+            error,
+            DomainError::MissingStatusCategory {
+                category: StatusCategory::Todo
+            }
+        );
+        assert_eq!(workflow.statuses().len(), 5);
+    }
+
+    #[test]
+    fn a_done_status_can_be_removed_while_another_remains() {
+        let mut workflow = Workflow::engineering();
+        workflow
+            .add_status(status("Cancelled", StatusCategory::Done))
+            .unwrap();
+
+        workflow.remove_status(id_of(&workflow, "Done")).unwrap();
+
+        assert_eq!(names(&workflow).last(), Some(&"Cancelled"));
     }
 
     #[test]

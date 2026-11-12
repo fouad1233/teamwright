@@ -25,7 +25,11 @@ no input or output.
 - A project key has 2 to 6 characters, starts with a letter and contains only
   capital letters and digits.
 - A workflow has at least one "todo" status and at least one "done" status,
-  and no two statuses share a name.
+  and no two statuses share a name. Adding, changing, moving and removing a
+  status keep it that way; a changed status may keep its own name.
+- Categories are ordered by how far along the work is: todo, active, review,
+  done. A new status goes behind the last status that is as far along, or
+  less far, so a new "active" status lands in front of review and done.
 - A task number is handed out once and never reused.
 - A task that reaches a "done" status gets a completion time, and loses it
   when it leaves.
