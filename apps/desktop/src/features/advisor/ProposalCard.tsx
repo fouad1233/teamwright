@@ -11,6 +11,7 @@ import { Prose } from '@/shared/ui/Prose';
 import { MemberAvatar } from '../team/Assignee';
 import { EFFORT_CHOICES, LEFT_TO_THE_PROGRAM, modelChoices } from '../team/profileChoices';
 import { effortLabel, modelLabel } from '../team/teamModel';
+import { appearsAt, waitsForManager } from '../work/waitsForManager';
 import {
   approvalInWords,
   countNewMembers,
@@ -80,11 +81,17 @@ export function ProposalCard({ proposal, team, onApprove }: ProposalCardProps) {
   }
 
   return (
-    <section className={styles.card} aria-label="The proposal of the Advisor">
-      <p className={classNames('label', styles.proposes)}>The Advisor proposes</p>
-      <Prose text={proposal.summary} />
+    <section
+      // The proposal is large and holds two tables: the sun lights its head.
+      className={classNames(waitsForManager.frame, waitsForManager.lightAtHead, styles.card)}
+      aria-label="The proposal of the Advisor"
+    >
+      <div className={classNames(waitsForManager.part, styles.head)}>
+        <p className={classNames('label', styles.proposes)}>The Advisor proposes</p>
+        <Prose text={proposal.summary} />
+      </div>
 
-      <div className={styles.part}>
+      <div className={classNames(waitsForManager.part, styles.part)} style={appearsAt(1)}>
         <h4 className="label">
           Team · {newMembers === 0 ? 'nobody new' : teamInWords(newMembers)}
         </h4>
@@ -165,7 +172,7 @@ export function ProposalCard({ proposal, team, onApprove }: ProposalCardProps) {
         )}
       </div>
 
-      <div className={styles.part}>
+      <div className={classNames(waitsForManager.part, styles.part)} style={appearsAt(2)}>
         <h4 className="label">Plan · {planInWords(draft.tasks)}</h4>
         {draft.tasks.length > 0 && (
           <ol className={styles.tasks}>
@@ -238,7 +245,7 @@ export function ProposalCard({ proposal, team, onApprove }: ProposalCardProps) {
         )}
       </div>
 
-      <footer className={styles.footer}>
+      <footer className={classNames(waitsForManager.part, styles.footer)} style={appearsAt(3)}>
         <p className={styles.effect}>
           {isEmpty ? 'Nothing is left of the proposal.' : approvalInWords(draft, team)}
           {withoutOwner > 0 &&

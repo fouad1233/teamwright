@@ -1,15 +1,17 @@
 /* The questions of the Advisor. Like a question of a specialist, they wait
-   for the manager, so they carry the rule of brass down their side. */
+   for the manager, so they stand in the same frame
+   (WaitsForManager.module.css): the rule of gold, and the sun. */
 .card {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
-  padding: var(--space-3) 0 var(--space-1) var(--space-4);
-  border-left: 2px solid var(--brass);
+  padding: var(--space-4);
 }
 
-.asks {
-  color: var(--brass);
+/* Set inside the card, so that the gold for words wins over the faint ink
+   of the global label style, which is loaded after it. */
+.card .asks {
+  color: var(--brass-text);
 }
 
 .questions {
@@ -26,9 +28,11 @@
   column-gap: var(--space-2);
 }
 
+/* In the soft ink, because the first number stands where the sun is
+   brightest, and the faint ink would fall under 4.5 to 1 there. */
 .number {
   padding-top: 3px;
-  color: var(--ink-faint);
+  color: var(--ink-soft);
   font-family: var(--font-mono);
   font-size: 11px;
   letter-spacing: 0.04em;

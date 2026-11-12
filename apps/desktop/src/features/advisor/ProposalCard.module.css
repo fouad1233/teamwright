@@ -1,15 +1,24 @@
-/* What the Advisor proposes. It waits for the manager, so it carries the
-   rule of brass down its side, like a question does. */
+/* What the Advisor proposes. It waits for the manager, so it stands in the
+   frame of a question (WaitsForManager.module.css): the rule of gold, and
+   the sun on its head. */
 .card {
+  container-type: inline-size;
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
-  padding: var(--space-3) 0 var(--space-1) var(--space-4);
-  border-left: 2px solid var(--brass);
+  padding: var(--space-4);
 }
 
-.proposes {
-  color: var(--brass);
+.head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* Set inside the card, so that the gold for words wins over the faint ink
+   of the global label style, which is loaded after it. */
+.card .proposes {
+  color: var(--brass-text);
 }
 
 .part {
@@ -33,7 +42,9 @@
 
 .member {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) 124px 124px auto;
+  /* The first column is as wide as the numbers of the tasks below, so the
+     names of the members and the titles of the tasks start on one line. */
+  grid-template-columns: 22px minmax(0, 1fr) 124px 124px auto;
   align-items: start;
   column-gap: var(--space-3);
   padding: var(--space-3) 0;
@@ -140,6 +151,19 @@
   overflow: hidden;
   color: var(--ink-faint);
   text-overflow: ellipsis;
+}
+
+/* In a narrow window the columns of the plan give up some of their room,
+   and a title that still does not fit goes on to a second line, rather than
+   losing its end. */
+@container (width < 760px) {
+  .task {
+    grid-template-columns: 22px minmax(0, 1fr) 148px 72px 96px auto;
+  }
+
+  .title {
+    white-space: normal;
+  }
 }
 
 .description {

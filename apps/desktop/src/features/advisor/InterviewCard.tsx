@@ -6,6 +6,7 @@ import { Button } from '@/shared/ui/Button';
 import { TextArea } from '@/shared/ui/Field';
 
 import { OptionList } from '../work/OptionList';
+import { appearsAt, waitsForManager } from '../work/waitsForManager';
 import { answersOf, emptyAnswers, isAnswered, type AnswerDraft } from './advisorModel';
 import styles from './InterviewCard.module.css';
 
@@ -51,8 +52,12 @@ export function InterviewCard({ interview, onAnswer }: InterviewCardProps) {
   }
 
   return (
-    <form className={styles.card} onSubmit={handleSubmit}>
-      <p className={classNames('label', styles.asks)}>
+    <form
+      // Several questions make a tall card: the sun lights its head.
+      className={classNames(waitsForManager.frame, waitsForManager.lightAtHead, styles.card)}
+      onSubmit={handleSubmit}
+    >
+      <p className={classNames('label', waitsForManager.part, styles.asks)}>
         The Advisor asks{' '}
         {interview.questions.length === 1
           ? 'one question'
@@ -67,7 +72,12 @@ export function InterviewCard({ interview, onAnswer }: InterviewCardProps) {
           const answersInWords = !hasOptions || draft.pick === 'own words';
           return (
             // The questions of an interview never change, so their place identifies them.
-            <li key={place} className={styles.question}>
+            // They come up after the words, one after the other.
+            <li
+              key={place}
+              className={classNames(waitsForManager.part, styles.question)}
+              style={appearsAt(place + 1)}
+            >
               <span className={styles.number} aria-hidden>
                 {number}
               </span>
@@ -109,7 +119,10 @@ export function InterviewCard({ interview, onAnswer }: InterviewCardProps) {
         })}
       </ol>
 
-      <div className={styles.actions}>
+      <div
+        className={classNames(waitsForManager.part, styles.actions)}
+        style={appearsAt(interview.questions.length + 1)}
+      >
         {open > 0 && (
           <span className={styles.left}>
             {open === 1
