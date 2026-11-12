@@ -29,7 +29,8 @@
   display: flex;
   flex: none;
   align-items: center;
-  gap: 2px;
+  /* Room between the tab and the mark of its menu, so the two read apart. */
+  gap: var(--space-1);
 }
 
 .dragged {
@@ -82,6 +83,7 @@
 /* A view that leaves tasks out says so on its tab. */
 .filtered {
   display: inline-flex;
+  margin-left: 2px;
   color: var(--ink-soft);
 }
 
@@ -98,7 +100,7 @@
   flex: none;
   align-items: center;
   justify-content: center;
-  width: 18px;
+  width: 20px;
   height: 22px;
   border-radius: var(--radius-control);
   color: var(--ink-faint);
@@ -226,4 +228,28 @@
 
 .add {
   margin-top: 1px;
+}
+
+/* The box of a choice that is switched on or off, such as hiding the
+   finished tasks. It is there while it is empty. */
+.box {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border: 1.5px solid var(--ink-faint);
+  border-radius: 3px;
+}
+
+.box[data-checked='true'] {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--ink-inverse);
+}
+
+.box svg {
+  width: 10px;
+  height: 10px;
+  stroke-width: 3;
 }

@@ -221,11 +221,14 @@ function FilterItems({ filter, onFilter }: FilterItemsProps) {
           event.preventDefault();
         }}
       >
-        <span className={styles.mark} />
+        {/* A box that is there while it is empty, so that the line reads as
+            something to switch on. */}
+        <span className={styles.mark}>
+          <span className={styles.box} data-checked={filter.hidesFinished}>
+            {filter.hidesFinished && <Check aria-hidden />}
+          </span>
+        </span>
         <span className={menuStyles.label}>Hide finished tasks</span>
-        <DropdownMenu.ItemIndicator className={menuStyles.check}>
-          <Check />
-        </DropdownMenu.ItemIndicator>
       </DropdownMenu.CheckboxItem>
     </>
   );
