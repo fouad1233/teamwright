@@ -97,11 +97,9 @@
   gap: 6px;
 }
 
+/* What the specialist said on the way: softer than its report. */
 .said {
   color: var(--ink-soft);
-  line-height: 1.5;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
 }
 
 /* The use of a tool: its name as a label, what it was used on in the
@@ -152,20 +150,43 @@
   color: var(--danger);
 }
 
+/* A note of the program about the run itself. It is set like the use of
+   a tool, in one line, and opens to its whole text. */
 .notice {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  min-width: 0;
   color: var(--ink-faint);
+}
+
+.noticeName {
+  flex: none;
+  width: 52px;
+  text-align: left;
+}
+
+.noticeName:hover {
+  color: var(--ink);
+}
+
+.noticeText {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
   font-size: var(--text-small);
   line-height: 1.5;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.notice[data-open] .noticeText {
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .reportTitle {
   margin-top: var(--space-1);
-}
-
-.report {
-  line-height: 1.55;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
 }
 
 .ending {

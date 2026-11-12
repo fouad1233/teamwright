@@ -1,0 +1,176 @@
+/* Running text that a specialist wrote. It is set like a note in the
+   margin of a drawing: the body size, calm headings, code in the
+   monospace. */
+.prose {
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.prose > * + * {
+  margin-top: var(--space-2);
+}
+
+/* A heading in a report is a caption, not a title: the panel already has
+   one. */
+.prose h1,
+.prose h2,
+.prose h3,
+.prose h4,
+.prose h5,
+.prose h6 {
+  font-size: inherit;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.prose h1,
+.prose h2 {
+  font-size: var(--text-strong);
+}
+
+.prose > h1:not(:first-child),
+.prose > h2:not(:first-child),
+.prose > h3:not(:first-child),
+.prose > h4:not(:first-child) {
+  margin-top: var(--space-4);
+}
+
+.prose strong {
+  font-weight: 600;
+}
+
+.prose em {
+  font-style: italic;
+}
+
+.prose del {
+  color: var(--ink-faint);
+}
+
+.prose ul,
+.prose ol {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-left: 20px;
+}
+
+.prose ul {
+  list-style: disc;
+}
+
+.prose ol {
+  list-style: decimal;
+}
+
+.prose li::marker {
+  color: var(--ink-faint);
+}
+
+.prose li > ul,
+.prose li > ol {
+  margin-top: 2px;
+}
+
+.prose li > p + p {
+  margin-top: var(--space-1);
+}
+
+/* A list of things to do has boxes instead of bullets. */
+.prose :global(.contains-task-list) {
+  padding-left: 0;
+  list-style: none;
+}
+
+.box {
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  margin-right: var(--space-2);
+  border: 1px solid var(--ink-faint);
+  border-radius: 2px;
+  vertical-align: -1px;
+}
+
+.box[data-checked] {
+  border-color: var(--ink-soft);
+  background: var(--ink-soft);
+}
+
+/* A name in code is a chip: the same faint tint in the dark and in the
+   light, so that it reads as one thing. */
+.prose code {
+  padding: 1px 3px;
+  border-radius: 3px;
+  background: var(--rule);
+  font-family: var(--font-mono);
+  font-size: var(--text-small);
+}
+
+.prose pre {
+  padding: var(--space-2) var(--space-3);
+  overflow-x: auto;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  background: var(--ground-sunken);
+  line-height: 1.5;
+}
+
+.prose pre code {
+  padding: 0;
+  background: none;
+  overflow-wrap: normal;
+  white-space: pre;
+}
+
+.prose blockquote {
+  padding-left: var(--space-3);
+  border-left: 2px solid var(--rule-strong);
+  color: var(--ink-soft);
+}
+
+.prose blockquote > * + * {
+  margin-top: var(--space-2);
+}
+
+.prose hr {
+  height: 0;
+  margin: var(--space-3) 0;
+  border: 0;
+  border-top: 1px solid var(--rule);
+}
+
+.wide {
+  overflow-x: auto;
+}
+
+.prose table {
+  border-collapse: collapse;
+  font-size: var(--text-small);
+}
+
+.prose th,
+.prose td {
+  padding: var(--space-1) var(--space-4) var(--space-1) 0;
+  border-bottom: 1px solid var(--rule);
+  text-align: left;
+  vertical-align: top;
+}
+
+.prose th {
+  border-bottom-color: var(--rule-strong);
+  color: var(--ink-soft);
+  font-weight: 600;
+}
+
+/* The address of a link, which cannot be followed from here. */
+.address {
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: var(--text-small);
+}
+
+/* Something the text asked for and the window left out. */
+.left {
+  color: var(--ink-faint);
+}

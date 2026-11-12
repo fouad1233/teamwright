@@ -60,13 +60,14 @@ export function scriptForTask(task: Task): Script {
       { after: 900, act: { kind: 'finish', id: 'write' } },
     ],
     endsAfter: 600,
+    // Written the way a model writes a report: in Markdown.
     answer: [
       `Done: ${task.title}.`,
       '',
-      `1. What I did: I worked the task out and wrote the result into ${file}.`,
-      `2. Files: ${file} (new).`,
-      '3. What I decided on my own: nothing that changes the plan.',
-      '4. What is open: please read the result, and accept it or send it back with what to change.',
+      `1. **What I did:** I worked the task out and wrote the result into \`${file}\`.`,
+      `2. **Files:** \`${file}\` (new).`,
+      '3. **What I decided on my own:** nothing that changes the plan.',
+      '4. **What is open:** please read the result, and accept it or send it back with what to change.',
     ].join('\n'),
     tokens: { input: 42, output: 880, cacheRead: 21_500, cacheWritten: 6400 },
   };

@@ -6,6 +6,7 @@ import type { Conversation, Project, Step, Turn } from '@/shared/api/types';
 import { classNames } from '@/shared/lib/classNames';
 import { formatMoment } from '@/shared/lib/format';
 import { Button } from '@/shared/ui/Button';
+import { Prose } from '@/shared/ui/Prose';
 
 import { MemberAvatar } from '../team/Assignee';
 import { useTeamMember } from '../team/TeamContext';
@@ -144,9 +145,7 @@ function TurnView({ turn }: { turn: Turn }) {
       {turn.answer !== '' && (
         <>
           <h4 className={classNames('label', styles.reportTitle)}>Report</h4>
-          <p className={styles.report} data-selectable>
-            {turn.answer}
-          </p>
+          <Prose text={turn.answer} />
         </>
       )}
 
@@ -179,9 +178,9 @@ function StepView({ step }: { step: Step }) {
   switch (step.kind) {
     case 'text':
       return (
-        <p className={styles.said} data-selectable>
-          {step.text}
-        </p>
+        <div className={styles.said}>
+          <Prose text={step.text} />
+        </div>
       );
     case 'tool':
       return (
@@ -201,8 +200,35 @@ function StepView({ step }: { step: Step }) {
         </p>
       );
     case 'notice':
-      return <p className={styles.notice}>{step.message}</p>;
+      return <Notice message={step.message} />;
   }
+}
+
+/**
+ * Something the program said about the run itself: a retry, a warning about
+ * its own setup. It is rarely about the work, so it takes one line until
+ * the manager asks for all of it.
+ */
+function Notice({ message }: { message: string }) {
+  const [isOpen, setIsOpen] = useState(false);
+
+  return (
+    <p className={styles.notice} data-open={isOpen ? '' : undefined}>
+      <button
+        type="button"
+        className={classNames('label', styles.noticeName)}
+        aria-expanded={isOpen}
+        onClick={() => {
+          setIsOpen(!isOpen);
+        }}
+      >
+        Note
+      </button>
+      <span className={styles.noticeText} title={isOpen ? undefined : message} data-selectable>
+        {message}
+      </span>
+    </p>
+  );
 }
 
 /** The mark at the end of the line of a tool: still running, done, or failed. */
