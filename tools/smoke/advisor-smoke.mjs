@@ -6,16 +6,17 @@
  * follows the Advisor to its proposal: if the Advisor asks questions, it
  * answers them the way the Advisor recommends, and it checks that nothing
  * is added to the project before the proposal is approved. Then it approves
- * the proposal with the button of the interface, checks that the members
- * and the tasks are there as proposed, and starts the application again to
+ * the proposal with the button of the interface, and checks that the
+ * members and the tasks are there as proposed. Then it asks the Advisor for
+ * more, approves what the Advisor adds, and starts the application again to
  * see that all of it is still there.
  *
  * Like the test of a real specialist next to it, this one is not free. It
  * runs the Claude Code that is installed on this computer, signed in as
- * whoever is signed in there. Planning takes two or three turns, and they
- * use a part of that account's plan. So it is not part of any automatic
- * check: run it by hand after a change to the Advisor. It prints what every
- * turn used.
+ * whoever is signed in there. The two rounds of planning take three to five
+ * turns, and they use a part of that account's plan. So it is not part of
+ * any automatic check: run it by hand after a change to the Advisor. It
+ * prints what every turn used.
  *
  * Usage:
  *   node tools/smoke/advisor-smoke.mjs <path-to-teamwright-desktop.exe> [folder-for-pictures]
@@ -414,6 +415,9 @@ try {
         ),
       JSON.stringify(team.map((member) => [member.name, member.model, member.effort])),
     );
+    // What the project is expected to hold at the end of the test.
+    let expectedMembers = team.length;
+    let expectedTasks = tasks.length;
     const firstStatus = project.statuses[0];
     const byTitle = (title) => tasks.find((task) => task.title === title);
     check(
@@ -469,6 +473,87 @@ try {
     await window.waitForText(proposal.tasks[0].title);
     check('the board shows the tasks of the plan without being loaded again', true);
     await picture('board');
+
+    // A later round. The manager asks for more. The Advisor is told that
+    // its proposal was approved, who is on the team and which tasks exist,
+    // and proposes what is to be added: nobody and nothing a second time.
+    await command('reply', {
+      conversationId: conversation.id,
+      message:
+        'One more thing: the device should also run from a battery for a day. ' +
+        'Add what that needs to the plan. The team stays as it is.',
+    });
+    conversation = await waitForEnd(conversation.id);
+    for (
+      let asked = 0;
+      conversation.turns.at(-1)?.interview && asked < MOST_INTERVIEWS;
+      asked += 1
+    ) {
+      report(`turn ${conversation.turns.length}`, conversation.turns.at(-1));
+      interviews += 1;
+      await command('answer_interview', {
+        conversationId: conversation.id,
+        answers: conversation.turns
+          .at(-1)
+          .interview.questions.map((question) =>
+            question.options.length > 0
+              ? { option: question.recommended ?? 0, note: '' }
+              : { option: null, note: 'Choose what is sensible.' },
+          ),
+      });
+      conversation = await waitForEnd(conversation.id);
+    }
+    report(`turn ${conversation.turns.length}`, conversation.turns.at(-1));
+    const addition = conversation.turns.at(-1)?.proposal;
+    check(
+      'asked for more, the Advisor proposes what is to be added',
+      addition !== null &&
+        addition !== undefined &&
+        addition.approvedAt === null &&
+        addition.tasks.length >= 1,
+      JSON.stringify(conversation.turns.at(-1)).slice(0, 400),
+    );
+    if (addition) {
+      for (const member of addition.members) {
+        console.log(`        + member: ${member.name}: ${member.reason}`);
+      }
+      for (const [place, task] of addition.tasks.entries()) {
+        console.log(`        + ${place + 1}. ${task.title} [${ownerOf(task)}]`);
+      }
+      const onTeam = new Set(team.map((member) => member.name.toLowerCase()));
+      check(
+        'it names nobody who is on the team already',
+        addition.members.every((member) => !onTeam.has(member.name.toLowerCase())),
+        JSON.stringify(addition.members.map((member) => member.name)),
+      );
+      // The program cannot tell a task that repeats another in other words.
+      // That the Advisor does not hand in its whole plan again shows in the
+      // number of tasks: what a battery needs is less than the device.
+      check(
+        'it does not propose the whole plan a second time',
+        addition.tasks.length < proposal.tasks.length,
+        `${addition.tasks.length} tasks after ${proposal.tasks.length}`,
+      );
+      check(
+        'it gives new tasks to members who are on the team already',
+        addition.tasks.some(
+          (task) => task.owner?.kind === 'member' && onTeam.has(task.owner.name.toLowerCase()),
+        ),
+        JSON.stringify(addition.tasks.map(ownerOf)),
+      );
+      await command('approve_proposal', {
+        conversationId: conversation.id,
+        proposal: { members: addition.members, tasks: addition.tasks },
+      });
+      expectedMembers = team.length + addition.members.length;
+      expectedTasks = tasks.length + addition.tasks.length;
+      check(
+        'approving it adds to the team and to the tasks that are there, and adds nobody twice',
+        (await command('list_members', { projectId: project.id })).length === expectedMembers &&
+          (await command('list_tasks', { projectId: project.id })).length === expectedTasks,
+        `expected ${expectedMembers} members and ${expectedTasks} tasks`,
+      );
+    }
     window.close();
 
     // Second run: the plan and its record are still there.
@@ -483,16 +568,16 @@ try {
       kept?.isWithAdvisor === true &&
         kept.turns.length === conversation.turns.length &&
         kept.turns.filter((turn) => turn.interview?.answers).length === interviews &&
-        typeof kept.turns.at(-1)?.proposal?.approvedAt === 'string' &&
-        kept.turns.at(-1).proposal.tasks.length === proposal.tasks.length,
+        kept.turns.filter((turn) => typeof turn.proposal?.approvedAt === 'string').length >= 1 &&
+        kept.turns.some((turn) => turn.proposal?.tasks.length === proposal.tasks.length),
       JSON.stringify(kept)?.slice(0, 300),
     );
     check(
       'and so do the team and the tasks it added',
       (await window.command('list_members', { projectId: project.id })).ok?.length ===
-        proposal.members.length &&
+        expectedMembers &&
         (await window.command('list_tasks', { projectId: project.id })).ok?.length ===
-          proposal.tasks.length,
+          expectedTasks,
     );
   }
   window.close();
