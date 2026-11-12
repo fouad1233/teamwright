@@ -65,6 +65,12 @@ What each line is for:
   and is not affected.
 - With the GNU toolchain the application needs `WebView2Loader.dll` next to
   the executable. The build puts it there.
+- The linker prints a warning when it links the application:
+  `.rsrc merge failure: multiple non-default manifests`. MinGW adds a
+  manifest of its own to every program, next to the one Tauri gives the
+  application, and the linker cannot tell which of the two is the default.
+  Both end up in the program, the application's first. The program runs,
+  and the warning can be left alone.
 - Release builds for distribution are made with the Microsoft toolchain on a
   build server, not with this setup.
 
