@@ -1,0 +1,45 @@
+.points {
+  height: 28px;
+  padding: 0 var(--space-2);
+  border: none;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  transition: background-color 100ms ease;
+}
+
+.points::placeholder {
+  color: var(--ink-faint);
+}
+
+.points:hover {
+  background: var(--hover);
+}
+
+.points:focus-visible {
+  outline: 2px solid var(--brass-soft);
+  outline-offset: 0;
+  background: var(--ground);
+}
+
+/* In a row the points are counted: the monospace, set to the right, so
+   that the units stand under each other. */
+.row {
+  width: 100%;
+  font-family: var(--font-mono);
+  font-size: var(--text-small);
+  text-align: right;
+}
+
+/* In the panel the field lines up with the values around it. */
+.panel {
+  width: 100%;
+  margin-left: calc(-1 * var(--space-2));
+}
+
+.notUnderstood,
+.notUnderstood:focus-visible {
+  outline: 2px solid var(--danger);
+  outline-offset: 0;
+}

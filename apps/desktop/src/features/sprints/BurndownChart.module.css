@@ -1,0 +1,60 @@
+.chart {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+}
+
+.plot {
+  display: block;
+  overflow: visible;
+}
+
+.base {
+  stroke: var(--rule-strong);
+  stroke-width: 1;
+}
+
+.tick {
+  stroke: var(--rule-strong);
+  stroke-width: 1;
+}
+
+/* The pace the dates ask for: a hairline, quieter than what happened. */
+.ideal {
+  fill: none;
+  stroke: var(--ink-faint);
+  stroke-width: 1;
+}
+
+/* What really remained, in ink. */
+.actual {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1.5;
+  stroke-linejoin: miter;
+}
+
+/* Today is the one point of attention of the chart, so it gets the brass. */
+.today {
+  stroke: var(--brass);
+  stroke-width: 1;
+}
+
+.end {
+  fill: var(--brass);
+}
+
+.caption {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.left {
+  color: var(--ink-soft);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}

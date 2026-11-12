@@ -1,0 +1,80 @@
+.completed {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.title {
+  padding: 0 var(--space-2) var(--space-2);
+  border-bottom: 1px solid var(--rule-strong);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+}
+
+.sprint {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 132px 112px minmax(120px, 280px);
+  align-items: center;
+  gap: 0 var(--space-4);
+  height: 36px;
+  padding: 0 var(--space-2);
+  border-bottom: 1px solid var(--rule);
+}
+
+.name {
+  overflow: hidden;
+  font-weight: 550;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dates,
+.summary {
+  color: var(--ink-soft);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.summary {
+  text-align: right;
+}
+
+/* A bar is what the sprint took on, as a hollow part, filled in ink as far
+   as it got. Every bar is measured on the scale of the largest sprint. */
+.bar {
+  position: relative;
+  height: 10px;
+}
+
+.committed,
+.done {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  border-radius: 1px;
+}
+
+.committed {
+  width: calc(var(--committed) * 100%);
+  border: 1px solid var(--ink-faint);
+}
+
+.done {
+  width: calc(var(--completed) * 100%);
+  background: var(--ink);
+}
+
+@container backlog (width < 760px) {
+  .sprint {
+    grid-template-columns: minmax(0, 1fr) 96px minmax(64px, 120px);
+  }
+
+  .dates {
+    display: none;
+  }
+}

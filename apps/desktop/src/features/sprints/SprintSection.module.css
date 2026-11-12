@@ -1,0 +1,99 @@
+/* A section is a part of the sheet: its heading stands on a strong rule,
+   its rows on hairlines. Nothing boxes it in. */
+.section {
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius-card);
+  transition: background-color 100ms ease;
+}
+
+/* A row held over a section shows where it will land. */
+.dropTarget {
+  background: var(--hover);
+  outline: 1px solid var(--rule-strong);
+  outline-offset: 4px;
+}
+
+/* The heading keeps room for its facts on one line; where the sheet is too
+   narrow for that, the chart and the buttons move under it. */
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-3) var(--space-5);
+  padding: 0 var(--space-1) var(--space-3) var(--space-2);
+  border-bottom: 1px solid var(--rule-strong);
+}
+
+.heading {
+  display: flex;
+  flex: 1 1 360px;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.titleLine {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+}
+
+.name {
+  overflow: hidden;
+  font-size: var(--text-strong);
+  font-weight: 650;
+  letter-spacing: -0.005em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.facts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+
+.fact {
+  display: inline-flex;
+  align-items: center;
+}
+
+/* Facts are parted by a short upright rule, as dimensions are on a drawing. */
+.separator {
+  width: 1px;
+  height: 9px;
+  margin: 0 var(--space-2);
+  background: var(--rule-strong);
+}
+
+.goal {
+  max-width: 64ch;
+  color: var(--ink-soft);
+  line-height: 1.5;
+}
+
+.actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.rows {
+  display: flex;
+  flex-direction: column;
+}
+
+.empty {
+  display: flex;
+  align-items: center;
+  height: 44px;
+  padding: 0 var(--space-2);
+  border-bottom: 1px solid var(--rule);
+  color: var(--ink-faint);
+}

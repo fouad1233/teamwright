@@ -1,0 +1,29 @@
+/* The backlog is a sheet to read down. The rows and sections size
+   themselves on its width, not on the window's. */
+.backlog {
+  container: backlog / inline-size;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.sheet {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-7);
+  max-width: 1120px;
+  padding: var(--space-6) var(--space-5) var(--space-8);
+}
+
+/* The active sprint is where the work is held: its state is set in brass. */
+.active {
+  color: var(--brass-text, var(--brass));
+}
+
+.composer {
+  padding-top: var(--space-1);
+}
+
+.note {
+  padding: var(--space-5);
+  color: var(--ink-soft);
+}

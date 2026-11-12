@@ -1,0 +1,116 @@
+/* A row is one line of a ruled sheet: the cells of every row stand in the
+   same columns, so that references, points and statuses read down. */
+.row {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr) 196px 56px 148px 28px;
+  align-items: center;
+  gap: 0 var(--space-3);
+  height: 38px;
+  padding: 0 var(--space-1) 0 var(--space-2);
+  border-bottom: 1px solid var(--rule);
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: background-color 80ms ease;
+}
+
+.row:hover {
+  background: var(--hover);
+}
+
+.row:focus-visible {
+  outline-offset: -2px;
+}
+
+/* The place a row leaves while it is dragged stays as a faint outline of
+   it, so that the eye keeps where it came from. */
+.lifted {
+  opacity: 0.35;
+}
+
+/* The copy that follows the pointer is a strip of paper lifted off the
+   sheet. */
+.dragged {
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius-card);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-lifted);
+  cursor: grabbing;
+}
+
+.reference {
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+
+.title {
+  overflow: hidden;
+  color: var(--ink);
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.assignee {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.assigneeName {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.points {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.pointsText {
+  padding-right: var(--space-2);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: var(--text-small);
+}
+
+.status {
+  display: flex;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* The menu of a row shows itself when the row is pointed at or reached
+   with the keyboard, so that a long list is not a column of dots. */
+.menu {
+  display: flex;
+  justify-content: flex-end;
+  opacity: 0;
+  transition: opacity 80ms ease;
+}
+
+.row:hover .menu,
+.row:focus-within .menu,
+.menu:has([data-state='open']) {
+  opacity: 1;
+}
+
+/* In a narrow window a row keeps what tells the tasks apart: who has a
+   task shows as the avatar alone, and the status as its mark. */
+@container backlog (width < 760px) {
+  .row {
+    grid-template-columns: 64px minmax(0, 1fr) 20px 48px 16px 28px;
+  }
+
+  .assigneeName {
+    display: none;
+  }
+
+  .status {
+    width: 12px;
+  }
+}

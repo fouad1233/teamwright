@@ -12,6 +12,7 @@ import { BoardView } from '../board/BoardView';
 import { CalendarView } from '../calendar/CalendarView';
 import { GanttView } from '../gantt/GanttView';
 import { OfficeView } from '../office/OfficeView';
+import { BacklogView } from '../sprints/BacklogView';
 import { TaskListView } from '../tasks/TaskListView';
 import { TaskPanel } from '../tasks/TaskPanel';
 import { useTasks } from '../tasks/taskQueries';
@@ -30,6 +31,7 @@ import { TaskTally } from './TaskTally';
 /** The ways a project can be looked at, in the order of their tabs. */
 const VIEWS: { view: ProjectView; label: string }[] = [
   { view: 'board', label: 'Board' },
+  { view: 'backlog', label: 'Backlog' },
   { view: 'list', label: 'List' },
   { view: 'gantt', label: 'Gantt' },
   { view: 'calendar', label: 'Calendar' },
@@ -169,6 +171,8 @@ function ChosenView({ view, project, tasks }: ChosenViewProps) {
   switch (view) {
     case 'board':
       return <BoardView project={project} tasks={tasks} />;
+    case 'backlog':
+      return <BacklogView project={project} tasks={tasks} />;
     case 'list':
       return <TaskListView project={project} tasks={tasks} />;
     case 'gantt':

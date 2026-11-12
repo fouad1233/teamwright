@@ -5,6 +5,7 @@ import type { Id } from '@/shared/api/types';
 /** The ways a project can be looked at. */
 export const PROJECT_VIEWS = [
   'board',
+  'backlog',
   'list',
   'gantt',
   'calendar',
