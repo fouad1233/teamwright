@@ -32,3 +32,4 @@ two readers.
 | 4 | [The first specialist goes to work](04-the-first-specialist.md) | 12 November 2026 |
 | 5 | [What a specialist can reach](05-what-a-specialist-can-reach.md) | 12 November 2026 |
 | 6 | [The Advisor, and a lamp](06-the-advisor.md) | 12 November 2026 |
+| 7 | [Many hands](07-many-hands.md) | 12 November 2026 |
