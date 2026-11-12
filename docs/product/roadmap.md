@@ -29,6 +29,9 @@ A desktop app that opens and manages projects and tasks without any AI.
 - ✅ Board with drag and drop, list view, task panel
 - ✅ Demo backend, so the interface also runs in a plain browser
 - ✅ Smoke test that drives the real application
+- ✅ A team for every project: AI specialists and people that tasks can be
+  given to. They cannot work yet
+- ✅ Screenshots of the real application, taken by a tool
 - ⬜ Editing the statuses of a workflow
 - ⬜ Activity history of a task
 - ⬜ Renaming and archiving a project from the interface
@@ -42,7 +45,7 @@ A single specialist that really works through Claude Code.
 - ⬜ Capture token usage per turn and reported plan limits
 - ⬜ Specialist profiles: built-in set and user-defined
 - ⬜ Discover the user's skills, plugins and MCP connectors
-- ⬜ Chat with a teammate; assign it a task from the board
+- ⬜ Chat with a teammate; let it carry out a task that was given to it
 
 ## M3 · The Advisor ⬜
 
@@ -96,8 +99,8 @@ Several specialists working together with the manager in the loop.
 
 Ideas that are recorded but not scheduled:
 
-- Human teammates: other people on a project who can be assigned tasks next
-  to the agents
+- People on the team who use Teamwright themselves, from their own
+  computers. Today a person on a team is a name that tasks can be given to
 - Voice conversation with the Advisor
 - Calendar view, whiteboards and documents inside projects
 - Automation rules

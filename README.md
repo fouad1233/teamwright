@@ -16,9 +16,10 @@ with a clear decision request whenever a choice is yours to make.
 
 > **Status: pre-alpha.** The project started on 11 November 2026 and is built
 > in the open, one small commit at a time. What works today is the ground
-> floor: a desktop app that keeps projects and tasks in a local database and
-> shows them on a board and in a list. The AI team described below is the
-> next milestone and does not exist yet. There is no installer; the app can
+> floor: a desktop app that keeps projects and tasks in a local database,
+> shows them on a board and in a list, and lets you put together a team and
+> give tasks to its members. The members cannot work yet: the AI team
+> described below is the next milestone. There is no installer; the app can
 > be [built from source](docs/development/README.md). The
 > [roadmap](docs/product/roadmap.md) says exactly what is done.
 
@@ -34,9 +35,15 @@ with a clear decision request whenever a choice is yours to make.
   <img alt="A task opened from the board: its status, assignee, priority, estimate and dates, a description, and the two tasks it waits for" src="docs/screenshots/task-light.png">
 </picture>
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/team-dark.png">
+  <img alt="The team of the sample project: the manager and three AI specialists, each with what it is there for and a tally of its tasks" src="docs/screenshots/team-light.png">
+</picture>
+
 These are pictures of the application as it runs today, on a sample project.
 They are [taken from the real program](docs/screenshots/README.md), not drawn.
-The team is not in them, because the team is not built yet.
+The specialists in them have names and tasks, and that is all they have so
+far: none of them can work yet.
 
 ## The problem
 

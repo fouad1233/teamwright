@@ -1,8 +1,8 @@
 # User manual
 
 This manual describes what Teamwright can do today. It grows with every
-milestone. The AI team is not part of the application yet; this version
-plans and tracks projects.
+milestone. This version plans and tracks projects and lets you put together
+a team. The members of the team cannot work yet.
 
 ## Projects
 
@@ -30,10 +30,12 @@ the project that is open. Teamwright reopens the last project you worked in.
 
 ## The header of a project
 
-Next to the name of the project is a row of small blocks, one for every task,
-in the color of the task's status. A hollow block is a task that has not been
-started. The count next to it says how many tasks there are and how many are
-done.
+Next to the name of the project are its key and, if the project has a team,
+the avatars of the members. Pressing them shows the team.
+
+On the right is a row of small blocks, one for every task, in the color of
+the task's status. A hollow block is a task that has not been started. The
+count next to it says how many tasks there are and how many are done.
 
 ## Tasks
 
@@ -57,7 +59,7 @@ everything about it:
 | Field | What it is |
 |---|---|
 | Status | Where the task stands. Choosing another status moves the task. |
-| Assignee | Who is responsible. Today that is you or nobody; team members will appear here. |
+| Assignee | Who is responsible: you, a member of [the team](#the-team), or nobody. |
 | Priority | Urgent, high, normal or low. Urgent and high show a colored flag. |
 | Estimate | The expected working time. Type it as `90m`, `2h` or `1h 30m`. |
 | Start, Due | The planned dates. A task cannot start after it is due. |
@@ -81,6 +83,50 @@ Teamwright refuses a dependency that would make tasks wait for each other in
 a circle, and says which tasks are involved: *"SSN-1 cannot wait for SSN-3,
 because SSN-3 already waits for SSN-1."*
 
+## The team
+
+A project has a team: the help you bring in. A member of the team is an AI
+specialist or a person, and a task can be given to either.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="../screenshots/team-dark.png">
+  <img alt="The Team view: you as the manager, then the members of the team" src="../screenshots/team-light.png">
+</picture>
+
+**What a member can do today.** A member can be given tasks, and that is
+all. An AI specialist does not carry out its tasks yet; that is the next
+milestone. A person is a name: Teamwright does not notify them.
+
+**Add a member** with *Add member* at the bottom of the *Team* view.
+
+- **Kind.** *AI specialist* or *Person*. It cannot be changed afterwards.
+- **Name.** What the member is called on the team. For a specialist this is
+  usually its discipline, as in "Hardware engineer". No two members of a
+  team can have the same name.
+- **Responsible for.** A sentence about what the member is on the team for.
+
+Teamwright gives every member a color that sets it apart from the others.
+
+**Change or remove a member** from the menu with the three dots in its row.
+Removing a member gives its tasks to nobody. Teamwright says how many tasks
+that is, and asks first.
+
+**Give a task to a member** by opening the task and choosing the member
+under *Assignee*.
+
+**How members are shown.** Where there is no room for a name, a member is
+shown by its initials in its color.
+
+| Shape | Who |
+|---|---|
+| A brass circle | You, the manager |
+| A block with initials | An AI specialist |
+| A circle with initials | A person |
+| A dashed circle | Nobody |
+
+In the *Team* view, the blocks next to a member are its tasks, in the colors
+of their statuses.
+
 ## Views
 
 **Board.** One lane for every status. Drag a card to another lane to change
@@ -93,6 +139,9 @@ red.
 </picture>
 
 **List.** One table of all tasks, grouped by status.
+
+**Team.** You and the members of the team, each with its tasks. See
+[the team](#the-team).
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="../screenshots/list-dark.png">
