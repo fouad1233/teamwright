@@ -564,6 +564,89 @@ try {
     JSON.stringify([answersToNothing, approvalOfNothing]),
   );
 
+  // The views of a project: six to start with, and more that the manager
+  // adds, names, filters, orders and removes.
+  const viewsOf = async () => (await window.command('list_views', { projectId: project.id })).ok;
+  const startingViews = await viewsOf();
+  check(
+    'a project starts with six views, one of each kind, named after its kind',
+    startingViews?.map((view) => `${view.kind}: ${view.name}`).join(', ') ===
+      'board: Board, backlog: Backlog, list: List, gantt: Gantt, calendar: Calendar, dashboard: Dashboard',
+    JSON.stringify(startingViews),
+  );
+  const secondBoard = await window.command('add_view', {
+    input: { projectId: project.id, kind: 'board' },
+  });
+  check(
+    'a second board gets a number, comes last and shows every task',
+    secondBoard.ok?.name === 'Board 2' &&
+      secondBoard.ok.filter.assignee.kind === 'anyone' &&
+      secondBoard.ok.filter.hidesFinished === false &&
+      (await viewsOf())?.at(-1)?.id === secondBoard.ok.id,
+    JSON.stringify(secondBoard),
+  );
+  const secondBacklog = await window.command('add_view', {
+    input: { projectId: project.id, kind: 'backlog' },
+  });
+  const nameTaken = await window.command('rename_view', {
+    viewId: secondBoard.ok.id,
+    name: 'gantt',
+  });
+  check(
+    'a second backlog and a name that is taken, whatever the capitals, are refused',
+    secondBacklog.refused?.code === 'view_kind_taken' &&
+      secondBacklog.refused.message ===
+        'the project already has a backlog, "Backlog", and can have only one' &&
+      nameTaken.refused?.code === 'view_name_taken' &&
+      nameTaken.refused.message === 'the project already has a view called "gantt"',
+    JSON.stringify([secondBacklog, nameTaken]),
+  );
+  const renamedView = await window.command('rename_view', {
+    viewId: secondBoard.ok.id,
+    name: '  Hardware only ',
+  });
+  const filteredView = await window.command('set_view_filter', {
+    viewId: secondBoard.ok.id,
+    filter: { assignee: { kind: 'member', memberId: engineer.id }, hidesFinished: true },
+  });
+  const filteredBacklog = await window.command('set_view_filter', {
+    viewId: startingViews[1].id,
+    filter: { assignee: { kind: 'manager' }, hidesFinished: false },
+  });
+  check(
+    'a view is renamed and given a filter of its own, and a backlog cannot be filtered',
+    renamedView.ok?.name === 'Hardware only' &&
+      filteredView.ok?.filter.assignee.memberId === engineer.id &&
+      filteredView.ok.filter.hidesFinished === true &&
+      filteredBacklog.refused?.code === 'rule_broken' &&
+      filteredBacklog.refused.message ===
+        '"Backlog" is a backlog, which shows every task and cannot be filtered',
+    JSON.stringify([renamedView, filteredView, filteredBacklog]),
+  );
+  const movedViews = await window.command('move_view', { viewId: secondBoard.ok.id, index: 0 });
+  check(
+    'a view is moved to the front, and the answer is the whole row in its new order',
+    movedViews.ok?.map((view) => view.name).join(', ') ===
+      'Hardware only, Board, Backlog, List, Gantt, Calendar, Dashboard',
+    JSON.stringify(movedViews),
+  );
+  await window.command('remove_view', { viewId: startingViews[4].id });
+  check(
+    'a view is removed',
+    (await viewsOf())?.map((view) => view.name).join(', ') ===
+      'Hardware only, Board, Backlog, List, Gantt, Dashboard',
+  );
+  await window.reload();
+  await window.waitForText('Hardware only');
+  const row = await window.evaluate(
+    `[...document.querySelectorAll('[role="tab"]')].map((tab) => tab.innerText.trim()).join(', ')`,
+  );
+  check(
+    'the window shows the views in their order, and then the places',
+    row === 'Hardware only, Board, Backlog, List, Gantt, Dashboard, Team, Office, Advisor',
+    row,
+  );
+
   // Sprints and the backlog: a sprint is planned, filled, started and
   // completed, and what it must not do is refused by name.
   const tasksOf = async () => (await window.command('list_tasks', { projectId: project.id })).ok;
@@ -759,6 +842,15 @@ try {
   check(
     'dependencies survive a restart',
     tasks?.find((stored) => stored.number === 2)?.blockedBy.length === 1,
+  );
+  const storedViews = (await window.command('list_views', { projectId: projects[0]?.id })).ok;
+  check(
+    'the views survive a restart, in their order and with the filter of the one that has one',
+    storedViews?.map((view) => view.name).join(', ') ===
+      'Hardware only, Board, Backlog, List, Gantt, Dashboard' &&
+      storedViews[0].filter.assignee.memberId === team?.[0]?.id &&
+      storedViews[0].filter.hidesFinished === true,
+    JSON.stringify(storedViews),
   );
   const storedSprints = (await window.command('list_sprints', { projectId: projects[0]?.id })).ok;
   const record = storedSprints?.find((stored) => stored.state === 'completed');

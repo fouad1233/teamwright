@@ -207,6 +207,27 @@ try {
     JSON.stringify(deskTasks.map((task) => task.number)),
   );
 
+  // A view the manager adds on one computer is there on the other, and the
+  // six a project starts with are not doubled by the taking in.
+  const laptopView = await onLaptop('add_view', {
+    input: { projectId: project.id, kind: 'list', name: 'Mine' },
+  });
+  await onLaptop('set_view_filter', {
+    viewId: laptopView.id,
+    filter: { assignee: { kind: 'manager' }, hidesFinished: true },
+  });
+  await onLaptop('sync_now');
+  await onDesk('sync_now');
+  const deskViews = await onDesk('list_views', { projectId: project.id });
+  check(
+    'a view added and filtered on the laptop reaches the desk, after the six of the project',
+    deskViews.map((view) => view.name).join(', ') ===
+      'Board, Backlog, List, Gantt, Calendar, Dashboard, Mine' &&
+      deskViews.at(-1).filter.assignee.kind === 'manager' &&
+      deskViews.at(-1).filter.hidesFinished === true,
+    JSON.stringify(deskViews.map((view) => [view.name, view.filter])),
+  );
+
   // Two changes to one task, made apart, must both survive.
   await onDesk('rename_task', { taskId: board.id, title: 'Draw the schematic of the board' });
   await onLaptop('prioritize_task', { taskId: board.id, priority: 'urgent' });
