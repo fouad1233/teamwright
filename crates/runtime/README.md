@@ -98,7 +98,9 @@ arguments):
   `priority`, normal unless said, and the tasks it `waits_for`). An owner
   is `manager`, a proposed member, or a member the project has, whatever
   the capitals. A task waits only for other tasks of the list, and not in a
-  circle.
+  circle. A member the project has is not proposed again: the call is
+  refused with the names and with what to leave out, because a model that
+  planned a project once tends to hand in the whole plan a second time.
 
 A model counts from 1, so `recommended` and `waits_for` do; what comes out
 counts from 0. An estimate in hours becomes minutes. Texts are trimmed, and

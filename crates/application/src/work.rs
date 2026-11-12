@@ -315,6 +315,7 @@ impl WorkService {
                 earlier_turns: Vec::new(),
                 answered_turn: None,
                 turn,
+                prompt: None,
             },
             Worker::Specialist(&member),
             &project,
@@ -374,6 +375,7 @@ impl WorkService {
                 earlier_turns,
                 answered_turn: None,
                 turn,
+                prompt: None,
             },
             Worker::Specialist(&member),
             &project,
@@ -436,6 +438,7 @@ impl WorkService {
                 earlier_turns,
                 answered_turn: Some(answered_turn),
                 turn,
+                prompt: None,
             },
             Worker::Specialist(&member),
             &project,
@@ -509,6 +512,7 @@ impl WorkService {
                 earlier_turns: Vec::new(),
                 answered_turn: None,
                 turn,
+                prompt: None,
             },
             Worker::Specialist(&member),
             &project,
@@ -625,6 +629,7 @@ impl WorkService {
             earlier_turns: mut turns,
             answered_turn,
             turn,
+            prompt,
         } = new_turn;
 
         let session = match conversation.session_id() {
@@ -663,7 +668,7 @@ impl WorkService {
         };
         let request = TurnRequest {
             working_folder: self.inner.places.work_folder_of(project)?,
-            prompt: turn.request().to_owned(),
+            prompt: prompt.unwrap_or_else(|| turn.request().to_owned()),
             session,
             model,
             effort,
@@ -733,6 +738,10 @@ struct NewTurn {
     /// with the answer recorded. It is stored only if the new turn starts.
     answered_turn: Option<Turn>,
     turn: Turn,
+    /// What the worker is told, where that is more than the request of the
+    /// turn: the request with what happened in the program since the worker
+    /// last spoke, which its session did not see.
+    prompt: Option<String>,
 }
 
 impl Inner {

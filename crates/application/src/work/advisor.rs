@@ -121,6 +121,7 @@ impl WorkService {
                 earlier_turns: Vec::new(),
                 answered_turn: None,
                 turn,
+                prompt: None,
             },
             Worker::Advisor,
             &project,
@@ -179,6 +180,7 @@ impl WorkService {
                 earlier_turns,
                 answered_turn: Some(answered_turn),
                 turn,
+                prompt: None,
             },
             Worker::Advisor,
             &project,
@@ -361,6 +363,14 @@ impl WorkService {
             .guard()
             .refuse_while_advisor_works(conversation.project_id())?;
         let project = self.inner.require_project(conversation.project_id())?;
+        // The session of the Advisor does not see an approval happen. If it
+        // is not told, it takes its proposal for open and proposes all of
+        // it again.
+        let approved_before = earlier_turns
+            .last()
+            .and_then(Turn::proposal)
+            .is_some_and(|proposal| !proposal.is_open());
+        let prompt = approved_before.then(|| message_after_approval(turn.request()));
         self.begin_turn(
             NewTurn {
                 conversation,
@@ -368,6 +378,7 @@ impl WorkService {
                 earlier_turns,
                 answered_turn: None,
                 turn,
+                prompt,
             },
             Worker::Advisor,
             &project,
@@ -466,6 +477,19 @@ pub fn answers_in_words(questions: &[InterviewQuestion], answers: &[InterviewAns
     blocks.join("\n\n")
 }
 
+/// A message of the manager's as the Advisor reads it when the manager
+/// approved its proposal before writing: with the news of the approval, and
+/// with what a proposal may hold from then on.
+#[must_use]
+pub fn message_after_approval(message: &str) -> String {
+    format!(
+        "The manager approved your proposal, as it was or with changes. What the project has \
+         now is in your instructions: its members are on the team and its tasks exist. If what \
+         the manager writes calls for more, propose only what is to be added: no member who is \
+         on the team, no task that exists.\n\nThe manager writes:\n{message}"
+    )
+}
+
 /// Writes the instructions that are added to the agent program's own for
 /// the Advisor of a project: who it is, how it works, and what the project
 /// has already. `team` and `tasks` are the members and the tasks of the
@@ -532,9 +556,12 @@ pub fn instructions_for_advisor(
     if !team.is_empty() || !tasks.is_empty() {
         lines.push(String::new());
         lines.push(
-            "What the project has already. Propose only what is to be added: new members and \
-             new tasks. Nothing that is there is changed or removed. A new task may be given to \
-             a member who is there, by the name below."
+            "What the project has already. Propose only what is to be added: members who are \
+             not on the team yet and tasks that do not exist yet. Never list a member or a task \
+             again that is there, also not one that you proposed earlier and the manager \
+             approved. If nobody is to be added, the list of members is empty. Nothing that is \
+             there is changed or removed. A new task may be given to a member who is there, by \
+             the name below."
                 .to_owned(),
         );
         if !team.is_empty() {

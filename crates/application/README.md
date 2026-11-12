@@ -205,7 +205,12 @@ start or end.
 - `reply` in a conversation with the Advisor is a wish for a change or
   another round. It is refused while the questions are open
   (`interview_open`, "the Advisor waits for your answers: answer its
-  questions first") and while the Advisor works (`advisor_busy`).
+  questions first") and while the Advisor works (`advisor_busy`). The
+  session of the Advisor does not see an approval happen. So a reply that
+  follows one reaches the Advisor as `message_after_approval`: the words of
+  the manager with the news that the proposal was approved, and that a
+  proposal from then on holds only what is to be added. The turn keeps the
+  words of the manager alone.
 - `approve_proposal` takes what the manager left of the proposal
   (`ApprovedProposal`) and checks all of it first (`no_proposal_open`; the
   rules of names, titles and plans; a task given to somebody who is neither

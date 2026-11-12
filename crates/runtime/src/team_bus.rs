@@ -94,7 +94,8 @@ const INTERVIEW_DESCRIPTION: &str = "Ask the manager what you need to know befor
 /// What the tool `propose_plan` tells the model it is for.
 const PROPOSE_PLAN_DESCRIPTION: &str = "Propose the team and the plan of the project to the \
      manager, who can change them and approves them. Nothing is created before the manager \
-     approves. After calling it, end your turn.";
+     approves. If the project has members or tasks already, propose only the members and the \
+     tasks that are to be added. After calling it, end your turn.";
 
 /// The fewest and the most options a question to decide may have.
 const FEWEST_OPTIONS: usize = 2;
@@ -407,9 +408,10 @@ fn interview_question_from(
 /// the names of the members the project has already.
 ///
 /// The summary says something. There are at most eight members, each with
-/// a name that no other has, whatever the capitals, and that is not
-/// "manager"; a model is one word, an effort one of low, medium, high,
-/// xhigh and max. There are one to forty tasks, each with a title and an
+/// a name that no other has and that nobody on the team has, whatever the
+/// capitals, and that is not "manager"; a model is one word, an effort one
+/// of low, medium, high, xhigh and max. There are one to forty tasks, each
+/// with a title and an
 /// owner: "manager", a proposed member or a member of the team, whatever
 /// the capitals. A task waits only for other tasks of the list, counted
 /// from 1 by the model and from 0 in the plan that comes out, and the
@@ -439,14 +441,30 @@ pub fn proposal_from(arguments: &Value, team: &[String]) -> Result<PlanProposal,
         .and_then(Value::as_array)
         .filter(|members| members.len() <= MOST_MEMBERS)
         .ok_or_else(|| "Give the members as a list of at most eight.".to_owned())?;
+    let on_the_team: HashSet<String> = team.iter().map(|name| name.trim().to_lowercase()).collect();
     let mut names = HashSet::new();
     let mut members = Vec::new();
+    let mut there_already = Vec::new();
     for (index, member) in given_members.iter().enumerate() {
         let member = planned_member_from(index + 1, member)?;
         if !names.insert(member.name.to_lowercase()) {
             return Err(format!("Two members are called {}.", member.name));
         }
+        if on_the_team.contains(&member.name.to_lowercase()) {
+            there_already.push(member.name.clone());
+        }
         members.push(member);
+    }
+    if !there_already.is_empty() {
+        // A model that planned a project once tends to hand in the whole
+        // plan again when it is asked for more. All the names are told at
+        // once, so that one more try is enough.
+        return Err(format!(
+            "On the team already: {}. A proposal holds only what is to be added. Leave out the \
+             members who are on the team and the tasks that exist, and propose again. A new \
+             task may be given to a member who is on the team.",
+            there_already.join(", ")
+        ));
     }
 
     let given_tasks = arguments
@@ -454,11 +472,7 @@ pub fn proposal_from(arguments: &Value, team: &[String]) -> Result<PlanProposal,
         .and_then(Value::as_array)
         .filter(|tasks| (1..=MOST_TASKS).contains(&tasks.len()))
         .ok_or_else(|| "Give one to forty tasks.".to_owned())?;
-    let known: HashSet<String> = names
-        .iter()
-        .cloned()
-        .chain(team.iter().map(|name| name.trim().to_lowercase()))
-        .collect();
+    let known: HashSet<String> = names.union(&on_the_team).cloned().collect();
     let tasks = given_tasks
         .iter()
         .enumerate()
@@ -906,7 +920,9 @@ fn interview_tool() -> Value {
 }
 
 /// The description of `propose_plan`, as the stand-in that was tried had
-/// it, with the efforts Teamwright knows and a model of any one word.
+/// it, with the efforts Teamwright knows and a model of any one word. What
+/// it says about members and tasks that are there already was added when a
+/// real Advisor, asked for more, proposed its whole plan a second time.
 fn propose_plan_tool() -> Value {
     json!({
         "name": PROPOSE_PLAN,
@@ -924,8 +940,9 @@ fn propose_plan_tool() -> Value {
                 "members": {
                     "type": "array",
                     "maxItems": MOST_MEMBERS,
-                    "description": "The AI specialists the project needs: the smallest team \
-                                    that can do the job.",
+                    "description": "The AI specialists to add to the project: the smallest \
+                                    team that can do the job. Nobody who is on the team \
+                                    already. The list is empty if nobody is to be added.",
                     "items": {
                         "type": "object",
                         "required": ["name", "responsibility", "reason"],
@@ -965,6 +982,7 @@ fn propose_plan_tool() -> Value {
                     "type": "array",
                     "minItems": 1,
                     "maxItems": MOST_TASKS,
+                    "description": "The tasks to create. No task that exists already.",
                     "items": {
                         "type": "object",
                         "required": ["title", "owner"],
@@ -1305,6 +1323,12 @@ mod tests {
         assert_eq!(
             refused(&|arguments| arguments["members"][1]["name"] = json!("hardware Engineer")),
             "Two members are called hardware Engineer."
+        );
+        assert_eq!(
+            refused(&|arguments| arguments["members"][1]["name"] = json!("mechanical Engineer")),
+            "On the team already: mechanical Engineer. A proposal holds only what is to be \
+             added. Leave out the members who are on the team and the tasks that exist, and \
+             propose again. A new task may be given to a member who is on the team."
         );
         assert!(
             refused(&|arguments| arguments["members"][1]["name"] = json!("x".repeat(61)))

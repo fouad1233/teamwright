@@ -77,8 +77,10 @@ From a conversation to an approved team and plan.
 - ✅ Staffing proposal with a reason, model and effort level per member
 - ✅ Plan proposal: tasks, owners, dependencies, estimates
 - ✅ Review, edit and approve; apply the approved plan to the board
-- 🚧 A later round that adds to the team and the tasks that are there:
-  built, not yet run with the real program
+- ✅ A later round that adds to the team and the tasks that are there. The
+  Advisor is told when its proposal was approved, and proposes nobody a
+  second time. That it repeats no task rests on what it is told: the
+  program cannot tell a task that says the same in other words
 - ⬜ Change the title, the size or the dependencies of a proposed task
   before approving
 - ⬜ Import earlier Claude Code conversations as context digests

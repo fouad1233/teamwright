@@ -1312,6 +1312,42 @@ fn lets_the_manager_start_another_round_after_a_proposal_was_approved() {
     assert_eq!(latest(&again).state(), TurnState::Running);
 }
 
+#[test]
+fn tells_the_advisor_that_its_proposal_was_approved_when_the_manager_writes_again() {
+    let planning = planning();
+    let conversation = planning.proposed();
+    planning
+        .approve(&conversation, unchanged(proposal_of(&conversation)))
+        .unwrap();
+
+    let again = planning
+        .work
+        .reply(conversation.conversation.id(), "Add a battery.")
+        .unwrap();
+
+    // The turn keeps the words of the manager. The Advisor reads more.
+    assert_eq!(latest(&again).request(), "Add a battery.");
+    let requests = planning.runtime.requests();
+    let prompt = &requests.last().unwrap().prompt;
+    assert!(prompt.starts_with("The manager approved your proposal"));
+    assert!(prompt.contains("propose only what is to be added"));
+    assert!(prompt.ends_with("The manager writes:\nAdd a battery."));
+}
+
+#[test]
+fn sends_the_advisor_the_words_of_the_manager_alone_while_its_proposal_is_open() {
+    let planning = planning();
+    let conversation = planning.proposed();
+
+    planning
+        .work
+        .reply(conversation.conversation.id(), "Leave out the enclosure.")
+        .unwrap();
+
+    let requests = planning.runtime.requests();
+    assert_eq!(requests.last().unwrap().prompt, "Leave out the enclosure.");
+}
+
 // What happens to the record of the planning
 
 #[test]
