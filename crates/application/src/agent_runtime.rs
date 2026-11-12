@@ -463,6 +463,31 @@ pub enum AgentEvent {
     TurnEnded(TurnOutcome),
 }
 
+/// A question a session asks the manager, because the answer is the
+/// manager's to give. The session ends its turn after it has asked, and the
+/// answer comes as the request of the next turn.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ManagerQuestion {
+    /// The question, not empty.
+    pub question: String,
+    /// Why it matters. May be empty.
+    pub reason: String,
+    /// The answers the session sees, two to four.
+    pub options: Vec<QuestionOption>,
+    /// The option the session recommends, by its place among the options,
+    /// counted from 0.
+    pub recommended: Option<usize>,
+}
+
+/// One of the answers a session offers the manager.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct QuestionOption {
+    /// The option in a few words, not empty.
+    pub label: String,
+    /// What choosing it leads to. May be empty.
+    pub consequence: String,
+}
+
 /// What a session has at its start.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SessionStarted {

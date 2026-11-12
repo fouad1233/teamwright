@@ -19,6 +19,7 @@ format of its output.
 | `process` | Starting the program, feeding it the prompt, reading it, stopping it |
 | `decode` | Turns the JSON lines of headless mode into `AgentEvent`s and a `TurnOutcome` |
 | `sign_in` | Reads the answer of `claude auth status --json` |
+| `team_bus` | The tool server through which a specialist asks the manager to decide |
 
 ## How a turn runs
 
@@ -57,6 +58,26 @@ Every option was checked against `claude --help` of Claude Code 2.1.322.
 in print mode. `--bare` is never used, because it ignores the subscription
 sign-in. `--max-turns`, which older documentation mentions, is not in the
 help of that version and is not used.
+
+## The team bus
+
+`team_bus::serve` is a tool server (MCP, one JSON-RPC 2.0 message per line
+on standard input and output) named `teamwright`, with one tool,
+`ask_manager`. A session calls it when a choice changes what is built, what
+it costs or when it is ready. The arguments are a `question`, a `reason`,
+two to four `options` with a `label` and a `consequence`, and the option it
+`recommended`, counted from 1 because that is how a model counts.
+
+The server does no more than check the question and tell the session to end
+its turn. One function, `team_bus::question_from`, checks the arguments for
+the server and for the decoder. A refusal says in plain words what to change,
+because the model reads it and tries again. Only the first good question of
+a turn is taken.
+
+The server answers `initialize`, `tools/list`, `tools/call` and `ping`. Any
+other request is answered with the JSON-RPC error `-32601`; notifications
+and lines that are not JSON get no answer. Claude Code 2.1.322 first sends a
+request `server/discover`, which is fine to refuse that way.
 
 ## Rules for code in this crate
 

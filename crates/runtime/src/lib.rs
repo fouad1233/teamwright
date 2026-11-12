@@ -12,6 +12,10 @@
 //! the prompt on standard input and one JSON object per line on standard
 //! output. A later turn resumes the session by its identifier.
 //!
+//! A specialist reaches the manager through the [`team_bus`]: a small tool
+//! server that Claude Code starts for a turn, whose one tool asks the
+//! manager to decide.
+//!
 //! Teamwright never reads, keeps or passes on a credential. It asks the
 //! program whether the user is signed in, and the program uses its own
 //! sign-in.
@@ -23,6 +27,7 @@ mod environment;
 mod locate;
 mod process;
 mod sign_in;
+pub mod team_bus;
 
 pub use claude_code::ClaudeCode;
 pub use environment::Environment;
