@@ -29,3 +29,4 @@ two readers.
 | 1 | [Day one: checking the ground](01-day-one.md) | 11 November 2026 |
 | 2 | [The first build, and the interface that was thrown away](02-first-build.md) | 11 November 2026 |
 | 3 | [A team with faces](03-a-team-with-faces.md) | 12 November 2026 |
+| 4 | [The first specialist goes to work](04-the-first-specialist.md) | 12 November 2026 |
