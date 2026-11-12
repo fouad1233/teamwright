@@ -138,6 +138,22 @@ impl SprintName {
     }
 }
 
+define_text!(
+    /// The name of a view of a project, such as "Board" or "Firmware only".
+    ViewName,
+    field = "view name",
+    max_length = 40
+);
+
+impl ViewName {
+    /// Whether two names are the same, whatever the capitals. Two views of
+    /// a project never have the same name in this sense.
+    #[must_use]
+    pub fn is_same_as(&self, other: &str) -> bool {
+        self.0.to_lowercase() == other.to_lowercase()
+    }
+}
+
 /// The name of a model, as the program that runs the specialists
 /// understands it: a short name for the latest model of a family, such as
 /// `sonnet`, or the full name of a model.

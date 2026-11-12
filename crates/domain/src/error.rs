@@ -271,6 +271,16 @@ pub enum DomainError {
         /// The name of the sprint.
         name: String,
     },
+
+    /// A backlog or a dashboard was to be given a filter. They show every
+    /// task.
+    #[error("\"{name}\" is a {kind}, which shows every task and cannot be filtered")]
+    ViewNotFiltered {
+        /// The name of the view.
+        name: String,
+        /// Its kind, as text: "backlog" or "dashboard".
+        kind: &'static str,
+    },
 }
 
 impl DomainError {

@@ -9,13 +9,14 @@ done with them. It does no input or output.
 
 | Module | Concepts |
 |---|---|
-| `ids` | `ProjectId`, `StatusId`, `TaskId`, `SprintId`, `MemberId`, `ConversationId`, `TurnId`: one identifier type per kind of thing |
-| `text` | `ProjectName`, `StatusName`, `TaskTitle`, `SprintName`, `MemberName`: names that are never empty, never multi-line, never too long; `ModelName`: the name of a model |
+| `ids` | `ProjectId`, `StatusId`, `TaskId`, `SprintId`, `ViewId`, `MemberId`, `ConversationId`, `TurnId`: one identifier type per kind of thing |
+| `text` | `ProjectName`, `StatusName`, `TaskTitle`, `SprintName`, `ViewName`, `MemberName`: names that are never empty, never multi-line, never too long; `ModelName`: the name of a model |
 | `color` | `Color`: the named colors a status or a team member can have |
 | `workflow` | `Workflow`, `Status`, `StatusCategory` |
 | `project` | `Project`, `ProjectKey` |
 | `task` | `Task`, `TaskDraft`, `Priority`, `Assignee`, `Schedule`, `Rank` |
 | `sprint` | `Sprint`, `SprintState`, `SprintDates`, `SprintSummary`, `SprintUnit`: a stretch of time in which the team works on a part of the backlog; `StoryPoints`: how big a task is; `CountedTask`: a task as a sprint counts its work |
+| `view` | `View`, `ViewKind`, `ViewFilter`, `ViewAssignee`: one way of looking at the tasks of a project, with a name, a filter and a place among the views of the project |
 | `task_history` | `TaskChange`, `history_of`: what changed from one version of a task to the next |
 | `dependencies` | `DependencyGraph`: which task waits for which |
 | `member` | `Member`, `MemberKind`: an AI agent or a person on the team of a project; `MemberProfile`, `Effort`: the model and the effort of a specialist |
@@ -56,6 +57,15 @@ done with them. It does no input or output.
   The refusals about the state of a sprint have codes of their own
   (`DomainError::code`): `sprint_completed`, `sprint_active`,
   `sprint_not_active`.
+- A view is a board, a backlog, a list, a Gantt chart, a calendar or a
+  dashboard. Its name has at most 40 characters; a view named after its
+  kind whose name is taken gets the first free number from 2 on, whatever
+  the capitals. Only a board, a list, a Gantt chart and a calendar can be
+  filtered, by whose tasks they show and whether finished tasks are hidden.
+  A new project starts with one view of each kind, in that order, and the
+  identifiers of these six follow from the project and the kind, so that
+  two computers that each give a project its starting views give it the
+  same ones.
 - The history of a task is not recorded as such. It is read off the versions
   the task has had: that it was opened, and then what differs from one
   version to the next. A move up or down within a status is not a change.

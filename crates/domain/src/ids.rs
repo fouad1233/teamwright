@@ -91,6 +91,12 @@ define_id!(
 );
 
 define_id!(
+    /// Identifies a view of a project: one way of showing its tasks.
+    ViewId,
+    kind = "view identifier"
+);
+
+define_id!(
     /// Identifies a conversation with an AI specialist.
     ConversationId,
     kind = "conversation identifier"
