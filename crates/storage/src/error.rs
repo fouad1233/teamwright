@@ -16,6 +16,16 @@ pub(crate) enum DatabaseError {
     #[error("stored data is damaged: {0}")]
     Damaged(String),
 
+    /// Something was to be written again that was deleted. A deletion is
+    /// final: identifiers are never used twice.
+    #[error("the {entity} {id} was deleted and cannot be written again")]
+    Deleted {
+        /// The kind of thing, as the log names it.
+        entity: &'static str,
+        /// Its identifier.
+        id: String,
+    },
+
     /// The file was written by a newer version of the program.
     #[error(
         "the database has format version {found}, but this program only understands versions \
@@ -41,7 +51,9 @@ impl From<DatabaseError> for StorageError {
         let message = error.to_string();
         match error {
             DatabaseError::Sqlite(source) => Self::caused_by(message, source),
-            DatabaseError::Damaged(_) | DatabaseError::TooNew { .. } => Self::new(message),
+            DatabaseError::Damaged(_)
+            | DatabaseError::Deleted { .. }
+            | DatabaseError::TooNew { .. } => Self::new(message),
         }
     }
 }

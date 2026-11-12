@@ -19,6 +19,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("schema/0007_planning.sql"),
     include_str!("schema/0008_sprints.sql"),
     include_str!("schema/0009_home_computer.sql"),
+    include_str!("schema/0010_merged_states.sql"),
 ];
 
 /// Applies the migrations a database has not seen yet. Each one runs in its
@@ -78,6 +79,7 @@ mod tests {
         for expected in [
             "conversations",
             "members",
+            "merged_states",
             "meta",
             "operations",
             "project_places",
@@ -419,6 +421,84 @@ mod tests {
             )
             .unwrap();
         assert_eq!(logged, home);
+    }
+
+    #[test]
+    fn the_merged_states_are_filled_from_the_log_with_its_deletions() {
+        let mut connection = Connection::open_in_memory().unwrap();
+        for migration in &MIGRATIONS[..9] {
+            connection.execute_batch(migration).unwrap();
+        }
+        connection.pragma_update(None, "user_version", 9).unwrap();
+        let device = "0196f3a2-7c1e-7d53-9b6f-2f1a4c8e9d10";
+        let stamp = |n: u32| format!("17628516000{n:02}-00000-{device}");
+        for (n, entity, id, kind, payload) in [
+            (
+                1,
+                "project",
+                "p1",
+                "upsert",
+                Some(r#"{"id":"p1","name":"First"}"#),
+            ),
+            (
+                2,
+                "project",
+                "p1",
+                "upsert",
+                Some(r#"{"id":"p1","name":"Second"}"#),
+            ),
+            (
+                3,
+                "task",
+                "t1",
+                "upsert",
+                Some(r#"{"id":"t1","title":"Gone"}"#),
+            ),
+            (4, "task", "t1", "delete", None),
+        ] {
+            connection
+                .execute(
+                    "INSERT INTO operations (device_id, stamp, entity, entity_id, kind, payload)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                    rusqlite::params![device, stamp(n), entity, id, kind, payload],
+                )
+                .unwrap();
+        }
+
+        migrate(&mut connection).unwrap();
+
+        let project: (String, String, Option<String>) = connection
+            .query_row(
+                "SELECT state, base_stamp, deleted_stamp FROM merged_states
+                 WHERE entity = 'project' AND entity_id = 'p1'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(
+            project,
+            (r#"{"id":"p1","name":"Second"}"#.to_owned(), stamp(2), None)
+        );
+        let task: (String, String, Option<String>, Option<String>) = connection
+            .query_row(
+                "SELECT state, base_stamp, deleted_stamp, deleted_seen FROM merged_states
+                 WHERE entity = 'task' AND entity_id = 't1'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+            )
+            .unwrap();
+        assert_eq!(task.0, r#"{"id":"t1","title":"Gone"}"#);
+        assert_eq!(task.1, stamp(3));
+        assert_eq!(task.2, Some(stamp(4)));
+        assert_eq!(task.3, Some(format!(r#"{{"{device}":"{}"}}"#, stamp(3))));
+        let numbered_as_before: i64 = connection
+            .query_row(
+                "SELECT count(*) FROM operations WHERE device_sequence = sequence",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(numbered_as_before, 4);
     }
 
     #[test]

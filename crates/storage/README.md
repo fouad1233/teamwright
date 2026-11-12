@@ -24,7 +24,8 @@ involved.
 | `conversations` | `SqliteConversationRepository`: conversations, their turns, the steps of the turns and the questions they asked the manager |
 | `planning` | The interviews and the proposals of the Advisor, as parts of their turns; `SqlitePlanningRepository`, which stores an approved plan |
 | `places` | `SqlitePlacesRepository`: the work folder and the reference folders chosen for each project |
-| `operations` | The operation log and the hybrid logical clock |
+| `operations` | The operation log, the hybrid logical clock, and the recorder that keeps the stamps of the fields |
+| `merge` | How each kind of thing merges field by field, and `MergedState`, a row of `merged_states` |
 | `codec` | The text forms of moments, dates, identifiers and enumerations |
 | `error` | The crate's internal error type and its conversion to `StorageError` |
 
@@ -139,6 +140,48 @@ domain is reported as damaged data and never turned into an invalid object.
 The model and the effort of a specialist are the columns `model` and
 `effort` of `members` (version 4), NULL when they are left to the program; a
 person with either is damaged data.
+
+## Field stamps and merged states
+
+Computers that keep in step merge what they changed field by field
+([decision 0017](../../docs/decisions/0017-sync-through-a-folder.md)).
+For that, every stored thing keeps the stamp of each of its fields (version
+10):
+
+- **Fields.** `merge.rs` says, for every entity, which keys of its logged
+  state belong together and merge as one field (a status with the moment of
+  completion, a start date with a due date, who a task is given to), and
+  which rule a field follows: the later stamp wins, or the larger value
+  wins (the next task number, the next sprint number, `updated_at`). A key
+  no field names is a field of its own, so a key written by a newer version
+  is kept and merged too. A turn and its parts merge whole; the folders of
+  a project never leave the computer. The list is an exhaustive `match` on
+  the entity: a new kind of thing does not compile until it says how it
+  merges.
+- **`merged_states`** keeps, for every thing ever stored, its merged state
+  as JSON (keys this version does not know included), the latest stamp of
+  any field as `base_stamp`, the older stamps of the other fields by name,
+  and for a deleted thing the stamp of the deletion with, for each
+  computer, the latest change of the thing the deleting computer had seen.
+  Migration 10 filled it from the log: every field of an existing thing has
+  the stamp of its latest upsert.
+- **The recorder does it.** `OperationRecorder::record_upsert` keeps its
+  signature: it reads the merged state, gives every field whose value
+  changed the stamp of the new operation, keeps the stamps of the others,
+  writes the merged state, and logs the operation with the stamps of its
+  fields that are older than itself (`field_stamps`). Writing the same state
+  again changes no stamp. `record_delete` records the deletion and what it
+  had seen (`seen`).
+- **A deletion is final.** Writing a deleted thing again is refused
+  (`DatabaseError::Deleted`), because identifiers are never used twice. A
+  step of a turn is the exception: its identifier is its position, and it
+  can be written again after it was removed.
+- **Numbers.** Every operation has `device_sequence`, its number on the
+  computer that made it; for an operation of this computer it equals
+  `sequence`.
+
+The table `merged_states` is bookkeeping of the log and is not logged
+itself.
 
 ## The clock stamp
 

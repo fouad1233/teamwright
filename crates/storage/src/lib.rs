@@ -24,6 +24,7 @@ mod conversations;
 mod database;
 mod error;
 mod members;
+mod merge;
 mod migrations;
 mod operations;
 mod places;
