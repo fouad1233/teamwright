@@ -261,6 +261,25 @@ describe('placeOfMember', () => {
     expect(place.measures.at(-1)).toEqual({ label: 'This turn', value: '1.2k tokens' });
   });
 
+  it('says when a specialist at work also waits for the manager about other work', () => {
+    const work = conversation({ id: 'work', taskId: 'route', turns: [running()] });
+    const waiting = conversation({
+      id: 'waiting',
+      taskId: 'choose',
+      turns: [turn({ id: 'asked', decision: question })],
+    });
+    const choose = task({ id: 'choose', number: 2 });
+    const place = placeOfMember(hardware, {
+      ...sources,
+      tasks: [routeTheBoard, choose],
+      conversations: [work, waiting],
+    });
+
+    expect(place.state).toBe('working');
+    expect(place.alsoWaits).toBe('Also waits for you on SSN-2');
+    expect(placeOfMember(hardware, { ...sources, conversations: [work] }).alsoWaits).toBeNull();
+  });
+
   it('leads work on a question of the manager to the conversation', () => {
     const chat = conversation({ id: 'chat', turns: [running()] });
     const place = placeOfMember(hardware, { ...sources, conversations: [chat] });
@@ -319,6 +338,7 @@ describe('placeOfMember', () => {
 
     expect(place.state).toBe('person');
     expect(place.role).toBe('Person');
+    expect(place.usage).toEqual({ label: 'Given', value: '2 tasks' });
     expect(place.detail).toBe('1 task not finished');
     expect(place.target).toBeNull();
   });
@@ -405,6 +425,19 @@ describe('placeOfManager and countWaitingForManager', () => {
   });
 });
 
+describe('isAnybodyWorking', () => {
+  it('tells whether a turn runs in any conversation, the Advisor too', () => {
+    expect(isAnybodyWorking([conversation({ id: 'done', turns: [turn({ id: 't' })] })])).toBe(
+      false,
+    );
+    expect(
+      isAnybodyWorking([
+        conversation({ id: 'plan', isWithAdvisor: true, memberId: null, turns: [running()] }),
+      ]),
+    ).toBe(true);
+  });
+});
+
 describe('describeOffice', () => {
   it('puts the manager and the Advisor at the front and counts the room', () => {
     const firmware = member({ id: 'firmware', name: 'Firmware engineer', color: 'blue' });
@@ -425,7 +458,6 @@ describe('describeOffice', () => {
       people: 0,
       used: 'nothing yet',
     });
-    expect(isAnybodyWorking(office)).toBe(true);
     expect(summaryInWords(office.summary)).toBe('1 at work');
     expect(summaryInWords({ ...office.summary, working: 0 })).toBe('Nobody is at work');
     expect(summaryInWords({ ...office.summary, waiting: 2 })).toBe('1 at work, 2 waiting for you');
@@ -442,21 +474,34 @@ describe('the arrangement of the room', () => {
 
   it('keeps the title block beside the room while the front fits in one row', () => {
     expect(arrangeOffice(3, { ...measures, width: 1140 })).toEqual({
+      frontColumns: 2,
       columns: 3,
       isAsideBeside: true,
     });
     expect(arrangeOffice(8, { ...measures, width: 1140 })).toEqual({
+      frontColumns: 2,
       columns: 3,
       isAsideBeside: true,
     });
   });
 
+  it('keeps the manager and the Advisor side by side for a team of one or none', () => {
+    expect(arrangeOffice(1, { ...measures, width: 1140 })).toEqual({
+      frontColumns: 2,
+      columns: 1,
+      isAsideBeside: true,
+    });
+    expect(arrangeOffice(0, { ...measures, width: 1140 }).frontColumns).toBe(2);
+  });
+
   it('puts the title block under the room when the window is narrow', () => {
     expect(arrangeOffice(3, { ...measures, width: 700 })).toEqual({
+      frontColumns: 2,
       columns: 2,
       isAsideBeside: false,
     });
     expect(arrangeOffice(1, { ...measures, width: 300 })).toEqual({
+      frontColumns: 1,
       columns: 1,
       isAsideBeside: false,
     });

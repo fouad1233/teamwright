@@ -68,6 +68,12 @@ export interface Place {
   detail: string | null;
   /** The facts that are counted: how long, how big, how many tokens this turn. */
   measures: Measure[];
+  /**
+   * For a specialist at work that also waits for the manager about other
+   * work: what it waits about, in words. The place is then held by the gold
+   * corners as well as lit.
+   */
+  alsoWaits: string | null;
   /** What the place has used in this project, or for the manager what everybody has. */
   usage: Measure;
   /** Where pressing the place leads, or nothing if it leads nowhere. */
@@ -88,6 +94,7 @@ export interface Office {
 /** The room counted up, for the title block. */
 export interface OfficeSummary {
   working: number;
+  /** The things that wait for the manager, as the manager's place counts them. */
   waiting: number;
   free: number;
   people: number;
@@ -258,6 +265,7 @@ export function placeOfMember(
     name: member.name,
     role: [kindLabel(member.kind), profileInWords(member)].filter(Boolean).join(', '),
     usage: { label: 'Used', value: usageInWords(tokensOf(own)) },
+    alsoWaits: null,
   };
   const given = tasksOfMember(tasks, member.id);
   const categoryOf = (task: Task) => statusOf(project, task)?.category;
@@ -266,6 +274,8 @@ export function placeOfMember(
     const open = given.filter((task) => categoryOf(task) !== 'done').length;
     return {
       ...base,
+      // A person uses no tokens. What they have been given takes the line.
+      usage: { label: 'Given', value: count(given.length, 'task', 'tasks') },
       state: 'person',
       stateInWords: 'Person',
       subject: null,
@@ -277,9 +287,11 @@ export function placeOfMember(
   }
 
   const work = whatMemberIsWorkingOn(own, member.id);
+  const waiting = whatMemberWaitsFor(own, member.id);
   if (work) {
     const subject = subjectOf(project, tasks, work);
     const target = targetOf(work, member.id);
+    const waitingAbout = waiting ? subjectOf(project, tasks, waiting) : null;
     return {
       ...base,
       state: 'working',
@@ -287,12 +299,14 @@ export function placeOfMember(
       subject,
       detail: lastThingDone(runningTurn(work)?.steps ?? []),
       measures: measuresOfWork(work, tasks, now),
+      alsoWaits: waitingAbout
+        ? `Also waits for you on ${waitingAbout.reference ?? 'a question of yours'}`
+        : null,
       target,
       actionInWords: actionOf(target, subject, member.name),
     };
   }
 
-  const waiting = whatMemberWaitsFor(own, member.id);
   const decision = waiting ? openDecision(waiting) : undefined;
   if (waiting && decision) {
     const subject = subjectOf(project, tasks, waiting);
@@ -338,6 +352,7 @@ export function placeOfAdvisor(conversations: readonly Conversation[], now: Mome
     usage: { label: 'Used', value: usageInWords(tokensOf(withAdvisor)) },
     target: { kind: 'advisor' } as const,
     actionInWords: 'Open the Advisor',
+    alsoWaits: null,
   };
 
   const turn = latest ? runningTurn(latest) : undefined;
@@ -411,6 +426,7 @@ export function placeOfManager({
         ? 'None of your own tasks is open'
         : `${count(open, 'task', 'tasks')} of your own open`,
     measures: [],
+    alsoWaits: null,
     usage: { label: 'The project', value: usageInWords(tokensOf(conversations)) },
     target: { kind: 'inbox' },
     actionInWords: 'Open the inbox',
@@ -427,7 +443,7 @@ export function describeOffice(sources: OfficeSources): Office {
     floor,
     summary: {
       working: all.filter((place) => place.state === 'working').length,
-      waiting: all.filter((place) => place.state === 'waiting').length,
+      waiting: countWaitingForManager(sources.conversations),
       free: all.filter((place) => place.state === 'free').length,
       people: floor.filter((place) => place.state === 'person').length,
       used: usageInWords(tokensOf(sources.conversations)),
@@ -436,8 +452,8 @@ export function describeOffice(sources: OfficeSources): Office {
 }
 
 /** Whether anything in the office is going on, so that its time has to be counted. */
-export function isAnybodyWorking(office: Office): boolean {
-  return [...office.front, ...office.floor].some((place) => place.state === 'working');
+export function isAnybodyWorking(conversations: readonly Conversation[]): boolean {
+  return conversations.some((conversation) => runningTurn(conversation) !== undefined);
 }
 
 /**
@@ -475,6 +491,8 @@ export interface OfficeArrangement {
   columns: number;
   /** Whether the title block stands beside the room, or under it when the window is narrow. */
   isAsideBeside: boolean;
+  /** How many places stand in a row of the front: both, unless the room is very narrow. */
+  frontColumns: number;
 }
 
 /** The places at the front of the room: the manager's and the Advisor's. */
@@ -498,7 +516,12 @@ export function arrangeOffice(memberCount: number, measures: OfficeMeasures): Of
   const roomBeside = width - asideWidth - gap - roomInset;
   const isAsideBeside = fitting(roomBeside, placeWidth, gap) >= FRONT_PLACES;
   const room = isAsideBeside ? roomBeside : width - roomInset;
-  return { columns: Math.min(wanted, fitting(room, placeWidth, gap)), isAsideBeside };
+  const fits = fitting(room, placeWidth, gap);
+  return {
+    frontColumns: Math.min(FRONT_PLACES, fits),
+    columns: Math.min(wanted, fits),
+    isAsideBeside,
+  };
 }
 
 /**
