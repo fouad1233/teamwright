@@ -12,6 +12,7 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 teamwright-application.workspace = true
 teamwright-domain.workspace = true
+teamwright-runtime.workspace = true
 teamwright-storage.workspace = true
 
 chrono.workspace = true

@@ -3480,6 +3480,7 @@ dependencies = [
  "tauri-build",
  "teamwright-application",
  "teamwright-domain",
+ "teamwright-runtime",
  "teamwright-storage",
  "thiserror 2.0.21",
 ]

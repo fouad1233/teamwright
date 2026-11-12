@@ -16,12 +16,12 @@ mod state;
 
 use std::process::ExitCode;
 
-use tauri::Manager;
+use tauri::{Manager, RunEvent};
 
 use crate::state::AppState;
 
 fn main() -> ExitCode {
-    let outcome = tauri::Builder::default()
+    let application = tauri::Builder::default()
         .setup(|app| {
             let state = AppState::open(app.handle())?;
             app.manage(state);
@@ -57,14 +57,38 @@ fn main() -> ExitCode {
             commands::team::rename_member,
             commands::team::set_member_responsibility,
             commands::team::remove_member,
+            commands::work::agent_program,
+            commands::work::list_conversations,
+            commands::work::start_work,
+            commands::work::reply,
+            commands::work::ask,
+            commands::work::stop_work,
+            commands::work::open_in_claude,
         ])
-        .run(tauri::generate_context!());
+        .build(tauri::generate_context!());
 
-    match outcome {
-        Ok(()) => ExitCode::SUCCESS,
+    match application {
+        Ok(application) => {
+            application.run(|app, event| {
+                if matches!(event, RunEvent::Exit) {
+                    stop_the_specialists(app);
+                }
+            });
+            ExitCode::SUCCESS
+        }
         Err(error) => {
             eprintln!("Teamwright could not start: {error}");
             ExitCode::FAILURE
         }
+    }
+}
+
+/// Stops the specialists that are still working when the program closes.
+/// Nobody would follow what they do afterwards.
+fn stop_the_specialists(app: &tauri::AppHandle) {
+    if let Some(state) = app.try_state::<AppState>() {
+        // The window is gone, so a failure has nobody to be shown to. The
+        // turns it left as running are ended at the next start.
+        let _ = state.work.close();
     }
 }

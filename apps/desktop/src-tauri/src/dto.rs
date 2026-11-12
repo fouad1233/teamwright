@@ -8,10 +8,13 @@ use std::str::FromStr;
 
 use chrono::SecondsFormat;
 use serde::{Deserialize, Serialize};
-use teamwright_application::{NewMember, NewProject, NewTask, StatusProperties, WorkflowTemplate};
+use teamwright_application::{
+    AgentProgram, ConversationWithTurns, NewMember, NewProject, NewTask, StatusProperties,
+    WorkflowTemplate,
+};
 use teamwright_domain::{
-    Assignee, CalendarDate, Color, DomainError, Member, MemberKind, Priority, Project, Status,
-    StatusCategory, Task, Timestamp,
+    Assignee, CalendarDate, Color, Conversation, DomainError, Member, MemberKind, Priority,
+    Project, Status, StatusCategory, Step, StepContent, Task, Timestamp, TokenCounts, Turn,
 };
 
 use crate::error::CommandError;
@@ -181,6 +184,188 @@ impl From<&Member> for MemberDto {
             color: member.color().as_str(),
             joined_at: moment_to_text(member.joined_at()),
             updated_at: moment_to_text(member.updated_at()),
+        }
+    }
+}
+
+/// Whether the program that runs the specialists can be used, as the
+/// interface sees it.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentProgramDto {
+    state: &'static str,
+    version: Option<String>,
+    sign_in_method: Option<String>,
+    subscription: Option<String>,
+    problem: Option<String>,
+}
+
+impl From<AgentProgram> for AgentProgramDto {
+    fn from(program: AgentProgram) -> Self {
+        Self {
+            state: program.state.as_str(),
+            version: program.version.map(|version| version.to_string()),
+            sign_in_method: program.sign_in_method,
+            subscription: program.subscription,
+            problem: program.problem,
+        }
+    }
+}
+
+/// A conversation with a specialist and all of its turns, as the interface
+/// sees it. It is also the payload of the event `conversation-changed`.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConversationDto {
+    id: String,
+    project_id: String,
+    member_id: Option<String>,
+    task_id: Option<String>,
+    started_at: String,
+    turns: Vec<TurnDto>,
+}
+
+impl ConversationDto {
+    /// Takes a conversation and its turns, the oldest first.
+    pub fn new(conversation: &Conversation, turns: &[Turn]) -> Self {
+        Self {
+            id: conversation.id().to_string(),
+            project_id: conversation.project_id().to_string(),
+            member_id: conversation.member_id().map(|id| id.to_string()),
+            task_id: conversation.task_id().map(|id| id.to_string()),
+            started_at: moment_to_text(conversation.started_at()),
+            turns: turns.iter().map(TurnDto::from).collect(),
+        }
+    }
+}
+
+impl From<&ConversationWithTurns> for ConversationDto {
+    fn from(conversation: &ConversationWithTurns) -> Self {
+        Self::new(&conversation.conversation, &conversation.turns)
+    }
+}
+
+/// One request to a specialist and what came of it, as the interface sees
+/// it.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TurnDto {
+    id: String,
+    request: String,
+    origin: &'static str,
+    state: &'static str,
+    started_at: String,
+    ended_at: Option<String>,
+    steps: Vec<StepDto>,
+    answer: String,
+    failure: Option<String>,
+    model: Option<String>,
+    tokens: Option<TokenCountsDto>,
+}
+
+impl From<&Turn> for TurnDto {
+    fn from(turn: &Turn) -> Self {
+        Self {
+            id: turn.id().to_string(),
+            request: turn.request().to_owned(),
+            origin: turn.origin().as_str(),
+            state: turn.state().as_str(),
+            started_at: moment_to_text(turn.started_at()),
+            ended_at: turn.ended_at().map(moment_to_text),
+            steps: turn.steps().iter().map(StepDto::from).collect(),
+            answer: turn.answer().to_owned(),
+            failure: turn.failure().map(str::to_owned),
+            model: turn.model().map(str::to_owned),
+            tokens: turn.tokens().map(TokenCountsDto::from),
+        }
+    }
+}
+
+/// One step of a turn: `{"at": "…", "kind": "text", "text": "…"}`, and so
+/// on for the other kinds.
+#[derive(Debug, Clone, Serialize)]
+pub struct StepDto {
+    at: String,
+    #[serde(flatten)]
+    content: StepContentDto,
+}
+
+/// What happened in a step, with its kind as the field `kind`.
+#[derive(Debug, Clone, Serialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum StepContentDto {
+    /// The specialist wrote something.
+    Text {
+        /// What it wrote.
+        text: String,
+    },
+    /// The specialist used a tool.
+    Tool {
+        /// The identifier of the use.
+        id: String,
+        /// The name of the tool.
+        tool: String,
+        /// What the tool was used on. May be empty.
+        summary: String,
+        /// `running`, `done` or `failed`.
+        outcome: &'static str,
+    },
+    /// A tool was refused.
+    Denied {
+        /// The name of the tool.
+        tool: String,
+    },
+    /// The program said something about the run itself.
+    Notice {
+        /// What it said.
+        message: String,
+    },
+}
+
+impl From<&Step> for StepDto {
+    fn from(step: &Step) -> Self {
+        let content = match &step.content {
+            StepContent::Text { text } => StepContentDto::Text { text: text.clone() },
+            StepContent::Tool {
+                use_id,
+                tool,
+                summary,
+                outcome,
+            } => StepContentDto::Tool {
+                id: use_id.clone(),
+                tool: tool.clone(),
+                summary: summary.clone(),
+                outcome: outcome.as_str(),
+            },
+            StepContent::Denied { tool } => StepContentDto::Denied { tool: tool.clone() },
+            StepContent::Notice { message } => StepContentDto::Notice {
+                message: message.clone(),
+            },
+        };
+        Self {
+            at: moment_to_text(step.at),
+            content,
+        }
+    }
+}
+
+/// Counts of tokens, by kind, as the interface sees them.
+#[derive(Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TokenCountsDto {
+    input: u64,
+    output: u64,
+    cache_read: u64,
+    cache_written: u64,
+}
+
+impl From<TokenCounts> for TokenCountsDto {
+    fn from(tokens: TokenCounts) -> Self {
+        Self {
+            input: tokens.input,
+            output: tokens.output,
+            cache_read: tokens.cache_read,
+            cache_written: tokens.cache_written,
         }
     }
 }
