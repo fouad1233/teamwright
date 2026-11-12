@@ -90,8 +90,15 @@ export function useTaskCommands(projectId: Id): TaskCommands {
       prioritize: (taskId, priority) => change(() => backend.prioritizeTask(taskId, priority)),
       assign: (taskId, assignee) => change(() => backend.assignTask(taskId, assignee)),
       estimate: (taskId, minutes) => change(() => backend.estimateTask(taskId, minutes)),
-      reschedule: (taskId, startOn, dueOn) =>
-        change(() => backend.rescheduleTask(taskId, startOn, dueOn)),
+      reschedule: async (taskId, startOn, dueOn) => {
+        // Show the new dates at once: a bar that was dragged on the chart
+        // must not jump back while the backend answers. If the backend
+        // refuses, the tasks are loaded again and the bar goes back.
+        queryClient.setQueryData<Task[]>(queryKey, (tasks = []) =>
+          tasks.map((task) => (task.id === taskId ? { ...task, startOn, dueOn } : task)),
+        );
+        await change(() => backend.rescheduleTask(taskId, startOn, dueOn));
+      },
       move: async (taskId, statusId, index) => {
         // Show the move at once instead of waiting for the backend.
         const tasks = queryClient.getQueryData<Task[]>(queryKey) ?? [];

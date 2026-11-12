@@ -1,0 +1,393 @@
+/*
+ * The chart is one sheet that scrolls both ways. Its head stays at the top
+ * and its outline at the left, the way the title block and the parts list of
+ * a drawing stay in view.
+ *
+ * The width of a day and the height of a row are set by the component, as
+ * `--day` and `--row`, because its arithmetic uses the same two numbers.
+ */
+.gantt {
+  --outline: 384px;
+  --head: 56px;
+
+  height: 100%;
+  overflow: auto;
+  /* The sheet must not scroll on while a bar is dragged past its edge. */
+  overscroll-behavior: contain;
+}
+
+.sheet {
+  display: flex;
+  flex-direction: column;
+  width: max-content;
+  min-width: 100%;
+  min-height: 100%;
+}
+
+.note {
+  padding: var(--space-5);
+  color: var(--ink-soft);
+}
+
+/* The head: the months over the days. */
+.head {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  display: flex;
+  flex: none;
+  height: var(--head);
+  border-bottom: 1px solid var(--rule);
+  background: var(--ground);
+}
+
+.corner {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  display: flex;
+  flex: none;
+  align-items: flex-end;
+  justify-content: space-between;
+  width: var(--outline);
+  padding: 0 var(--space-3) 10px var(--space-5);
+  border-right: 1px solid var(--rule);
+  background: var(--ground);
+}
+
+.todayButton {
+  /* The button sits on the line of the label next to it. */
+  margin-bottom: -7px;
+}
+
+.scale {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+.months {
+  display: flex;
+  height: 26px;
+}
+
+.month {
+  display: flex;
+  flex: none;
+  align-items: center;
+  border-left: 1px solid var(--rule-strong);
+}
+
+.month:first-child {
+  border-left-color: transparent;
+}
+
+/* The name of a month stays in view for as long as any of its days is. */
+.monthName {
+  position: sticky;
+  left: calc(var(--outline) + var(--space-3));
+  padding: 0 var(--space-3);
+  white-space: nowrap;
+}
+
+.days {
+  display: flex;
+  height: 24px;
+}
+
+.day {
+  flex: none;
+  width: var(--day);
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  line-height: 24px;
+  text-align: center;
+}
+
+.restDay {
+  opacity: 0.55;
+}
+
+/* Today is the one point of attention of the chart, so it gets the brass. */
+.today {
+  color: var(--brass);
+  font-weight: 600;
+  opacity: 1;
+}
+
+/* The body: the rows, on a ground of weeks. */
+.body {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+}
+
+/* The chart begins on a Monday. A hairline marks the beginning of every
+   week, and the two days of rest at its end carry a faint wash. */
+.backdrop {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: var(--outline);
+  background-image:
+    linear-gradient(to right, var(--rule) 1px, transparent 1px),
+    linear-gradient(
+      to right,
+      transparent calc(5 * var(--day)),
+      var(--hover) calc(5 * var(--day)),
+      var(--hover) calc(7 * var(--day))
+    );
+  background-size: calc(7 * var(--day)) 100%;
+  pointer-events: none;
+}
+
+.monthLine {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--rule-strong);
+}
+
+.todayLine {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--brass);
+}
+
+/* A small square where the line of today meets the scale, like the mark a
+   draftsman sets where a measure is taken. */
+.todayLine::before {
+  position: absolute;
+  top: -3px;
+  left: -2px;
+  width: 5px;
+  height: 5px;
+  background: var(--brass);
+  content: '';
+}
+
+.row {
+  display: flex;
+  flex: none;
+  height: var(--row);
+}
+
+.row:hover > .track,
+.openRow > .track {
+  background: var(--hover);
+}
+
+/* The name of the task. It lies over the bars that scroll under it, so its
+   ground is solid. */
+.name {
+  position: sticky;
+  left: 0;
+  z-index: 3;
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-2);
+  width: var(--outline);
+  padding: 0 var(--space-3) 0 calc(var(--space-5) + var(--depth) * var(--space-4));
+  border-right: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+  background: var(--ground);
+  cursor: pointer;
+}
+
+.row:hover > .name,
+.openRow > .name {
+  background: linear-gradient(var(--hover), var(--hover)), var(--ground);
+}
+
+.name:focus-visible {
+  outline-offset: -2px;
+}
+
+.mark {
+  display: inline-flex;
+  flex: none;
+}
+
+.reference {
+  flex: none;
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+
+.title {
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fold {
+  height: 22px;
+  padding: 0 6px 0 4px;
+  border-radius: var(--radius-control);
+}
+
+.assignee {
+  display: inline-flex;
+  flex: none;
+  margin-left: auto;
+}
+
+.track {
+  position: relative;
+  flex: none;
+  border-bottom: 1px solid var(--rule);
+}
+
+.rest {
+  display: flex;
+  flex: 1;
+}
+
+.restOfOutline {
+  position: sticky;
+  left: 0;
+  z-index: 3;
+  flex: none;
+  width: var(--outline);
+  border-right: 1px solid var(--rule);
+  background: var(--ground);
+}
+
+/*
+ * A bar is a block of the tally, drawn out over the days of its task: hollow
+ * while the work has not started, solid in the pigment of its status once it
+ * has, and quieter when it is done.
+ */
+.bar {
+  position: absolute;
+  top: calc((var(--row) - var(--bar)) / 2);
+  z-index: 1;
+  height: var(--bar);
+  border-radius: 3px;
+  background: var(--tone);
+  cursor: grab;
+  touch-action: none;
+}
+
+/* The grounds of these two are mixed, not see-through, so that a line that
+   runs behind a bar does not show in it. */
+.bar[data-progress='todo'] {
+  border: 1px solid var(--ink-faint);
+  background: linear-gradient(var(--tone-wash), var(--tone-wash)), var(--ground);
+}
+
+.bar[data-progress='done'] {
+  background: color-mix(in srgb, var(--tone) 45%, var(--ground));
+}
+
+.bar:focus-visible {
+  outline-offset: 2px;
+}
+
+/* A task with only a start has no end to show: its bar fades out. */
+.bar[data-kind='open'] {
+  mask-image: linear-gradient(to right, #000 45%, transparent);
+}
+
+/* A task with only a due date is a mark on that day: a square on its corner. */
+.bar[data-kind='deadline'] {
+  top: calc((var(--row) - 12px) / 2);
+  height: 12px;
+  border-radius: 2px;
+  transform: rotate(45deg) scale(0.78);
+}
+
+.dragged {
+  z-index: 2;
+  box-shadow: var(--shadow-lifted);
+  cursor: grabbing;
+}
+
+/* The ends of a bar are held to change one date. They show nothing until the
+   pointer is over the bar. */
+.startGrip,
+.endGrip {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 7px;
+  cursor: ew-resize;
+}
+
+.startGrip {
+  left: 0;
+}
+
+.endGrip {
+  right: 0;
+}
+
+.bar:hover > .startGrip::after,
+.bar:hover > .endGrip::after,
+.dragged > .startGrip::after,
+.dragged > .endGrip::after {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 3px;
+  width: 1px;
+  background: var(--ground);
+  content: '';
+  opacity: 0.7;
+}
+
+/* The dates of a bar while it is dragged, set over it like a dimension. */
+.dragDates {
+  position: absolute;
+  bottom: calc((var(--row) + var(--bar)) / 2 + 5px);
+  z-index: 2;
+  padding: 1px 6px;
+  pointer-events: none;
+  border: 1px solid var(--rule-strong);
+  border-radius: 3px;
+  background: var(--surface-raised);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+/* How late a task is: a thin line from the end of its bar to today. */
+.lateness {
+  position: absolute;
+  top: calc(var(--row) / 2 - 1px);
+  z-index: 1;
+  height: 2px;
+  background: var(--danger);
+}
+
+/* The lines of the dependencies run behind the bars and take no clicks. */
+.links {
+  position: absolute;
+  top: 0;
+  left: var(--outline);
+  z-index: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.link {
+  fill: none;
+  stroke: var(--ink-faint);
+  stroke-width: 1;
+}
+
+.brokenLink {
+  stroke: var(--danger);
+}
