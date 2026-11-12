@@ -24,8 +24,8 @@ use teamwright_domain::{
     Effort, Interview, InterviewAnswer, InterviewQuestion, Member, MemberId, MemberKind,
     MemberName, MemberProfile, ModelName, Priority, Project, ProjectKey, ProjectName, Proposal,
     ProposedMember, ProposedOwner, ProposedTask, Rank, Schedule, Status, StatusCategory, StatusId,
-    StatusName, StepContent, Task, TaskDraft, TaskId, TaskTitle, Timestamp, TokenCounts,
-    ToolOutcome, Turn, TurnOrigin, TurnState, Workflow,
+    StatusName, StepContent, StoryPoints, Task, TaskDraft, TaskId, TaskTitle, Timestamp,
+    TokenCounts, ToolOutcome, Turn, TurnOrigin, TurnState, Workflow,
 };
 use teamwright_storage::{
     Database, Operation, SqliteConversationRepository, SqliteMemberRepository,
@@ -396,6 +396,7 @@ fn a_saved_task_is_found_again_unchanged() {
         moment(10),
     );
     task.block_on(blocker.id(), moment(11)).unwrap();
+    task.set_points(Some(StoryPoints::new(13).unwrap()), moment(11));
     store.tasks.save(&task).unwrap();
 
     let found = store.tasks.find(task.id()).unwrap();

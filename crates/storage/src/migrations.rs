@@ -17,6 +17,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("schema/0005_decisions.sql"),
     include_str!("schema/0006_project_places.sql"),
     include_str!("schema/0007_planning.sql"),
+    include_str!("schema/0008_sprints.sql"),
 ];
 
 /// Applies the migrations a database has not seen yet. Each one runs in its
@@ -81,6 +82,7 @@ mod tests {
             "project_places",
             "project_reference_folders",
             "projects",
+            "sprints",
             "statuses",
             "task_dependencies",
             "tasks",
@@ -280,6 +282,98 @@ mod tests {
             .query_row("SELECT count(*) FROM turn_proposals", [], |row| row.get(0))
             .unwrap();
         assert_eq!(proposals, 0);
+    }
+
+    #[test]
+    fn a_database_without_sprints_is_brought_up_to_date_with_its_tasks_kept() {
+        let mut connection = Connection::open_in_memory().unwrap();
+        for migration in &MIGRATIONS[..7] {
+            connection.execute_batch(migration).unwrap();
+        }
+        connection.pragma_update(None, "user_version", 7).unwrap();
+        connection
+            .execute_batch(
+                "INSERT INTO projects (id, key, name, description, next_task_number, created_at)
+                 VALUES ('p1', 'SSN', 'Smart sensor node', '', 3, '2026-11-11T09:00:00.000Z');
+                 INSERT INTO statuses (id, project_id, position, name, category, color)
+                 VALUES ('s1', 'p1', 0, 'To do', 'todo', 'slate');
+                 INSERT INTO tasks (
+                     id, project_id, number, title, description, status_id, priority,
+                     assignee_kind, assignee_member_id, parent_id, estimate_minutes,
+                     start_on, due_on, rank, created_at, updated_at, completed_at
+                 )
+                 VALUES (
+                     't1', 'p1', 1, 'Design the board', 'Two layers.', 's1', 'high',
+                     'manager', NULL, NULL, 240, '2026-11-12', '2026-11-14', 1024.0,
+                     '2026-11-11T09:00:00.000Z', '2026-11-11T10:00:00.000Z', NULL
+                 ),
+                 (
+                     't2', 'p1', 2, 'Write the firmware', '', 's1', 'normal',
+                     NULL, NULL, 't1', NULL, NULL, NULL, 2048.0,
+                     '2026-11-11T09:00:00.000Z', '2026-11-11T09:00:00.000Z', NULL
+                 );",
+            )
+            .unwrap();
+
+        migrate(&mut connection).unwrap();
+
+        assert_eq!(
+            version_of(&connection),
+            i64::try_from(MIGRATIONS.len()).unwrap()
+        );
+        type Kept = (String, String, Option<i64>, Option<String>, Option<String>);
+        let kept: Kept = connection
+            .query_row(
+                "SELECT title, priority, estimate_minutes, due_on, updated_at FROM tasks
+                 WHERE id = 't1'",
+                [],
+                |row| {
+                    Ok((
+                        row.get(0)?,
+                        row.get(1)?,
+                        row.get(2)?,
+                        row.get(3)?,
+                        row.get(4)?,
+                    ))
+                },
+            )
+            .unwrap();
+        assert_eq!(
+            kept,
+            (
+                "Design the board".to_owned(),
+                "high".to_owned(),
+                Some(240),
+                Some("2026-11-14".to_owned()),
+                Some("2026-11-11T10:00:00.000Z".to_owned())
+            )
+        );
+        let parent: Option<String> = connection
+            .query_row("SELECT parent_id FROM tasks WHERE id = 't2'", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(parent.as_deref(), Some("t1"));
+        let in_backlog_without_points: i64 = connection
+            .query_row(
+                "SELECT count(*) FROM tasks WHERE sprint_id IS NULL AND points IS NULL",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(in_backlog_without_points, 2);
+        let (next_task, next_sprint): (i64, i64) = connection
+            .query_row(
+                "SELECT next_task_number, next_sprint_number FROM projects WHERE id = 'p1'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!((next_task, next_sprint), (3, 1));
+        let sprints: i64 = connection
+            .query_row("SELECT count(*) FROM sprints", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(sprints, 0);
     }
 
     #[test]

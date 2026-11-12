@@ -4,8 +4,9 @@ use std::cmp::Ordering;
 use std::collections::BTreeSet;
 
 use crate::error::DomainError;
-use crate::ids::{MemberId, ProjectId, StatusId, TaskId};
+use crate::ids::{MemberId, ProjectId, SprintId, StatusId, TaskId};
 use crate::macros::text_enum;
+use crate::sprint::StoryPoints;
 use crate::text::TaskTitle;
 use crate::time::{CalendarDate, Timestamp};
 use crate::workflow::{Status, StatusCategory};
@@ -242,6 +243,10 @@ pub struct TaskSnapshot {
     pub blocked_by: BTreeSet<TaskId>,
     /// The expected working time in minutes.
     pub estimate_minutes: Option<u32>,
+    /// The sprint the task is planned into, or `None` for the backlog.
+    pub sprint_id: Option<SprintId>,
+    /// How big the task is compared with other work.
+    pub points: Option<StoryPoints>,
     /// The planned start and due dates.
     pub schedule: Schedule,
     /// The position among the tasks of the same status.
@@ -268,6 +273,8 @@ pub struct Task {
     parent_id: Option<TaskId>,
     blocked_by: BTreeSet<TaskId>,
     estimate_minutes: Option<u32>,
+    sprint_id: Option<SprintId>,
+    points: Option<StoryPoints>,
     schedule: Schedule,
     rank: Rank,
     created_at: Timestamp,
@@ -303,6 +310,9 @@ impl Task {
             parent_id: draft.parent_id,
             blocked_by: BTreeSet::new(),
             estimate_minutes: draft.estimate_minutes,
+            // A new task starts in the backlog, without points.
+            sprint_id: None,
+            points: None,
             schedule: draft.schedule,
             rank,
             created_at: now,
@@ -326,6 +336,8 @@ impl Task {
             parent_id: snapshot.parent_id,
             blocked_by: snapshot.blocked_by,
             estimate_minutes: snapshot.estimate_minutes,
+            sprint_id: snapshot.sprint_id,
+            points: snapshot.points,
             schedule: snapshot.schedule,
             rank: snapshot.rank,
             created_at: snapshot.created_at,
@@ -400,6 +412,19 @@ impl Task {
         self.estimate_minutes
     }
 
+    /// The sprint the task is planned into, or `None` if it is in the
+    /// backlog.
+    #[must_use]
+    pub const fn sprint_id(&self) -> Option<SprintId> {
+        self.sprint_id
+    }
+
+    /// The story points of the task, if it has any.
+    #[must_use]
+    pub const fn points(&self) -> Option<StoryPoints> {
+        self.points
+    }
+
     /// The planned start and due dates.
     #[must_use]
     pub const fn schedule(&self) -> Schedule {
@@ -463,6 +488,22 @@ impl Task {
     /// Sets or clears the expected working time.
     pub fn estimate(&mut self, minutes: Option<u32>, now: Timestamp) {
         self.estimate_minutes = minutes;
+        self.touch(now);
+    }
+
+    /// Puts the task into a sprint, or with `None` back into the backlog.
+    ///
+    /// Whether the sprint takes tasks, and that a subtask goes where its
+    /// task goes, depends on other stored things and is checked by the use
+    /// case.
+    pub fn plan_into(&mut self, sprint_id: Option<SprintId>, now: Timestamp) {
+        self.sprint_id = sprint_id;
+        self.touch(now);
+    }
+
+    /// Gives the task story points, or takes them away.
+    pub fn set_points(&mut self, points: Option<StoryPoints>, now: Timestamp) {
+        self.points = points;
         self.touch(now);
     }
 
@@ -608,6 +649,27 @@ mod tests {
         assert_eq!(task.updated_at(), moment(9));
         assert!(task.blocked_by().is_empty());
         assert!(!task.is_complete());
+        assert_eq!(task.sprint_id(), None);
+        assert_eq!(task.points(), None);
+    }
+
+    #[test]
+    fn a_task_is_planned_into_a_sprint_and_given_points() {
+        let mut task = task_in(&Workflow::standard());
+        let sprint_id = SprintId::generate();
+
+        task.plan_into(Some(sprint_id), moment(10));
+        task.set_points(Some(StoryPoints::new(8).unwrap()), moment(11));
+
+        assert_eq!(task.sprint_id(), Some(sprint_id));
+        assert_eq!(task.points().map(StoryPoints::value), Some(8));
+        assert_eq!(task.updated_at(), moment(11));
+
+        task.plan_into(None, moment(12));
+        task.set_points(None, moment(12));
+
+        assert_eq!(task.sprint_id(), None);
+        assert_eq!(task.points(), None);
     }
 
     #[test]

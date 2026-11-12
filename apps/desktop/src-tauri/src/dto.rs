@@ -17,8 +17,8 @@ use teamwright_application::{
 use teamwright_domain::{
     Assignee, CalendarDate, Color, Conversation, DecisionOption, DecisionRequest, DomainError,
     Effort, Interview, InterviewAnswer, Member, MemberKind, Priority, Project, Proposal,
-    ProposedOwner, Schedule, Status, StatusCategory, Step, StepContent, Task, TaskChange,
-    TaskChangeKind, Timestamp, TokenCounts, Turn,
+    ProposedOwner, Schedule, Status, StatusCategory, Step, StepContent, StoryPoints, Task,
+    TaskChange, TaskChangeKind, Timestamp, TokenCounts, Turn,
 };
 
 use crate::error::CommandError;
@@ -94,6 +94,8 @@ pub struct TaskDto {
     parent_id: Option<String>,
     blocked_by: Vec<String>,
     estimate_minutes: Option<u32>,
+    sprint_id: Option<String>,
+    points: Option<u16>,
     start_on: Option<String>,
     due_on: Option<String>,
     rank: f64,
@@ -116,6 +118,8 @@ impl From<&Task> for TaskDto {
             parent_id: task.parent_id().map(|parent_id| parent_id.to_string()),
             blocked_by: task.blocked_by().iter().map(ToString::to_string).collect(),
             estimate_minutes: task.estimate_minutes(),
+            sprint_id: task.sprint_id().map(|sprint_id| sprint_id.to_string()),
+            points: task.points().map(StoryPoints::value),
             start_on: task.schedule().start_on().map(date_to_text),
             due_on: task.schedule().due_on().map(date_to_text),
             rank: task.rank().value(),

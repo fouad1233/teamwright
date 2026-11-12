@@ -20,16 +20,22 @@ use crate::places;
 
 /// The columns of the `projects` table that every query reads.
 const PROJECT_COLUMNS: &str =
-    "id, key, name, description, next_task_number, created_at, archived_at";
+    "id, key, name, description, next_task_number, next_sprint_number, created_at, archived_at";
 
 const UPSERT_PROJECT: &str = "
-    INSERT INTO projects (id, key, name, description, next_task_number, created_at, archived_at)
-    VALUES (:id, :key, :name, :description, :next_task_number, :created_at, :archived_at)
+    INSERT INTO projects (
+        id, key, name, description, next_task_number, next_sprint_number, created_at, archived_at
+    )
+    VALUES (
+        :id, :key, :name, :description, :next_task_number, :next_sprint_number, :created_at,
+        :archived_at
+    )
     ON CONFLICT (id) DO UPDATE SET
         key = excluded.key,
         name = excluded.name,
         description = excluded.description,
         next_task_number = excluded.next_task_number,
+        next_sprint_number = excluded.next_sprint_number,
         created_at = excluded.created_at,
         archived_at = excluded.archived_at";
 
@@ -85,6 +91,7 @@ struct ProjectRecord {
     name: String,
     description: String,
     next_task_number: u32,
+    next_sprint_number: u32,
     created_at: String,
     archived_at: Option<String>,
     statuses: Vec<StatusRecord>,
@@ -99,6 +106,7 @@ impl ProjectRecord {
             name: project.name().to_string(),
             description: project.description().to_owned(),
             next_task_number: project.next_task_number(),
+            next_sprint_number: project.next_sprint_number(),
             created_at: codec::moment_to_text(project.created_at()),
             archived_at: project.archived_at().map(codec::moment_to_text),
             statuses: project
@@ -119,6 +127,7 @@ impl ProjectRecord {
             name: row.get("name")?,
             description: row.get("description")?,
             next_task_number: row.get("next_task_number")?,
+            next_sprint_number: row.get("next_sprint_number")?,
             created_at: row.get("created_at")?,
             archived_at: row.get("archived_at")?,
             statuses: Vec::new(),
@@ -143,6 +152,7 @@ impl ProjectRecord {
             description: self.description,
             workflow: Workflow::new(statuses).map_err(broken)?,
             next_task_number: self.next_task_number,
+            next_sprint_number: self.next_sprint_number,
             created_at: codec::moment_from_text(&self.created_at)?,
             archived_at: self
                 .archived_at
@@ -295,6 +305,7 @@ fn upsert_project(
             ":name": record.name,
             ":description": record.description,
             ":next_task_number": record.next_task_number,
+            ":next_sprint_number": record.next_sprint_number,
             ":created_at": record.created_at,
             ":archived_at": record.archived_at,
         },

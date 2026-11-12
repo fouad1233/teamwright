@@ -105,6 +105,8 @@ pub struct ProjectSnapshot {
     pub workflow: Workflow,
     /// The number the next new task will get.
     pub next_task_number: u32,
+    /// The number the next new sprint will get.
+    pub next_sprint_number: u32,
     /// When the project was created.
     pub created_at: Timestamp,
     /// When the project was archived, if it was.
@@ -120,6 +122,7 @@ pub struct Project {
     description: String,
     workflow: Workflow,
     next_task_number: u32,
+    next_sprint_number: u32,
     created_at: Timestamp,
     archived_at: Option<Timestamp>,
 }
@@ -127,6 +130,8 @@ pub struct Project {
 impl Project {
     /// The number of the first task of every project.
     const FIRST_TASK_NUMBER: u32 = 1;
+    /// The number of the first sprint of every project.
+    const FIRST_SPRINT_NUMBER: u32 = 1;
 
     /// Starts a new project.
     #[must_use]
@@ -144,6 +149,7 @@ impl Project {
             description,
             workflow,
             next_task_number: Self::FIRST_TASK_NUMBER,
+            next_sprint_number: Self::FIRST_SPRINT_NUMBER,
             created_at: now,
             archived_at: None,
         }
@@ -159,6 +165,7 @@ impl Project {
             description: snapshot.description,
             workflow: snapshot.workflow,
             next_task_number: snapshot.next_task_number.max(Self::FIRST_TASK_NUMBER),
+            next_sprint_number: snapshot.next_sprint_number.max(Self::FIRST_SPRINT_NUMBER),
             created_at: snapshot.created_at,
             archived_at: snapshot.archived_at,
         }
@@ -200,6 +207,12 @@ impl Project {
         self.next_task_number
     }
 
+    /// The number the next new sprint will get.
+    #[must_use]
+    pub const fn next_sprint_number(&self) -> u32 {
+        self.next_sprint_number
+    }
+
     /// When the project was created.
     #[must_use]
     pub const fn created_at(&self) -> Timestamp {
@@ -234,6 +247,16 @@ impl Project {
     pub fn allocate_task_number(&mut self) -> u32 {
         let number = self.next_task_number;
         self.next_task_number = self.next_task_number.saturating_add(1);
+        number
+    }
+
+    /// Hands out the number for a new sprint and moves the counter on.
+    ///
+    /// A sprint that is left without a name is called after its number.
+    /// Numbers are never reused, so a deleted sprint still counts.
+    pub fn allocate_sprint_number(&mut self) -> u32 {
+        let number = self.next_sprint_number;
+        self.next_sprint_number = self.next_sprint_number.saturating_add(1);
         number
     }
 
@@ -390,6 +413,20 @@ mod tests {
     }
 
     #[test]
+    fn sprint_numbers_start_at_one_and_are_never_handed_out_twice() {
+        let mut project = project("Smart sensor node");
+
+        let numbers = [
+            project.allocate_sprint_number(),
+            project.allocate_sprint_number(),
+        ];
+
+        assert_eq!(numbers, [1, 2]);
+        assert_eq!(project.next_sprint_number(), 3);
+        assert_eq!(project.next_task_number(), 1);
+    }
+
+    #[test]
     fn a_new_project_is_not_archived() {
         assert!(!project("Smart sensor node").is_archived());
     }
@@ -455,6 +492,7 @@ mod tests {
             description: original.description().to_owned(),
             workflow: original.workflow().clone(),
             next_task_number: original.next_task_number(),
+            next_sprint_number: original.next_sprint_number(),
             created_at: original.created_at(),
             archived_at: original.archived_at(),
         });

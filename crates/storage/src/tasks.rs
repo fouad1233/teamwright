@@ -7,7 +7,8 @@ use rusqlite::{Connection, OptionalExtension, Row, Transaction, named_params};
 use serde::{Deserialize, Serialize};
 use teamwright_application::{StorageError, TaskRepository};
 use teamwright_domain::{
-    Assignee, DomainError, ProjectId, Rank, Schedule, Task, TaskId, TaskSnapshot, TaskTitle,
+    Assignee, DomainError, ProjectId, Rank, Schedule, StoryPoints, Task, TaskId, TaskSnapshot,
+    TaskTitle,
 };
 
 use crate::codec;
@@ -17,8 +18,8 @@ use crate::operations::{self, Entity, OperationRecorder};
 
 /// The columns of the `tasks` table that every query reads.
 const TASK_COLUMNS: &str = "id, project_id, number, title, description, status_id, priority, \
-     assignee_kind, assignee_member_id, parent_id, estimate_minutes, start_on, due_on, rank, \
-     created_at, updated_at, completed_at";
+     assignee_kind, assignee_member_id, parent_id, estimate_minutes, sprint_id, points, start_on, \
+     due_on, rank, created_at, updated_at, completed_at";
 
 /// The value of `assignee_kind` for a task given to the manager.
 const ASSIGNEE_MANAGER: &str = "manager";
@@ -31,12 +32,12 @@ const UPSERT_TASK: &str = "
     INSERT INTO tasks (
         id, project_id, number, title, description, status_id, priority,
         assignee_kind, assignee_member_id, parent_id, estimate_minutes,
-        start_on, due_on, rank, created_at, updated_at, completed_at
+        sprint_id, points, start_on, due_on, rank, created_at, updated_at, completed_at
     )
     VALUES (
         :id, :project_id, :number, :title, :description, :status_id, :priority,
         :assignee_kind, :assignee_member_id, :parent_id, :estimate_minutes,
-        :start_on, :due_on, :rank, :created_at, :updated_at, :completed_at
+        :sprint_id, :points, :start_on, :due_on, :rank, :created_at, :updated_at, :completed_at
     )
     ON CONFLICT (id) DO UPDATE SET
         project_id = excluded.project_id,
@@ -49,6 +50,8 @@ const UPSERT_TASK: &str = "
         assignee_member_id = excluded.assignee_member_id,
         parent_id = excluded.parent_id,
         estimate_minutes = excluded.estimate_minutes,
+        sprint_id = excluded.sprint_id,
+        points = excluded.points,
         start_on = excluded.start_on,
         due_on = excluded.due_on,
         rank = excluded.rank,
@@ -71,6 +74,12 @@ struct TaskRecord {
     assignee_member_id: Option<String>,
     parent_id: Option<String>,
     estimate_minutes: Option<u32>,
+    // A task logged before there were sprints is in the backlog and has no
+    // points.
+    #[serde(default)]
+    sprint_id: Option<String>,
+    #[serde(default)]
+    points: Option<u16>,
     start_on: Option<String>,
     due_on: Option<String>,
     rank: f64,
@@ -103,6 +112,8 @@ impl TaskRecord {
             assignee_member_id,
             parent_id: task.parent_id().map(|parent_id| parent_id.to_string()),
             estimate_minutes: task.estimate_minutes(),
+            sprint_id: task.sprint_id().map(|sprint_id| sprint_id.to_string()),
+            points: task.points().map(StoryPoints::value),
             start_on: task.schedule().start_on().map(codec::date_to_text),
             due_on: task.schedule().due_on().map(codec::date_to_text),
             rank: task.rank().value(),
@@ -128,6 +139,8 @@ impl TaskRecord {
             assignee_member_id: row.get("assignee_member_id")?,
             parent_id: row.get("parent_id")?,
             estimate_minutes: row.get("estimate_minutes")?,
+            sprint_id: row.get("sprint_id")?,
+            points: row.get("points")?,
             start_on: row.get("start_on")?,
             due_on: row.get("due_on")?,
             rank: row.get("rank")?,
@@ -173,6 +186,12 @@ impl TaskRecord {
             parent_id: self.parent_id.as_deref().map(codec::parse).transpose()?,
             blocked_by,
             estimate_minutes: self.estimate_minutes,
+            sprint_id: self.sprint_id.as_deref().map(codec::parse).transpose()?,
+            points: self
+                .points
+                .map(|points| StoryPoints::new(i64::from(points)))
+                .transpose()
+                .map_err(broken)?,
             schedule,
             rank: Rank::from_value(self.rank),
             created_at: codec::moment_from_text(&self.created_at)?,
@@ -339,6 +358,8 @@ fn store(
             ":assignee_member_id": record.assignee_member_id,
             ":parent_id": record.parent_id,
             ":estimate_minutes": record.estimate_minutes,
+            ":sprint_id": record.sprint_id,
+            ":points": record.points,
             ":start_on": record.start_on,
             ":due_on": record.due_on,
             ":rank": record.rank,
@@ -398,4 +419,41 @@ fn blockers_in_project(
             .push(blocker_id);
     }
     Ok(blockers_by_task)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_task_logged_before_there_were_sprints_is_read_into_the_backlog_without_points() {
+        let logged = r#"{
+            "id": "0190a000-0000-7000-8000-000000000001",
+            "project_id": "0190a000-0000-7000-8000-000000000002",
+            "number": 1,
+            "title": "Design the board",
+            "description": "",
+            "status_id": "0190a000-0000-7000-8000-000000000003",
+            "priority": "high",
+            "assignee_kind": null,
+            "assignee_member_id": null,
+            "parent_id": null,
+            "estimate_minutes": 240,
+            "start_on": null,
+            "due_on": null,
+            "rank": 0.0,
+            "created_at": "2026-11-11T09:00:00.000Z",
+            "updated_at": "2026-11-11T09:00:00.000Z",
+            "completed_at": null,
+            "blocked_by": []
+        }"#;
+
+        let record: TaskRecord = serde_json::from_str(logged).unwrap();
+        let task = record.into_task().unwrap();
+
+        assert_eq!(task.title().as_str(), "Design the board");
+        assert_eq!(task.estimate_minutes(), Some(240));
+        assert_eq!(task.sprint_id(), None);
+        assert_eq!(task.points(), None);
+    }
 }
