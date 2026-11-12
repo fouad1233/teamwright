@@ -31,6 +31,7 @@ was considered.
 | [0013](0013-the-folders-of-a-project.md) | Give a project a work folder the manager can choose, and folders that are only read | Accepted |
 | [0014](0014-the-advisor-plans-through-two-tools.md) | Let the Advisor interview and propose through two tools | Accepted |
 | [0015](0015-light-where-something-happens.md) | Let light fall only where something happens or waits for the manager | Accepted |
+| [0016](0016-sprints-and-a-backlog.md) | Plan the work in sprints, with a backlog and story points | Accepted |
 | [0017](0017-sync-through-a-folder.md) | Keep computers in step through files of operations in a folder the user owns | Proposed |
 
 ## Template
