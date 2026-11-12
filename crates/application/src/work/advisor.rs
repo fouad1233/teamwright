@@ -538,7 +538,7 @@ pub fn instructions_for_advisor(
                 .to_owned(),
         );
         if !team.is_empty() {
-            lines.push("The team:".to_owned());
+            lines.push("On the team already:".to_owned());
             lines.extend(team.iter().map(|member| {
                 let kind = match member.kind() {
                     MemberKind::Agent => "AI specialist",
@@ -553,7 +553,7 @@ pub fn instructions_for_advisor(
             }));
         }
         if !tasks.is_empty() {
-            lines.push("The tasks:".to_owned());
+            lines.push("The tasks that exist:".to_owned());
             lines.extend(tasks.iter().map(|task| {
                 let status = project.workflow().status(task.status_id()).map_or_else(
                     || "unknown status".to_owned(),
