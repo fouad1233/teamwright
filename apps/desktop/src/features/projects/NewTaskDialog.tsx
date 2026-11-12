@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 
 import { useNavigation } from '@/app/navigation';
-import type { Project } from '@/shared/api/types';
+import type { Assignee, Project } from '@/shared/api/types';
 import { Button } from '@/shared/ui/Button';
 import { Dialog } from '@/shared/ui/Dialog';
 import { Field, TextInput } from '@/shared/ui/Field';
@@ -12,6 +12,11 @@ import styles from './NewTaskDialog.module.css';
 interface NewTaskDialogProps {
   open: boolean;
   project: Project;
+  /**
+   * Who the new task is given to, when the view that is open shows the
+   * tasks of one person. Left out, nobody.
+   */
+  assignee?: Assignee;
   onClose: () => void;
 }
 
@@ -19,16 +24,22 @@ interface NewTaskDialogProps {
  * The dialog in which a task is opened by its title alone. The new task is
  * shown at once, so the manager can go on to assign it and fill in the rest.
  */
-export function NewTaskDialog({ open, project, onClose }: NewTaskDialogProps) {
+export function NewTaskDialog({ open, project, assignee, onClose }: NewTaskDialogProps) {
   return (
     <Dialog open={open} title="New task" onClose={onClose}>
-      <NewTaskForm project={project} onDone={onClose} />
+      <NewTaskForm project={project} assignee={assignee} onDone={onClose} />
     </Dialog>
   );
 }
 
 /** The form inside the dialog. Its field starts empty every time the dialog opens. */
-function NewTaskForm({ project, onDone }: { project: Project; onDone: () => void }) {
+interface NewTaskFormProps {
+  project: Project;
+  assignee: Assignee | undefined;
+  onDone: () => void;
+}
+
+function NewTaskForm({ project, assignee, onDone }: NewTaskFormProps) {
   const commands = useTaskCommands(project.id);
   const navigation = useNavigation();
   const [title, setTitle] = useState('');
@@ -37,7 +48,7 @@ function NewTaskForm({ project, onDone }: { project: Project; onDone: () => void
 
   async function createTask() {
     setIsSubmitting(true);
-    const created = await commands.create({ title });
+    const created = await commands.create({ title, assignee });
     setIsSubmitting(false);
     if (created) {
       onDone();

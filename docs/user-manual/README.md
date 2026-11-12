@@ -435,6 +435,9 @@ and Dashboard. You can change them:
   its subtasks always stay with it. A filtered view has a small mark on
   its tab, and a line at its top says what it shows, for example *Shows
   the tasks of Firmware engineer*. *Show every task* clears the filter.
+  A task you add while a view shows one member's tasks, or yours, is
+  given to that member, or to you, so that it stays in the view; the line
+  at the top says so.
   When a member leaves the team, a view that showed only their tasks shows
   everybody's again.
 - **When the row is full**, the views that do not fit the window are

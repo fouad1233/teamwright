@@ -17,7 +17,13 @@ import { TeamView } from '../team/TeamView';
 import { useTeam } from '../team/teamQueries';
 import { FilterLine } from '../views/FilterLine';
 import { kindOf } from '../views/viewKinds';
-import { EVERY_TASK, isFilterable, shownTaskIds, viewToShow } from '../views/viewModel';
+import {
+  EVERY_TASK,
+  assigneeForNewTasks,
+  isFilterable,
+  shownTaskIds,
+  viewToShow,
+} from '../views/viewModel';
 import { useViewCommands, useViews } from '../views/viewQueries';
 import { ViewTabs } from '../views/ViewTabs';
 import { MemberChat } from '../work/MemberChat';
@@ -157,6 +163,13 @@ export function ProjectWorkspace({ project }: { project: Project }) {
           <NewTaskDialog
             open={isAddingTask}
             project={project}
+            // A task made while a view of one person's tasks is open goes to
+            // that person, so that it stays in the view.
+            assignee={
+              shownView && isFilterable(shownView.kind)
+                ? assigneeForNewTasks(shownView.filter)
+                : undefined
+            }
             onClose={() => {
               setIsAddingTask(false);
             }}
@@ -199,7 +212,13 @@ function ShownView({ view, project, tasks, onClearFilter }: ShownViewProps) {
     <div className={styles.view}>
       <FilterLine view={{ ...view, filter }} onClear={onClearFilter} />
       <div className={styles.viewBody}>
-        <Component project={project} tasks={shownTasks} everyTask={tasks} shows={shows} />
+        <Component
+          project={project}
+          tasks={shownTasks}
+          everyTask={tasks}
+          shows={shows}
+          assigneeOfNewTasks={assigneeForNewTasks(filter)}
+        />
       </div>
     </div>
   );

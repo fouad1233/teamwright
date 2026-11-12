@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { Member, Status, Task, View, ViewFilter } from '@/shared/api/types';
 
 import {
+  assigneeForNewTasks,
   EVERY_TASK,
   filterInWords,
   isFilterable,
@@ -123,10 +124,10 @@ describe('a filter in words', () => {
   it('says whose tasks are shown, and whether the finished ones are left out', () => {
     expect(filterInWords(EVERY_TASK, members)).toBeNull();
     expect(filterInWords({ assignee: ENGINEER, hidesFinished: false }, members)).toBe(
-      'Shows the tasks of Firmware engineer',
+      'Shows the tasks of Firmware engineer. New ones go to them',
     );
     expect(filterInWords({ assignee: { kind: 'manager' }, hidesFinished: true }, members)).toBe(
-      'Shows your unfinished tasks',
+      'Shows your unfinished tasks. New ones are yours',
     );
     expect(filterInWords({ assignee: { kind: 'nobody' }, hidesFinished: false }, members)).toBe(
       'Shows the tasks given to nobody',
@@ -143,6 +144,22 @@ describe('a filter in words', () => {
         members,
       ),
     ).toBe('Shows the tasks of a member who has left the team');
+  });
+});
+
+describe('who a task opened in a view is given to', () => {
+  it('goes to the member or to the manager the filter shows', () => {
+    expect(assigneeForNewTasks({ assignee: ENGINEER, hidesFinished: false })).toEqual(ENGINEER);
+    expect(assigneeForNewTasks({ assignee: { kind: 'manager' }, hidesFinished: true })).toEqual({
+      kind: 'manager',
+    });
+  });
+
+  it('goes to nobody in a view of everybody or of nobody', () => {
+    expect(assigneeForNewTasks(EVERY_TASK)).toBeUndefined();
+    expect(
+      assigneeForNewTasks({ assignee: { kind: 'nobody' }, hidesFinished: false }),
+    ).toBeUndefined();
   });
 });
 

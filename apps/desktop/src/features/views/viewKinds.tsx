@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import type { ComponentType } from 'react';
 
-import type { Project, Task, ViewKind } from '@/shared/api/types';
+import type { Assignee, Project, Task, ViewKind } from '@/shared/api/types';
 
 import { CalendarView } from '../calendar/CalendarView';
 import { DashboardView } from '../dashboard/DashboardView';
@@ -27,6 +27,8 @@ export interface KindProps {
   everyTask: Task[];
   /** Whether a task is let through by the filter. Nothing when every task is. */
   shows: ((task: Task) => boolean) | undefined;
+  /** Who a task opened in the view is given to, so that the filter keeps showing it. */
+  assigneeOfNewTasks: Assignee | undefined;
 }
 
 /** One kind of view: what it is called, what it is for, its mark, and what draws it. */
@@ -44,8 +46,15 @@ export interface Kind {
  * dropped between the shown ones then lands where it was dropped, and a card
  * still counts a task it waits for that the filter hides.
  */
-function FilteredBoard({ project, everyTask, shows }: KindProps) {
-  return <SprintBoard project={project} tasks={everyTask} shows={shows} />;
+function FilteredBoard({ project, everyTask, shows, assigneeOfNewTasks }: KindProps) {
+  return (
+    <SprintBoard
+      project={project}
+      tasks={everyTask}
+      shows={shows}
+      assigneeOfNewTasks={assigneeOfNewTasks}
+    />
+  );
 }
 
 /** The kinds of view, in the order of the chooser. A new kind is one more entry. */

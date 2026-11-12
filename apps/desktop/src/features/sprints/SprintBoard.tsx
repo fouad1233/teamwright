@@ -1,7 +1,7 @@
 import { ChevronDown, History } from 'lucide-react';
 import { useState } from 'react';
 
-import type { Project, Sprint, Task } from '@/shared/api/types';
+import type { Assignee, Project, Sprint, Task } from '@/shared/api/types';
 import { classNames } from '@/shared/lib/classNames';
 import { today } from '@/shared/lib/format';
 import { Button } from '@/shared/ui/Button';
@@ -31,6 +31,8 @@ interface SprintBoardProps {
    * is shown.
    */
   shows?: (task: Task) => boolean;
+  /** Who a task opened from a lane is given to. Left out, nobody. */
+  assigneeOfNewTasks?: Assignee;
 }
 
 /**
@@ -39,7 +41,7 @@ interface SprintBoardProps {
  * the header chooses a sprint that is over, and the board then shows the
  * tasks it finished. Without any sprint it is the board of all tasks.
  */
-export function SprintBoard({ project, tasks, shows }: SprintBoardProps) {
+export function SprintBoard({ project, tasks, shows, assigneeOfNewTasks }: SprintBoardProps) {
   const sprints = useSprints(project.id);
   const commands = useSprintCommands(project.id);
   const [scope, setScope] = useState<BoardScope>({ kind: 'current' });
@@ -47,7 +49,14 @@ export function SprintBoard({ project, tasks, shows }: SprintBoardProps) {
   const previous = previousSprintOf(scope, completed);
 
   if (!active && completed.length === 0) {
-    return <BoardView project={project} tasks={tasks} shows={shows} />;
+    return (
+      <BoardView
+        project={project}
+        tasks={tasks}
+        shows={shows}
+        assigneeOfNewTasks={assigneeOfNewTasks}
+      />
+    );
   }
 
   // A completed sprint takes no tasks, so a task made while one is shown
@@ -121,6 +130,7 @@ export function SprintBoard({ project, tasks, shows }: SprintBoardProps) {
         <BoardView
           project={project}
           tasks={tasks}
+          assigneeOfNewTasks={assigneeOfNewTasks}
           shows={
             sprintShown
               ? (task) => task.sprintId === sprintShown.id && (shows?.(task) ?? true)

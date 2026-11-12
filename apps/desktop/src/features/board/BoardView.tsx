@@ -17,7 +17,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { useMemo, useState } from 'react';
 
 import { useNavigation } from '@/app/navigation';
-import type { Id, Project, Task } from '@/shared/api/types';
+import type { Assignee, Id, Project, Task } from '@/shared/api/types';
 import { durationToken, easingToken, usePrefersReducedMotion } from '@/shared/ui/motion';
 
 import { useSubtaskFolds } from '../tasks/subtaskFolds';
@@ -127,6 +127,11 @@ interface BoardViewProps {
   shows?: (task: Task) => boolean;
   /** Called with a task opened from a lane, for example to plan it into the sprint shown. */
   onCreated?: (task: Task) => void;
+  /**
+   * Who a task opened from a lane is given to, for a board that shows the
+   * tasks of one person: the task then stays on it. Left out, nobody.
+   */
+  assigneeOfNewTasks?: Assignee;
 }
 
 /**
@@ -134,7 +139,13 @@ interface BoardViewProps {
  * card of its own in a column: it is shown under its parent, which has a row
  * that folds its subtasks away.
  */
-export function BoardView({ project, tasks, shows, onCreated }: BoardViewProps) {
+export function BoardView({
+  project,
+  tasks,
+  shows,
+  onCreated,
+  assigneeOfNewTasks,
+}: BoardViewProps) {
   const commands = useTaskCommands(project.id);
   const navigation = useNavigation();
   const folds = useSubtaskFolds(project.id);
@@ -236,7 +247,11 @@ export function BoardView({ project, tasks, shows, onCreated }: BoardViewProps) 
               .flatMap((taskId) => tasksById.get(taskId) ?? [])
               .filter((task) => shows?.(task) ?? true)}
             onCreateTask={async (title) => {
-              const created = await commands.create({ title, statusId: status.id });
+              const created = await commands.create({
+                title,
+                statusId: status.id,
+                assignee: assigneeOfNewTasks,
+              });
               if (created) {
                 onCreated?.(created);
               }

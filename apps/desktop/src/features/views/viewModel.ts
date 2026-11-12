@@ -1,4 +1,13 @@
-import type { Id, Member, Status, Task, View, ViewFilter, ViewKind } from '@/shared/api/types';
+import type {
+  Assignee,
+  Id,
+  Member,
+  Status,
+  Task,
+  View,
+  ViewFilter,
+  ViewKind,
+} from '@/shared/api/types';
 
 /**
  * What the row of views works out without drawing anything: which tasks a
@@ -71,6 +80,25 @@ export function shownTaskIds(
   return new Set(tasks.filter((task) => shownRoots.has(rootOf(task))).map((task) => task.id));
 }
 
+/**
+ * Who a task opened in a filtered view is given to, so that it does not
+ * vanish the moment it is made: the member or the manager the filter shows.
+ * Nothing for a view that shows everybody's tasks or nobody's, where a new
+ * task given to nobody stays in view.
+ */
+export function assigneeForNewTasks(filter: ViewFilter): Assignee | undefined {
+  const wanted = filter.assignee;
+  switch (wanted.kind) {
+    case 'manager':
+      return { kind: 'manager' };
+    case 'member':
+      return { kind: 'member', memberId: wanted.memberId };
+    case 'anyone':
+    case 'nobody':
+      return undefined;
+  }
+}
+
 /** Whether a task is given to the one the filter asks for. */
 function isGivenAsFiltered(task: Task, filter: ViewFilter): boolean {
   const wanted = filter.assignee;
@@ -100,10 +128,12 @@ export function filterInWords(filter: ViewFilter, members: readonly Member[]): s
     case 'anyone':
       return 'Hides the finished tasks';
     case 'manager':
-      return `Shows your ${tasks}`;
+      return `Shows your ${tasks}. New ones are yours`;
     case 'member': {
       const name = members.find((member) => member.id === wanted.memberId)?.name;
-      return `Shows the ${tasks} of ${name ?? 'a member who has left the team'}`;
+      return name === undefined
+        ? `Shows the ${tasks} of a member who has left the team`
+        : `Shows the ${tasks} of ${name}. New ones go to them`;
     }
     case 'nobody':
       return `Shows the ${tasks} given to nobody`;
