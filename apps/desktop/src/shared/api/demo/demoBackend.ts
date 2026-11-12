@@ -14,6 +14,8 @@ import type {
   Priority,
   Project,
   Status,
+  StatusCategory,
+  StatusProperties,
   Task,
   WorkflowTemplate,
 } from '../types';
@@ -59,7 +61,22 @@ const WORKFLOWS: Record<WorkflowTemplate, readonly Omit<Status, 'id'>[]> = {
  */
 const MEMBER_COLORS: readonly Color[] = ['teal', 'blue', 'purple', 'pink', 'green'];
 
+/**
+ * How far along in the course of the work a status is, by its category. A
+ * new status is placed by it.
+ */
+const PROGRESS_OF_CATEGORY: Record<StatusCategory, number> = {
+  todo: 0,
+  active: 1,
+  review: 2,
+  done: 3,
+};
+
+/** The categories no workflow can do without. */
+const REQUIRED_CATEGORIES: readonly StatusCategory[] = ['todo', 'done'];
+
 const PROJECT_NAME_MAX_LENGTH = 80;
+const STATUS_NAME_MAX_LENGTH = 40;
 const TASK_TITLE_MAX_LENGTH = 200;
 const MEMBER_NAME_MAX_LENGTH = 60;
 const PROJECT_KEY_MAX_LENGTH = 6;
@@ -142,6 +159,129 @@ export class DemoBackend implements Backend {
     return respond(() => {
       const project = this.requireProject(projectId);
       project.archivedAt ??= this.nowAsText();
+      return project;
+    });
+  }
+
+  listArchivedProjects(): Promise<Project[]> {
+    return respond(() =>
+      this.allProjects()
+        .filter((project) => project.archivedAt !== null)
+        .sort((first, second) => (second.archivedAt ?? '').localeCompare(first.archivedAt ?? '')),
+    );
+  }
+
+  restoreProject(projectId: Id): Promise<Project> {
+    return respond(() => {
+      const project = this.requireProject(projectId);
+      project.archivedAt = null;
+      return project;
+    });
+  }
+
+  deleteProject(projectId: Id): Promise<void> {
+    return respond(() => {
+      const project = this.requireProject(projectId);
+      for (const task of this.tasksOfProject(project.id)) {
+        this.tasks.delete(task.id);
+      }
+      for (const member of this.teamOf(project.id)) {
+        this.members.delete(member.id);
+      }
+      this.nextTaskNumbers.delete(project.id);
+      this.projects.delete(project.id);
+    });
+  }
+
+  addStatus(projectId: Id, properties: StatusProperties): Promise<Project> {
+    return respond(() => {
+      const project = this.requireProject(projectId);
+      const name = tidyName(properties.name, 'status name', STATUS_NAME_MAX_LENGTH);
+      refuseStatusNameInUse(project.statuses, name);
+      const status: Status = {
+        id: this.environment.newId(),
+        name,
+        category: properties.category,
+        color: properties.color,
+      };
+      project.statuses.splice(placeForNewStatus(project.statuses, status.category), 0, status);
+      return project;
+    });
+  }
+
+  changeStatus(projectId: Id, statusId: Id, properties: StatusProperties): Promise<Project> {
+    return respond(() => {
+      const project = this.requireProject(projectId);
+      const status = requireStatus(project, statusId);
+      const name = tidyName(properties.name, 'status name', STATUS_NAME_MAX_LENGTH);
+      refuseStatusNameInUse(
+        project.statuses.filter((other) => other.id !== statusId),
+        name,
+      );
+      requireCategories(
+        project.statuses.map((other) =>
+          other.id === statusId ? properties.category : other.category,
+        ),
+      );
+
+      const wasDone = status.category === 'done';
+      const isDone = properties.category === 'done';
+      status.name = name;
+      status.category = properties.category;
+      status.color = properties.color;
+
+      // Whether a task is complete follows from the category of its status.
+      if (wasDone !== isDone) {
+        const now = this.nowAsText();
+        for (const task of this.tasksOfStatus(project.id, statusId)) {
+          task.completedAt = isDone ? (task.completedAt ?? now) : null;
+          task.updatedAt = now;
+        }
+      }
+      return project;
+    });
+  }
+
+  moveStatus(projectId: Id, statusId: Id, index: number): Promise<Project> {
+    return respond(() => {
+      const project = this.requireProject(projectId);
+      const status = requireStatus(project, statusId);
+      const others = project.statuses.filter((other) => other.id !== statusId);
+      others.splice(Math.min(Math.max(index, 0), others.length), 0, status);
+      project.statuses = others;
+      return project;
+    });
+  }
+
+  removeStatus(projectId: Id, statusId: Id, moveTasksTo?: Id): Promise<Project> {
+    return respond(() => {
+      const project = this.requireProject(projectId);
+      const status = requireStatus(project, statusId);
+      const remaining = project.statuses.filter((other) => other.id !== statusId);
+      requireCategories(remaining.map((other) => other.category));
+
+      const tasks = this.tasksOfStatus(project.id, statusId);
+      if (tasks.length > 0) {
+        if (moveTasksTo === undefined || moveTasksTo === statusId) {
+          throw new BackendError(
+            'status_in_use',
+            `the status "${status.name}" still has ${countOfTasks(tasks.length)}, which need another status to go to`,
+          );
+        }
+        const target = requireStatus(project, moveTasksTo);
+        const now = this.nowAsText();
+        // The tasks go to the bottom of the other status, in their order.
+        let lastRank = this.tasksOfStatus(project.id, target.id).at(-1)?.rank;
+        for (const task of tasks) {
+          lastRank = rankBetween(lastRank, undefined);
+          task.statusId = target.id;
+          task.rank = lastRank;
+          task.completedAt = target.category === 'done' ? (task.completedAt ?? now) : null;
+          task.updatedAt = now;
+        }
+      }
+
+      project.statuses = remaining;
       return project;
     });
   }
@@ -638,6 +778,46 @@ function suggestKey(name: string): string {
     [initials, firstLetters].find((candidate) => PROJECT_KEY_PATTERN.test(candidate)) ??
     FALLBACK_PROJECT_KEY
   );
+}
+
+/** Refuses a name that a status of the workflow already has. Capital and small letters count as the same. */
+function refuseStatusNameInUse(statuses: readonly Status[], name: string): void {
+  const wanted = name.toLowerCase();
+  if (statuses.some((status) => status.name.toLowerCase() === wanted)) {
+    throw new BackendError('rule_broken', `the workflow already has a status named "${name}"`);
+  }
+}
+
+/** Makes sure that a workflow keeps a status of every category it cannot do without. */
+function requireCategories(categories: readonly StatusCategory[]): void {
+  for (const required of REQUIRED_CATEGORIES) {
+    if (!categories.includes(required)) {
+      throw new BackendError(
+        'rule_broken',
+        `a workflow needs at least one status in the "${required}" category`,
+      );
+    }
+  }
+}
+
+/**
+ * Where a new status goes: behind the last status that is as far along in
+ * the course of the work, or less far. A new step of the work then stands
+ * with the other steps, and not behind the statuses in which work is done.
+ */
+function placeForNewStatus(statuses: readonly Status[], category: StatusCategory): number {
+  let place = 0;
+  statuses.forEach((status, position) => {
+    if (PROGRESS_OF_CATEGORY[status.category] <= PROGRESS_OF_CATEGORY[category]) {
+      place = position + 1;
+    }
+  });
+  return place;
+}
+
+/** Writes a number of tasks: "1 task", "3 tasks". */
+function countOfTasks(count: number): string {
+  return `${count.toString()} ${count === 1 ? 'task' : 'tasks'}`;
 }
 
 function requireStatus(project: Project, statusId: Id): Status {

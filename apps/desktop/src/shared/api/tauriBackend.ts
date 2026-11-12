@@ -11,6 +11,7 @@ import type {
   NewTask,
   Priority,
   Project,
+  StatusProperties,
   Task,
 } from './types';
 
@@ -37,6 +38,34 @@ export class TauriBackend implements Backend {
 
   archiveProject(projectId: Id): Promise<Project> {
     return call('archive_project', { projectId });
+  }
+
+  listArchivedProjects(): Promise<Project[]> {
+    return call('list_archived_projects');
+  }
+
+  restoreProject(projectId: Id): Promise<Project> {
+    return call('restore_project', { projectId });
+  }
+
+  deleteProject(projectId: Id): Promise<void> {
+    return call('delete_project', { projectId });
+  }
+
+  addStatus(projectId: Id, status: StatusProperties): Promise<Project> {
+    return call('add_status', { projectId, status });
+  }
+
+  changeStatus(projectId: Id, statusId: Id, status: StatusProperties): Promise<Project> {
+    return call('change_status', { projectId, statusId, status });
+  }
+
+  moveStatus(projectId: Id, statusId: Id, index: number): Promise<Project> {
+    return call('move_status', { projectId, statusId, index });
+  }
+
+  removeStatus(projectId: Id, statusId: Id, moveTasksTo?: Id): Promise<Project> {
+    return call('remove_status', { projectId, statusId, moveTasksTo: moveTasksTo ?? null });
   }
 
   listTasks(projectId: Id): Promise<Task[]> {

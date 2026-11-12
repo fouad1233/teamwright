@@ -8,6 +8,7 @@ import type {
   NewTask,
   Priority,
   Project,
+  StatusProperties,
   Task,
 } from './types';
 
@@ -24,7 +25,33 @@ export interface Backend {
   createProject(project: NewProject): Promise<Project>;
   renameProject(projectId: Id, name: string): Promise<Project>;
   describeProject(projectId: Id, description: string): Promise<Project>;
+  /** Puts a project away. Its tasks and its team are kept, and it can be brought back. */
   archiveProject(projectId: Id): Promise<Project>;
+  /** Lists the projects that were put away, the one that was put away last first. */
+  listArchivedProjects(): Promise<Project[]>;
+  /** Brings a project back that was put away. */
+  restoreProject(projectId: Id): Promise<Project>;
+  /** Removes a project for good, with its tasks and its team. */
+  deleteProject(projectId: Id): Promise<void>;
+
+  /**
+   * Adds a status to the workflow of a project. It goes behind the last
+   * status that is as far along in the course of the work, or less far.
+   */
+  addStatus(projectId: Id, status: StatusProperties): Promise<Project>;
+  /**
+   * Replaces the name, the category and the color of a status. If the
+   * category changes between done and not done, the tasks in the status are
+   * completed or reopened with it.
+   */
+  changeStatus(projectId: Id, statusId: Id, status: StatusProperties): Promise<Project>;
+  /** Moves a status to another place in the workflow. Index 0 is the first place. */
+  moveStatus(projectId: Id, statusId: Id, index: number): Promise<Project>;
+  /**
+   * Removes a status from the workflow. If tasks are in it, `moveTasksTo`
+   * must name the status they go to; they are put at its bottom.
+   */
+  removeStatus(projectId: Id, statusId: Id, moveTasksTo?: Id): Promise<Project>;
 
   /** Lists the tasks of a project in the order the manager arranged them. */
   listTasks(projectId: Id): Promise<Task[]>;

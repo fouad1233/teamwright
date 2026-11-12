@@ -35,6 +35,13 @@ export interface Status {
   color: Color;
 }
 
+/** What a manager chooses about a status: its name, what it means, and its color. */
+export interface StatusProperties {
+  name: string;
+  category: StatusCategory;
+  color: Color;
+}
+
 export interface Project {
   id: Id;
   /** The prefix of the project's task numbers, as in `IOT-12`. */
