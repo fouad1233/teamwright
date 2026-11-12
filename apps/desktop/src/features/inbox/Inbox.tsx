@@ -10,6 +10,7 @@ import { useTasks } from '../tasks/taskQueries';
 import { MemberAvatar } from '../team/Assignee';
 import { useTeam } from '../team/teamQueries';
 import { DecisionCard } from '../work/DecisionCard';
+import { appearsAt, waitsForManager } from '../work/waitsForManager';
 import { askedAt, openDecision } from '../work/workModel';
 import { useConversationsWaiting, useWorkCommands } from '../work/workQueries';
 import styles from './Inbox.module.css';
@@ -104,9 +105,11 @@ function FromAdvisor({ project, conversation }: QuestionProps) {
         <span className={styles.taskTitle}>Advisor</span>
         <span className={classNames(styles.when)}>{formatMoment(askedAt(conversation))}</span>
       </header>
-      <div className={styles.advisor}>
-        <p className={styles.wants}>The Advisor {waitsFor}.</p>
+      <div className={classNames(waitsForManager.frame, styles.advisor)}>
+        <p className={classNames(waitsForManager.part, styles.wants)}>The Advisor {waitsFor}.</p>
         <Button
+          className={waitsForManager.part}
+          style={appearsAt(1)}
           variant="secondary"
           onClick={() => {
             navigation.openAdvisorOf(project.id);

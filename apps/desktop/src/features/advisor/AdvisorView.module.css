@@ -71,18 +71,28 @@
   font-weight: 550;
 }
 
-/* What became of a proposal, in one line. */
+/* What became of a proposal, in one line, set like the steps of a turn: a
+   label in a column of its own, as wide as the names of the tools, and
+   the words after it. */
 .became {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: var(--space-2);
+  gap: 2px var(--space-3);
   padding-top: var(--space-1);
   color: var(--ink-soft);
   line-height: 1.5;
 }
 
-.approved {
+.became > :first-child {
+  flex: none;
+  min-width: 52px;
+}
+
+/* An approved proposal is done, so its label is ink, not gold. With the
+   global label class in the selector, it wins over the faint ink of that
+   class, which is loaded later. */
+:global(.label).approved {
   color: var(--ink);
 }
 

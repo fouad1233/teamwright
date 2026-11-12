@@ -123,14 +123,13 @@
   letter-spacing: 0.02em;
 }
 
-/* What the Advisor wants: one line with the rule of brass, and the way to
-   the Advisor, where there is room to answer it. */
+/* What the Advisor wants: one line in the frame of what waits for the
+   manager, and the way to the Advisor, where there is room to answer it. */
 .advisor {
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  padding: var(--space-2) 0 var(--space-2) var(--space-4);
-  border-left: 2px solid var(--brass);
+  padding: var(--space-3) var(--space-3) var(--space-3) var(--space-4);
 }
 
 .wants {
