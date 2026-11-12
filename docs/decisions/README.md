@@ -29,6 +29,7 @@ was considered.
 | [0011](0011-what-a-specialist-may-do.md) | Let a specialist read and write in the folder of the project, and nothing else | Accepted |
 | [0012](0012-a-specialist-asks-through-a-tool.md) | Let a specialist ask the manager through a tool of its own | Accepted |
 | [0013](0013-the-folders-of-a-project.md) | Give a project a work folder the manager can choose, and folders that are only read | Accepted |
+| [0014](0014-the-advisor-plans-through-two-tools.md) | Let the Advisor interview and propose through two tools | Accepted |
 
 ## Template
 
