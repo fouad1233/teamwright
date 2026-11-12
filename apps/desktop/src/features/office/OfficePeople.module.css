@@ -1,0 +1,10 @@
+/* The people of the room: one canvas over the whole room, which catches
+   no pointer and is drawn pixel for pixel, never smoothed. */
+.people {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 1;
+  pointer-events: none;
+  image-rendering: pixelated;
+}

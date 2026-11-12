@@ -18,6 +18,7 @@ import {
   type Place,
   type PlaceTarget,
 } from './officeModel';
+import { OfficePeople } from './OfficePeople';
 import { OfficePlace } from './OfficePlace';
 import styles from './OfficeView.module.css';
 
@@ -57,8 +58,10 @@ function useOfficeMeasures(): [React.RefObject<HTMLDivElement | null>, OfficeMea
               placeWidth: lengthToken(element, '--office-place-width'),
               asideWidth: lengthToken(element, '--office-aside-width'),
               gap: lengthToken(element, '--space-4'),
-              // The room keeps a margin of --space-6 inside each wall.
-              roomInset: 2 * lengthToken(element, '--space-6') + 2,
+              // The room keeps a margin of --space-6 inside its left wall,
+              // where the letters of the rows stand, and of --space-7 inside
+              // its right wall, where the aisle runs down the side.
+              roomInset: lengthToken(element, '--space-6') + lengthToken(element, '--space-7') + 2,
             },
       );
     });
@@ -149,7 +152,7 @@ export function OfficeView({ project, tasks }: OfficeViewProps) {
           {row.map((place, column) => {
             const target = place.target;
             return (
-              <li key={place.key} className={styles.place}>
+              <li key={place.key} className={styles.place} data-place-key={place.key}>
                 <OfficePlace
                   place={place}
                   reference={placeReference(index, column)}
@@ -170,6 +173,7 @@ export function OfficeView({ project, tasks }: OfficeViewProps) {
   }
 
   const { summary } = office;
+  const places = useMemo(() => [...office.front, ...office.floor], [office]);
 
   return (
     <div className={styles.view}>
@@ -195,7 +199,9 @@ export function OfficeView({ project, tasks }: OfficeViewProps) {
               Advisor.
             </p>
           )}
+          <Commons />
           <Door />
+          <OfficePeople places={places} />
         </section>
 
         <aside className={styles.titleBlock} aria-label="The office in numbers">
@@ -249,6 +255,20 @@ export function OfficeView({ project, tasks }: OfficeViewProps) {
           </p>
         </aside>
       </div>
+    </div>
+  );
+}
+
+/**
+ * The band at the foot of the room where the shared places stand: a window
+ * in the left wall, a plant, the table with the plan, the coffee corner.
+ * The furniture is drawn with the people; the window belongs to the wall
+ * and is drawn here, in plan, the way an architect draws one.
+ */
+function Commons() {
+  return (
+    <div className={styles.commons} data-commons aria-hidden>
+      <span className={styles.window} />
     </div>
   );
 }

@@ -23,13 +23,14 @@
 }
 
 /* The room in plan: walls drawn as two hairlines with a kerf between them,
-   the way a drawing shows that a wall has a thickness. */
+   the way a drawing shows that a wall has a thickness. The people of the
+   room (decision 0019) need aisles: one in front of every row of benches,
+   one down the right side, and a band of shared places at the foot. */
 .room {
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: var(--space-6);
-  padding: var(--space-7) var(--space-6) var(--space-7);
+  padding: var(--office-aisle) var(--space-7) var(--space-7) var(--space-6);
   border: 1px solid var(--rule-strong);
   box-shadow:
     inset 0 0 0 var(--space-1) var(--ground),
@@ -39,7 +40,7 @@
 .rows {
   display: flex;
   flex-direction: column;
-  gap: var(--space-7);
+  gap: var(--office-aisle);
 }
 
 .row {
@@ -71,16 +72,47 @@
 }
 
 /* The front of the room, where the plan is made, is set apart from the
-   floor by a partition with a passage through its middle. */
+   floor by a partition with a passage through its middle. It stops short of
+   the right wall, where the aisle down the side of the room goes past. */
 .partition {
+  flex: none;
   height: 1px;
-  margin: 0 calc(-1 * var(--space-6) + var(--space-1) + 1px);
+  margin: var(--space-4) calc(-1 * var(--space-6) + var(--space-1) + 1px) var(--office-aisle);
   background: linear-gradient(
     to right,
     var(--rule-strong) calc(50% - var(--space-7)),
     transparent 0 calc(50% + var(--space-7)),
-    var(--rule-strong) 0
+    var(--rule-strong) 0 calc(100% - var(--space-6) + var(--space-1) + 1px),
+    transparent 0
   );
+}
+
+/* The band of shared places at the foot of the room. */
+.commons {
+  position: relative;
+  flex: none;
+  height: var(--office-commons-height);
+  margin-top: var(--space-5);
+}
+
+/* A window in the left wall, drawn in plan: the wall gives way to a frame
+   with the glass as a line down its middle. It stands where the place by
+   the window is, in the lower half of the band. */
+.window {
+  position: absolute;
+  bottom: var(--space-2);
+  left: calc(-1 * var(--space-6) - 1px);
+  width: calc(var(--space-1) + 3px);
+  height: var(--space-7);
+  border-block: 1px solid var(--rule-strong);
+  background:
+    linear-gradient(
+      to right,
+      transparent calc(50% - 0.5px),
+      var(--rule-strong) 0 calc(50% + 0.5px),
+      transparent 0
+    ),
+    var(--ground);
 }
 
 .empty {

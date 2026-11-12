@@ -136,6 +136,11 @@
      how strong the pool of light is that it casts while work goes on. */
   --office-lamp-size: 13px;
   --office-lamp-pool: 0.26;
+  /* The people of the office (decision 0019): the aisle in front of a row
+     of benches, deep enough for somebody seated and somebody walking past
+     behind them; and the band of shared places at the foot of the room. */
+  --office-aisle: 80px;
+  --office-commons-height: 112px;
 
   /* A mask that keeps all it covers. Two of them, one cut out of the other,
      leave only the rim of an element for a light to fall on. */
