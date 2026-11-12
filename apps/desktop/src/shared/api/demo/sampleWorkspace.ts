@@ -55,6 +55,8 @@ interface SampleTask {
   priority?: Priority;
   /** Who the task is given to. A task without an owner is unassigned. */
   owner?: 'manager' | TeamMemberName;
+  /** The number of the task this one is a part of, if it is a subtask. */
+  partOf?: number;
   /** The numbers of the tasks this one waits for. */
   waitsFor?: number[];
   estimateHours?: number;
@@ -193,6 +195,54 @@ const SAMPLE_TASKS: SampleTask[] = [
     startsInDays: 11,
     dueInDays: 14,
   },
+  // The parts of two of the tasks above. Each part has a status of its own.
+  {
+    number: 13,
+    title: 'Power supply and battery charger',
+    status: 'done',
+    owner: 'hardware',
+    partOf: 4,
+    estimateHours: 2,
+    startsInDays: -2,
+    dueInDays: -1,
+  },
+  {
+    number: 14,
+    title: 'Microcontroller and its clock',
+    status: 'progress',
+    owner: 'hardware',
+    partOf: 4,
+    estimateHours: 3,
+    startsInDays: -1,
+    dueInDays: 1,
+  },
+  {
+    number: 15,
+    title: 'Connectors for the sensors and the display',
+    status: 'todo',
+    owner: 'hardware',
+    partOf: 4,
+    estimateHours: 3,
+    dueInDays: 2,
+  },
+  {
+    number: 16,
+    title: 'Driver for temperature and humidity',
+    status: 'todo',
+    owner: 'firmware',
+    partOf: 8,
+    estimateHours: 3,
+    dueInDays: 4,
+  },
+  {
+    number: 17,
+    title: 'Driver for the oxygen sensor',
+    status: 'todo',
+    owner: 'firmware',
+    partOf: 8,
+    estimateHours: 5,
+    dueInDays: 7,
+  },
 ];
 
 const SAMPLE_PROJECT_ID: Id = 'demo-project-sensor';
@@ -236,7 +286,7 @@ export function sampleWorkspace(today: Date = new Date()): DemoWorkspace {
       statusId: status.id,
       priority: sample.priority ?? 'normal',
       assignee: assigneeOf(sample),
-      parentId: null,
+      parentId: sample.partOf === undefined ? null : taskId(sample.partOf),
       blockedBy: (sample.waitsFor ?? []).map(taskId),
       estimateMinutes: sample.estimateHours === undefined ? null : sample.estimateHours * 60,
       startOn: dateInDays(today, sample.startsInDays),
