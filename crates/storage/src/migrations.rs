@@ -21,6 +21,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("schema/0009_home_computer.sql"),
     include_str!("schema/0010_merged_states.sql"),
     include_str!("schema/0011_notices.sql"),
+    include_str!("schema/0012_sync.sql"),
 ];
 
 /// Applies the migrations a database has not seen yet. Each one runs in its
@@ -78,6 +79,7 @@ mod tests {
         );
         let tables = table_names(&connection);
         for expected in [
+            "computers",
             "conversations",
             "members",
             "merged_states",
@@ -102,6 +104,7 @@ mod tests {
             "turn_proposals",
             "turn_steps",
             "turns",
+            "written_files",
         ] {
             assert!(
                 tables.iter().any(|table| table == expected),

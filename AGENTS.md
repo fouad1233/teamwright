@@ -48,7 +48,10 @@ at it: `npm run dev` serves it in a browser on demo data. See
 4. **Logic follows the category of a status, never its name.** Managers name
    statuses freely.
 5. **Every database write is logged.** Use `Database::write` and its
-   `OperationRecorder`. Update rows in place; never replace them.
+   `OperationRecorder`. Update rows in place; never replace them. The data
+   the manager works with is logged; the bookkeeping of the log is not
+   (`meta`, the merged states, what syncing has read and written, the other
+   computers, the notices).
 6. **The wire contract has two halves.** `apps/desktop/src-tauri/src/dto.rs`
    and `apps/desktop/src/shared/api/types.ts` change together.
 7. **The interface uses design tokens and its own components.** No raw

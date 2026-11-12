@@ -53,6 +53,8 @@ pub use sprint::{
 };
 pub use task::{Assignee, Priority, Rank, Schedule, Task, TaskDraft, TaskSnapshot};
 pub use task_history::{TaskChange, TaskChangeKind, changes_between, history_of};
-pub use text::{MemberName, ModelName, ProjectName, SprintName, StatusName, TaskTitle};
+pub use text::{
+    ComputerName, MemberName, ModelName, ProjectName, SprintName, StatusName, TaskTitle,
+};
 pub use time::{CalendarDate, Timestamp};
 pub use workflow::{Status, StatusCategory, Workflow};

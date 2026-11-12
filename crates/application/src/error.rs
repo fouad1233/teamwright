@@ -167,6 +167,36 @@ pub enum ApplicationError {
         computer: ComputerId,
     },
 
+    /// A round of syncing was to run while no sync folder is chosen.
+    #[error("no sync folder is chosen")]
+    SyncOff,
+
+    /// The sync folder could not be reached: it is gone, or a drive or a
+    /// share is not there.
+    #[error("the sync folder {folder} cannot be reached")]
+    SyncFolderUnreachable {
+        /// The folder, as it is kept.
+        folder: String,
+    },
+
+    /// The sync folder was to lie inside the folder Teamwright keeps its
+    /// own data in.
+    #[error("the sync folder {folder} lies inside Teamwright's own data folder; choose another")]
+    SyncFolderInDataFolder {
+        /// The folder, as it was given.
+        folder: String,
+    },
+
+    /// Another computer writes into the sync folder under the identity of
+    /// this one: its data folder was copied. Syncing stops until this
+    /// computer gets a new identity, or until Teamwright starts again with
+    /// the new identity it got.
+    #[error(
+        "another computer uses the identity of this computer; give this computer a new identity \
+         and start Teamwright again"
+    )]
+    IdentityInUse,
+
     /// A folder was to be used without a name.
     #[error("the folder must be named")]
     FolderNotNamed,
@@ -320,6 +350,10 @@ impl ApplicationError {
             Self::NoProposalOpen => "no_proposal_open",
             Self::SessionNotStarted => "session_not_started",
             Self::ConversationRunsElsewhere { .. } => "runs_elsewhere",
+            Self::SyncOff => "sync_off",
+            Self::SyncFolderUnreachable { .. } => "sync_folder_unreachable",
+            Self::SyncFolderInDataFolder { .. } => "sync_folder_in_data",
+            Self::IdentityInUse => "identity_in_use",
             Self::AgentProgram(error) => error.code(),
             Self::Storage(_) => "storage_failed",
         }

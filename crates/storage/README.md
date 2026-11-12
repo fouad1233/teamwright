@@ -30,6 +30,7 @@ involved.
 | `take_in` | Takes in the operations of another computer: merge, deletions, waiting, repairs |
 | `notices` | What syncing tells the manager, kept on this computer |
 | `folder` | `FolderOfComputers`: the files in the sync folder, which implements the port `SyncFolder` |
+| `ledger` | `SqliteSyncLedger`: the bookkeeping of syncing, which implements the port `SyncLedger` |
 | `codec` | The text forms of moments, dates, identifiers and enumerations |
 | `error` | The crate's internal error type and its conversion to `StorageError` |
 
@@ -293,6 +294,30 @@ folder:
   from the joined one only the numbers it has not read.
 
 `tests/folder.rs` runs all of this in a temporary folder of its own.
+
+## The bookkeeping of syncing
+
+`SqliteSyncLedger` implements the port `SyncLedger` (version 12). The table
+`computers` keeps the other computers: what their cards say, whether the
+manager accepted them (NULL while undecided), the number of the last of
+their operations taken in, how far their clock is ahead, and a newer
+format they wrote. `written_files` keeps the names of the files this
+computer wrote; a file in its own folder that is not there means another
+computer uses its identity. The settings are keys of `meta`:
+`sync_folder`, `files_folder`, `computer_name`, `written_through` and
+`copied_before_sync`. Taking in a batch and moving the number read up to
+happen in one transaction. Before anything is taken in for the first time,
+the database is copied with `VACUUM INTO` to
+`teamwright-before-sync-<date>.db` next to it. A new identity changes
+`device_id` in `meta` and in the open database at once; the operations of
+the old identity that were never written into the folder are renumbered
+under the new one. None of this is logged.
+
+`tests/sync.rs` proves the feature: real databases in temporary folders of
+their own, a `SyncService` for each, and one temporary sync folder. Changes
+made apart meet in either order, a second exchange changes nothing, a
+computer that joins late ends up equal, and a database copied file for file
+is found out and goes on under a new identity without losing an operation.
 
 ## The clock stamp
 

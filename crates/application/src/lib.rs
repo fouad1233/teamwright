@@ -45,8 +45,10 @@ pub use ports::{
 pub use projects::{NewProject, ProjectService, StatusProperties, WorkflowTemplate};
 pub use sprints::{NewSprint, SprintChanges, SprintDay, SprintReport, SprintService, SprintStart};
 pub use sync::{
-    ComputerCard, ExchangedChange, ExchangedOperation, FileContent, FoundComputer, NoticeKind,
-    SYNC_FORMAT, SyncFolder, SyncNotice, TakeInReport,
+    Acceptance, CLOCK_AHEAD_LIMIT_MILLIS, ComputerCard, ExchangedChange, ExchangedOperation,
+    FileContent, FoundComputer, KnownComputer, NoticeKind, RoundReport, SYNC_FORMAT, SyncFolder,
+    SyncLedger, SyncNotice, SyncPhase, SyncPorts, SyncService, SyncSettings, SyncState,
+    TakeInReport,
 };
 pub use tasks::{NewTask, TaskService};
 pub use team::{NewMember, TeamService};

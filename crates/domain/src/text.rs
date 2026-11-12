@@ -98,6 +98,14 @@ define_text!(
 );
 
 define_text!(
+    /// The name the manager gives one of their computers, such as "Desk" or
+    /// "Laptop". Other computers show it.
+    ComputerName,
+    field = "name of the computer",
+    max_length = 60
+);
+
+define_text!(
     /// The name of a sprint, such as "Sprint 3" or "Board bring-up".
     SprintName,
     field = "sprint name",

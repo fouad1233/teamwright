@@ -597,6 +597,40 @@ impl WorkService {
         Ok(())
     }
 
+    /// Finds a conversation with its turns, the oldest first, if it is
+    /// stored.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if storage fails.
+    pub fn conversation(
+        &self,
+        id: ConversationId,
+    ) -> Result<Option<ConversationWithTurns>, ApplicationError> {
+        let ports = &self.inner.ports;
+        let Some(conversation) = ports.conversations.find(id)? else {
+            return Ok(None);
+        };
+        let turns = ports.conversations.turns_of(id)?;
+        Ok(Some(ConversationWithTurns {
+            conversation,
+            turns,
+        }))
+    }
+
+    /// Stops the programs of turns that another computer deleted while
+    /// they ran here: their records are gone, so nobody would follow what
+    /// they do. A turn this run of the program does not run is passed over.
+    pub fn stop_turns(&self, turns: &[TurnId]) {
+        let stopped: Vec<_> = {
+            let mut running = lock(&self.inner.running);
+            turns.iter().filter_map(|id| running.remove(id)).collect()
+        };
+        for handle in stopped {
+            handle.stop();
+        }
+    }
+
     /// Ends the turns that storage still calls running although nothing
     /// runs them: they were cut off when Teamwright was closed. Each ends
     /// as failed, with a text that says so. Call it once, when the program

@@ -13,6 +13,7 @@ window or agent runtime.
 | `team` | `TeamService`: put members on the team of a project, change them, take them off |
 | `places` | `PlacesService`: the folders of a project: choose its work folder, add and take away reference folders, copy reference files into it |
 | `work` | `WorkService`: let AI specialists work: start on a task, ask, reply, answer a specialist's question, list what waits for the manager, stop, follow every event, open a session in the desktop app, recover after a restart; `brief_for` and `instructions_for`. Its part `advisor`: plan a project with the Advisor (`advise`, `answer_interview`, `approve_proposal`); `ApprovedProposal`, `answers_in_words` and `instructions_for_advisor` |
+| `sync` | `SyncService`: keep several computers of one manager in step through a folder the manager owns (`round`, `choose_folder`, `stop`, `rename_this_computer`, `accept`, `ignore`, `notices`, `dismiss`, `new_identity`); the ports `SyncFolder` and `SyncLedger`, and the operations that travel between computers |
 | `ports` | The interfaces the services need: `ProjectRepository`, `TaskRepository`, `MemberRepository`, `ConversationRepository`, `PlanningRepository`, `PlacesRepository`, `SprintRepository`, `ProjectFolders`, `FileSystem`, `WorkListener`, `Clock` (which also tells the day a moment falls on) |
 | `agent_runtime` | `AgentRuntime`: the interface to the program that runs a team member's session, and the data it speaks |
 | `error` | `ApplicationError`, with a stable `code()` for interfaces |
@@ -316,6 +317,52 @@ Usage is counted in tokens
 ([decision 0008](../../docs/decisions/0008-budgets-in-tokens.md)). The dollar
 figure is kept as `estimated_cost_usd`. Plan limits are reported as
 `PlanUsage` when the program reports them, and are unknown otherwise.
+
+## Keeping computers in step
+
+`SyncService` keeps the computers of one manager in step through a folder
+the manager owns
+([decision 0017](../../docs/decisions/0017-sync-through-a-folder.md)). It
+never looks inside the state an operation carries; storage merges.
+
+- **Two ports.** `SyncFolder` writes and reads the files in the folder: a
+  card per computer (`ComputerCard`), files of operations
+  (`ExchangedOperation`) that are `Complete`, `NotYet` or in a
+  `NewerFormat`, and joining small files. `SyncLedger` is the log and the
+  bookkeeping: this computer's operations after a number, taking in
+  operations of another computer together with the number read up to, the
+  other computers (`KnownComputer`, `Acceptance`), the files this computer
+  wrote, the settings, the notices, the copy before the first take-in, and
+  a new identity.
+- **A round** (`round`) refuses without a folder (`sync_off`) or with a
+  folder that cannot be reached (`sync_folder_unreachable`). It checks that
+  every file in this computer's own folder is one it wrote, and otherwise
+  stops (`identity_in_use`): the data folder was copied to another
+  computer. It writes the operations not written yet (at most 2000 a file),
+  the card, and joins small files. Then, for every accepted computer, it
+  reads the new complete files in order, up to the first one that is not
+  whole, and takes them in in batches of 500. A computer found for the
+  first time is remembered as undecided and reported; it is not read until
+  the manager accepts it. A file in a newer format stops reading that
+  computer and is reported. A clock more than five minutes ahead leaves a
+  notice. Two rounds never run at once.
+- **Choosing the folder** (`choose_folder`) asks for the name of this
+  computer (`ComputerName`, a rule of the domain), refuses a folder that is
+  not there (`folder_not_found`) or lies inside Teamwright's own data
+  folder (`sync_folder_in_data`). A folder other than the one written to
+  before starts anew, and the first round writes the whole log.
+- **A new identity** (`new_identity`) is for a computer whose data folder
+  was copied. Its old identity becomes another computer, accepted, read
+  from after the last operation this computer wrote into the folder; the
+  operations it never wrote go on under the new identity. Syncing waits for
+  Teamwright to start again with the new identity.
+- `state` says where syncing stands (`SyncPhase`: `off`, `in_step`,
+  `writing`, `unreachable`, `stopped`) with the other computers and what
+  went wrong last.
+- `WorkService::stop_turns` stops the programs of turns that a deletion
+  from another computer removed while they ran here, and
+  `WorkService::conversation` finds one conversation with its turns, to
+  tell the interface what changed.
 
 ## Adding a use case
 

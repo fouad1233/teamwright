@@ -1,7 +1,7 @@
 //! The database file and the two ways of using it: reading, and writing in a
 //! logged transaction.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard, PoisonError};
 
 use rusqlite::{Connection, OptionalExtension, Transaction, named_params};
@@ -28,7 +28,8 @@ const DEVICE_ID_KEY: &str = "device_id";
 #[derive(Debug)]
 pub struct Database {
     state: Mutex<State>,
-    device_id: ComputerId,
+    /// The file, or nothing for a database in memory.
+    path: Option<PathBuf>,
 }
 
 /// What a write needs exclusive access to.
@@ -36,6 +37,9 @@ pub struct Database {
 struct State {
     connection: Connection,
     clock: HybridLogicalClock,
+    /// The identity of this computer. It changes only when the manager
+    /// gives the computer a new one.
+    device_id: ComputerId,
 }
 
 impl Database {
@@ -47,8 +51,10 @@ impl Database {
     /// Returns an error if the file cannot be opened, if it was written by a
     /// newer version of the program, or if it is damaged.
     pub fn open(path: impl AsRef<Path>) -> Result<Self, StorageError> {
-        let connection = Connection::open(path).map_err(DatabaseError::from)?;
-        Ok(Self::prepare(connection)?)
+        let connection = Connection::open(path.as_ref()).map_err(DatabaseError::from)?;
+        let mut database = Self::prepare(connection)?;
+        database.path = Some(path.as_ref().to_path_buf());
+        Ok(database)
     }
 
     /// Opens a database that lives in memory and is gone when it is dropped.
@@ -75,16 +81,63 @@ impl Database {
         let device_id = identify_device(&connection)?;
         let clock = HybridLogicalClock::continuing_after(latest_stamp(&connection)?);
         Ok(Self {
-            state: Mutex::new(State { connection, clock }),
-            device_id,
+            state: Mutex::new(State {
+                connection,
+                clock,
+                device_id,
+            }),
+            path: None,
         })
     }
 
     /// The identity of this computer. It is created when the database is
-    /// first opened and never changes.
+    /// first opened, and changes only when the manager gives the computer a
+    /// new one because its data was copied to another computer.
     #[must_use]
-    pub const fn device_id(&self) -> ComputerId {
-        self.device_id
+    pub fn device_id(&self) -> ComputerId {
+        self.lock().device_id
+    }
+
+    /// The file of the database, or nothing for one in memory.
+    pub(crate) fn path(&self) -> Option<&Path> {
+        self.path.as_deref()
+    }
+
+    /// Gives this computer a new identity, in one transaction with `also`,
+    /// which is handed the old and the new identity. Every change from then
+    /// on carries the new identity.
+    pub(crate) fn change_identity(
+        &self,
+        also: impl FnOnce(&Transaction<'_>, ComputerId, ComputerId) -> Result<(), DatabaseError>,
+    ) -> Result<ComputerId, StorageError> {
+        let mut state = self.lock();
+        let old = state.device_id;
+        let new = ComputerId::generate();
+        let transaction = state
+            .connection
+            .transaction()
+            .map_err(DatabaseError::from)?;
+        transaction
+            .execute(
+                "UPDATE meta SET value = :value WHERE key = :key",
+                named_params! { ":value": new.to_string(), ":key": DEVICE_ID_KEY },
+            )
+            .map_err(DatabaseError::from)?;
+        also(&transaction, old, new)?;
+        transaction.commit().map_err(DatabaseError::from)?;
+        state.device_id = new;
+        Ok(new)
+    }
+
+    /// Copies the whole database into a new file, consistently, while it is
+    /// in use.
+    pub(crate) fn copy_to(&self, target: &Path) -> Result<(), StorageError> {
+        let state = self.lock();
+        state
+            .connection
+            .execute("VACUUM INTO ?1", [target.to_string_lossy().into_owned()])
+            .map_err(DatabaseError::from)?;
+        Ok(())
     }
 
     /// Reads the whole operation log, oldest operation first.
@@ -136,7 +189,7 @@ impl Database {
     ///
     /// Returns an error if the log cannot be read.
     pub fn operations_to_send(&self, after: u64) -> Result<Vec<ExchangedOperation>, StorageError> {
-        let this_computer = self.device_id;
+        let this_computer = self.device_id();
         self.read(|connection| {
             let mut statement = connection.prepare(
                 "SELECT device_sequence, stamp, entity, entity_id, payload, field_stamps, seen
@@ -246,11 +299,15 @@ impl Database {
         change: impl FnOnce(&Transaction<'_>, &mut OperationRecorder<'_>) -> Result<T, DatabaseError>,
     ) -> Result<T, StorageError> {
         let mut state = self.lock();
-        let State { connection, clock } = &mut *state;
+        let State {
+            connection,
+            clock,
+            device_id,
+        } = &mut *state;
 
         let transaction = connection.transaction().map_err(DatabaseError::from)?;
         let value = {
-            let mut operations = OperationRecorder::new(&transaction, self.device_id, clock);
+            let mut operations = OperationRecorder::new(&transaction, *device_id, clock);
             change(&transaction, &mut operations)?
         };
         transaction.commit().map_err(DatabaseError::from)?;
