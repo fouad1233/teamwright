@@ -3281,6 +3281,38 @@ mod tests {
     }
 
     #[test]
+    fn a_question_asked_on_another_computer_is_listed_as_waiting_for_the_manager() {
+        let workspace = workspace();
+        let elsewhere = workspace.running_elsewhere();
+        let mut turn = workspace
+            .ports
+            .conversations
+            .turns_of(elsewhere.id())
+            .unwrap()
+            .remove(0);
+        turn.ask(decision_from(question_about("Choose the battery")).unwrap())
+            .unwrap();
+        turn.finish(
+            WAITING,
+            teamwright_domain::TokenCounts::default(),
+            start_of_day(),
+        )
+        .unwrap();
+        workspace.ports.conversations.save_turn(&turn).unwrap();
+
+        let waiting = workspace.work.waiting_for_manager().unwrap();
+
+        assert_eq!(waiting.len(), 1);
+        assert_eq!(waiting[0].conversation.id(), elsewhere.id());
+        assert!(
+            !waiting[0]
+                .conversation
+                .is_at_home_on(workspace.ports.this_computer),
+            "it is listed to be read; answering it is refused here"
+        );
+    }
+
+    #[test]
     fn a_specialist_working_on_another_computer_stays_on_the_team() {
         let workspace = workspace();
         workspace.running_elsewhere();

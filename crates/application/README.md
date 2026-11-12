@@ -231,7 +231,8 @@ question; every request to the specialist is a turn of it.
   checks it had before.
 - `waiting_for_manager` lists the conversations with an open question, an
   open interview or an open proposal in every project that is not archived,
-  the one that has waited longest first.
+  the one that has waited longest first. Those whose home is another
+  computer are listed too, to be read: answering them is refused here.
 - `stop` records the running turn as stopped by the manager and then stops
   the program. Stopping a conversation in which nothing runs changes nothing.
 - `recover` ends, as failed, the turns that storage still calls running when
