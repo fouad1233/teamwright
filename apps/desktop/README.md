@@ -147,13 +147,11 @@ Rules of the interface:
   and `shared/lib`, next to their tests. The Gantt chart, the calendar and
   the burndown chart only draw what `ganttModel.ts`, `calendarModel.ts` and
   `burndownModel.ts` work out.
-- **Sprints are in the contract before they are in the shell.** The
-  `TauriBackend` calls the commands of sprints and points (`list_sprints`,
-  `create_sprint`, `change_sprint`, `delete_sprint`, `start_sprint`,
-  `complete_sprint`, `plan_task`, `set_task_points`, `sprint_report`),
-  which the shell does not serve yet. Until it does, they work only on the
-  demo data; `demoSprints.test.ts` says what the shell is to do
+- **Sprints were in the contract before they were in the shell.** The
+  demo backend and `demoSprints.test.ts` came first and said what the
+  shell was to do; the Rust side was written against them, case by case
   ([decision 0016](../../docs/decisions/0016-sprints-and-a-backlog.md)).
+  A change to sprints goes the same way: the demo and its tests first.
 - **Dates are counted, not clocked.** A calendar date is a whole number of
   days (`shared/lib/days.ts`), so adding days never meets a time zone or a
   change of the clocks.

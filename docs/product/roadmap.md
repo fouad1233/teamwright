@@ -109,20 +109,23 @@ Several specialists working together with the manager in the loop.
 - ✅ The office: specialists as characters with activity, time left and usage.
   A workshop in plan with a bench for everybody and a lamp lit where work
   goes on; "time left" is answered with how long work has taken and the
-  size of the task
+  size of the task. Seen in the built program with a real specialist at
+  work; a bench that waits for you there was seen on demo data only
   ([decision 0018](../decisions/0018-the-office-as-a-plan-of-a-workshop.md))
 - ⬜ Dashboards: usage per teammate, plan limits, workload by status
 - ⬜ Project report at completion
 
 ## M6 · Agile 🚧
 
-- 🚧 Backlog, sprints, story points
-  ([decision 0016](../decisions/0016-sprints-and-a-backlog.md)): the
-  interface, the contract and the demo backend are built and shown on demo
-  data; the program itself does not have them until the Rust side follows
-- 🚧 Burndown of a sprint, and the completed sprints side by side: built
-  the same way. The burndown does not yet follow tasks that join or leave
-  a sprint while it runs. Velocity as a forecast is not planned yet
+- ✅ Backlog, sprints, story points
+  ([decision 0016](../decisions/0016-sprints-and-a-backlog.md)). A sprint
+  is planned, filled, started and completed in the built program, and is
+  there after a restart. The history of a task does not list its sprint or
+  its points yet, and a row of the backlog is dragged with the pointer
+  only: with the keyboard its menu moves it
+- 🚧 Burndown of a sprint, and the completed sprints side by side. The
+  burndown does not yet follow tasks that join or leave a sprint while it
+  runs. Velocity as a forecast is not planned yet
 - ⬜ Work-in-progress limits, custom fields, tags, checklists
 - ⬜ Templates: Scrum, Kanban, hardware product
 
