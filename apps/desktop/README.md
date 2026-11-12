@@ -208,6 +208,7 @@ src/
     work/             The work of AI specialists: starting it, following it, answering
     inbox/            What waits for the manager in every project: questions to decide
     advisor/          Planning a project with the Advisor: its questions, its proposal
+    areas/            The areas of a project: at the side, the open area, the dialog, the field of a task
     sprints/          The Backlog view, sprints and points, the burndown, the board of a sprint, completed sprints opened
     sync/             Computers: syncing through a folder, the line at the foot of the sidebar, conversations elsewhere
     views/            The row of views and places, the chooser, the menu and filter of a view
@@ -226,7 +227,8 @@ Rules of the interface:
 - **One way to the backend.** Components use `useBackend()` or the hooks
   built on it (`useProjects`, `useTasks`, `useTaskCommands`, `useTeam`,
   `useTeamCommands`, `useConversations`, `useWorkCommands`, `useSprints`,
-  `useSprintCommands`, `useViews`, `useViewCommands`). Nothing calls
+  `useSprintCommands`, `useViews`, `useViewCommands`, `useAreas`,
+  `useAreaCommands`). Nothing calls
   Tauri directly except `shared/api/tauriBackend.ts`.
 - **The team of the open project is known everywhere.** `TeamProvider` puts
   it in a context, so a card, a row or a menu can show who a task is given
@@ -274,6 +276,13 @@ Rules of the interface:
   The board alone keeps every task and is told which ones get a card,
   because it places a dropped card among all the tasks of its status and
   counts the tasks a card waits for.
+- **The open area is applied the same way.** The workspace hands a view
+  only the tasks of the open area (`areas/areaModel.ts`), and the filter
+  of the view on top. `OpenAreaProvider` makes the open area known to the
+  task commands, so that a task made anywhere in a view goes into it, and
+  to the dashboard, which names it. Which area is open is part of
+  `app/navigation.tsx`: remembered like the open view, kept while the
+  inbox or the computers are open, and every area when it is gone.
 - **Two backends.** `TauriBackend` calls the shell. `DemoBackend` runs in the
   browser's memory with a sample project, so the interface can be developed
   and tested without Rust.

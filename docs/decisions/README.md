@@ -37,6 +37,7 @@ was considered.
 | [0019](0019-people-in-the-office.md) | Put people in the office, drawn as pixel characters | Accepted |
 | [0020](0020-a-dashboard-worked-out-not-written.md) | Work the dashboard out by rules, and have nothing written for it | Accepted |
 | [0021](0021-views-the-manager-can-add.md) | Let the manager add, name, filter, order and remove the views of a project | Accepted |
+| [0022](0022-areas-inside-a-project.md) | Cut a project into areas, one for each job inside it | Accepted |
 
 ## Template
 

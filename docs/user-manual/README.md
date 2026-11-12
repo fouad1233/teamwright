@@ -38,6 +38,7 @@ the project that is open. Teamwright reopens the last project you worked in.
 - *Name and description* opens a form for both. The key stays as it is,
   because it is part of the number of every task.
 - *Statuses* opens the list of the project's [statuses](#statuses).
+- *Areas* opens the list of the project's [areas](#areas).
 - *Archive project* puts the project away. Nothing is lost: the sidebar
   then shows *Archived* under the list of projects, and from there a
   project is brought back, or deleted.
@@ -83,6 +84,44 @@ which it is done. The last one of each kind cannot be removed or given
 another meaning.
 
 Changes are saved as you make them.
+
+### Areas
+
+A project can be cut into areas, one for each job inside it: the
+electronics, the firmware and the enclosure of a device. Every task is in
+one area. A new project has one, called *General*, and as long as it has
+only one, you see nothing of areas at all.
+
+*Areas* in the menu of the project opens the list of its areas. It works
+like the list of the statuses:
+
+- **Add** an area with *Add area*. It appears at the end, with a name ready
+  to be typed over.
+- **Rename** an area by typing over its name. Enter or leaving the field
+  saves, Escape undoes. Two areas of a project cannot have the same name.
+- **Move** an area by dragging the dots at the front of its row.
+- **Remove** an area with the bin at the end of its row. If tasks are in
+  it, Teamwright asks which area they should go to. The last area of a
+  project cannot be removed.
+
+Once a project has two areas, they appear at the side, under the name of
+the project. Press an area to see only its tasks: every view (the board,
+the backlog, the list, the Gantt chart, the calendar and the dashboard)
+then shows the tasks of that area, and the header names it, as in *Smart
+sensor node › Firmware*. A filter of a view still applies on top. Press
+the name of the project, at the side or in the header, to see every area
+again. Team, Office and Advisor always show the whole project.
+
+A task you make while an area is open goes into that area. Otherwise it
+goes into the first area. In the panel of a task, *Area* says where it is;
+choose another area there to move it, together with its subtasks. A
+subtask is always in the area of its task.
+
+Sprints belong to the whole project. In an area, a sprint shows the tasks
+of that area that are in it, and its burndown still counts all of them.
+
+Teamwright remembers which area was open, also when you go to the inbox
+and come back.
 
 ### Folders
 
@@ -189,6 +228,8 @@ the avatars of the members. Pressing them shows the team.
 On the right is a row of small blocks, one for every task, in the color of
 the task's status. A hollow block is a task that has not been started. The
 count next to it says how many tasks there are and how many are done.
+When an area is open, the blocks and the count are those of the area, and
+the count names it.
 
 ## Tasks
 
