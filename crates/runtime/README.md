@@ -139,10 +139,16 @@ and the tests rely on.
   as writing outside the working folder, is denied at once with a `system`
   event of subtype `permission_denied`, and listed in the result's
   `permission_denials`.
-- Writing to a path that contains a Windows short name (`LONGNA~1`) is
-  denied as suspicious. The system's temporary folder is often given in
-  that form, so the working folder is resolved to its full long form before
-  the program is started.
+- Paths are compared as they are written. A path that contains a Windows
+  short name (`LONGNA~1`) is taken to be outside the folders of the
+  session, even if it names a file inside them: reading it, searching it
+  and writing to it are refused. The system's temporary folder is often
+  given in that form. So the working folder and the folders a session may
+  read are resolved to their full long form before the program is started
+  (`full_form`), and whoever names a folder to a session must name it in
+  that form too. In its full form, a folder added with `--add-dir` can be
+  read and searched (`Read`, `Glob` and `Grep` were tried), also when its
+  name has a space and brackets in it.
 - A rule that allows a tool without naming a path, such as `Read` in
   `--allowedTools`, allows it everywhere. With it alone, a session read a
   file outside its working folder when asked to. `--restricted` confines

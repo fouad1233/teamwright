@@ -131,8 +131,12 @@ question; every request to the specialist is a turn of it.
   that still exist as `readable_folders`, and with instructions that say who
   the specialist is and how the team works (`instructions_for`). The
   instructions list the reference folders, if there are any, as readable
-  and not to be changed, and always say that files the manager added for
-  reference are in the folder `references`. Opening a session in the
+  and not to be changed, and always say that single files the manager
+  handed over are copies in the folder `references`. A reference folder is
+  given to the turn, and named in the instructions, in its full form
+  (`FileSystem::resolve`), whatever way the manager named it: the agent
+  program compares paths as they are written, and refuses a folder that a
+  specialist names in another way than the program was given it. Opening a session in the
   desktop app uses the same work folder. The first turn starts a new
   session; later turns resume it by the identifier the program reported.
 - Every event of the runtime is recorded in the turn, the turn is stored,

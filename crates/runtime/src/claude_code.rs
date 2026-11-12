@@ -239,11 +239,27 @@ fn full_folder(folder: &Path) -> Result<PathBuf, AgentRuntimeError> {
     let not_there = || AgentRuntimeError::InvalidRequest {
         message: format!("the working folder {} does not exist", folder.display()),
     };
-    let resolved = std::fs::canonicalize(folder).map_err(|_| not_there())?;
+    let resolved = full_form(folder).map_err(|_| not_there())?;
     if !resolved.is_dir() {
         return Err(not_there());
     }
-    Ok(without_verbatim_prefix(resolved))
+    Ok(resolved)
+}
+
+/// The full form of a path that exists, which is the form Claude Code knows
+/// it in: links are followed, the short names of Windows are expanded, and
+/// the `\\?\` prefix Windows adds to resolved paths is taken off again.
+///
+/// Claude Code compares paths as they are written. A folder that a session
+/// was given in this form must be named to the session in this form too.
+/// Named with a short name such as `LONGNA~1`, it counts as another folder,
+/// outside what the session may reach, and reading it is refused.
+///
+/// # Errors
+///
+/// Returns an error if the path does not exist or cannot be reached.
+pub fn full_form(path: &Path) -> std::io::Result<PathBuf> {
+    std::fs::canonicalize(path).map(without_verbatim_prefix)
 }
 
 fn without_verbatim_prefix(path: PathBuf) -> PathBuf {

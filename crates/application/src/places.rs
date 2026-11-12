@@ -252,7 +252,13 @@ impl PlacesService {
     }
 
     /// The reference folders of a project that exist on the computer now,
-    /// in the order they were added.
+    /// in the order they were added, each in its full form.
+    ///
+    /// The full form matters. The program that runs a specialist compares
+    /// paths as they are written. A folder that is named to it in another
+    /// way than the specialist names it later, for example with a short
+    /// name of Windows, counts as a different folder, and reading it is
+    /// refused.
     ///
     /// # Errors
     ///
@@ -267,6 +273,7 @@ impl PlacesService {
             .reference_folders
             .into_iter()
             .filter(|folder| self.file_system.is_folder(folder))
+            .filter_map(|folder| self.file_system.resolve(&folder).ok())
             .collect())
     }
 

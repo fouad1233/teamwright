@@ -247,7 +247,10 @@ impl FileSystem for LocalFileSystem {
     }
 
     fn resolve(&self, path: &Path) -> Result<PathBuf, StorageError> {
-        fs::canonicalize(path).map_err(|error| {
+        // The form the agent program knows a folder in. A specialist is
+        // told about its reference folders in this form, and must name
+        // them in it.
+        teamwright_runtime::full_form(path).map_err(|error| {
             StorageError::caused_by(
                 format!("the folder {} could not be reached", path.display()),
                 error,

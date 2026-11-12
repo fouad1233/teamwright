@@ -1189,19 +1189,23 @@ pub fn instructions_for(
         .map(str::to_owned),
     );
     if !reference_folders.is_empty() {
-        let listed: Vec<String> = reference_folders
-            .iter()
-            .map(|folder| folder.display().to_string())
-            .collect();
-        lines.push(format!(
-            "- You may read these folders of reference material, and you must not change \
-             anything in them: {}.",
-            listed.join(", ")
-        ));
+        // Each folder stands on a line of its own, because the name of a
+        // folder may hold a comma.
+        lines.push(
+            "- Besides the folder of the project you may read the folders below. They hold \
+             material the manager wants you to know, and you must not change anything in \
+             them. Write their paths exactly as they stand here:"
+                .to_owned(),
+        );
+        lines.extend(
+            reference_folders
+                .iter()
+                .map(|folder| format!("    {}", folder.display())),
+        );
     }
     lines.push(format!(
-        "- Files the manager added for reference are in the folder {REFERENCES_FOLDER} inside \
-         the folder of the project."
+        "- Single files the manager handed you are copies in the folder {REFERENCES_FOLDER} \
+         inside the folder of the project."
     ));
     lines.extend(
         [
@@ -1722,8 +1726,7 @@ mod tests {
         );
         let instructions = request.extra_instructions.as_deref().unwrap();
         assert!(instructions.contains(
-            "- You may read these folders of reference material, and you must not change \
-             anything in them: /sample/datasheets."
+            "Write their paths exactly as they stand here:\n    /sample/datasheets\n- Single files"
         ));
         assert!(!instructions.contains("/sample/gone"));
         assert_eq!(
@@ -1734,6 +1737,41 @@ mod tests {
                 .unwrap(),
             request.working_folder
         );
+    }
+
+    #[test]
+    fn a_reference_folder_reaches_a_turn_in_its_full_form() {
+        // The manager named the folder in another way than the computer
+        // does: here with other capitals, on Windows often with a short
+        // name. The program that runs the specialist compares paths as they
+        // are written, so the turn must get the one full form.
+        let workspace = workspace();
+        workspace
+            .ports
+            .file_system
+            .add_folder("/Sample/Data sheets");
+        workspace
+            .ports
+            .places
+            .save(
+                workspace.project.id(),
+                &crate::places::ChosenPlaces {
+                    work_folder: None,
+                    reference_folders: vec![PathBuf::from("/sample/data sheets")],
+                },
+            )
+            .unwrap();
+
+        workspace.work.start_work(workspace.schematic.id()).unwrap();
+
+        let request = &workspace.ports.runtime.requests()[0];
+        assert_eq!(
+            request.readable_folders,
+            [PathBuf::from("/Sample/Data sheets")]
+        );
+        let instructions = request.extra_instructions.as_deref().unwrap();
+        assert!(instructions.contains("\n    /Sample/Data sheets\n"));
+        assert!(!instructions.contains("/sample/data sheets"));
     }
 
     #[test]
@@ -2977,14 +3015,14 @@ mod tests {
         assert_eq!(lines.len(), 10);
         assert_eq!(
             lines[6],
-            "- Files the manager added for reference are in the folder references inside the \
-             folder of the project."
+            "- Single files the manager handed you are copies in the folder references inside \
+             the folder of the project."
         );
         assert!(lines[9].starts_with("- Write in plain words."));
         assert!(lines[8].contains("ask with the tool ask_manager"));
         assert!(lines[8].ends_with("The answer comes as your next message."));
         assert_eq!(shorter.lines().count(), 9);
-        assert!(!instructions.contains("folders of reference material"));
+        assert!(!instructions.contains("Besides the folder of the project"));
         assert!(!shorter.contains("What you are on the team for"));
     }
 }

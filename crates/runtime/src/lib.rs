@@ -29,6 +29,6 @@ mod process;
 mod sign_in;
 pub mod team_bus;
 
-pub use claude_code::ClaudeCode;
+pub use claude_code::{ClaudeCode, full_form};
 pub use environment::Environment;
 pub use locate::Locator;
