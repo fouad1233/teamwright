@@ -111,7 +111,12 @@ Several specialists working together with the manager in the loop.
   goes on; "time left" is answered with how long work has taken and the
   size of the task. Seen in the built program with a real specialist at
   work; a bench that waits for you there was seen on demo data only
-  ([decision 0018](../decisions/0018-the-office-as-a-plan-of-a-workshop.md))
+  ([decision 0018](../decisions/0018-the-office-as-a-plan-of-a-workshop.md)).
+  People in the room: a pixel character for every kind of role and a
+  default, who works, waits with a hand raised, and walks the aisles to a
+  shared place when free; a portrait at the bench and in the Team view.
+  Seen in a browser on demo data only, not yet in the built program
+  ([decision 0019](../decisions/0019-people-in-the-office.md))
 - 🚧 Dashboards: usage per teammate, plan limits, workload by status. A
   Dashboard view of a project: where it stands in sentences worked out by
   rules, the manager's note, the numbers, work by status and by member,

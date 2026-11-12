@@ -100,6 +100,7 @@ src/
     tasks/            The task panel, the list, badges, the fold of subtasks, task logic
     team/             The team: avatars, the Team view, adding and changing a member
     office/           The office: the team at work, drawn as a workshop in plan
+      characters/     The people of the office: pixel figures drawn in code, and portraits
     dashboard/        How a project is going: a summary in words, numbers, small charts
     work/             The work of AI specialists: starting it, following it, answering
     inbox/            What waits for the manager in every project: questions to decide
@@ -201,6 +202,23 @@ The interface follows the design philosophy in
   for the manager borrows the corners of a waiting card. What each bench
   shows, and how many benches stand in a row, is worked out in
   `officeModel.ts`.
+- The office has people in it
+  ([decision 0019](../../docs/decisions/0019-people-in-the-office.md)).
+  Each is a pixel figure written by hand as a grid of letters in
+  `office/characters/sprites.ts`; `palette.ts` names every color a figure
+  may have, the only place where colors are data. `characterModel.ts`
+  reads a member's role from the words of its name and responsibility,
+  and its skin and hair from its identifier. `spriteModel.ts` puts a
+  figure together in a pose and adds its outline. `paint.ts` paints it at
+  a whole number of device pixels per pixel, so it is never blurred.
+  `office/roomModel.ts` works out where everybody sits, the aisles, the
+  shared places and who walks when; `roomPainter.ts` runs the one loop
+  that draws the room on a canvas over it, and stops it when the window
+  is hidden or motion is turned down. A member's portrait (`Portrait`)
+  stands on its bench and in the Team view. To look at every figure in
+  every pose at once, a contact sheet is easy to make: draw
+  `standingFigure` and `benchScene` with `paintSprite` on a page of their
+  own, at a large scale, on both grounds.
 - Movement comes from the motion tokens: named curves and durations, with
   a reduced form for each under `prefers-reduced-motion`, declared with
   `!important` so that it wins over the rule in `base.css` that ends every

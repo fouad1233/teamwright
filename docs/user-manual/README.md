@@ -600,6 +600,49 @@ inbox. With the keyboard, Tab moves from bench to bench and Enter presses.
 The title block in the corner counts the room, and its legend says what the
 lamp and the corners mean.
 
+### The people in the office
+
+Every place has its person: a small figure drawn in pixels, sitting
+behind the far edge of the bench. You can tell what each does by what it
+wears and what stands on its bench:
+
+| Character | Wears | On the bench |
+|---|---|---|
+| You, the manager | A gold jacket | A tray of letters and a mug |
+| The Advisor | A long dark coat, gray hair, glasses | The plan, and rolled plans |
+| Software or firmware | Headphones | A laptop and a mug |
+| Hardware or electronics | A loupe on the forehead | A circuit board and a soldering iron |
+| Mechanical | An apron | A machined part and a caliper |
+| Designer | A beret | A drawing tablet and a fan of colors |
+| Test | A lab coat | An instrument and a clipboard |
+| Technical writer | A cardigan | A notebook, a pen and books |
+| Researcher or analyst | Glasses and a sweater vest | Papers, a magnifying glass and a chart |
+| Anybody else | A shirt | Papers and a mug |
+
+Teamwright chooses the character from the words of a member's name, or,
+if the name says nothing it knows, from its responsibility: *Firmware
+engineer* and *Embedded developer* both get the software character. A
+person on the team gets a character the same way. The shirt is in the
+member's own color, and the skin and the hair are the member's own, so two
+members with the same role look different, and each looks the same every
+time you come back. The same face stands next to the name on the bench
+and in the Team view.
+
+The people do what their bench says. At work, they bend over the work and
+their things move: smoke rises from the soldering iron, the screen lights
+up. Waiting for you, they sit turned to the room with a hand raised,
+inside the gold corners. Free, they sit at ease and look around, and now
+and then one gets up, walks along the aisles to the window, the table
+with the plan or the coffee corner at the foot of the room, stays a
+while, and walks back. While they are away, their chair and their things
+wait on the bench. You and the Advisor do the same. As soon as work
+starts for somebody who is away, they turn round and come back.
+
+It is slow on purpose: never more than one person on the way at once,
+and nothing moves while the window is hidden. If your system asks for
+less motion, nobody walks and nothing moves: everybody sits at the bench
+in the pose of what the bench says.
+
 ## The dashboard
 
 The *Dashboard* tab says how the project is going, on one page that reads
