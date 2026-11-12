@@ -13,13 +13,14 @@ import { useNavigation } from '@/app/navigation';
 import type { Id, Project, Status, Task } from '@/shared/api/types';
 import { classNames } from '@/shared/lib/classNames';
 import { dayNumberOf, isWeekend, partsOfDay, type DayNumber } from '@/shared/lib/days';
-import { formatDate, formatMonth, isOverdue, taskReference, today } from '@/shared/lib/format';
+import { formatMonth, formatPeriod, isOverdue, taskReference, today } from '@/shared/lib/format';
 import { Button } from '@/shared/ui/Button';
 
 import { SubtaskFold } from '../tasks/SubtaskFold';
 import { StatusMark } from '../tasks/TaskBadges';
 import { useSubtaskFolds } from '../tasks/subtaskFolds';
 import { statusOf } from '../tasks/taskModel';
+import { spanOf, type Span } from '../tasks/taskSpan';
 import { useTaskCommands } from '../tasks/taskQueries';
 import { AssigneeAvatar } from '../team/Assignee';
 import styles from './GanttView.module.css';
@@ -33,12 +34,10 @@ import {
   draggedDates,
   linksOf,
   monthsOf,
-  spanOf,
   type ChartRange,
   type ChartRow,
   type Dates,
   type Grip,
-  type Span,
 } from './ganttModel';
 
 /** How many days are shown to the left of today when the chart opens. */
@@ -406,7 +405,7 @@ function Bar({
 }: BarProps) {
   const [drag, setDrag] = useState<Drag | null>(null);
   const bar = barOf(span, range);
-  const period = periodOf(dates);
+  const period = formatPeriod(dates.startOn, dates.dueOn);
   const isLate = drag === null && isOverdue(task) && span.lastDay < todayDay;
 
   function hold(grip: Grip) {
@@ -518,20 +517,4 @@ function Bar({
       )}
     </>
   );
-}
-
-/** Says the dates of a task in a few words: "10 Nov – 14 Nov". */
-function periodOf({ startOn, dueOn }: Dates): string {
-  if (startOn !== null && dueOn !== null) {
-    return startOn === dueOn
-      ? formatDate(startOn)
-      : `${formatDate(startOn)} – ${formatDate(dueOn)}`;
-  }
-  if (startOn !== null) {
-    return `Starts ${formatDate(startOn)}, no due date`;
-  }
-  if (dueOn !== null) {
-    return `Due ${formatDate(dueOn)}`;
-  }
-  return 'No dates';
 }

@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import {
   formatDate,
+  formatDay,
   formatEstimate,
+  formatMonth,
+  formatMonthShort,
+  formatPeriod,
   isOverdue,
   parseEstimate,
   taskReference,
@@ -30,6 +34,40 @@ describe('formatDate', () => {
 
   it('adds the year to a date of another year', () => {
     expect(formatDate('2027-01-05', inNovember2026)).toBe('5 Jan 2027');
+  });
+});
+
+describe('formatMonth and formatMonthShort', () => {
+  it('write a month with its year, or as a short name', () => {
+    expect(formatMonth(2026, 11)).toBe('November 2026');
+    expect(formatMonthShort(2026, 12)).toBe('Dec');
+  });
+});
+
+describe('formatDay', () => {
+  it('writes a date in full, with the day of the week', () => {
+    expect(formatDay('2026-11-12')).toBe('Thursday 12 November');
+  });
+});
+
+describe('formatPeriod', () => {
+  const inNovember2026 = new Date(2026, 10, 11);
+
+  it('writes both dates of a planned task', () => {
+    expect(formatPeriod('2026-11-10', '2026-11-14', inNovember2026)).toBe('10 Nov – 14 Nov');
+  });
+
+  it('writes one date when the task starts and ends on the same day', () => {
+    expect(formatPeriod('2026-11-10', '2026-11-10', inNovember2026)).toBe('10 Nov');
+  });
+
+  it('says which date a task with one date has', () => {
+    expect(formatPeriod('2026-11-10', null, inNovember2026)).toBe('Starts 10 Nov, no due date');
+    expect(formatPeriod(null, '2026-11-14', inNovember2026)).toBe('Due 14 Nov');
+  });
+
+  it('says so when a task has no dates', () => {
+    expect(formatPeriod(null, null)).toBe('No dates');
   });
 });
 

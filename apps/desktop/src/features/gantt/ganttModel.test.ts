@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import type { Task } from '@/shared/api/types';
 import { calendarDateOfDay, dayNumberOf, weekdayOf } from '@/shared/lib/days';
 
+import { spanOf } from '../tasks/taskSpan';
+
 import {
   BAR_HEIGHT,
   BAR_INSET,
@@ -16,7 +18,6 @@ import {
   linkPath,
   linksOf,
   monthsOf,
-  spanOf,
   type ChartRange,
 } from './ganttModel';
 
@@ -49,40 +50,6 @@ const today = dayNumberOf('2026-11-12');
 const range: ChartRange = { firstDay: dayNumberOf('2026-11-02'), dayCount: 56 };
 const DAY = 10;
 const ROW = 20;
-
-describe('spanOf', () => {
-  it('runs from the start to the due date of a planned task', () => {
-    expect(spanOf({ startOn: '2026-11-10', dueOn: '2026-11-14' })).toEqual({
-      firstDay: dayNumberOf('2026-11-10'),
-      lastDay: dayNumberOf('2026-11-14'),
-      kind: 'planned',
-    });
-  });
-
-  it('is one open day for a task that only has a start', () => {
-    const day = dayNumberOf('2026-11-10');
-
-    expect(spanOf({ startOn: '2026-11-10', dueOn: null })).toEqual({
-      firstDay: day,
-      lastDay: day,
-      kind: 'open',
-    });
-  });
-
-  it('is the day of the deadline for a task that only has a due date', () => {
-    const day = dayNumberOf('2026-11-14');
-
-    expect(spanOf({ startOn: null, dueOn: '2026-11-14' })).toEqual({
-      firstDay: day,
-      lastDay: day,
-      kind: 'deadline',
-    });
-  });
-
-  it('is nothing for a task without any date', () => {
-    expect(spanOf({ startOn: null, dueOn: null })).toBeUndefined();
-  });
-});
 
 describe('chartRange', () => {
   it('shows eight weeks around today when nothing is planned', () => {

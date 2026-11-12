@@ -1,14 +1,8 @@
 import type { CalendarDate, Id, Task } from '@/shared/api/types';
-import {
-  addDays,
-  dayNumberOf,
-  firstDayOfMonth,
-  mondayOf,
-  partsOfDay,
-  type DayNumber,
-} from '@/shared/lib/days';
+import { addDays, firstDayOfMonth, mondayOf, partsOfDay, type DayNumber } from '@/shared/lib/days';
 
 import { indexSubtasks, isSubtask, outlineRows, type OutlineRow } from '../tasks/taskModel';
+import { spanOf, type Span } from '../tasks/taskSpan';
 
 /**
  * The arithmetic of the Gantt chart: which days a task takes up, which days
@@ -32,37 +26,6 @@ export const BAR_INSET = 2;
 
 /** The width of the mark of a task that has a due date and no start, in pixels. */
 export const DEADLINE_MARK_WIDTH = 12;
-
-/** The days a task takes up on the chart. */
-export interface Span {
-  firstDay: DayNumber;
-  lastDay: DayNumber;
-  /**
-   * `planned` for a task with a start and a due date, `open` for a task
-   * that only has a start, and `deadline` for one that only has a due date.
-   */
-  kind: 'planned' | 'open' | 'deadline';
-}
-
-/** The days a task takes up, or nothing for a task without any date. */
-export function spanOf(task: Pick<Task, 'startOn' | 'dueOn'>): Span | undefined {
-  if (task.startOn !== null && task.dueOn !== null) {
-    return {
-      firstDay: dayNumberOf(task.startOn),
-      lastDay: dayNumberOf(task.dueOn),
-      kind: 'planned',
-    };
-  }
-  if (task.startOn !== null) {
-    const day = dayNumberOf(task.startOn);
-    return { firstDay: day, lastDay: day, kind: 'open' };
-  }
-  if (task.dueOn !== null) {
-    const day = dayNumberOf(task.dueOn);
-    return { firstDay: day, lastDay: day, kind: 'deadline' };
-  }
-  return undefined;
-}
 
 /** The days a chart shows. */
 export interface ChartRange {

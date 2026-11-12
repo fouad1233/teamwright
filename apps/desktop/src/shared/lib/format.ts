@@ -58,6 +58,45 @@ export function formatMonth(year: number, month: number): string {
   );
 }
 
+/** Writes the short name of a month: "Nov". `month` counts from 1. */
+export function formatMonthShort(year: number, month: number): string {
+  return new Intl.DateTimeFormat(INTERFACE_LOCALE, { month: 'short' }).format(
+    new Date(year, month - 1, 1),
+  );
+}
+
+/** Writes a calendar date in full: "Thursday 12 November". */
+export function formatDay(date: CalendarDate): string {
+  return new Intl.DateTimeFormat(INTERFACE_LOCALE, {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+  }).format(localDateOf(date));
+}
+
+/**
+ * Says the dates of a task in a few words: "10 Nov – 14 Nov" for a task with
+ * a start and a due date, and otherwise which of the two it has.
+ */
+export function formatPeriod(
+  startOn: CalendarDate | null,
+  dueOn: CalendarDate | null,
+  now: Date = new Date(),
+): string {
+  if (startOn !== null && dueOn !== null) {
+    return startOn === dueOn
+      ? formatDate(startOn, now)
+      : `${formatDate(startOn, now)} – ${formatDate(dueOn, now)}`;
+  }
+  if (startOn !== null) {
+    return `Starts ${formatDate(startOn, now)}, no due date`;
+  }
+  if (dueOn !== null) {
+    return `Due ${formatDate(dueOn, now)}`;
+  }
+  return 'No dates';
+}
+
 /** Writes a moment for people, in the user's time zone: "11 Nov 2026, 10:00". */
 export function formatMoment(moment: Moment): string {
   return new Intl.DateTimeFormat(INTERFACE_LOCALE, {
