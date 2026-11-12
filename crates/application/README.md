@@ -47,8 +47,8 @@ project, two members of one team cannot have the same name.
   of a deleted project is free again.
 - Archived projects are listed with the one put away last first. Restoring
   one brings it back with its tasks and its team.
-- Deleting a project deletes its tasks and its team. The project itself goes
-  last, so a deletion that fails half-way can simply be repeated.
+- Deleting a project deletes its tasks, its team and what it knew about its
+  folders; the folders on disk stay. The project itself goes last, so a deletion that fails half-way can simply be repeated.
 - Changing a status between "done" and not done completes or reopens every
   task in it, subtasks included.
 - A status that still has tasks is removed only when another status is
@@ -126,9 +126,14 @@ question; every request to the specialist is a turn of it.
   trimmed; `ask` opens a conversation without a task.
 - A specialist works on one thing at a time (`member_busy`). Whether it is
   busy is read from storage: a turn in the state running.
-- A turn runs with `PermissionProfile::specialist()`, in the folder of the
-  project (`ProjectFolders`), with instructions that say who the specialist
-  is and how the team works (`instructions_for`). The first turn starts a new
+- A turn runs with `PermissionProfile::specialist()`, in the work folder of
+  the project (`PlacesService::work_folder_of`), with the reference folders
+  that still exist as `readable_folders`, and with instructions that say who
+  the specialist is and how the team works (`instructions_for`). The
+  instructions list the reference folders, if there are any, as readable
+  and not to be changed, and always say that files the manager added for
+  reference are in the folder `references`. Opening a session in the
+  desktop app uses the same work folder. The first turn starts a new
   session; later turns resume it by the identifier the program reported.
 - Every event of the runtime is recorded in the turn, the turn is stored,
   and the `WorkListener` is told with the whole conversation. Plan usage is
