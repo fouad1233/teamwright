@@ -1,4 +1,4 @@
-import { useState, type CSSProperties, type FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
 
 import type { DecisionRequest, NewDecisionAnswer } from '@/shared/api/types';
 import { classNames } from '@/shared/lib/classNames';
@@ -6,6 +6,7 @@ import { Button } from '@/shared/ui/Button';
 
 import styles from './DecisionCard.module.css';
 import { OptionList, type OptionPick } from './OptionList';
+import { appearsAt, waitsForManager } from './waitsForManager';
 
 interface DecisionCardProps {
   decision: DecisionRequest;
@@ -33,7 +34,7 @@ export function DecisionCard({ decision, askedBy, onDecide }: DecisionCardProps)
   const canDecide = !isSending && (typeof pick === 'number' || saysSomething);
   // The words of the manager and the button come up with the last option,
   // the one for an answer in words.
-  const afterTheOptions = { '--place': decision.options.length + 1 } as CSSProperties;
+  const afterTheOptions = appearsAt(decision.options.length + 1);
 
   async function decide() {
     if (!canDecide) {
@@ -52,13 +53,15 @@ export function DecisionCard({ decision, askedBy, onDecide }: DecisionCardProps)
   }
 
   return (
-    <form className={styles.card} onSubmit={handleSubmit}>
-      <p className={classNames('label', styles.asks)}>{askedBy} asks you to decide</p>
-      <h4 className={styles.question} data-selectable>
+    <form className={classNames(waitsForManager.frame, styles.card)} onSubmit={handleSubmit}>
+      <p className={classNames('label', waitsForManager.part, styles.asks)}>
+        {askedBy} asks you to decide
+      </p>
+      <h4 className={classNames(waitsForManager.part, styles.question)} data-selectable>
         {decision.question}
       </h4>
       {decision.reason !== '' && (
-        <p className={styles.reason} data-selectable>
+        <p className={classNames(waitsForManager.part, styles.reason)} data-selectable>
           {decision.reason}
         </p>
       )}
@@ -73,7 +76,7 @@ export function DecisionCard({ decision, askedBy, onDecide }: DecisionCardProps)
       />
 
       <textarea
-        className={styles.note}
+        className={classNames(waitsForManager.part, styles.note)}
         style={afterTheOptions}
         aria-label="Your words"
         placeholder={
@@ -86,7 +89,7 @@ export function DecisionCard({ decision, askedBy, onDecide }: DecisionCardProps)
         rows={2}
       />
 
-      <div className={styles.actions} style={afterTheOptions}>
+      <div className={classNames(waitsForManager.part, styles.actions)} style={afterTheOptions}>
         <Button variant="primary" type="submit" disabled={!canDecide}>
           Decide
         </Button>

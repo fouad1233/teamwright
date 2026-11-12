@@ -1,9 +1,10 @@
-import { useId, type CSSProperties } from 'react';
+import { useId } from 'react';
 
 import type { DecisionOption } from '@/shared/api/types';
 import { classNames } from '@/shared/lib/classNames';
 
 import styles from './OptionList.module.css';
+import { appearsAt, waitsForManager } from './waitsForManager';
 
 /** What the manager has picked: one of the options, or to answer in words alone. */
 export type OptionPick = number | 'own words';
@@ -19,11 +20,6 @@ interface OptionListProps {
   onPick: (pick: OptionPick) => void;
   /** Lets the options come up one after the other, as part of a decision that appears. */
   isAppearing?: boolean;
-}
-
-/** The place of an option in the order in which they come up, from 1. */
-function placeOf(place: number): CSSProperties {
-  return { '--place': place + 1 } as CSSProperties;
 }
 
 /**
@@ -42,17 +38,18 @@ export function OptionList({
   const name = useId();
 
   return (
-    <div
-      className={classNames(styles.options, isAppearing && styles.appearing)}
-      role="radiogroup"
-      aria-label={label}
-    >
+    <div className={styles.options} role="radiogroup" aria-label={label}>
       {options.map((option, place) => (
         <label
           // The options of a question never change, so their place identifies them.
           key={place}
-          className={classNames(styles.option, pick === place && styles.picked)}
-          style={placeOf(place)}
+          className={classNames(
+            styles.option,
+            pick === place && styles.picked,
+            isAppearing && waitsForManager.part,
+          )}
+          // The options come up after the question, one after the other.
+          style={appearsAt(place + 1)}
         >
           <input
             type="radio"
@@ -75,8 +72,12 @@ export function OptionList({
         </label>
       ))}
       <label
-        className={classNames(styles.option, pick === 'own words' && styles.picked)}
-        style={placeOf(options.length)}
+        className={classNames(
+          styles.option,
+          pick === 'own words' && styles.picked,
+          isAppearing && waitsForManager.part,
+        )}
+        style={appearsAt(options.length + 1)}
       >
         <input
           type="radio"

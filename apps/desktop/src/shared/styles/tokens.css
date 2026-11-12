@@ -113,6 +113,10 @@
   --sun-from: #2a211a;
   --sun-to: #12100e;
   --grain-strength: 0.07;
+  /* On a large card, such as a proposal with its tables, the sun lights the
+     head alone: how far it reaches across and down. */
+  --sun-head-width: 640px;
+  --sun-head-height: 260px;
   --grain-texture: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 
   /* The joints at the corners of a card that waits for the manager. Two
@@ -124,6 +128,8 @@
   /* A mask that keeps all it covers. Two of them, one cut out of the other,
      leave only the rim of an element for a light to fall on. */
   --mask-opaque: linear-gradient(#000 0 0);
+  /* A mask that keeps the top and lets the rest fade away. */
+  --mask-fade-down: linear-gradient(#000, transparent);
 
   /*
    * Motion (decision 0015). Things arrive by slowing down and leave by
