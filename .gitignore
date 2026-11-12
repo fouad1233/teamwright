@@ -31,6 +31,7 @@ dist-ssr/
 # Machine-specific tool configuration
 /.cargo/config.toml
 .claude/settings.local.json
+/.claude/worktrees/
 
 # Editors and operating systems
 .idea/
