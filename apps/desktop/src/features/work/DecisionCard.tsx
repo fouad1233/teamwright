@@ -1,13 +1,11 @@
-import { useId, useState, type FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
 
 import type { DecisionRequest, NewDecisionAnswer } from '@/shared/api/types';
 import { classNames } from '@/shared/lib/classNames';
 import { Button } from '@/shared/ui/Button';
 
 import styles from './DecisionCard.module.css';
-
-/** What the manager has picked so far: one of the options, or to answer in words alone. */
-type Pick = number | 'own words' | undefined;
+import { OptionList, type OptionPick } from './OptionList';
 
 interface DecisionCardProps {
   decision: DecisionRequest;
@@ -25,8 +23,7 @@ interface DecisionCardProps {
  * one thing there that carries the brass.
  */
 export function DecisionCard({ decision, askedBy, onDecide }: DecisionCardProps) {
-  const name = useId();
-  const [pick, setPick] = useState<Pick>(undefined);
+  const [pick, setPick] = useState<OptionPick | undefined>(undefined);
   const [note, setNote] = useState('');
   const [isSending, setIsSending] = useState(false);
   const saysSomething = note.trim() !== '';
@@ -62,47 +59,13 @@ export function DecisionCard({ decision, askedBy, onDecide }: DecisionCardProps)
         </p>
       )}
 
-      <div className={styles.options} role="radiogroup" aria-label="Options">
-        {decision.options.map((option, place) => (
-          <label
-            // The options of a question never change, so their place identifies them.
-            key={place}
-            className={classNames(styles.option, pick === place && styles.picked)}
-          >
-            <input
-              type="radio"
-              name={name}
-              className={styles.radio}
-              checked={pick === place}
-              onChange={() => {
-                setPick(place);
-              }}
-            />
-            <span className={styles.optionLabel}>
-              {option.label}
-              {decision.recommended === place && (
-                <span className={classNames('label', styles.recommended)}>Recommended</span>
-              )}
-            </span>
-            {option.consequence !== '' && (
-              <span className={styles.consequence}>{option.consequence}</span>
-            )}
-          </label>
-        ))}
-        <label className={classNames(styles.option, pick === 'own words' && styles.picked)}>
-          <input
-            type="radio"
-            name={name}
-            className={styles.radio}
-            checked={pick === 'own words'}
-            onChange={() => {
-              setPick('own words');
-            }}
-          />
-          <span className={styles.optionLabel}>Something else</span>
-          <span className={styles.consequence}>Say below what you want instead.</span>
-        </label>
-      </div>
+      <OptionList
+        label="Options"
+        options={decision.options}
+        recommended={decision.recommended}
+        pick={pick}
+        onPick={setPick}
+      />
 
       <textarea
         className={styles.note}

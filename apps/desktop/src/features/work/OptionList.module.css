@@ -1,0 +1,70 @@
+.options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* An option is a small card: what it is in ink, what it leads to in a
+   softer ink under it. */
+.option {
+  /* The hidden radio button is placed against its own option. Left to
+     find a frame further out, it would stand outside the panel that
+     scrolls, and make the whole window scroll to reach it. */
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius-card);
+  cursor: pointer;
+  transition:
+    border-color 100ms ease,
+    background-color 100ms ease;
+}
+
+.option:hover {
+  background: var(--hover);
+}
+
+/* The option that is picked is outlined in ink, like a part that has been
+   picked up. */
+.picked,
+.picked:hover {
+  border-color: var(--ink);
+  background: transparent;
+}
+
+/* The radio button does the work for the keyboard and for screen readers;
+   the card around it shows the choice. */
+.radio {
+  position: absolute;
+  top: 0;
+  left: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.option:has(.radio:focus-visible) {
+  outline: 2px solid var(--brass);
+  outline-offset: 2px;
+}
+
+.optionLabel {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  font-weight: 550;
+}
+
+.recommended {
+  flex: none;
+  color: var(--ink-faint);
+}
+
+.consequence {
+  color: var(--ink-soft);
+  font-size: var(--text-small);
+  line-height: 1.45;
+}

@@ -1,5 +1,5 @@
 import { Check, ExternalLink, Send, Square, X } from 'lucide-react';
-import { useState, type KeyboardEvent } from 'react';
+import { useState, type KeyboardEvent, type ReactNode } from 'react';
 
 import { useIsDemo } from '@/shared/api/BackendProvider';
 import type { Conversation, Project, Step, Turn } from '@/shared/api/types';
@@ -61,7 +61,7 @@ export function ConversationView({
         <span className={styles.space} />
         {working ? (
           <>
-            <span className={classNames('label', styles.working)}>Working</span>
+            <WorkingMark />
             <Button
               variant="ghost"
               icon={<Square />}
@@ -127,11 +127,29 @@ const ORIGIN_LABELS: Record<Turn['origin'], string> = {
   interview: 'Your answers',
 };
 
-/** One request to a specialist: what was asked, what happened, and what came back. */
-function TurnView({ turn }: { turn: Turn }) {
-  // A brief is long and written by the program, so it is folded away. What
-  // the manager wrote is short and is shown.
-  const [isRequestShown, setIsRequestShown] = useState(turn.origin !== 'brief');
+/** Says that somebody is at work: the one thing on its page that moves. */
+export function WorkingMark() {
+  return <span className={classNames('label', styles.working)}>Working</span>;
+}
+
+interface TurnViewProps {
+  turn: Turn;
+  /**
+   * What stands over the answer the turn ended with. A specialist ends
+   * with a report. Nothing stands over an answer that is only a sentence.
+   */
+  reportTitle?: string | null;
+  /** What else came of the turn, shown under its answer. */
+  children?: ReactNode;
+}
+
+/** One request to a specialist or to the Advisor: what was asked, what happened, and what came back. */
+export function TurnView({ turn, reportTitle = 'Report', children }: TurnViewProps) {
+  // A brief is long and written by the program, and the answers to an
+  // interview repeat its questions, so both are folded away. What the
+  // manager wrote in their own words is short and is shown.
+  const isWrittenByProgram = turn.origin === 'brief' || turn.origin === 'interview';
+  const [isRequestShown, setIsRequestShown] = useState(!isWrittenByProgram);
   const decided = turn.decision === null ? null : decisionInWords(turn.decision);
 
   return (
@@ -140,7 +158,7 @@ function TurnView({ turn }: { turn: Turn }) {
         <span className="label">
           {ORIGIN_LABELS[turn.origin]} · {formatMoment(turn.startedAt)}
         </span>
-        {turn.origin === 'brief' && (
+        {isWrittenByProgram && (
           <button
             type="button"
             className={styles.fold}
@@ -174,7 +192,9 @@ function TurnView({ turn }: { turn: Turn }) {
           next to its question is no report, so it gets no such title. */}
       {turn.answer !== '' && turn.decision === null && (
         <>
-          <h4 className={classNames('label', styles.reportTitle)}>Report</h4>
+          {reportTitle !== null && (
+            <h4 className={classNames('label', styles.reportTitle)}>{reportTitle}</h4>
+          )}
           <Prose text={turn.answer} />
         </>
       )}
@@ -186,6 +206,8 @@ function TurnView({ turn }: { turn: Turn }) {
           <p data-selectable>{decided}</p>
         </div>
       )}
+
+      {children}
 
       {turn.failure !== null && (
         <p

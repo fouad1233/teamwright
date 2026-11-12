@@ -5,12 +5,13 @@ import { classNames } from '@/shared/lib/classNames';
 import { Button } from '@/shared/ui/Button';
 import { Dialog } from '@/shared/ui/Dialog';
 import { ChoiceInput, Field, TextArea, TextInput } from '@/shared/ui/Field';
-import { ChoiceMenu, type Choice } from '@/shared/ui/Menu';
+import { ChoiceMenu } from '@/shared/ui/Menu';
 import { describeFailure } from '@/shared/ui/Toast';
 
 import { MemberAvatar } from './Assignee';
 import styles from './MemberDialog.module.css';
-import { EFFORTS, MODEL_NAMES, effortLabel, kindLabel, modelLabel } from './teamModel';
+import { EFFORT_CHOICES, LEFT_TO_THE_PROGRAM, modelChoices } from './profileChoices';
+import { effortLabel, kindLabel, modelLabel } from './teamModel';
 import { useTeamCommands } from './teamQueries';
 
 interface KindChoice {
@@ -35,31 +36,6 @@ const KIND_CHOICES: KindChoice[] = [
     example: 'Dana Ortiz',
   },
 ];
-
-/**
- * The value that stands, in a menu, for leaving a choice to the program
- * that runs the specialists. A menu chooses among texts, and "nothing" is
- * not one.
- */
-const LEFT_TO_THE_PROGRAM = 'default';
-
-const EFFORT_CHOICES: Choice<string>[] = [
-  { value: LEFT_TO_THE_PROGRAM, label: 'The default' },
-  ...EFFORTS.map((effort) => ({ value: effort, label: effortLabel(effort) })),
-];
-
-/**
- * The models the menu offers: the default, the short names, and the model
- * the member has now if it is none of those.
- */
-function modelChoices(current: string | null): Choice<string>[] {
-  const names =
-    current === null || MODEL_NAMES.includes(current) ? MODEL_NAMES : [...MODEL_NAMES, current];
-  return [
-    { value: LEFT_TO_THE_PROGRAM, label: 'The default of Claude Code' },
-    ...names.map((name) => ({ value: name, label: modelLabel(name) })),
-  ];
-}
 
 interface MemberDialogProps {
   open: boolean;
