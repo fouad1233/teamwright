@@ -2,7 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useMemo } from 'react';
 
 import { useBackend } from '@/shared/api/BackendProvider';
-import type { Id, NewProject, Project, StatusProperties } from '@/shared/api/types';
+import type { Id, NewProject, Project, ProjectPlaces, StatusProperties } from '@/shared/api/types';
 import { describeFailure, useNotifier } from '@/shared/ui/Toast';
 
 import { tasksKey } from '../tasks/taskQueries';
@@ -178,4 +178,62 @@ export function useProjectCommands(): ProjectCommands {
       },
     };
   }, [backend, queryClient, notifier]);
+}
+
+/** The name under which the folders of a project are cached. */
+function placesKey(projectId: Id) {
+  return ['project-places', projectId] as const;
+}
+
+/** Where the specialists of a project work, and what else they may read. */
+export function useProjectPlaces(projectId: Id) {
+  const backend = useBackend();
+  return useQuery({
+    queryKey: placesKey(projectId),
+    queryFn: () => backend.projectPlaces(projectId),
+  });
+}
+
+/**
+ * Everything the manager can do about the folders of one project. They are
+ * used in a dialog: a refusal by the backend is thrown to it, and it shows
+ * the reason next to what was tried.
+ */
+export interface PlacesCommands {
+  /** Lets the manager pick a folder of this computer. Nothing, if they changed their mind. */
+  chooseFolder(): Promise<string | null>;
+  /** Lets the manager pick files of this computer. */
+  chooseFiles(): Promise<string[]>;
+  /** Makes a folder the work folder. With nothing, the folder of Teamwright is used again. */
+  setWorkFolder(folder: string | null): Promise<void>;
+  addReferenceFolder(folder: string): Promise<void>;
+  removeReferenceFolder(folder: string): Promise<void>;
+  /** Copies files for the specialists. Resolves to the names the copies have. */
+  addReferenceFiles(files: string[]): Promise<string[]>;
+  /** Shows the work folder in the file manager of this computer. */
+  showWorkFolder(): Promise<void>;
+}
+
+/** The commands for the folders of a project. */
+export function usePlacesCommands(projectId: Id): PlacesCommands {
+  const backend = useBackend();
+  const queryClient = useQueryClient();
+
+  return useMemo(() => {
+    /** Runs a request that answers with the folders, and shows them. */
+    const change = async (request: () => Promise<ProjectPlaces>) => {
+      queryClient.setQueryData<ProjectPlaces>(placesKey(projectId), await request());
+    };
+
+    return {
+      chooseFolder: () => backend.chooseFolder(),
+      chooseFiles: () => backend.chooseFiles(),
+      setWorkFolder: (folder) => change(() => backend.setWorkFolder(projectId, folder)),
+      addReferenceFolder: (folder) => change(() => backend.addReferenceFolder(projectId, folder)),
+      removeReferenceFolder: (folder) =>
+        change(() => backend.removeReferenceFolder(projectId, folder)),
+      addReferenceFiles: (files) => backend.addReferenceFiles(projectId, files),
+      showWorkFolder: () => backend.showWorkFolder(projectId),
+    };
+  }, [backend, queryClient, projectId]);
 }

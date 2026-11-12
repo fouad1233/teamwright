@@ -1,4 +1,4 @@
-import { Archive, Columns3, Ellipsis, Pencil, Trash2 } from 'lucide-react';
+import { Archive, Columns3, Ellipsis, Folder, Pencil, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 
 import type { Project } from '@/shared/api/types';
@@ -8,13 +8,14 @@ import { FormActions } from '@/shared/ui/Form';
 import { ActionMenu } from '@/shared/ui/Menu';
 
 import { useTeamMembers } from '../team/TeamContext';
+import { FoldersDialog } from './FoldersDialog';
 import { ProjectDetailsDialog } from './ProjectDetailsDialog';
 import styles from './ProjectMenu.module.css';
 import { StatusesDialog } from './StatusesDialog';
 import { useProjectCommands } from './projectQueries';
 
 /** The dialogs the menu can open. One at a time. */
-type OpenDialog = 'details' | 'statuses' | 'removal';
+type OpenDialog = 'details' | 'statuses' | 'folders' | 'removal';
 
 interface ProjectMenuProps {
   project: Project;
@@ -24,7 +25,7 @@ interface ProjectMenuProps {
 
 /**
  * The menu of a project: change its name and description, edit its
- * statuses, put it away, or delete it.
+ * statuses, say where its specialists work, put it away, or delete it.
  */
 export function ProjectMenu({ project, taskCount }: ProjectMenuProps) {
   const commands = useProjectCommands();
@@ -60,6 +61,13 @@ export function ProjectMenu({ project, taskCount }: ProjectMenuProps) {
             },
           },
           {
+            label: 'Folders',
+            icon: <Folder />,
+            onSelect: () => {
+              setOpenDialog('folders');
+            },
+          },
+          {
             label: 'Archive project',
             icon: <Archive />,
             onSelect: () => {
@@ -83,6 +91,7 @@ export function ProjectMenu({ project, taskCount }: ProjectMenuProps) {
 
       <ProjectDetailsDialog open={openDialog === 'details'} project={project} onClose={close} />
       <StatusesDialog open={openDialog === 'statuses'} project={project} onClose={close} />
+      <FoldersDialog open={openDialog === 'folders'} project={project} onClose={close} />
 
       <Dialog open={openDialog === 'removal'} title={`Delete ${project.name}?`} onClose={close}>
         <p className={styles.warning}>
