@@ -48,13 +48,26 @@ The shell is where the work of an AI specialist meets the outside world
 - **The team bus.** A specialist asks the manager to decide through a tool,
   `ask_manager`
   ([decision 0012](../../docs/decisions/0012-a-specialist-asks-through-a-tool.md)).
-  The server of that tool is this very program: `state.rs` tells the
-  runtime to start it with the argument `--team-bus`, and `main.rs` then
-  serves the tool on standard input and output without a window and without
-  the database. The question itself arrives in the events of the turn, like
-  every other step.
+  The Advisor interviews and proposes through two more, `interview` and
+  `propose_plan`
+  ([decision 0014](../../docs/decisions/0014-the-advisor-plans-through-two-tools.md)).
+  The server of these tools is this very program: `state.rs` tells the
+  runtime to start it with the argument `--team-bus`, the runtime adds the
+  names of the tools the turn is given (and `--member <name>` for each
+  member of the team), and `main.rs` then serves those tools on standard
+  input and output without a window and without the database. What is asked
+  or proposed arrives in the events of the turn, like every other step.
+- **Planning with the Advisor.** The commands `advise`, `answer_interview`
+  and `approve_proposal` in `commands/work.rs` carry it out; `reply` and
+  `list_conversations_waiting` serve conversations with the Advisor too. In
+  `dto.rs`, a conversation says whether it `isWithAdvisor`, a turn carries
+  its `interview` and its `proposal`, and an owner of a proposed task is
+  `{"kind": "manager"}` or `{"kind": "member", "name": "…"}`. A place sent
+  as a number that is not a whole number from 0, such as `-1` or `1.5`, is
+  read as a place that is not there, so that the use case refuses it with
+  the rule it breaks.
 - **Slow commands.** Asking the program whether it is there, and starting a
-  turn, take seconds. Those commands are declared `async`, so they run on a
+  turn (also `advise` and `answer_interview`), take seconds. Those commands are declared `async`, so they run on a
   thread of their own and the window stays alive.
 - **One event.** Every change to a conversation is sent to the interface as
   the event `conversation-changed`, with the whole conversation. The

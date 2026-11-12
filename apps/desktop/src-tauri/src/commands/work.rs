@@ -6,7 +6,12 @@
 
 use tauri::State;
 
-use crate::dto::{AgentProgramDto, ConversationDto, DecisionAnswerInput, parse_id};
+use teamwright_application::ApprovedProposal;
+
+use crate::dto::{
+    AgentProgramDto, ApprovedProposalInput, ConversationDto, DecisionAnswerInput,
+    InterviewAnswerInput, NewAdviceInput, parse_effort, parse_id,
+};
 use crate::error::CommandError;
 use crate::state::AppState;
 
@@ -76,8 +81,57 @@ pub fn answer_decision(
     Ok(ConversationDto::from(&conversation))
 }
 
-/// Lists the conversations in which a specialist waits for the manager to
-/// decide, in every project that is not archived, the longest wait first.
+/// Starts planning a project with the Advisor: a new conversation that
+/// begins with what the manager wants.
+#[tauri::command(async)]
+pub fn advise(
+    state: State<'_, AppState>,
+    project_id: String,
+    advice: NewAdviceInput,
+) -> Result<ConversationDto, CommandError> {
+    let effort = advice.effort.as_deref().map(parse_effort).transpose()?;
+    let conversation = state.work.advise(
+        parse_id(&project_id)?,
+        &advice.brief,
+        advice.model.as_deref(),
+        effort,
+    )?;
+    Ok(ConversationDto::from(&conversation))
+}
+
+/// Answers the questions the Advisor asked in a conversation, one answer
+/// for each question. The Advisor goes on in the same session.
+#[tauri::command(async)]
+pub fn answer_interview(
+    state: State<'_, AppState>,
+    conversation_id: String,
+    answers: Vec<InterviewAnswerInput>,
+) -> Result<ConversationDto, CommandError> {
+    let conversation = state.work.answer_interview(
+        parse_id(&conversation_id)?,
+        answers.into_iter().map(Into::into).collect(),
+    )?;
+    Ok(ConversationDto::from(&conversation))
+}
+
+/// Approves the proposal of the latest turn of a conversation with the
+/// Advisor, as the manager changed it.
+#[tauri::command(async)]
+pub fn approve_proposal(
+    state: State<'_, AppState>,
+    conversation_id: String,
+    proposal: ApprovedProposalInput,
+) -> Result<ConversationDto, CommandError> {
+    let conversation = state.work.approve_proposal(
+        parse_id(&conversation_id)?,
+        ApprovedProposal::try_from(proposal)?,
+    )?;
+    Ok(ConversationDto::from(&conversation))
+}
+
+/// Lists the conversations that wait for the manager, in every project that
+/// is not archived, the longest wait first: a specialist waits for a
+/// decision, or the Advisor for answers or for a word about its proposal.
 #[tauri::command]
 pub async fn list_conversations_waiting(
     state: State<'_, AppState>,

@@ -10,13 +10,15 @@ use std::str::FromStr;
 use chrono::SecondsFormat;
 use serde::{Deserialize, Serialize};
 use teamwright_application::{
-    AgentProgram, ConversationWithTurns, NewMember, NewProject, NewTask, ProjectPlaces,
-    StatusProperties, WorkflowTemplate,
+    AgentProgram, ApprovedMember, ApprovedOwner, ApprovedProposal, ApprovedTask,
+    ConversationWithTurns, NewMember, NewProject, NewTask, ProjectPlaces, StatusProperties,
+    WorkflowTemplate,
 };
 use teamwright_domain::{
-    Assignee, CalendarDate, Color, Conversation, DecisionRequest, DomainError, Effort, Member,
-    MemberKind, Priority, Project, Schedule, Status, StatusCategory, Step, StepContent, Task,
-    TaskChange, TaskChangeKind, Timestamp, TokenCounts, Turn,
+    Assignee, CalendarDate, Color, Conversation, DecisionOption, DecisionRequest, DomainError,
+    Effort, Interview, InterviewAnswer, Member, MemberKind, Priority, Project, Proposal,
+    ProposedOwner, Schedule, Status, StatusCategory, Step, StepContent, Task, TaskChange,
+    TaskChangeKind, Timestamp, TokenCounts, Turn,
 };
 
 use crate::error::CommandError;
@@ -391,6 +393,9 @@ fn path_to_text(path: &Path) -> String {
 pub struct ConversationDto {
     id: String,
     project_id: String,
+    /// Whether the conversation is with the Advisor, which has no member
+    /// and no task.
+    is_with_advisor: bool,
     member_id: Option<String>,
     task_id: Option<String>,
     started_at: String,
@@ -403,6 +408,7 @@ impl ConversationDto {
         Self {
             id: conversation.id().to_string(),
             project_id: conversation.project_id().to_string(),
+            is_with_advisor: conversation.is_with_advisor(),
             member_id: conversation.member_id().map(|id| id.to_string()),
             task_id: conversation.task_id().map(|id| id.to_string()),
             started_at: moment_to_text(conversation.started_at()),
@@ -434,6 +440,8 @@ pub struct TurnDto {
     model: Option<String>,
     tokens: Option<TokenCountsDto>,
     decision: Option<DecisionRequestDto>,
+    interview: Option<InterviewDto>,
+    proposal: Option<ProposalDto>,
 }
 
 impl From<&Turn> for TurnDto {
@@ -451,6 +459,295 @@ impl From<&Turn> for TurnDto {
             model: turn.model().map(str::to_owned),
             tokens: turn.tokens().map(TokenCountsDto::from),
             decision: turn.decision().map(DecisionRequestDto::from),
+            interview: turn.interview().map(InterviewDto::from),
+            proposal: turn.proposal().map(ProposalDto::from),
+        }
+    }
+}
+
+/// The questions the Advisor asked, as the interface sees them. `answers`
+/// and `answeredAt` are null while the interview is open.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InterviewDto {
+    questions: Vec<InterviewQuestionDto>,
+    answers: Option<Vec<InterviewAnswerDto>>,
+    answered_at: Option<String>,
+}
+
+/// One question of an interview.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InterviewQuestionDto {
+    question: String,
+    reason: String,
+    /// Two to four options, or none for a question answered in words.
+    options: Vec<DecisionOptionDto>,
+    /// The recommended option, by its place counted from 0.
+    recommended: Option<usize>,
+}
+
+/// The manager's answer to one question of an interview.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InterviewAnswerDto {
+    option: Option<usize>,
+    note: String,
+}
+
+impl From<&Interview> for InterviewDto {
+    fn from(interview: &Interview) -> Self {
+        Self {
+            questions: interview
+                .questions()
+                .iter()
+                .map(|question| InterviewQuestionDto {
+                    question: question.question.clone(),
+                    reason: question.reason.clone(),
+                    options: question
+                        .options
+                        .iter()
+                        .map(DecisionOptionDto::from)
+                        .collect(),
+                    recommended: question.recommended,
+                })
+                .collect(),
+            answers: interview.answers().map(|answers| {
+                answers
+                    .iter()
+                    .map(|answer| InterviewAnswerDto {
+                        option: answer.option,
+                        note: answer.note.clone(),
+                    })
+                    .collect()
+            }),
+            answered_at: interview.answered_at().map(moment_to_text),
+        }
+    }
+}
+
+/// What the Advisor proposed, as the interface sees it. `approvedAt` is
+/// null while it is not approved.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProposalDto {
+    summary: String,
+    members: Vec<ProposedMemberDto>,
+    tasks: Vec<ProposedTaskDto>,
+    approved_at: Option<String>,
+}
+
+/// A member of a proposal.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProposedMemberDto {
+    name: String,
+    responsibility: String,
+    reason: String,
+    model: Option<String>,
+    effort: Option<&'static str>,
+}
+
+/// Who a proposed task is given to: `{"kind": "manager"}` or
+/// `{"kind": "member", "name": "…"}`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum ProposedOwnerDto {
+    /// The manager.
+    Manager,
+    /// A member by name.
+    Member {
+        /// The name of the member.
+        name: String,
+    },
+}
+
+/// A task of a proposal.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProposedTaskDto {
+    title: String,
+    description: String,
+    owner: Option<ProposedOwnerDto>,
+    estimate_minutes: Option<u32>,
+    priority: &'static str,
+    /// The tasks of the same proposal it waits for, by their places from 0.
+    waits_for: Vec<usize>,
+}
+
+impl From<&Proposal> for ProposalDto {
+    fn from(proposal: &Proposal) -> Self {
+        Self {
+            summary: proposal.summary().to_owned(),
+            members: proposal
+                .members()
+                .iter()
+                .map(|member| ProposedMemberDto {
+                    name: member.name.to_string(),
+                    responsibility: member.responsibility.clone(),
+                    reason: member.reason.clone(),
+                    model: member.model.as_ref().map(ToString::to_string),
+                    effort: member.effort.map(|effort| effort.as_str()),
+                })
+                .collect(),
+            tasks: proposal
+                .tasks()
+                .iter()
+                .map(|task| ProposedTaskDto {
+                    title: task.title.to_string(),
+                    description: task.description.clone(),
+                    owner: task.owner.as_ref().map(|owner| match owner {
+                        ProposedOwner::Manager => ProposedOwnerDto::Manager,
+                        ProposedOwner::Member(name) => ProposedOwnerDto::Member {
+                            name: name.to_string(),
+                        },
+                    }),
+                    estimate_minutes: task.estimate_minutes,
+                    priority: task.priority.as_str(),
+                    waits_for: task.waits_for.clone(),
+                })
+                .collect(),
+            approved_at: proposal.approved_at().map(moment_to_text),
+        }
+    }
+}
+
+/// What the interface sends to start planning with the Advisor.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NewAdviceInput {
+    /// What the manager wants, in their own words.
+    pub brief: String,
+    /// The model of the Advisor, or none for the default of the program.
+    #[serde(default)]
+    pub model: Option<String>,
+    /// The effort of the Advisor, in its text form, or none.
+    #[serde(default)]
+    pub effort: Option<String>,
+}
+
+/// What the interface sends to answer one question of an interview.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InterviewAnswerInput {
+    /// The chosen option, by its place from 0, or none.
+    #[serde(default)]
+    option: Option<f64>,
+    /// Words of the manager's own. Needed if no option is chosen.
+    #[serde(default)]
+    note: String,
+}
+
+impl From<InterviewAnswerInput> for InterviewAnswer {
+    fn from(input: InterviewAnswerInput) -> Self {
+        Self {
+            option: input.option.map(place_from_number),
+            note: input.note,
+        }
+    }
+}
+
+/// What the interface sends to approve a proposal: the members and the
+/// tasks the manager left in it.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ApprovedProposalInput {
+    members: Vec<ProposedMemberInput>,
+    tasks: Vec<ProposedTaskInput>,
+}
+
+/// A member of a proposal as the manager approves it.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProposedMemberInput {
+    name: String,
+    #[serde(default)]
+    responsibility: String,
+    #[serde(default)]
+    reason: String,
+    #[serde(default)]
+    model: Option<String>,
+    #[serde(default)]
+    effort: Option<String>,
+}
+
+/// A task of a proposal as the manager approves it.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProposedTaskInput {
+    title: String,
+    #[serde(default)]
+    description: String,
+    #[serde(default)]
+    owner: Option<ProposedOwnerDto>,
+    #[serde(default)]
+    estimate_minutes: Option<u32>,
+    priority: String,
+    /// Places of other tasks of the proposal, from 0. A number that is not
+    /// a place, such as -1 or 1.5, is read as a place that is not there,
+    /// which the use case refuses with the rule it breaks.
+    #[serde(default)]
+    waits_for: Vec<f64>,
+}
+
+impl TryFrom<ApprovedProposalInput> for ApprovedProposal {
+    type Error = CommandError;
+
+    fn try_from(input: ApprovedProposalInput) -> Result<Self, Self::Error> {
+        Ok(Self {
+            members: input
+                .members
+                .into_iter()
+                .map(|member| {
+                    Ok(ApprovedMember {
+                        name: member.name,
+                        responsibility: member.responsibility,
+                        reason: member.reason,
+                        model: member.model,
+                        effort: member.effort.as_deref().map(parse_effort).transpose()?,
+                    })
+                })
+                .collect::<Result<_, CommandError>>()?,
+            tasks: input
+                .tasks
+                .into_iter()
+                .map(|task| {
+                    Ok(ApprovedTask {
+                        title: task.title,
+                        description: task.description,
+                        owner: task.owner.map(|owner| match owner {
+                            ProposedOwnerDto::Manager => ApprovedOwner::Manager,
+                            ProposedOwnerDto::Member { name } => ApprovedOwner::Member(name),
+                        }),
+                        estimate_minutes: task.estimate_minutes,
+                        priority: parse_priority(&task.priority)?,
+                        waits_for: task.waits_for.into_iter().map(place_from_number).collect(),
+                    })
+                })
+                .collect::<Result<_, CommandError>>()?,
+        })
+    }
+}
+
+/// A place in a list that the interface sent as a number. A number that is
+/// not a whole number from 0 becomes a place no list has, so that the use
+/// case refuses it as a place that is not there.
+fn place_from_number(number: f64) -> usize {
+    let is_place = number.trunc().to_bits() == number.to_bits()
+        && (0.0..=f64::from(u32::MAX)).contains(&number);
+    if is_place {
+        // A whole number from 0 to the largest u32 fits without loss.
+        usize::try_from(number as u32).unwrap_or(usize::MAX)
+    } else {
+        usize::MAX
+    }
+}
+
+impl From<&DecisionOption> for DecisionOptionDto {
+    fn from(option: &DecisionOption) -> Self {
+        Self {
+            label: option.label.clone(),
+            consequence: option.consequence.clone(),
         }
     }
 }

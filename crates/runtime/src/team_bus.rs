@@ -608,11 +608,6 @@ fn planned_task_from(
 fn minutes_of(hours: f64) -> Option<u32> {
     let minutes = (hours * 60.0).round();
     // The bounds are checked first, so the conversion cannot cut anything.
-    #[expect(
-        clippy::cast_possible_truncation,
-        clippy::cast_sign_loss,
-        reason = "the value is a whole number between 0 and the largest u32"
-    )]
     (0.0..=f64::from(u32::MAX))
         .contains(&minutes)
         .then_some(minutes as u32)
