@@ -126,6 +126,25 @@ which is enough for a plan of this size, or on the model named in
 ends with code 2, without a failure, if Claude Code is not installed or not
 signed in. Windows only for now.
 
+## Two computers
+
+```bash
+node tools/smoke/sync-smoke.mjs target/debug/teamwright-desktop.exe
+```
+
+This starts the built application twice, each on temporary data of its
+own, and gives both the same temporary folder to sync through. One copy is
+the computer "Desk", the other "Laptop". It checks that a project is taken
+in only after the manager accepts the other computer, that changes travel
+both ways, that a new title from one and a new priority from the other
+both hold, that a deletion wins and the other computer is told, that a
+change travels by itself within a minute and a half, and that stopping and
+restarting behave. It takes about two minutes, most of it waiting for the
+round that nobody asks for.
+
+It does not need Claude Code. It cannot stand in for two real computers
+with a cloud drive between them. Windows only for now.
+
 ## Pictures for the documentation
 
 ```bash

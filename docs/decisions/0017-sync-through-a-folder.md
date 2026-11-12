@@ -1,6 +1,6 @@
 # 0017. Keep computers in step through files of operations in a folder the user owns
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-11-12
 - Changes: [0007](0007-local-first-storage.md), which merged "last writer
   wins per record"; this record merges per field and says how
@@ -360,3 +360,39 @@ the turns that were carried over.
   start programs, and needs the protection the first version leaves out.
 - **The database in the folder, the Google Drive API, a server, a CRDT
   library**: rejected in 0007 for reasons that still hold.
+
+## Note of 13 November 2026: accepted, and what changed while it was built
+
+The owner of the project accepted the design as proposed, with every
+recommended answer to the open questions. The Rust side was then built in
+the order of [the plan](../architecture/sync-plan.md). It differs from the
+text above in these places:
+
+- **A stamp of a task or a member merges by the later stamp, not by the
+  larger value.** With "larger wins", a write from a computer whose clock
+  disagreed kept its own value while the other computer kept the larger
+  one, and the two never met. A test of random changes on two computers
+  found this. The counters of task and sprint numbers still keep the
+  larger value.
+- **An operation also waits for the things it refers to**, not only for
+  its parent: the member, the sprint, the blocker of a task, the task of a
+  conversation.
+- **A conversation about a task that was deleted elsewhere is deleted**
+  by the computer that takes the deletion in, with a logged deletion of
+  its own.
+- **A new key for a project counts on from the number**: after `SSN2`
+  comes `SSN3`.
+- **The copy of the database before the first take-in** is made by
+  storage, as a file beside the database.
+- **A new identity** holds in the open database at once, and the program
+  has to be started again. Conversations keep the old identity as their
+  home, so the new identity belongs on the computer the data was copied
+  to. Two computers that both wrote into the folder under one identity
+  before it was noticed are not untangled.
+- **Joining small files** writes all the files of a computer into one.
+- **Not built yet:** the computer beside each entry of a task's history.
+
+Run so far: two copies of the built program on one computer, each on data
+of its own, through one folder. Not run: two real computers, and a real
+program that keeps the folder in step, with its delays and half-copied
+files.

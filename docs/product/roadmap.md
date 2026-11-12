@@ -147,11 +147,23 @@ Several specialists working together with the manager in the loop.
 - ⬜ Work-in-progress limits, custom fields, tags, checklists
 - ⬜ Templates: Scrum, Kanban, hardware product
 
-## M7 · Many computers ⬜
+## M7 · Many computers 🚧
 
-- ⬜ Sync through a folder the user owns
-- ⬜ Conflict handling
-- ⬜ View a project that is running on another computer
+- 🚧 Sync through a folder the user owns
+  ([decision 0017](../decisions/0017-sync-through-a-folder.md)). The Rust
+  side is built: a computer has a name, writes what it did into the
+  folder, and takes in what computers it accepted did, every 20 seconds
+  or when asked. Run with two copies of the built program on one computer
+  through one folder. The interface is not built yet, and two real
+  computers with a real cloud drive between them were never tried
+- 🚧 Conflict handling: two changes to different fields of one thing both
+  hold; a deletion is final, and the computer whose change was dropped is
+  told; a task number or a project key used twice and two running sprints
+  are repaired. Seen with two copies of the program for a task; the
+  repairs only in tests
+- 🚧 View a project that is running on another computer: a conversation
+  knows the computer it runs on and can only be continued there. Not seen
+  in the program yet: it needs the interface and a real specialist
 
 ## M8 · Release ⬜
 
