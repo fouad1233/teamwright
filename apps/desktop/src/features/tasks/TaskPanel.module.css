@@ -10,7 +10,13 @@
   border-left: 1px solid var(--rule-strong);
   background: var(--surface);
   box-shadow: var(--shadow-overlay);
-  animation: slide-in 160ms ease-out;
+  animation: slide-in var(--duration-panel) var(--ease-drawer);
+}
+
+/* It slides a short way, enough to say where it came from, and closes
+   quicker than it opens, because the manager has already moved on. */
+.leaving {
+  animation: slide-out var(--duration-leave) var(--ease-leave) both;
 }
 
 .panel:focus-visible {
@@ -19,8 +25,38 @@
 
 @keyframes slide-in {
   from {
-    transform: translateX(16px);
+    transform: translateX(var(--panel-travel));
     opacity: 0;
+  }
+}
+
+@keyframes slide-out {
+  to {
+    transform: translateX(var(--panel-travel));
+    opacity: 0;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes fade-out {
+  to {
+    opacity: 0;
+  }
+}
+
+/* With motion turned down, it fades in and out without sliding. */
+@media (prefers-reduced-motion: reduce) {
+  .panel {
+    animation: fade-in var(--duration-quick) linear !important;
+  }
+
+  .leaving {
+    animation: fade-out var(--duration-quick) linear both !important;
   }
 }
 

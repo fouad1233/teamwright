@@ -170,6 +170,12 @@ The interface follows the design philosophy in
   corners and says "Waits for you". Every light stands beside a mark or a
   word that says the same, because a picture or reduced motion shows no
   light.
+- Movement comes from the motion tokens: named curves and durations, with
+  a reduced form for each under `prefers-reduced-motion`, declared with
+  `!important` so that it wins over the rule in `base.css` that ends every
+  other animation at once. What is played from code, such as the drop of a
+  dragged card, reads the same tokens through `shared/ui/motion.ts`. A side
+  panel plays its closing before it goes, through `useLeaving`.
 - A subtask is shown under its task, never next to it: as a smaller card on
   the board and as a row set in on the list, each with the mark of its own
   status. The task ends in a fold (`SubtaskFold`) that counts its subtasks

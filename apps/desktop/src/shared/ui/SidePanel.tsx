@@ -1,7 +1,10 @@
 import { X } from 'lucide-react';
 import { useEffect, useRef, type KeyboardEvent, type ReactNode } from 'react';
 
+import { classNames } from '@/shared/lib/classNames';
+
 import { IconButton } from './Button';
+import { useLeaving } from './motion';
 import styles from './SidePanel.module.css';
 
 interface SidePanelProps {
@@ -20,6 +23,7 @@ interface SidePanelProps {
  */
 export function SidePanel({ label, header, onClose, children }: SidePanelProps) {
   const panel = useRef<HTMLElement>(null);
+  const { isLeaving, leave } = useLeaving(panel, label, onClose);
 
   // Moving the focus into the panel lets Escape close it right away.
   useEffect(() => {
@@ -28,14 +32,14 @@ export function SidePanel({ label, header, onClose, children }: SidePanelProps) 
 
   function closeOnEscape(event: KeyboardEvent) {
     if (event.key === 'Escape') {
-      onClose();
+      leave();
     }
   }
 
   return (
     <aside
       ref={panel}
-      className={styles.panel}
+      className={classNames(styles.panel, isLeaving && styles.leaving)}
       aria-label={label}
       tabIndex={-1}
       onKeyDown={closeOnEscape}
@@ -43,7 +47,7 @@ export function SidePanel({ label, header, onClose, children }: SidePanelProps) 
       <header className={styles.header}>
         {header}
         <span className={styles.space} />
-        <IconButton label="Close" onClick={onClose}>
+        <IconButton label="Close" onClick={leave}>
           <X />
         </IconButton>
       </header>

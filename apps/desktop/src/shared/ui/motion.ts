@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react';
+import { useEffect, useEffectEvent, useState, useSyncExternalStore, type RefObject } from 'react';
 
 /*
  * Motion that is played from code rather than from a style sheet: the curve
@@ -47,4 +47,53 @@ export function durationToken(name: string): number {
 /** A curve token, such as `--ease-arrive`, as a timing function. */
 export function easingToken(name: string): string {
   return tokenValue(name) || 'linear';
+}
+
+/**
+ * Lets an element play the animation of its leaving before it is taken
+ * away, such as a side panel that closes.
+ *
+ * `leave` marks it as leaving: the element then shows its leaving style,
+ * and `onGone` is called when the animations that style starts have ended.
+ * Where nothing can be animated, `onGone` is called at once. `subject` is
+ * what the element shows, such as a task: when it changes, the leaving is
+ * called off, so that what was asked for last is not closed by what was
+ * asked for before.
+ */
+export function useLeaving(
+  element: RefObject<HTMLElement | null>,
+  subject: unknown,
+  onGone: () => void,
+) {
+  const [leavingSubject, setLeavingSubject] = useState<unknown>(undefined);
+  const isLeaving = leavingSubject !== undefined && leavingSubject === subject;
+  const gone = useEffectEvent(onGone);
+
+  useEffect(() => {
+    const node = element.current;
+    if (!isLeaving || !node) {
+      return;
+    }
+    let isCalledOff = false;
+    void Promise.allSettled(node.getAnimations().map((animation) => animation.finished)).then(
+      () => {
+        if (!isCalledOff) {
+          gone();
+        }
+      },
+    );
+    return () => {
+      isCalledOff = true;
+    };
+  }, [element, isLeaving]);
+
+  function leave() {
+    if (typeof element.current?.getAnimations !== 'function') {
+      onGone();
+      return;
+    }
+    setLeavingSubject(subject);
+  }
+
+  return { isLeaving, leave };
 }

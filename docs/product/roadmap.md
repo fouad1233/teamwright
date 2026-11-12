@@ -100,6 +100,9 @@ Several specialists working together with the manager in the loop.
 
 - ✅ Gantt chart with dependencies; bars are dragged to change the dates
 - ✅ Calendar by month
+- ✅ Light and motion where something happens: work under way, a decision
+  that waits for the manager, a card that is new or carried
+  ([decision 0015](../decisions/0015-light-where-something-happens.md))
 - ⬜ Planned against actual on the Gantt chart
 - ⬜ The office: specialists as characters with activity, time left and usage
 - ⬜ Dashboards: usage per teammate, plan limits, workload by status

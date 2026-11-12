@@ -9,6 +9,7 @@ import { Button, IconButton, ValueButton } from '@/shared/ui/Button';
 import { DateField } from '@/shared/ui/DateField';
 import { Dialog } from '@/shared/ui/Dialog';
 import { ActionMenu, ChoiceMenu, type Choice } from '@/shared/ui/Menu';
+import { useLeaving } from '@/shared/ui/motion';
 
 import {
   AssigneeAvatar,
@@ -48,6 +49,9 @@ export function TaskPanel({ project, task, tasks, onClose }: TaskPanelProps) {
   const navigation = useNavigation();
   const team = useTeamMembers();
   const panel = useRef<HTMLElement>(null);
+  // The panel closes with a movement of its own. Opening another task on
+  // the way calls the closing off.
+  const { isLeaving, leave } = useLeaving(panel, task.id, onClose);
   const [isConfirmingDeletion, setIsConfirmingDeletion] = useState(false);
 
   const tasksById = useMemo(() => indexById(tasks), [tasks]);
@@ -91,7 +95,7 @@ export function TaskPanel({ project, task, tasks, onClose }: TaskPanelProps) {
 
   function closeOnEscape(event: KeyboardEvent) {
     if (event.key === 'Escape') {
-      onClose();
+      leave();
     }
   }
 
@@ -105,7 +109,7 @@ export function TaskPanel({ project, task, tasks, onClose }: TaskPanelProps) {
   return (
     <aside
       ref={panel}
-      className={styles.panel}
+      className={classNames(styles.panel, isLeaving && styles.leaving)}
       aria-label={`Task ${reference}`}
       tabIndex={-1}
       onKeyDown={closeOnEscape}
@@ -142,7 +146,7 @@ export function TaskPanel({ project, task, tasks, onClose }: TaskPanelProps) {
             <Ellipsis />
           </IconButton>
         </ActionMenu>
-        <IconButton label="Close" onClick={onClose}>
+        <IconButton label="Close" onClick={leave}>
           <X />
         </IconButton>
       </header>
