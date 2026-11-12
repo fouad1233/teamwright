@@ -293,20 +293,10 @@ pub enum SessionChoice {
     Resume(SessionId),
 }
 
-/// How hard the model should think. More effort costs more tokens.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum Effort {
-    /// The least effort.
-    Low,
-    /// Moderate effort.
-    Medium,
-    /// High effort.
-    High,
-    /// More than high effort.
-    ExtraHigh,
-    /// The most effort.
-    Max,
-}
+/// How hard the model should think. It belongs to the domain, because a
+/// specialist keeps one in its profile; it is named here too because a turn
+/// request carries it.
+pub use teamwright_domain::Effort;
 
 /// How the agent program decides about tool use that no rule allows or
 /// denies.

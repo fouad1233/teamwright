@@ -36,10 +36,10 @@ pub use conversation::{
 pub use dependencies::DependencyGraph;
 pub use error::DomainError;
 pub use ids::{ConversationId, MemberId, ProjectId, StatusId, TaskId, TurnId};
-pub use member::{Member, MemberKind, MemberSnapshot};
+pub use member::{Effort, Member, MemberKind, MemberProfile, MemberSnapshot};
 pub use project::{Project, ProjectKey, ProjectSnapshot};
 pub use task::{Assignee, Priority, Rank, Schedule, Task, TaskDraft, TaskSnapshot};
 pub use task_history::{TaskChange, TaskChangeKind, changes_between, history_of};
-pub use text::{MemberName, ProjectName, StatusName, TaskTitle};
+pub use text::{MemberName, ModelName, ProjectName, StatusName, TaskTitle};
 pub use time::{CalendarDate, Timestamp};
 pub use workflow::{Status, StatusCategory, Workflow};

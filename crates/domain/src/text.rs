@@ -97,6 +97,51 @@ define_text!(
     max_length = 60
 );
 
+/// The name of a model, as the program that runs the specialists
+/// understands it: a short name for the latest model of a family, such as
+/// `sonnet`, or the full name of a model.
+///
+/// Teamwright does not keep a list of models. A name is only checked to be
+/// one word that is not too long; whether the program knows it shows when a
+/// specialist works.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ModelName(String);
+
+impl ModelName {
+    /// The largest number of characters the name of a model can have.
+    pub const MAX_LENGTH: usize = 80;
+
+    /// Checks the name of a model. Whitespace at both ends is removed.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DomainError::InvalidModelName`] if nothing is left, if the
+    /// name has whitespace inside, or if it is longer than
+    /// [`Self::MAX_LENGTH`] characters.
+    pub fn parse(raw: &str) -> Result<Self, DomainError> {
+        let name = raw.trim();
+        let is_one_word = !name.is_empty() && !name.contains(char::is_whitespace);
+        if !is_one_word || name.chars().count() > Self::MAX_LENGTH {
+            return Err(DomainError::InvalidModelName {
+                max_length: Self::MAX_LENGTH,
+            });
+        }
+        Ok(Self(name.to_owned()))
+    }
+
+    /// Returns the name.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for ModelName {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(&self.0)
+    }
+}
+
 /// Removes surrounding whitespace and turns every run of whitespace inside
 /// the text, line breaks included, into one space.
 fn join_words_with_single_spaces(raw: &str) -> String {
@@ -154,6 +199,30 @@ mod tests {
                 actual_length: StatusName::MAX_LENGTH + 1,
             }
         );
+    }
+
+    #[test]
+    fn the_name_of_a_model_is_trimmed_and_kept_as_it_is_written() {
+        assert_eq!(ModelName::parse(" sonnet ").unwrap().as_str(), "sonnet");
+        assert_eq!(
+            ModelName::parse("claude-sonnet-5-5").unwrap().as_str(),
+            "claude-sonnet-5-5"
+        );
+    }
+
+    #[test]
+    fn the_name_of_a_model_is_one_word_that_is_not_too_long() {
+        let longest_allowed = "m".repeat(ModelName::MAX_LENGTH);
+        let too_long = "m".repeat(ModelName::MAX_LENGTH + 1);
+
+        assert!(ModelName::parse(&longest_allowed).is_ok());
+        for refused in ["", "  ", "the best one", "two\twords", too_long.as_str()] {
+            let error = ModelName::parse(refused).unwrap_err();
+            assert_eq!(
+                error.to_string(),
+                "the name of a model is one word of at most 80 characters"
+            );
+        }
     }
 
     #[test]

@@ -13,6 +13,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("schema/0001_initial.sql"),
     include_str!("schema/0002_team_members.sql"),
     include_str!("schema/0003_conversations.sql"),
+    include_str!("schema/0004_member_profiles.sql"),
 ];
 
 /// Applies the migrations a database has not seen yet. Each one runs in its
@@ -115,6 +116,45 @@ mod tests {
             })
             .unwrap();
         assert_eq!(kept, "Smart sensor node");
+    }
+
+    #[test]
+    fn a_database_without_profiles_is_brought_up_to_date_with_its_members_kept() {
+        let mut connection = Connection::open_in_memory().unwrap();
+        for migration in &MIGRATIONS[..3] {
+            connection.execute_batch(migration).unwrap();
+        }
+        connection.pragma_update(None, "user_version", 3).unwrap();
+        connection
+            .execute_batch(
+                "INSERT INTO projects (id, key, name, description, next_task_number, created_at)
+                 VALUES ('p1', 'SSN', 'Smart sensor node', '', 1, '2026-11-11T09:00:00.000Z');
+                 INSERT INTO members (
+                     id, project_id, name, kind, responsibility, color, joined_at, updated_at
+                 )
+                 VALUES (
+                     'm1', 'p1', 'Hardware engineer', 'agent', '', 'teal',
+                     '2026-11-11T09:00:00.000Z', '2026-11-11T09:00:00.000Z'
+                 );",
+            )
+            .unwrap();
+
+        migrate(&mut connection).unwrap();
+
+        assert_eq!(
+            version_of(&connection),
+            i64::try_from(MIGRATIONS.len()).unwrap()
+        );
+        let (name, model, effort): (String, Option<String>, Option<String>) = connection
+            .query_row(
+                "SELECT name, model, effort FROM members WHERE id = 'm1'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(name, "Hardware engineer");
+        assert_eq!(model, None);
+        assert_eq!(effort, None);
     }
 
     #[test]

@@ -71,6 +71,9 @@ involved.
 
 Stored values are checked when they are read. A row that breaks a rule of the
 domain is reported as damaged data and never turned into an invalid object.
+The model and the effort of a specialist are the columns `model` and
+`effort` of `members` (version 4), NULL when they are left to the program; a
+person with either is damaged data.
 
 ## The clock stamp
 

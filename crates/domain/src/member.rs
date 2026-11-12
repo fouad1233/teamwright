@@ -1,9 +1,10 @@
 //! The members of a project's team.
 
 use crate::color::Color;
+use crate::error::DomainError;
 use crate::ids::{MemberId, ProjectId};
 use crate::macros::text_enum;
-use crate::text::MemberName;
+use crate::text::{MemberName, ModelName};
 use crate::time::Timestamp;
 
 /// What kind of member someone is.
@@ -24,6 +25,52 @@ text_enum!(MemberKind, kind = "kind of team member", {
     Human => "human",
 });
 
+/// How hard the model of a specialist thinks. More effort uses more tokens.
+///
+/// The values are ordered from the least effort to the most.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Effort {
+    /// The least effort.
+    Low,
+    /// Moderate effort.
+    Medium,
+    /// High effort.
+    High,
+    /// More than high effort.
+    ExtraHigh,
+    /// The most effort.
+    Max,
+}
+
+text_enum!(Effort, kind = "effort", {
+    Low => "low",
+    Medium => "medium",
+    High => "high",
+    ExtraHigh => "xhigh",
+    Max => "max",
+});
+
+/// Which model an AI specialist runs on and how hard it thinks.
+///
+/// Either part may be absent: the program that runs the specialist then
+/// uses its own default. A person always has the empty profile.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
+pub struct MemberProfile {
+    /// The model, or the program's default if absent.
+    pub model: Option<ModelName>,
+    /// The effort, or the program's default if absent.
+    pub effort: Option<Effort>,
+}
+
+impl MemberProfile {
+    /// Whether the profile leaves both the model and the effort to the
+    /// program.
+    #[must_use]
+    pub const fn is_empty(&self) -> bool {
+        self.model.is_none() && self.effort.is_none()
+    }
+}
+
 /// The plain data of a team member, used to recreate one that was stored.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MemberSnapshot {
@@ -37,6 +84,8 @@ pub struct MemberSnapshot {
     pub kind: MemberKind,
     /// What the member is on the team for. May be empty.
     pub responsibility: String,
+    /// The model and the effort of an AI specialist. Empty for a person.
+    pub profile: MemberProfile,
     /// The color the member is shown in.
     pub color: Color,
     /// When the member joined the team.
@@ -57,6 +106,7 @@ pub struct Member {
     name: MemberName,
     kind: MemberKind,
     responsibility: String,
+    profile: MemberProfile,
     color: Color,
     joined_at: Timestamp,
     updated_at: Timestamp,
@@ -89,7 +139,8 @@ impl Member {
             .unwrap_or(Color::Teal)
     }
 
-    /// Puts someone on the team of a project.
+    /// Puts someone on the team of a project. The member starts with the
+    /// empty profile.
     #[must_use]
     pub fn create(
         project_id: ProjectId,
@@ -105,6 +156,7 @@ impl Member {
             name,
             kind,
             responsibility,
+            profile: MemberProfile::default(),
             color,
             joined_at: now,
             updated_at: now,
@@ -112,18 +164,24 @@ impl Member {
     }
 
     /// Recreates a member from stored data.
-    #[must_use]
-    pub fn restore(snapshot: MemberSnapshot) -> Self {
-        Self {
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DomainError::ProfileOfPerson`] if the data describes a
+    /// person with a model or an effort.
+    pub fn restore(snapshot: MemberSnapshot) -> Result<Self, DomainError> {
+        refuse_profile_of_person(snapshot.kind, &snapshot.profile)?;
+        Ok(Self {
             id: snapshot.id,
             project_id: snapshot.project_id,
             name: snapshot.name,
             kind: snapshot.kind,
             responsibility: snapshot.responsibility,
+            profile: snapshot.profile,
             color: snapshot.color,
             joined_at: snapshot.joined_at,
             updated_at: snapshot.updated_at,
-        }
+        })
     }
 
     /// The identifier of the member.
@@ -156,6 +214,25 @@ impl Member {
         &self.responsibility
     }
 
+    /// The model and the effort of the member. Empty for a person.
+    #[must_use]
+    pub const fn profile(&self) -> &MemberProfile {
+        &self.profile
+    }
+
+    /// The model the member runs on, or `None` for the program's default.
+    #[must_use]
+    pub const fn model(&self) -> Option<&ModelName> {
+        self.profile.model.as_ref()
+    }
+
+    /// How hard the member's model thinks, or `None` for the program's
+    /// default.
+    #[must_use]
+    pub const fn effort(&self) -> Option<Effort> {
+        self.profile.effort
+    }
+
     /// The color the member is shown in.
     #[must_use]
     pub const fn color(&self) -> Color {
@@ -185,6 +262,32 @@ impl Member {
         self.responsibility = responsibility;
         self.updated_at = now;
     }
+
+    /// Replaces the model and the effort of the member.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DomainError::ProfileOfPerson`] if the member is a person
+    /// and the profile is not empty. Nothing is changed then.
+    pub fn set_profile(
+        &mut self,
+        profile: MemberProfile,
+        now: Timestamp,
+    ) -> Result<(), DomainError> {
+        refuse_profile_of_person(self.kind, &profile)?;
+        self.profile = profile;
+        self.updated_at = now;
+        Ok(())
+    }
+}
+
+/// Refuses a model or an effort for a person. Only an AI specialist runs on
+/// a model.
+fn refuse_profile_of_person(kind: MemberKind, profile: &MemberProfile) -> Result<(), DomainError> {
+    if kind == MemberKind::Human && !profile.is_empty() {
+        return Err(DomainError::ProfileOfPerson);
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -266,21 +369,129 @@ mod tests {
             name: MemberName::parse("Dana").unwrap(),
             kind: MemberKind::Human,
             responsibility: String::new(),
+            profile: MemberProfile::default(),
             color: Color::Pink,
             joined_at: moment(9),
             updated_at: moment(12),
         };
 
-        let member = Member::restore(snapshot.clone());
+        let member = Member::restore(snapshot.clone()).unwrap();
 
         assert_eq!(member.id(), snapshot.id);
         assert_eq!(member.project_id(), snapshot.project_id);
         assert_eq!(member.name(), &snapshot.name);
         assert_eq!(member.kind(), MemberKind::Human);
         assert_eq!(member.responsibility(), "");
+        assert!(member.profile().is_empty());
         assert_eq!(member.color(), Color::Pink);
         assert_eq!(member.joined_at(), moment(9));
         assert_eq!(member.updated_at(), moment(12));
+    }
+
+    fn opus_at_high_effort() -> MemberProfile {
+        MemberProfile {
+            model: Some(ModelName::parse("opus").unwrap()),
+            effort: Some(Effort::High),
+        }
+    }
+
+    fn dana() -> Member {
+        Member::create(
+            ProjectId::generate(),
+            MemberName::parse("Dana").unwrap(),
+            MemberKind::Human,
+            String::new(),
+            Color::Pink,
+            moment(9),
+        )
+    }
+
+    #[test]
+    fn a_new_member_leaves_the_model_and_the_effort_to_the_program() {
+        let member = hardware_engineer();
+
+        assert!(member.profile().is_empty());
+        assert_eq!(member.model(), None);
+        assert_eq!(member.effort(), None);
+    }
+
+    #[test]
+    fn a_specialist_can_be_given_a_model_and_an_effort_and_lose_them_again() {
+        let mut member = hardware_engineer();
+
+        member
+            .set_profile(opus_at_high_effort(), moment(10))
+            .unwrap();
+        assert_eq!(member.model().map(ModelName::as_str), Some("opus"));
+        assert_eq!(member.effort(), Some(Effort::High));
+        assert_eq!(member.updated_at(), moment(10));
+
+        member
+            .set_profile(MemberProfile::default(), moment(11))
+            .unwrap();
+        assert!(member.profile().is_empty());
+        assert_eq!(member.updated_at(), moment(11));
+    }
+
+    #[test]
+    fn a_person_has_neither_a_model_nor_an_effort() {
+        let mut person = dana();
+
+        let error = person
+            .set_profile(opus_at_high_effort(), moment(10))
+            .unwrap_err();
+
+        assert_eq!(error, DomainError::ProfileOfPerson);
+        assert!(person.profile().is_empty());
+        assert_eq!(person.updated_at(), moment(9));
+    }
+
+    #[test]
+    fn a_person_may_be_given_the_empty_profile() {
+        let mut person = dana();
+
+        person
+            .set_profile(MemberProfile::default(), moment(10))
+            .unwrap();
+
+        assert_eq!(person.updated_at(), moment(10));
+    }
+
+    #[test]
+    fn stored_data_of_a_person_with_a_profile_is_refused() {
+        let snapshot = MemberSnapshot {
+            id: MemberId::generate(),
+            project_id: ProjectId::generate(),
+            name: MemberName::parse("Dana").unwrap(),
+            kind: MemberKind::Human,
+            responsibility: String::new(),
+            profile: opus_at_high_effort(),
+            color: Color::Pink,
+            joined_at: moment(9),
+            updated_at: moment(9),
+        };
+
+        assert_eq!(
+            Member::restore(snapshot).unwrap_err(),
+            DomainError::ProfileOfPerson
+        );
+    }
+
+    #[test]
+    fn every_effort_survives_being_written_as_text_and_read_back() {
+        for effort in Effort::ALL {
+            assert_eq!(effort.as_str().parse::<Effort>().unwrap(), *effort);
+        }
+        assert_eq!(Effort::ExtraHigh.as_str(), "xhigh");
+    }
+
+    #[test]
+    fn efforts_are_ordered_from_the_least_to_the_most() {
+        let mut sorted = Effort::ALL.to_vec();
+        sorted.sort();
+
+        assert_eq!(sorted, Effort::ALL);
+        assert!(Effort::Low < Effort::Max);
     }
 
     #[test]

@@ -99,6 +99,19 @@ pub enum DomainError {
         id: String,
     },
 
+    /// The name of a model was empty, had whitespace inside, or was too
+    /// long.
+    #[error("the name of a model is one word of at most {max_length} characters")]
+    InvalidModelName {
+        /// The largest number of characters allowed.
+        max_length: usize,
+    },
+
+    /// A person was to be given a model or an effort, which only an AI
+    /// specialist has.
+    #[error("only an AI specialist has a model and an effort")]
+    ProfileOfPerson,
+
     /// A start date was later than the due date.
     #[error("the start date {start} is after the due date {due}")]
     StartAfterDue {

@@ -9,14 +9,14 @@ no input or output.
 | Module | Concepts |
 |---|---|
 | `ids` | `ProjectId`, `StatusId`, `TaskId`, `MemberId`, `ConversationId`, `TurnId`: one identifier type per kind of thing |
-| `text` | `ProjectName`, `StatusName`, `TaskTitle`, `MemberName`: names that are never empty, never multi-line, never too long |
+| `text` | `ProjectName`, `StatusName`, `TaskTitle`, `MemberName`: names that are never empty, never multi-line, never too long; `ModelName`: the name of a model |
 | `color` | `Color`: the named colors a status or a team member can have |
 | `workflow` | `Workflow`, `Status`, `StatusCategory` |
 | `project` | `Project`, `ProjectKey` |
 | `task` | `Task`, `TaskDraft`, `Priority`, `Assignee`, `Schedule`, `Rank` |
 | `task_history` | `TaskChange`, `history_of`: what changed from one version of a task to the next |
 | `dependencies` | `DependencyGraph`: which task waits for which |
-| `member` | `Member`, `MemberKind`: an AI agent or a person on the team of a project |
+| `member` | `Member`, `MemberKind`: an AI agent or a person on the team of a project; `MemberProfile`, `Effort`: the model and the effort of a specialist |
 | `conversation` | `Conversation`, `Turn`, `Step`, `TokenCounts`: the work of an AI specialist, one request at a time |
 | `error` | `DomainError`: every rule that can be broken |
 | `time` | `Timestamp`, `CalendarDate` |
@@ -43,6 +43,8 @@ no input or output.
   version to the next. A move up or down within a status is not a change.
 - A newcomer to a team gets a color that no other member has, as long as
   there is one left. Gray, amber and red are never handed out.
+- Only an AI specialist has a model and an effort; a person's profile is
+  always empty. The name of a model is one word of at most 80 characters.
 - A turn of a conversation has a request that is not empty. It takes steps
   only while it runs, a tool use is finished only if the turn has it, and the
   turn ends exactly once: finished, failed or stopped.

@@ -5,7 +5,9 @@ use std::sync::Arc;
 use rusqlite::{OptionalExtension, Row, named_params};
 use serde::Serialize;
 use teamwright_application::{MemberRepository, StorageError};
-use teamwright_domain::{DomainError, Member, MemberId, MemberName, MemberSnapshot, ProjectId};
+use teamwright_domain::{
+    DomainError, Member, MemberId, MemberName, MemberProfile, MemberSnapshot, ModelName, ProjectId,
+};
 
 use crate::codec;
 use crate::database::Database;
@@ -14,21 +16,24 @@ use crate::operations::Entity;
 
 /// The columns of the `members` table that every query reads.
 const MEMBER_COLUMNS: &str =
-    "id, project_id, name, kind, responsibility, color, joined_at, updated_at";
+    "id, project_id, name, kind, responsibility, model, effort, color, joined_at, updated_at";
 
 // The row is updated in place, like every row of this database.
 const UPSERT_MEMBER: &str = "
     INSERT INTO members (
-        id, project_id, name, kind, responsibility, color, joined_at, updated_at
+        id, project_id, name, kind, responsibility, model, effort, color, joined_at, updated_at
     )
     VALUES (
-        :id, :project_id, :name, :kind, :responsibility, :color, :joined_at, :updated_at
+        :id, :project_id, :name, :kind, :responsibility, :model, :effort, :color, :joined_at,
+        :updated_at
     )
     ON CONFLICT (id) DO UPDATE SET
         project_id = excluded.project_id,
         name = excluded.name,
         kind = excluded.kind,
         responsibility = excluded.responsibility,
+        model = excluded.model,
+        effort = excluded.effort,
         color = excluded.color,
         joined_at = excluded.joined_at,
         updated_at = excluded.updated_at";
@@ -41,6 +46,10 @@ struct MemberRecord {
     name: String,
     kind: String,
     responsibility: String,
+    /// The model of an AI specialist; `None` leaves it to the program.
+    model: Option<String>,
+    /// The effort of an AI specialist; `None` leaves it to the program.
+    effort: Option<String>,
     color: String,
     joined_at: String,
     updated_at: String,
@@ -55,6 +64,8 @@ impl MemberRecord {
             name: member.name().to_string(),
             kind: member.kind().to_string(),
             responsibility: member.responsibility().to_owned(),
+            model: member.model().map(ToString::to_string),
+            effort: member.effort().map(|effort| effort.as_str().to_owned()),
             color: member.color().to_string(),
             joined_at: codec::moment_to_text(member.joined_at()),
             updated_at: codec::moment_to_text(member.updated_at()),
@@ -69,6 +80,8 @@ impl MemberRecord {
             name: row.get("name")?,
             kind: row.get("kind")?,
             responsibility: row.get("responsibility")?,
+            model: row.get("model")?,
+            effort: row.get("effort")?,
             color: row.get("color")?,
             joined_at: row.get("joined_at")?,
             updated_at: row.get("updated_at")?,
@@ -79,16 +92,27 @@ impl MemberRecord {
     fn into_member(self) -> Result<Member, DatabaseError> {
         let broken = |reason: DomainError| codec::damaged_record("team member", &self.id, &reason);
 
-        Ok(Member::restore(MemberSnapshot {
+        let profile = MemberProfile {
+            model: self
+                .model
+                .as_deref()
+                .map(ModelName::parse)
+                .transpose()
+                .map_err(broken)?,
+            effort: self.effort.as_deref().map(codec::parse).transpose()?,
+        };
+        Member::restore(MemberSnapshot {
             id: codec::parse(&self.id)?,
             project_id: codec::parse(&self.project_id)?,
             name: MemberName::parse(&self.name).map_err(broken)?,
             kind: codec::parse(&self.kind)?,
             responsibility: self.responsibility,
+            profile,
             color: codec::parse(&self.color)?,
             joined_at: codec::moment_from_text(&self.joined_at)?,
             updated_at: codec::moment_from_text(&self.updated_at)?,
-        }))
+        })
+        .map_err(broken)
     }
 }
 
@@ -118,6 +142,8 @@ impl MemberRepository for SqliteMemberRepository {
                     ":name": record.name,
                     ":kind": record.kind,
                     ":responsibility": record.responsibility,
+                    ":model": record.model,
+                    ":effort": record.effort,
                     ":color": record.color,
                     ":joined_at": record.joined_at,
                     ":updated_at": record.updated_at,
@@ -170,5 +196,74 @@ impl MemberRepository for SqliteMemberRepository {
             }
             Ok(())
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use teamwright_domain::Effort;
+
+    use super::*;
+
+    fn stored_agent() -> MemberRecord {
+        MemberRecord {
+            id: MemberId::generate().to_string(),
+            project_id: ProjectId::generate().to_string(),
+            name: "Hardware engineer".to_owned(),
+            kind: "agent".to_owned(),
+            responsibility: String::new(),
+            model: Some("sonnet".to_owned()),
+            effort: Some("high".to_owned()),
+            color: "teal".to_owned(),
+            joined_at: "2026-11-11T09:00:00.000Z".to_owned(),
+            updated_at: "2026-11-11T09:00:00.000Z".to_owned(),
+        }
+    }
+
+    #[test]
+    fn a_stored_profile_is_read_back() {
+        let member = stored_agent().into_member().unwrap();
+
+        assert_eq!(member.model().map(ModelName::as_str), Some("sonnet"));
+        assert_eq!(member.effort(), Some(Effort::High));
+    }
+
+    #[test]
+    fn a_stored_person_with_a_profile_is_damaged_data() {
+        let record = MemberRecord {
+            kind: "human".to_owned(),
+            ..stored_agent()
+        };
+
+        assert!(matches!(
+            record.into_member(),
+            Err(DatabaseError::Damaged(_))
+        ));
+    }
+
+    #[test]
+    fn a_stored_effort_that_is_not_known_is_damaged_data() {
+        let record = MemberRecord {
+            effort: Some("enormous".to_owned()),
+            ..stored_agent()
+        };
+
+        assert!(matches!(
+            record.into_member(),
+            Err(DatabaseError::Damaged(_))
+        ));
+    }
+
+    #[test]
+    fn a_stored_model_with_a_space_in_it_is_damaged_data() {
+        let record = MemberRecord {
+            model: Some("the best one".to_owned()),
+            ..stored_agent()
+        };
+
+        assert!(matches!(
+            record.into_member(),
+            Err(DatabaseError::Damaged(_))
+        ));
     }
 }
