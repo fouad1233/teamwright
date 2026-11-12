@@ -760,9 +760,8 @@ fn failure_text(failure: &TurnFailure, final_text: &str) -> String {
         TurnFailure::Reported { .. } if final_text.trim().is_empty() => COULD_NOT_FINISH.to_owned(),
         TurnFailure::Reported { .. } => final_text.trim().to_owned(),
         TurnFailure::Stopped => Turn::STOPPED_BY_THE_MANAGER.to_owned(),
-        TurnFailure::ProgramEnded { message } => {
-            format!("Claude Code ended before the specialist had finished: {message}")
-        }
+        // The runtime already says this in words for people.
+        TurnFailure::ProgramEnded { message } => message.clone(),
     }
 }
 
@@ -1713,10 +1712,11 @@ mod tests {
             ),
             (
                 TurnFailure::ProgramEnded {
-                    message: "exit code 1".to_owned(),
+                    message: "Claude Code ended with exit code 1 before the turn was finished"
+                        .to_owned(),
                 },
                 "",
-                "Claude Code ended before the specialist had finished: exit code 1",
+                "Claude Code ended with exit code 1 before the turn was finished",
             ),
         ];
         for (failure, final_text, expected) in cases {
