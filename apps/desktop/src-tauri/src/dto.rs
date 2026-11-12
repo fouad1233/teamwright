@@ -13,9 +13,9 @@ use teamwright_application::{
     WorkflowTemplate,
 };
 use teamwright_domain::{
-    Assignee, CalendarDate, Color, Conversation, DomainError, Effort, Member, MemberKind, Priority,
-    Project, Schedule, Status, StatusCategory, Step, StepContent, Task, TaskChange, TaskChangeKind,
-    Timestamp, TokenCounts, Turn,
+    Assignee, CalendarDate, Color, Conversation, DecisionRequest, DomainError, Effort, Member,
+    MemberKind, Priority, Project, Schedule, Status, StatusCategory, Step, StepContent, Task,
+    TaskChange, TaskChangeKind, Timestamp, TokenCounts, Turn,
 };
 
 use crate::error::CommandError;
@@ -402,6 +402,7 @@ pub struct TurnDto {
     failure: Option<String>,
     model: Option<String>,
     tokens: Option<TokenCountsDto>,
+    decision: Option<DecisionRequestDto>,
 }
 
 impl From<&Turn> for TurnDto {
@@ -418,8 +419,77 @@ impl From<&Turn> for TurnDto {
             failure: turn.failure().map(str::to_owned),
             model: turn.model().map(str::to_owned),
             tokens: turn.tokens().map(TokenCountsDto::from),
+            decision: turn.decision().map(DecisionRequestDto::from),
         }
     }
+}
+
+/// A question a specialist asked the manager to decide, as the interface
+/// sees it. `answer` is null while the question is open.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DecisionRequestDto {
+    question: String,
+    reason: String,
+    options: Vec<DecisionOptionDto>,
+    /// The recommended option, by its place counted from 0.
+    recommended: Option<usize>,
+    answer: Option<DecisionAnswerDto>,
+}
+
+/// One of the answers a specialist offers for a decision.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DecisionOptionDto {
+    label: String,
+    consequence: String,
+}
+
+/// What the manager decided.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DecisionAnswerDto {
+    /// The chosen option, by its place counted from 0, or null for an
+    /// answer in words only.
+    option: Option<usize>,
+    note: String,
+    at: String,
+}
+
+impl From<&DecisionRequest> for DecisionRequestDto {
+    fn from(decision: &DecisionRequest) -> Self {
+        Self {
+            question: decision.question().to_owned(),
+            reason: decision.reason().to_owned(),
+            options: decision
+                .options()
+                .iter()
+                .map(|option| DecisionOptionDto {
+                    label: option.label.clone(),
+                    consequence: option.consequence.clone(),
+                })
+                .collect(),
+            recommended: decision.recommended(),
+            answer: decision.answer().map(|answer| DecisionAnswerDto {
+                option: answer.option,
+                note: answer.note.clone(),
+                at: moment_to_text(answer.at),
+            }),
+        }
+    }
+}
+
+/// What the interface sends to answer a specialist's question: an option,
+/// counted from 0, or none, and words of the manager's own.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DecisionAnswerInput {
+    /// The chosen option, or none.
+    #[serde(default)]
+    pub option: Option<usize>,
+    /// Words of the manager's own. Needed if no option is chosen.
+    #[serde(default)]
+    pub note: String,
 }
 
 /// One step of a turn: `{"at": "…", "kind": "text", "text": "…"}`, and so

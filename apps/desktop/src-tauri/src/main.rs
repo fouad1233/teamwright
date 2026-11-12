@@ -14,13 +14,19 @@ mod dto;
 mod error;
 mod state;
 
+use std::ffi::OsStr;
 use std::process::ExitCode;
+use std::{env, io};
 
 use tauri::{Manager, RunEvent};
 
-use crate::state::AppState;
+use crate::state::{AppState, TEAM_BUS_ARGUMENT};
 
 fn main() -> ExitCode {
+    if env::args_os().nth(1).as_deref() == Some(OsStr::new(TEAM_BUS_ARGUMENT)) {
+        return serve_the_team_bus();
+    }
+
     let application = tauri::Builder::default()
         .setup(|app| {
             let state = AppState::open(app.handle())?;
@@ -64,6 +70,8 @@ fn main() -> ExitCode {
             commands::work::start_work,
             commands::work::reply,
             commands::work::ask,
+            commands::work::answer_decision,
+            commands::work::list_conversations_waiting,
             commands::work::stop_work,
             commands::work::open_in_claude,
         ])
@@ -80,6 +88,21 @@ fn main() -> ExitCode {
         }
         Err(error) => {
             eprintln!("Teamwright could not start: {error}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+/// Serves the team bus on standard input and output, for the one turn of a
+/// specialist that Claude Code started this program for. No window is
+/// opened and the database is not touched.
+fn serve_the_team_bus() -> ExitCode {
+    let input = io::stdin().lock();
+    let output = io::stdout().lock();
+    match teamwright_runtime::team_bus::serve(input, output) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(error) => {
+            eprintln!("The team bus stopped: {error}");
             ExitCode::FAILURE
         }
     }

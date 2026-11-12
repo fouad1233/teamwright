@@ -6,7 +6,7 @@
 
 use tauri::State;
 
-use crate::dto::{AgentProgramDto, ConversationDto, parse_id};
+use crate::dto::{AgentProgramDto, ConversationDto, DecisionAnswerInput, parse_id};
 use crate::error::CommandError;
 use crate::state::AppState;
 
@@ -58,6 +58,32 @@ pub fn ask(
 ) -> Result<ConversationDto, CommandError> {
     let conversation = state.work.ask(parse_id(&member_id)?, &message)?;
     Ok(ConversationDto::from(&conversation))
+}
+
+/// Answers the question the specialist of a conversation asked, with an
+/// option, words of the manager's own, or both. The specialist goes on in
+/// the same session with the answer.
+#[tauri::command(async)]
+pub fn answer_decision(
+    state: State<'_, AppState>,
+    conversation_id: String,
+    answer: DecisionAnswerInput,
+) -> Result<ConversationDto, CommandError> {
+    let conversation =
+        state
+            .work
+            .answer_decision(parse_id(&conversation_id)?, answer.option, &answer.note)?;
+    Ok(ConversationDto::from(&conversation))
+}
+
+/// Lists the conversations in which a specialist waits for the manager to
+/// decide, in every project that is not archived, the longest wait first.
+#[tauri::command]
+pub async fn list_conversations_waiting(
+    state: State<'_, AppState>,
+) -> Result<Vec<ConversationDto>, CommandError> {
+    let conversations = state.work.waiting_for_manager()?;
+    Ok(conversations.iter().map(ConversationDto::from).collect())
 }
 
 /// Stops the turn that is running in a conversation.

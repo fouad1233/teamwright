@@ -36,6 +36,11 @@ const DATA_DIRECTORY_VARIABLE: &str = "TEAMWRIGHT_DATA_DIR";
 /// shows how its user is signed in.
 const AGENT_PROGRAM_VARIABLE: &str = "TEAMWRIGHT_AGENT_PROGRAM";
 
+/// The argument with which this program serves the team bus instead of
+/// opening its window. Claude Code starts it that way for every turn of a
+/// specialist, so that the specialist can ask the manager to decide.
+pub const TEAM_BUS_ARGUMENT: &str = "--team-bus";
+
 /// The folder in the user's documents that holds the folders of the
 /// projects ([decision 0011](../../../../docs/decisions/0011-what-a-specialist-may-do.md)).
 const PROJECTS_FOLDER_NAME: &str = "Teamwright";
@@ -156,12 +161,20 @@ fn data_directory(app: &AppHandle) -> Result<PathBuf, StartupError> {
 /// The program that runs the specialists: the one named by
 /// `TEAMWRIGHT_AGENT_PROGRAM` if that is set, and otherwise the Claude Code
 /// that is found on the computer.
+///
+/// It starts the team bus as this very program with `--team-bus`. If the
+/// path of this program cannot be found, the specialists work without the
+/// tool to ask the manager.
 fn agent_program() -> ClaudeCode {
-    match env::var_os(AGENT_PROGRAM_VARIABLE) {
+    let runtime = match env::var_os(AGENT_PROGRAM_VARIABLE) {
         Some(program) if !program.is_empty() => {
             ClaudeCode::new().with_program(PathBuf::from(program))
         }
         _ => ClaudeCode::new(),
+    };
+    match env::current_exe() {
+        Ok(this_program) => runtime.with_team_bus(this_program, vec![TEAM_BUS_ARGUMENT.to_owned()]),
+        Err(_) => runtime,
     }
 }
 
