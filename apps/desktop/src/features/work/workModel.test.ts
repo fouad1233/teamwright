@@ -1,21 +1,26 @@
 import { describe, expect, it } from 'vitest';
 
-import type { AgentProgram, Conversation, Turn } from '@/shared/api/types';
+import type { AgentProgram, Conversation, DecisionRequest, Turn } from '@/shared/api/types';
 
 import {
   allTokens,
+  askedAt,
   chatsWith,
   conversationOfTask,
+  decisionInWords,
   durationInWords,
   formatTokens,
   hasSession,
   hasTurnStartedOrEnded,
+  openDecision,
   runningTurn,
   signInInWords,
   tasksBeingWorkedOn,
+  tasksWaitingForManager,
   tokensInWords,
   tokensOfTurns,
   whatMemberIsWorkingOn,
+  whatMemberWaitsFor,
   whyProgramIsNotReady,
   withConversation,
 } from './workModel';
@@ -32,6 +37,7 @@ function turn(overrides: Partial<Turn> & Pick<Turn, 'id'>): Turn {
     failure: null,
     model: 'simulated',
     tokens: { input: 10, output: 100, cacheRead: 1000, cacheWritten: 5 },
+    decision: null,
     ...overrides,
   };
 }
@@ -227,6 +233,85 @@ describe('whyProgramIsNotReady and signInInWords', () => {
     expect(signInInWords({ ...ready, subscription: null })).toBe('a Claude plan');
     expect(signInInWords({ ...ready, subscription: null, signInMethod: 'api_key' })).toBe(
       'an API key',
+    );
+  });
+});
+
+describe('the questions that wait for the manager', () => {
+  const question: DecisionRequest = {
+    question: 'Battery or USB power only?',
+    reason: 'A battery adds a charger and about 4 mm of height.',
+    options: [
+      { label: 'Battery and USB', consequence: 'Works anywhere. Taller and dearer.' },
+      { label: 'USB only', consequence: 'Flat and cheap. Needs a socket.' },
+    ],
+    recommended: 1,
+    answer: null,
+  };
+  const asking = turn({ id: 'asking', decision: question, endedAt: '2026-11-11T10:00:00.000Z' });
+
+  it('find the question a conversation ended with, while it is not answered', () => {
+    expect(openDecision(conversation({ id: 'waiting', turns: [asking] }))).toBe(question);
+    expect(openDecision(conversation({ id: 'reported', turns: [turn({ id: 'done' })] }))).toBe(
+      undefined,
+    );
+  });
+
+  it('take a question for closed once it is answered, and while the next turn runs', () => {
+    const answered = turn({
+      id: 'answered',
+      decision: { ...question, answer: { option: 0, note: '', at: '2026-11-11T11:00:00.000Z' } },
+    });
+    const next = turn({ id: 'next', origin: 'decision', state: 'running', endedAt: null });
+
+    expect(openDecision(conversation({ id: 'answered', turns: [answered] }))).toBe(undefined);
+    expect(openDecision(conversation({ id: 'going on', turns: [answered, next] }))).toBe(undefined);
+    expect(openDecision(conversation({ id: 'empty', turns: [] }))).toBe(undefined);
+  });
+
+  it('say when a question was asked', () => {
+    expect(askedAt(conversation({ id: 'waiting', turns: [asking] }))).toBe(
+      '2026-11-11T10:00:00.000Z',
+    );
+  });
+
+  it('name the tasks that wait for the manager, and no question that is not about a task', () => {
+    const waiting = tasksWaitingForManager([
+      conversation({ id: 'about a task', taskId: 'schematic', turns: [asking] }),
+      conversation({ id: 'a chat', taskId: null, turns: [asking] }),
+      conversation({ id: 'reported', taskId: 'board', turns: [turn({ id: 'done' })] }),
+    ]);
+
+    expect([...waiting]).toEqual(['schematic']);
+  });
+
+  it('find what a member waits for, the longest wait first', () => {
+    const earlier = turn({
+      id: 'earlier',
+      decision: question,
+      endedAt: '2026-11-11T08:00:00.000Z',
+    });
+    const conversations = [
+      conversation({ id: 'later', memberId: 'engineer', turns: [asking] }),
+      conversation({ id: 'first', memberId: 'engineer', turns: [earlier] }),
+      conversation({ id: 'of another', memberId: 'writer', turns: [asking] }),
+    ];
+
+    expect(whatMemberWaitsFor(conversations, 'engineer')?.id).toBe('first');
+    expect(whatMemberWaitsFor(conversations, 'tester')).toBe(undefined);
+  });
+
+  it('put a decision into words: the option, the words of the manager, or both', () => {
+    const decided = (answer: DecisionRequest['answer']) => decisionInWords({ ...question, answer });
+    const at = '2026-11-11T11:00:00.000Z';
+
+    expect(decided(null)).toBeNull();
+    expect(decided({ option: 1, note: '', at })).toBe('USB only');
+    expect(decided({ option: 0, note: 'Keep it under 12 mm.', at })).toBe(
+      'Battery and USB. Keep it under 12 mm.',
+    );
+    expect(decided({ option: null, note: 'Neither. Use a coin cell.', at })).toBe(
+      'Neither. Use a coin cell.',
     );
   });
 });

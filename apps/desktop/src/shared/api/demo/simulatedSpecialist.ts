@@ -1,4 +1,4 @@
-import type { Member, Task, TokenCounts } from '../types';
+import type { DecisionRequest, Member, Task, TokenCounts } from '../types';
 
 /**
  * What a specialist does in the demo.
@@ -29,9 +29,11 @@ export interface Script {
   acts: TimedAct[];
   /** How long after the last act the turn ends, in milliseconds. */
   endsAfter: number;
-  /** The report the specialist ends with. */
+  /** The report the specialist ends with, or what it says when it asks. */
   answer: string;
   tokens: TokenCounts;
+  /** What the specialist asks the manager to decide, if it ends the turn with a question. */
+  asks?: Omit<DecisionRequest, 'answer'>;
 }
 
 /** The name the demo gives the model of a simulated turn. */
@@ -40,8 +42,85 @@ export const SIMULATED_MODEL = 'simulated';
 const WHAT_THIS_IS =
   'This is the demo. The work is simulated: nothing is sent to a model and no file is written.';
 
+/**
+ * Whether a simulated specialist asks the manager before it works on a
+ * task. It does when the title says that something is to be chosen, which
+ * makes the demo easy to steer: a task called "Choose the battery" ends in
+ * a question, any other task in a report.
+ */
+export function asksBeforeItWorks(task: Task): boolean {
+  return /^(choose|select|decide)\b/i.test(task.title.trim());
+}
+
+/** The script of a specialist that starts on a task about a choice: it asks the manager. */
+export function scriptForChoice(task: Task): Script {
+  return {
+    acts: [
+      { after: 0, act: { kind: 'note', message: WHAT_THIS_IS } },
+      {
+        after: 700,
+        act: { kind: 'say', text: 'I am reading the task and what the project already has.' },
+      },
+      { after: 600, act: { kind: 'use', id: 'read', tool: 'Read', summary: 'README.md' } },
+      { after: 500, act: { kind: 'finish', id: 'read' } },
+      {
+        after: 800,
+        act: {
+          kind: 'say',
+          text: 'This choice changes what is built and what it costs, so it is yours to make.',
+        },
+      },
+    ],
+    endsAfter: 600,
+    answer: 'I am waiting for your decision before I go on.',
+    tokens: { input: 30, output: 410, cacheRead: 21_500, cacheWritten: 5200 },
+    asks: {
+      question: `Which way should I take for "${task.title}"?`,
+      reason:
+        'The two ways lead to different parts and a different price, and the later tasks build on the answer.',
+      options: [
+        {
+          label: 'The proven way',
+          consequence:
+            'Parts that are easy to get and well documented. A little larger and dearer.',
+        },
+        {
+          label: 'The compact way',
+          consequence: 'Smaller and cheaper for each unit. Fewer suppliers, and more to test.',
+        },
+      ],
+      recommended: 0,
+    },
+  };
+}
+
+/** The script of a specialist that goes on after the manager has decided. */
+export function scriptAfterDecision(decision: string): Script {
+  return {
+    acts: [
+      { after: 0, act: { kind: 'note', message: WHAT_THIS_IS } },
+      { after: 700, act: { kind: 'say', text: 'Thank you. I am going on with your decision.' } },
+      { after: 600, act: { kind: 'use', id: 'write', tool: 'Write', summary: 'decision.md' } },
+      { after: 900, act: { kind: 'finish', id: 'write' } },
+    ],
+    endsAfter: 600,
+    answer: [
+      'Done, the way you decided.',
+      '',
+      `1. **What I did:** I worked on with your decision (${decision}) and wrote it down in \`decision.md\`.`,
+      '2. **Files:** `decision.md` (new).',
+      '3. **What I decided on my own:** nothing.',
+      '4. **What is open:** please read the result, and accept it or send it back.',
+    ].join('\n'),
+    tokens: { input: 36, output: 640, cacheRead: 22_900, cacheWritten: 900 },
+  };
+}
+
 /** The script of a specialist that starts on a task. */
 export function scriptForTask(task: Task): Script {
+  if (asksBeforeItWorks(task)) {
+    return scriptForChoice(task);
+  }
   const file = `${fileNameFor(task.title)}.md`;
   return {
     acts: [

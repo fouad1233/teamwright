@@ -7,12 +7,14 @@ import type {
   CalendarDate,
   Color,
   Conversation,
+  DecisionRequest,
   Effort,
   Id,
   Member,
   MemberKind,
   MemberProfile,
   Moment,
+  NewDecisionAnswer,
   NewMember,
   NewProject,
   NewTask,
@@ -30,6 +32,7 @@ import { briefFor } from './brief';
 import { historyOf } from './taskHistory';
 import {
   SIMULATED_MODEL,
+  scriptAfterDecision,
   scriptForMessage,
   scriptForTask,
   type Act,
@@ -685,9 +688,65 @@ export class DemoBackend implements Backend {
       }
       const text = tidyMessage(message);
       this.refuseWhileBusy(member);
+      if (openDecisionOf(conversation)) {
+        throw new BackendError(
+          'decision_open',
+          `${member.name} waits for a decision: answer its question first`,
+        );
+      }
       this.beginTurn(conversation, text, 'message', scriptForMessage(member));
       return conversation;
     });
+  }
+
+  answerDecision(conversationId: Id, answer: NewDecisionAnswer): Promise<Conversation> {
+    return this.answer(() => {
+      const conversation = this.requireConversation(conversationId);
+      const decision = openDecisionOf(conversation);
+      if (!decision) {
+        throw new BackendError('no_decision_open', 'no question is open in this conversation');
+      }
+      const member =
+        conversation.memberId === null ? undefined : this.members.get(conversation.memberId);
+      if (!member) {
+        throw new BackendError(
+          'no_specialist',
+          'the specialist of this conversation has left the team',
+        );
+      }
+      const note = answer.note.trim();
+      const chosen = answer.option === null ? undefined : decision.options[answer.option];
+      if (answer.option !== null && !chosen) {
+        throw new BackendError('rule_broken', 'the question has no such option');
+      }
+      if (!chosen && note === '') {
+        throw new BackendError(
+          'rule_broken',
+          'an answer names one of the options or says something in words',
+        );
+      }
+      this.refuseWhileBusy(member);
+
+      decision.answer = { option: answer.option, note, at: this.nowAsText() };
+      const words = answerInWords(chosen?.label, note);
+      this.beginTurn(
+        conversation,
+        words,
+        'decision',
+        scriptAfterDecision(chosen?.label ?? 'in your own words'),
+      );
+      return conversation;
+    });
+  }
+
+  listConversationsWaiting(): Promise<Conversation[]> {
+    return this.answer(() =>
+      this.allProjects()
+        .filter((project) => project.archivedAt === null)
+        .flatMap((project) => this.conversationsOf(project.id))
+        .filter((conversation) => openDecisionOf(conversation) !== undefined)
+        .sort((first, second) => askedAt(first).localeCompare(askedAt(second))),
+    );
   }
 
   ask(memberId: Id, message: string): Promise<Conversation> {
@@ -831,6 +890,7 @@ export class DemoBackend implements Backend {
       failure: null,
       model: SIMULATED_MODEL,
       tokens: null,
+      decision: null,
     };
     conversation.turns.push(turn);
 
@@ -906,9 +966,13 @@ export class DemoBackend implements Backend {
     turn.endedAt = this.nowAsText();
     turn.answer = script.answer;
     turn.tokens = script.tokens;
+    turn.decision = script.asks ? { ...structuredClone(script.asks), answer: null } : null;
 
+    // Work that ends in a question is not ready to be checked: the task
+    // stays in work until the manager has decided and the specialist has
+    // gone on.
     const task = conversation.taskId === null ? undefined : this.tasks.get(conversation.taskId);
-    if (task && this.categoryOf(task) === 'active') {
+    if (task && turn.decision === null && this.categoryOf(task) === 'active') {
       this.moveToFirst(task, 'review');
     }
     this.noteVersions();
@@ -1283,6 +1347,33 @@ function referenceOf(project: Project, task: Task): string {
 }
 
 /** Trims a message of the manager's and refuses an empty one. */
+/**
+ * The question that is open in a conversation: the one its latest turn
+ * ended with, if the manager has not answered it yet.
+ */
+function openDecisionOf(conversation: Conversation): DecisionRequest | undefined {
+  const latest = conversation.turns.at(-1);
+  return latest?.state !== 'running' && latest?.decision && latest.decision.answer === null
+    ? latest.decision
+    : undefined;
+}
+
+/** When the open question of a conversation was asked: when its latest turn ended. */
+function askedAt(conversation: Conversation): Moment {
+  return conversation.turns.at(-1)?.endedAt ?? conversation.startedAt;
+}
+
+/**
+ * The answer of the manager as the specialist reads it: the option that was
+ * chosen, and what the manager added in words.
+ */
+function answerInWords(option: string | undefined, note: string): string {
+  if (option === undefined) {
+    return note;
+  }
+  return note === '' ? `Decision: ${option}` : `Decision: ${option}\n\n${note}`;
+}
+
 function tidyMessage(raw: string): string {
   const message = raw.trim();
   if (message === '') {

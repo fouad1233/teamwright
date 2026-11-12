@@ -10,6 +10,7 @@ import type {
   Id,
   Member,
   MemberProfile,
+  NewDecisionAnswer,
   NewMember,
   NewProject,
   NewTask,
@@ -171,6 +172,14 @@ export class TauriBackend implements Backend {
 
   ask(memberId: Id, message: string): Promise<Conversation> {
     return call('ask', { memberId, message });
+  }
+
+  answerDecision(conversationId: Id, answer: NewDecisionAnswer): Promise<Conversation> {
+    return call('answer_decision', { conversationId, answer });
+  }
+
+  listConversationsWaiting(): Promise<Conversation[]> {
+    return call('list_conversations_waiting');
   }
 
   stopWork(conversationId: Id): Promise<Conversation> {

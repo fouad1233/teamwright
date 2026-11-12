@@ -366,6 +366,201 @@ describe('the work of specialists in the DemoBackend', () => {
     });
   });
 
+  describe('asking the manager to decide', () => {
+    let choice: Task;
+
+    beforeEach(async () => {
+      // The simulated specialist asks before it works on a task whose title
+      // says that something is to be chosen.
+      choice = await backend.createTask({
+        projectId: project.id,
+        title: 'Choose the battery',
+        assignee: { kind: 'member', memberId: engineer.id },
+      });
+    });
+
+    /** Lets the specialist work on the choice until it has asked its question. */
+    async function asked(): Promise<Conversation> {
+      const started = await backend.startWork(choice.id);
+      environment.passAll();
+      // What a request answers with is a copy, so the conversation is read
+      // again now that the specialist has asked.
+      const conversations = await backend.listConversations(project.id);
+      const conversation = conversations.find((listed) => listed.id === started.id);
+      if (!conversation) {
+        throw new Error('the conversation is gone');
+      }
+      return conversation;
+    }
+
+    it('ends the turn with a question instead of a report, and leaves the task in work', async () => {
+      const conversation = await asked();
+
+      const turn = conversation.turns[0];
+      expect(turn?.state).toBe('finished');
+      expect(turn?.decision).toMatchObject({
+        question: 'Which way should I take for "Choose the battery"?',
+        recommended: 0,
+        answer: null,
+      });
+      expect(turn?.decision?.options.map((option) => option.label)).toEqual([
+        'The proven way',
+        'The compact way',
+      ]);
+      expect((await storedTask(choice.id)).statusId).toBe(statusOf(project, 'active').id);
+    });
+
+    it('asks nothing in a turn that ends in a report', async () => {
+      await backend.startWork(schematic.id);
+      environment.passAll();
+
+      expect((await onlyConversation()).turns[0]?.decision).toBeNull();
+    });
+
+    it('lists the conversations that wait for the manager, the longest wait first', async () => {
+      const writer = await backend.addMember({
+        projectId: project.id,
+        name: 'Writer',
+        kind: 'agent',
+      });
+      const second = await backend.createTask({
+        projectId: project.id,
+        title: 'Select the paper',
+        assignee: { kind: 'member', memberId: writer.id },
+      });
+      const first = await asked();
+      environment.pass(60_000);
+      const later = await backend.startWork(second.id);
+      expect((await backend.listConversationsWaiting()).map((waiting) => waiting.id)).toEqual([
+        first.id,
+      ]);
+      environment.passAll();
+
+      const waiting = await backend.listConversationsWaiting();
+
+      expect(waiting.map((conversation) => conversation.id)).toEqual([first.id, later.id]);
+    });
+
+    it('does not list a conversation of a project that is put away', async () => {
+      await asked();
+
+      await backend.archiveProject(project.id);
+
+      expect(await backend.listConversationsWaiting()).toEqual([]);
+    });
+
+    it('takes an option as the answer and sends the specialist on with it', async () => {
+      const conversation = await asked();
+      environment.pass(60_000);
+
+      const answered = await backend.answerDecision(conversation.id, { option: 1, note: '' });
+
+      expect(answered.turns).toHaveLength(2);
+      expect(answered.turns[0]?.decision?.answer).toEqual({
+        option: 1,
+        note: '',
+        at: '2026-11-11T09:02:00.000Z',
+      });
+      expect(answered.turns[1]).toMatchObject({
+        origin: 'decision',
+        state: 'running',
+        request: 'Decision: The compact way',
+        decision: null,
+      });
+      expect(await backend.listConversationsWaiting()).toEqual([]);
+
+      environment.passAll();
+      expect((await storedTask(choice.id)).statusId).toBe(statusOf(project, 'review').id);
+    });
+
+    it('takes words of the manager with an option, or instead of one', async () => {
+      const conversation = await asked();
+      const withBoth = await backend.answerDecision(conversation.id, {
+        option: 0,
+        note: '  But keep the connector.  ',
+      });
+      expect(withBoth.turns[1]?.request).toBe(
+        'Decision: The proven way\n\nBut keep the connector.',
+      );
+      expect(withBoth.turns[0]?.decision?.answer).toMatchObject({
+        option: 0,
+        note: 'But keep the connector.',
+      });
+
+      const other = await backend.createTask({
+        projectId: project.id,
+        title: 'Decide on the color',
+        assignee: { kind: 'member', memberId: engineer.id },
+      });
+      environment.passAll();
+      const second = await backend.startWork(other.id);
+      environment.passAll();
+      const inWords = await backend.answerDecision(second.id, {
+        option: null,
+        note: 'Neither. Use the gray we already have.',
+      });
+      expect(inWords.turns[1]?.request).toBe('Neither. Use the gray we already have.');
+      expect(inWords.turns[0]?.decision?.answer).toMatchObject({ option: null });
+    });
+
+    it('refuses an answer that names no option and says nothing', async () => {
+      const conversation = await asked();
+
+      const error = await refusal(
+        backend.answerDecision(conversation.id, { option: null, note: '  ' }),
+      );
+
+      expect(error.code).toBe('rule_broken');
+      expect(error.message).toBe('an answer names one of the options or says something in words');
+    });
+
+    it('refuses an option that the question does not have', async () => {
+      const conversation = await asked();
+
+      const error = await refusal(backend.answerDecision(conversation.id, { option: 2, note: '' }));
+
+      expect(error.code).toBe('rule_broken');
+      expect(error.message).toBe('the question has no such option');
+      expect((await backend.listConversationsWaiting()).length).toBe(1);
+    });
+
+    it('refuses an ordinary message while a question is open', async () => {
+      const conversation = await asked();
+
+      const error = await refusal(backend.reply(conversation.id, 'Go on.'));
+
+      expect(error.code).toBe('decision_open');
+      expect(error.message).toBe(
+        'Hardware engineer waits for a decision: answer its question first',
+      );
+    });
+
+    it('refuses an answer where nothing was asked, or was answered already', async () => {
+      await backend.startWork(schematic.id);
+      environment.passAll();
+      const report = await onlyConversation();
+      const nothingAsked = await refusal(
+        backend.answerDecision(report.id, { option: 0, note: '' }),
+      );
+      expect(nothingAsked.code).toBe('no_decision_open');
+      expect(nothingAsked.message).toBe('no question is open in this conversation');
+
+      const conversation = await asked();
+      await backend.answerDecision(conversation.id, { option: 0, note: '' });
+      environment.passAll();
+      const twice = await refusal(backend.answerDecision(conversation.id, { option: 1, note: '' }));
+      expect(twice.code).toBe('no_decision_open');
+    });
+
+    it('lets the specialist start on something else while it waits for a decision', async () => {
+      await asked();
+
+      const other = await backend.startWork(schematic.id);
+
+      expect(other.turns[0]?.state).toBe('running');
+    });
+  });
+
   describe('what happens to the record of the work', () => {
     it('goes with a task that is deleted', async () => {
       await backend.startWork(schematic.id);

@@ -1,4 +1,12 @@
-import type { AgentProgram, Conversation, Id, Moment, TokenCounts, Turn } from '@/shared/api/types';
+import type {
+  AgentProgram,
+  Conversation,
+  DecisionRequest,
+  Id,
+  Moment,
+  TokenCounts,
+  Turn,
+} from '@/shared/api/types';
 
 /**
  * Pure functions about the work of AI specialists: which conversation
@@ -27,6 +35,63 @@ export function runningTurn(conversation: Conversation): Turn | undefined {
  */
 export function hasSession(conversation: Conversation): boolean {
   return conversation.turns.some((turn) => turn.model !== null);
+}
+
+/**
+ * The question that is open in a conversation: the one its latest turn
+ * ended with, as long as the manager has not answered it.
+ */
+export function openDecision(conversation: Conversation): DecisionRequest | undefined {
+  const latest = conversation.turns.at(-1);
+  if (!latest || latest.state === 'running' || latest.decision?.answer !== null) {
+    return undefined;
+  }
+  return latest.decision;
+}
+
+/** When the open question of a conversation was asked: when its latest turn ended. */
+export function askedAt(conversation: Conversation): Moment {
+  return conversation.turns.at(-1)?.endedAt ?? conversation.startedAt;
+}
+
+/** The tasks whose specialist waits for a decision of the manager. */
+export function tasksWaitingForManager(conversations: readonly Conversation[]): Set<Id> {
+  const waiting = new Set<Id>();
+  for (const conversation of conversations) {
+    if (conversation.taskId !== null && openDecision(conversation)) {
+      waiting.add(conversation.taskId);
+    }
+  }
+  return waiting;
+}
+
+/**
+ * The conversation in which a member waits for a decision of the manager,
+ * the one that has waited longest if there are several.
+ */
+export function whatMemberWaitsFor(
+  conversations: readonly Conversation[],
+  memberId: Id,
+): Conversation | undefined {
+  return conversations
+    .filter((conversation) => conversation.memberId === memberId && openDecision(conversation))
+    .sort((first, second) => askedAt(first).localeCompare(askedAt(second)))[0];
+}
+
+/**
+ * What the manager decided, in a few words: the option, the manager's own
+ * words, or both. Nothing while the question is open.
+ */
+export function decisionInWords(decision: DecisionRequest): string | null {
+  const answer = decision.answer;
+  if (answer === null) {
+    return null;
+  }
+  const option = answer.option === null ? undefined : decision.options[answer.option]?.label;
+  if (option === undefined) {
+    return answer.note;
+  }
+  return answer.note === '' ? option : `${option}. ${answer.note}`;
 }
 
 export function tasksBeingWorkedOn(conversations: readonly Conversation[]): Set<Id> {

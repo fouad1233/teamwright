@@ -6,6 +6,7 @@ import type {
   Id,
   Member,
   MemberProfile,
+  NewDecisionAnswer,
   NewMember,
   NewProject,
   NewTask,
@@ -117,6 +118,19 @@ export interface Backend {
   reply(conversationId: Id, message: string): Promise<Conversation>;
   /** Asks an AI specialist something that is not about a task. It starts a new conversation. */
   ask(memberId: Id, message: string): Promise<Conversation>;
+  /**
+   * Answers the question a specialist asked the manager in a conversation:
+   * with one of its options, with words of the manager's own, or with both.
+   * The specialist goes on in the same session with the answer. While a
+   * question is open, this is the only way to go on with the conversation.
+   */
+  answerDecision(conversationId: Id, answer: NewDecisionAnswer): Promise<Conversation>;
+  /**
+   * Lists the conversations in which a specialist waits for a decision of
+   * the manager, in every project that is not put away. The one that has
+   * waited longest comes first.
+   */
+  listConversationsWaiting(): Promise<Conversation[]>;
   /** Stops the turn that is running in a conversation. */
   stopWork(conversationId: Id): Promise<Conversation>;
   /** Opens a conversation in the Claude desktop app, to look at all of it there. */

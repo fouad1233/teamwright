@@ -188,16 +188,65 @@ export interface TokenCounts {
   cacheWritten: number;
 }
 
+/** One of the answers a specialist offers the manager for a decision. */
+export interface DecisionOption {
+  /** The option in a few words. */
+  label: string;
+  /** What choosing it leads to. */
+  consequence: string;
+}
+
+/** What the manager decided. */
+export interface DecisionAnswer {
+  /**
+   * The option the manager chose, by its place among the options, counted
+   * from 0. Nothing if the manager answered in their own words.
+   */
+  option: number | null;
+  /**
+   * What the manager added to the option, or the whole answer if no option
+   * was chosen. Empty if an option was chosen and nothing was added.
+   */
+  note: string;
+  at: Moment;
+}
+
+/**
+ * A question that is the manager's to answer. A specialist asks it instead
+ * of guessing, and ends its turn. The answer starts the next turn of the
+ * same conversation.
+ */
+export interface DecisionRequest {
+  question: string;
+  /** Why it matters. May be empty. */
+  reason: string;
+  /** Two to four options. */
+  options: DecisionOption[];
+  /** The option the specialist recommends, by its place from 0, if it recommends one. */
+  recommended: number | null;
+  /** What the manager decided. Nothing while the question is open. */
+  answer: DecisionAnswer | null;
+}
+
+/** What the manager answers to a decision request. */
+export interface NewDecisionAnswer {
+  /** The option that is chosen, by its place from 0, or nothing. */
+  option: number | null;
+  /** Words of the manager's own. Needed if no option is chosen. */
+  note: string;
+}
+
 /** One request to a specialist, and what came of it. */
 export interface Turn {
   id: Id;
   /** What the specialist was asked to do. */
   request: string;
   /**
-   * `brief` when the program wrote the request from a task, and `message`
-   * when the manager wrote it in their own words.
+   * `brief` when the program wrote the request from a task, `message` when
+   * the manager wrote it in their own words, and `decision` when it is the
+   * manager's answer to a decision request.
    */
-  origin: 'brief' | 'message';
+  origin: 'brief' | 'message' | 'decision';
   state: TurnState;
   startedAt: Moment;
   endedAt: Moment | null;
@@ -211,6 +260,8 @@ export interface Turn {
   model: string | null;
   /** The tokens the turn used, all models together, once it has ended. */
   tokens: TokenCounts | null;
+  /** What the specialist asked the manager to decide in this turn, if anything. */
+  decision: DecisionRequest | null;
 }
 
 /**
