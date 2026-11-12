@@ -113,10 +113,12 @@ Several specialists working together with the manager in the loop.
   work; a bench that waits for you there was seen on demo data only
   ([decision 0018](../decisions/0018-the-office-as-a-plan-of-a-workshop.md)).
   People in the room: a pixel character for every kind of role and a
-  default, who works, waits with a hand raised, and walks the aisles to a
-  shared place when free; a portrait at the bench and in the Team view.
-  Seen in the built program with a real specialist at work at its bench;
-  walking and waiting were seen in a browser on demo data only
+  default, at a desk of its own, larger in a wide window, who works, waits
+  with a hand raised, does small things when free and walks the aisles to
+  a shared place; a portrait at the bench and in the Team view.
+  The first, smaller people were seen in the built program with a real
+  specialist at work; the larger ones, and walking, waiting and the small
+  things, in a browser on demo data only
   ([decision 0019](../decisions/0019-people-in-the-office.md))
 - 🚧 Dashboards: usage per teammate, plan limits, workload by status. A
   Dashboard view of a project: where it stands in sentences worked out by

@@ -275,7 +275,9 @@ The interface follows the design philosophy in
   `office/roomModel.ts` works out where everybody sits, the aisles, the
   shared places and who walks when; `roomPainter.ts` runs the one loop
   that draws the room on a canvas over it, and stops it when the window
-  is hidden or motion is turned down. A member's portrait (`Portrait`)
+  is hidden or motion is turned down. The scale of the figures comes from
+  the token `--office-scale`, three in a wide window and two in a narrow
+  one, so that the painter and the depth of the aisles always agree. A member's portrait (`Portrait`)
   stands on its bench and in the Team view. To look at every figure in
   every pose at once, a contact sheet is easy to make: draw
   `standingFigure` and `benchScene` with `paintSprite` on a page of their

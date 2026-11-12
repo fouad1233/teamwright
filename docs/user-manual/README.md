@@ -602,11 +602,12 @@ lamp and the corners mean.
 
 ### The people in the office
 
-Every place has its person: a small figure drawn in pixels, sitting
-behind the far edge of the bench. You can tell what each does by what it
-wears and what stands on its bench:
+Every place has its person: a figure drawn in pixels, sitting at a desk
+of wood above the bench, the bench itself below like a label. In a wide
+window the figures are drawn larger than in a narrow one. You can tell
+what each does by what it wears and what stands on its desk:
 
-| Character | Wears | On the bench |
+| Character | Wears | On the desk |
 |---|---|---|
 | You, the manager | A gold jacket | A tray of letters and a mug |
 | The Advisor | A long dark coat, gray hair, glasses | The plan, and rolled plans |
@@ -631,17 +632,21 @@ and in the Team view.
 The people do what their bench says. At work, they bend over the work and
 their things move: smoke rises from the soldering iron, the screen lights
 up. Waiting for you, they sit turned to the room with a hand raised,
-inside the gold corners. Free, they sit at ease and look around, and now
-and then one gets up, walks along the aisles to the window, the table
-with the plan or the coffee corner at the foot of the room, stays a
-while, and walks back. While they are away, their chair and their things
-wait on the bench. You and the Advisor do the same. As soon as work
-starts for somebody who is away, they turn round and come back.
+inside the gold corners. Free, they sit at ease and now and then do a
+small thing: look around, take a sip from a cup, turn a page, stretch.
+Now and then one gets up, walks along the aisles to the nearest of the
+window, the table with the plan or the coffee corner at the foot of the
+room, stays a while, and walks back. While they are away, their chair
+and their things wait on the desk. You and the Advisor do the same. As
+soon as work starts for somebody who is away, they turn round and come
+back. If you make the window wider or narrower, whoever is on the way
+walks on in the new room.
 
-It is slow on purpose: never more than one person on the way at once,
-and nothing moves while the window is hidden. If your system asks for
-less motion, nobody walks and nothing moves: everybody sits at the bench
-in the pose of what the bench says.
+It is calm on purpose: one person at a time is on the way, and one is
+away from the desk, or two in a team of six or more. Nothing moves while
+the window is hidden. If your system asks for less motion, nobody walks
+and nothing moves: everybody sits at the desk in the pose of what the
+bench says.
 
 ## The dashboard
 

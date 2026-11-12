@@ -111,3 +111,25 @@ purpose:
 - **Characters on the cards of the board.** Left out: at twenty pixels a
   face does not read, and the board is where the manager works, not where
   the team is watched.
+
+## Note, 2026-11-13
+
+Seen in the room, the people were too small to carry it and sat on the
+edge of a card of text, and the room often stood still. What this record
+says changes in four points:
+
+- In a window of 1280 pixels or more the figures are drawn at three
+  times, 48 by 72 pixels, and the aisles and the band of shared places
+  deepen to 120 and 160 pixels; in a narrower window they stay at two
+  times, with the depths given above. The token `--office-scale` says
+  which.
+- Every seated figure has a desk: a low top of wood with a rule of brass,
+  under the figure and its things. The card below reads as the label of
+  the desk.
+- In a team of six or more, two may be away from their bench at a time;
+  one still walks at a time. People walk to the nearest free place, at a
+  pace that brings most there in under twenty seconds.
+- Somebody free at the bench now and then takes a sip, turns a page or
+  stretches, besides glancing aside: two slow frames each, and nothing
+  with motion turned down. When the window changes size, whoever is away
+  walks on in the new room instead of jumping back to the bench.
