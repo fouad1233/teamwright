@@ -128,12 +128,171 @@ pub enum TurnOrigin {
     Brief,
     /// The manager wrote it in their own words.
     Message,
+    /// It is the manager's answer to a question the specialist asked.
+    Decision,
 }
 
 text_enum!(TurnOrigin, kind = "origin of a turn", {
     Brief => "brief",
     Message => "message",
+    Decision => "decision",
 });
+
+/// One of the answers a specialist offers the manager for a decision.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DecisionOption {
+    /// The option in a few words. Never empty in a [`DecisionRequest`].
+    pub label: String,
+    /// What choosing it leads to. May be empty.
+    pub consequence: String,
+}
+
+/// What the manager decided.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DecisionAnswer {
+    /// The option the manager chose, by its place among the options,
+    /// counted from 0. Nothing if the manager answered in their own words.
+    pub option: Option<usize>,
+    /// What the manager added to the option, or the whole answer if no
+    /// option was chosen. Empty if an option was chosen and nothing added.
+    pub note: String,
+    /// When the manager answered.
+    pub at: Timestamp,
+}
+
+/// The plain data of a decision request, used to recreate one that was
+/// stored.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DecisionSnapshot {
+    /// The question.
+    pub question: String,
+    /// Why it matters.
+    pub reason: String,
+    /// The options.
+    pub options: Vec<DecisionOption>,
+    /// The recommended option, by its place from 0.
+    pub recommended: Option<usize>,
+    /// What the manager decided, if the manager has.
+    pub answer: Option<DecisionAnswer>,
+}
+
+/// A question that is the manager's to answer. A specialist asks it
+/// instead of guessing, and ends its turn. The answer starts the next turn
+/// of the same conversation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DecisionRequest {
+    question: String,
+    reason: String,
+    options: Vec<DecisionOption>,
+    recommended: Option<usize>,
+    answer: Option<DecisionAnswer>,
+}
+
+impl DecisionRequest {
+    /// The fewest options a question has.
+    pub const FEWEST_OPTIONS: usize = 2;
+    /// The most options a question has.
+    pub const MOST_OPTIONS: usize = 4;
+
+    /// Makes a question that has not been answered. Whitespace around the
+    /// texts is removed.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the question is empty, if there are fewer than
+    /// two or more than four options, if an option has no label, or if the
+    /// recommended option is not one of them.
+    pub fn new(
+        question: &str,
+        reason: &str,
+        options: Vec<DecisionOption>,
+        recommended: Option<usize>,
+    ) -> Result<Self, DomainError> {
+        let question = question.trim();
+        if question.is_empty() {
+            return Err(DomainError::EmptyText { field: "question" });
+        }
+        if !(Self::FEWEST_OPTIONS..=Self::MOST_OPTIONS).contains(&options.len()) {
+            return Err(DomainError::OptionCount {
+                count: options.len(),
+            });
+        }
+        let options = options
+            .into_iter()
+            .map(|option| {
+                let label = option.label.trim();
+                if label.is_empty() {
+                    return Err(DomainError::EmptyText {
+                        field: "label of an option",
+                    });
+                }
+                Ok(DecisionOption {
+                    label: label.to_owned(),
+                    consequence: option.consequence.trim().to_owned(),
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        if recommended.is_some_and(|place| place >= options.len()) {
+            return Err(DomainError::NoSuchOption);
+        }
+        Ok(Self {
+            question: question.to_owned(),
+            reason: reason.trim().to_owned(),
+            options,
+            recommended,
+            answer: None,
+        })
+    }
+
+    /// Recreates a question from stored data.
+    #[must_use]
+    pub fn restore(snapshot: DecisionSnapshot) -> Self {
+        Self {
+            question: snapshot.question,
+            reason: snapshot.reason,
+            options: snapshot.options,
+            recommended: snapshot.recommended,
+            answer: snapshot.answer,
+        }
+    }
+
+    /// The question.
+    #[must_use]
+    pub fn question(&self) -> &str {
+        &self.question
+    }
+
+    /// Why it matters. May be empty.
+    #[must_use]
+    pub fn reason(&self) -> &str {
+        &self.reason
+    }
+
+    /// The options, two to four.
+    #[must_use]
+    pub fn options(&self) -> &[DecisionOption] {
+        &self.options
+    }
+
+    /// The option the specialist recommends, by its place from 0, if it
+    /// recommends one.
+    #[must_use]
+    pub const fn recommended(&self) -> Option<usize> {
+        self.recommended
+    }
+
+    /// What the manager decided. Nothing while the question is open.
+    #[must_use]
+    pub const fn answer(&self) -> Option<&DecisionAnswer> {
+        self.answer.as_ref()
+    }
+
+    /// Whether the manager has not answered yet.
+    #[must_use]
+    pub const fn is_open(&self) -> bool {
+        self.answer.is_none()
+    }
+}
 
 /// How a turn stands.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -289,6 +448,9 @@ pub struct TurnSnapshot {
     pub model: Option<String>,
     /// The tokens the turn used, once it has ended.
     pub tokens: Option<TokenCounts>,
+    /// What the specialist asked the manager to decide in this turn, if
+    /// anything.
+    pub decision: Option<DecisionRequest>,
 }
 
 /// One request to a specialist, and what came of it.
@@ -309,6 +471,7 @@ pub struct Turn {
     failure: Option<String>,
     model: Option<String>,
     tokens: Option<TokenCounts>,
+    decision: Option<DecisionRequest>,
 }
 
 impl Turn {
@@ -344,6 +507,7 @@ impl Turn {
             failure: None,
             model: None,
             tokens: None,
+            decision: None,
         })
     }
 
@@ -363,6 +527,7 @@ impl Turn {
             failure: snapshot.failure,
             model: snapshot.model,
             tokens: snapshot.tokens,
+            decision: snapshot.decision,
         }
     }
 
@@ -442,6 +607,67 @@ impl Turn {
     #[must_use]
     pub const fn tokens(&self) -> Option<TokenCounts> {
         self.tokens
+    }
+
+    /// What the specialist asked the manager to decide in this turn, if
+    /// anything.
+    #[must_use]
+    pub const fn decision(&self) -> Option<&DecisionRequest> {
+        self.decision.as_ref()
+    }
+
+    /// Records that the specialist asked the manager to decide something.
+    /// A turn asks at most once. The question counts as asked when the turn
+    /// ends, because only then does the specialist wait for the answer.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the turn has ended or has asked already.
+    pub fn ask(&mut self, request: DecisionRequest) -> Result<(), DomainError> {
+        self.require_running()?;
+        if self.decision.is_some() {
+            return Err(DomainError::AlreadyAsked);
+        }
+        self.decision = Some(request);
+        Ok(())
+    }
+
+    /// Records the manager's answer to the question of the turn: one of its
+    /// options, words of the manager's own, or both. Whitespace around the
+    /// words is removed.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the turn is still running, if it asked nothing,
+    /// if its question has been answered already, if the option is not one
+    /// of the question's, or if the answer names no option and says
+    /// nothing.
+    pub fn answer_decision(
+        &mut self,
+        option: Option<usize>,
+        note: &str,
+        now: Timestamp,
+    ) -> Result<(), DomainError> {
+        if self.is_running() {
+            return Err(DomainError::TurnStillRunning);
+        }
+        let decision = self.decision.as_mut().ok_or(DomainError::NothingAsked)?;
+        if decision.answer.is_some() {
+            return Err(DomainError::AlreadyAnswered);
+        }
+        if option.is_some_and(|place| place >= decision.options.len()) {
+            return Err(DomainError::NoSuchOption);
+        }
+        let note = note.trim();
+        if option.is_none() && note.is_empty() {
+            return Err(DomainError::EmptyAnswer);
+        }
+        decision.answer = Some(DecisionAnswer {
+            option,
+            note: note.to_owned(),
+            at: now,
+        });
+        Ok(())
     }
 
     /// Records the model the turn runs on.
@@ -937,9 +1163,182 @@ mod tests {
             failure: None,
             model: Some("claude-model".to_owned()),
             tokens: turn.tokens(),
+            decision: None,
         };
 
         assert_eq!(Turn::restore(snapshot), turn);
+    }
+
+    fn option(label: &str, consequence: &str) -> DecisionOption {
+        DecisionOption {
+            label: label.to_owned(),
+            consequence: consequence.to_owned(),
+        }
+    }
+
+    fn battery_question() -> DecisionRequest {
+        DecisionRequest::new(
+            "Which battery?",
+            "It sets the size of the board.",
+            vec![
+                option("The proven way", "A larger board."),
+                option("The compact way", "A new part to test."),
+            ],
+            Some(0),
+        )
+        .unwrap()
+    }
+
+    /// A turn that asked the battery question and has ended.
+    fn turn_that_asked() -> Turn {
+        let mut turn = running_turn();
+        turn.ask(battery_question()).unwrap();
+        turn.finish("I wait for your decision.", tokens(), moment(5))
+            .unwrap();
+        turn
+    }
+
+    #[test]
+    fn a_question_is_tidied_and_starts_without_an_answer() {
+        let question = DecisionRequest::new(
+            "  Which battery? ",
+            " It sets the size. ",
+            vec![option(" Proven ", " Larger. "), option("Compact", "")],
+            None,
+        )
+        .unwrap();
+
+        assert_eq!(question.question(), "Which battery?");
+        assert_eq!(question.reason(), "It sets the size.");
+        assert_eq!(question.options()[0], option("Proven", "Larger."));
+        assert_eq!(question.recommended(), None);
+        assert_eq!(question.answer(), None);
+        assert!(question.is_open());
+    }
+
+    #[test]
+    fn a_question_that_cannot_be_answered_is_refused() {
+        let two = || vec![option("A", ""), option("B", "")];
+
+        assert_eq!(
+            DecisionRequest::new(" ", "", two(), None),
+            Err(DomainError::EmptyText { field: "question" })
+        );
+        assert_eq!(
+            DecisionRequest::new("Which?", "", vec![option("A", "")], None),
+            Err(DomainError::OptionCount { count: 1 })
+        );
+        assert_eq!(
+            DecisionRequest::new("Which?", "", vec![option("A", ""); 5], None)
+                .unwrap_err()
+                .to_string(),
+            "a question has two to four options, but this one has 5"
+        );
+        assert_eq!(
+            DecisionRequest::new("Which?", "", vec![option("A", ""), option(" ", "")], None)
+                .unwrap_err()
+                .to_string(),
+            "the label of an option must not be empty"
+        );
+        assert_eq!(
+            DecisionRequest::new("Which?", "", two(), Some(2)),
+            Err(DomainError::NoSuchOption)
+        );
+    }
+
+    #[test]
+    fn a_turn_asks_only_while_it_runs_and_only_once() {
+        let mut turn = running_turn();
+
+        turn.ask(battery_question()).unwrap();
+
+        assert_eq!(turn.decision(), Some(&battery_question()));
+        assert_eq!(turn.ask(battery_question()), Err(DomainError::AlreadyAsked));
+        let mut ended = running_turn();
+        ended.stop(None, moment(2)).unwrap();
+        assert_eq!(ended.ask(battery_question()), Err(DomainError::TurnEnded));
+    }
+
+    #[test]
+    fn an_answer_takes_an_option_words_or_both() {
+        let mut by_option = turn_that_asked();
+        by_option.answer_decision(Some(1), "", moment(7)).unwrap();
+        let mut in_words = turn_that_asked();
+        in_words
+            .answer_decision(None, "  Neither. Use the gray one.  ", moment(7))
+            .unwrap();
+
+        assert_eq!(
+            by_option.decision().and_then(DecisionRequest::answer),
+            Some(&DecisionAnswer {
+                option: Some(1),
+                note: String::new(),
+                at: moment(7),
+            })
+        );
+        let answer = in_words.decision().and_then(DecisionRequest::answer);
+        assert_eq!(answer.map(|answer| answer.option), Some(None));
+        assert_eq!(
+            answer.map(|answer| answer.note.as_str()),
+            Some("Neither. Use the gray one.")
+        );
+        assert!(!in_words.decision().unwrap().is_open());
+    }
+
+    #[test]
+    fn an_answer_must_fit_the_question_and_comes_once_after_the_turn() {
+        let mut running = running_turn();
+        running.ask(battery_question()).unwrap();
+        assert_eq!(
+            running.answer_decision(Some(0), "", moment(3)),
+            Err(DomainError::TurnStillRunning)
+        );
+
+        let mut nothing_asked = running_turn();
+        nothing_asked
+            .finish("Report.", tokens(), moment(3))
+            .unwrap();
+        assert_eq!(
+            nothing_asked.answer_decision(Some(0), "", moment(4)),
+            Err(DomainError::NothingAsked)
+        );
+
+        let mut turn = turn_that_asked();
+        let no_such_option = turn.answer_decision(Some(2), "", moment(6)).unwrap_err();
+        assert_eq!(
+            no_such_option.to_string(),
+            "the question has no such option"
+        );
+        let empty = turn.answer_decision(None, "   ", moment(6)).unwrap_err();
+        assert_eq!(
+            empty.to_string(),
+            "an answer names one of the options or says something in words"
+        );
+        assert!(turn.decision().unwrap().is_open());
+
+        turn.answer_decision(Some(0), "", moment(6)).unwrap();
+        assert_eq!(
+            turn.answer_decision(Some(1), "", moment(7)),
+            Err(DomainError::AlreadyAnswered)
+        );
+    }
+
+    #[test]
+    fn a_stored_question_is_recreated_as_it_was() {
+        let mut turn = turn_that_asked();
+        turn.answer_decision(Some(0), "Keep the connector.", moment(8))
+            .unwrap();
+        let decision = turn.decision().unwrap().clone();
+
+        let restored = DecisionRequest::restore(DecisionSnapshot {
+            question: decision.question().to_owned(),
+            reason: decision.reason().to_owned(),
+            options: decision.options().to_vec(),
+            recommended: decision.recommended(),
+            answer: decision.answer().cloned(),
+        });
+
+        assert_eq!(restored, decision);
     }
 
     #[test]

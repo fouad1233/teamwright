@@ -221,6 +221,8 @@ impl TurnRecord {
             failure: self.failure,
             model: self.model,
             tokens,
+            // Questions to the manager are not stored yet: nothing asks one.
+            decision: None,
         }))
     }
 

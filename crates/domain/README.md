@@ -17,7 +17,7 @@ no input or output.
 | `task_history` | `TaskChange`, `history_of`: what changed from one version of a task to the next |
 | `dependencies` | `DependencyGraph`: which task waits for which |
 | `member` | `Member`, `MemberKind`: an AI agent or a person on the team of a project; `MemberProfile`, `Effort`: the model and the effort of a specialist |
-| `conversation` | `Conversation`, `Turn`, `Step`, `TokenCounts`: the work of an AI specialist, one request at a time |
+| `conversation` | `Conversation`, `Turn`, `Step`, `TokenCounts`: the work of an AI specialist, one request at a time; `DecisionRequest`, `DecisionOption`, `DecisionAnswer`: a question a specialist asks the manager to decide |
 | `error` | `DomainError`: every rule that can be broken |
 | `time` | `Timestamp`, `CalendarDate` |
 
@@ -50,6 +50,11 @@ no input or output.
   turn ends exactly once: finished, failed or stopped.
 - A finished turn does not show its report twice: a last text step that is
   the answer is dropped.
+- A question to the manager is not empty and has two to four options, each
+  with a label; a recommended option is one of them. A turn asks it while it
+  runs, and at most once. It is answered after the turn has ended, once,
+  with one of its options, with words of the manager's own, or with both,
+  never with neither.
 
 ## How to work in it
 

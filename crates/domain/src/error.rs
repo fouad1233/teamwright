@@ -99,6 +99,37 @@ pub enum DomainError {
         id: String,
     },
 
+    /// A question for the manager had too few or too many options.
+    #[error("a question has two to four options, but this one has {count}")]
+    OptionCount {
+        /// The number of options that were given.
+        count: usize,
+    },
+
+    /// An option was named that a question does not have.
+    #[error("the question has no such option")]
+    NoSuchOption,
+
+    /// A turn was to ask the manager a second question.
+    #[error("the turn has already asked the manager a question")]
+    AlreadyAsked,
+
+    /// A question was to be answered while its turn was still running.
+    #[error("the turn that asks the question has not ended yet")]
+    TurnStillRunning,
+
+    /// A question was to be answered in a turn that asked none.
+    #[error("the turn asked no question")]
+    NothingAsked,
+
+    /// A question was to be answered a second time.
+    #[error("the question has already been answered")]
+    AlreadyAnswered,
+
+    /// An answer to a question chose no option and said nothing.
+    #[error("an answer names one of the options or says something in words")]
+    EmptyAnswer,
+
     /// The name of a model was empty, had whitespace inside, or was too
     /// long.
     #[error("the name of a model is one word of at most {max_length} characters")]

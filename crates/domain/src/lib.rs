@@ -30,8 +30,9 @@ pub mod workflow;
 
 pub use color::Color;
 pub use conversation::{
-    Conversation, ConversationSnapshot, Step, StepContent, StepKind, TokenCounts, ToolOutcome,
-    Turn, TurnOrigin, TurnSnapshot, TurnState,
+    Conversation, ConversationSnapshot, DecisionAnswer, DecisionOption, DecisionRequest,
+    DecisionSnapshot, Step, StepContent, StepKind, TokenCounts, ToolOutcome, Turn, TurnOrigin,
+    TurnSnapshot, TurnState,
 };
 pub use dependencies::DependencyGraph;
 pub use error::DomainError;
