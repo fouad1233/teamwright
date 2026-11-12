@@ -25,6 +25,8 @@
 }
 
 .kind {
+  /* The hidden radio button is placed against its own card. */
+  position: relative;
   display: flex;
   align-items: center;
   gap: var(--space-2);
@@ -53,6 +55,8 @@
    the card around it shows the choice. */
 .radio {
   position: absolute;
+  top: 0;
+  left: 0;
   opacity: 0;
   pointer-events: none;
 }
