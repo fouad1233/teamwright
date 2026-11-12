@@ -23,6 +23,15 @@ impl CommandError {
             message: message.into(),
         }
     }
+
+    /// Something the computer offers could not be used, such as its file
+    /// manager.
+    pub fn not_available(message: impl Into<String>) -> Self {
+        Self {
+            code: "not_available",
+            message: message.into(),
+        }
+    }
 }
 
 impl From<ApplicationError> for CommandError {

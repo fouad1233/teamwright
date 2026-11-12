@@ -4,13 +4,14 @@
 //! of the application. `src/shared/api/types.ts` mirrors them, and the two
 //! must be changed together. Field names are camelCase on the wire.
 
+use std::path::Path;
 use std::str::FromStr;
 
 use chrono::SecondsFormat;
 use serde::{Deserialize, Serialize};
 use teamwright_application::{
-    AgentProgram, ConversationWithTurns, NewMember, NewProject, NewTask, StatusProperties,
-    WorkflowTemplate,
+    AgentProgram, ConversationWithTurns, NewMember, NewProject, NewTask, ProjectPlaces,
+    StatusProperties, WorkflowTemplate,
 };
 use teamwright_domain::{
     Assignee, CalendarDate, Color, Conversation, DecisionRequest, DomainError, Effort, Member,
@@ -351,6 +352,36 @@ impl From<AgentProgram> for AgentProgramDto {
             problem: program.problem,
         }
     }
+}
+
+/// The folders of a project as the interface sees them. Paths travel as
+/// text.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectPlacesDto {
+    work_folder: String,
+    is_work_folder_chosen: bool,
+    reference_folders: Vec<String>,
+}
+
+impl From<ProjectPlaces> for ProjectPlacesDto {
+    fn from(places: ProjectPlaces) -> Self {
+        Self {
+            work_folder: path_to_text(&places.work_folder),
+            is_work_folder_chosen: places.is_work_folder_chosen,
+            reference_folders: places
+                .reference_folders
+                .iter()
+                .map(|folder| path_to_text(folder))
+                .collect(),
+        }
+    }
+}
+
+/// Writes a path as text for the interface. The paths come from the
+/// interface as text, so nothing is lost.
+fn path_to_text(path: &Path) -> String {
+    path.to_string_lossy().into_owned()
 }
 
 /// A conversation with a specialist and all of its turns, as the interface

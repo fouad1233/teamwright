@@ -8,8 +8,8 @@ use std::{env, fs};
 
 use tauri::{AppHandle, Emitter, Manager};
 use teamwright_application::{
-    AgentRuntime, ApplicationError, FileSystem, ProjectFolders, ProjectService, StorageError,
-    SystemClock, TaskService, TeamService, WorkListener, WorkPorts, WorkService,
+    AgentRuntime, ApplicationError, FileSystem, PlacesService, ProjectFolders, ProjectService,
+    StorageError, SystemClock, TaskService, TeamService, WorkListener, WorkPorts, WorkService,
 };
 use teamwright_domain::{Conversation, Project, Turn};
 use teamwright_runtime::ClaudeCode;
@@ -85,6 +85,8 @@ pub struct AppState {
     pub tasks: TaskService,
     /// The use cases for the team of a project.
     pub team: TeamService,
+    /// The use cases for the folders of a project.
+    pub places: PlacesService,
     /// The use cases for the work of the AI specialists.
     pub work: WorkService,
 }
@@ -108,17 +110,19 @@ impl AppState {
         let conversation_repository = Arc::new(SqliteConversationRepository::new(database));
         let runtime: Arc<dyn AgentRuntime> = Arc::new(agent_program());
         let clock = Arc::new(SystemClock);
+        let folders: Arc<dyn ProjectFolders> = Arc::new(FoldersOfProjects {
+            root: projects_directory(app).map_err(|error| error.to_string()),
+        });
+        let file_system: Arc<dyn FileSystem> = Arc::new(LocalFileSystem);
 
         let work = WorkService::new(WorkPorts {
             projects: project_repository.clone(),
             tasks: task_repository.clone(),
             members: member_repository.clone(),
             conversations: conversation_repository.clone(),
-            folders: Arc::new(FoldersOfProjects {
-                root: projects_directory(app).map_err(|error| error.to_string()),
-            }),
+            folders: folders.clone(),
             places: places_repository.clone(),
-            file_system: Arc::new(LocalFileSystem),
+            file_system: file_system.clone(),
             runtime,
             listener: Arc::new(EventToInterface { app: app.clone() }),
             clock: clock.clone(),
@@ -131,8 +135,17 @@ impl AppState {
                 task_repository.clone(),
                 member_repository.clone(),
                 conversation_repository.clone(),
-                places_repository,
+                places_repository.clone(),
                 clock.clone(),
+            ),
+            places: PlacesService::new(
+                project_repository.clone(),
+                task_repository.clone(),
+                member_repository.clone(),
+                conversation_repository.clone(),
+                places_repository,
+                folders,
+                file_system,
             ),
             tasks: TaskService::new(
                 project_repository.clone(),

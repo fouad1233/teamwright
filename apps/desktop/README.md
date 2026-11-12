@@ -40,7 +40,11 @@ The shell is where the work of an AI specialist meets the outside world
   projects are in `projects` inside it instead, so a test never writes into
   the user's documents. The reference folders of the project are given to
   each turn to read. `state.rs` reaches the disk for the application through
-  `LocalFileSystem`, on the standard library.
+  `LocalFileSystem`, on the standard library. The commands in
+  `commands/places.rs` choose the folders and copy reference files;
+  `show_work_folder` opens the work folder in the file manager of the
+  operating system (`explorer`, `open` or `xdg-open`) without waiting for
+  it, and reports a chosen folder that is gone as `folder_not_found`.
 - **The team bus.** A specialist asks the manager to decide through a tool,
   `ask_manager`
   ([decision 0012](../../docs/decisions/0012-a-specialist-asks-through-a-tool.md)).
