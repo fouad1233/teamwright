@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 use chrono::{TimeDelta, TimeZone, Utc};
 use teamwright_application::in_memory::{
-    FixedProjectFolders, ManualClock, RecordingWorkListener, ScriptedRuntime,
+    FixedProjectFolders, ManualClock, PretendFileSystem, RecordingWorkListener, ScriptedRuntime,
 };
 use teamwright_application::{
     AgentEvent, ChosenPlaces, ConversationRepository, ManagerQuestion, MemberRepository,
@@ -1447,6 +1447,7 @@ fn the_use_cases_work_on_the_real_database() {
     let project_repository = Arc::new(SqliteProjectRepository::new(database.clone()));
     let task_repository = Arc::new(SqliteTaskRepository::new(database.clone()));
     let member_repository = Arc::new(SqliteMemberRepository::new(database.clone()));
+    let places_repository = Arc::new(SqlitePlacesRepository::new(database.clone()));
     let conversation_repository = Arc::new(SqliteConversationRepository::new(database));
     let clock = Arc::new(ManualClock::starting_at(moment(9)));
     let projects = ProjectService::new(
@@ -1454,6 +1455,7 @@ fn the_use_cases_work_on_the_real_database() {
         task_repository.clone(),
         member_repository.clone(),
         conversation_repository.clone(),
+        places_repository.clone(),
         clock.clone(),
     );
     let tasks = TaskService::new(
@@ -1540,6 +1542,7 @@ fn the_workflow_and_removal_use_cases_work_on_the_real_database() {
     let project_repository = Arc::new(SqliteProjectRepository::new(database.clone()));
     let task_repository = Arc::new(SqliteTaskRepository::new(database.clone()));
     let member_repository = Arc::new(SqliteMemberRepository::new(database.clone()));
+    let places_repository = Arc::new(SqlitePlacesRepository::new(database.clone()));
     let conversation_repository = Arc::new(SqliteConversationRepository::new(database.clone()));
     let clock = Arc::new(ManualClock::starting_at(moment(9)));
     let projects = ProjectService::new(
@@ -1547,6 +1550,7 @@ fn the_workflow_and_removal_use_cases_work_on_the_real_database() {
         task_repository.clone(),
         member_repository.clone(),
         conversation_repository.clone(),
+        places_repository.clone(),
         clock.clone(),
     );
     let tasks = TaskService::new(
@@ -1665,6 +1669,7 @@ fn the_work_of_a_specialist_is_kept_on_the_real_database() {
     let project_repository = Arc::new(SqliteProjectRepository::new(database.clone()));
     let task_repository = Arc::new(SqliteTaskRepository::new(database.clone()));
     let member_repository = Arc::new(SqliteMemberRepository::new(database.clone()));
+    let places_repository = Arc::new(SqlitePlacesRepository::new(database.clone()));
     let conversation_repository = Arc::new(SqliteConversationRepository::new(database.clone()));
     let clock = Arc::new(ManualClock::starting_at(moment(9)));
     let runtime = Arc::new(ScriptedRuntime::new());
@@ -1675,6 +1680,8 @@ fn the_work_of_a_specialist_is_kept_on_the_real_database() {
             members: member_repository.clone(),
             conversations: conversation_repository.clone(),
             folders: Arc::new(FixedProjectFolders::inside("projects")),
+            places: places_repository.clone(),
+            file_system: Arc::new(PretendFileSystem::default()),
             runtime: runtime.clone(),
             listener: Arc::new(RecordingWorkListener::default()),
             clock: clock.clone(),
@@ -1685,6 +1692,7 @@ fn the_work_of_a_specialist_is_kept_on_the_real_database() {
         task_repository.clone(),
         member_repository.clone(),
         conversation_repository.clone(),
+        places_repository.clone(),
         clock.clone(),
     );
     let tasks = TaskService::new(

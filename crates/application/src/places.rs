@@ -443,6 +443,7 @@ mod tests {
     /// The services under test on shared storage, the pretended file
     /// system, and a project "Smart sensor node" with the key SSN.
     struct Workspace {
+        projects: ProjectService,
         places: PlacesService,
         tasks: TaskService,
         team: TeamService,
@@ -468,6 +469,7 @@ mod tests {
             tasks.clone(),
             members.clone(),
             conversations.clone(),
+            places.clone(),
             clock.clone(),
         );
         let project = project_service
@@ -483,7 +485,7 @@ mod tests {
                 tasks.clone(),
                 members.clone(),
                 conversations.clone(),
-                places,
+                places.clone(),
                 folders.clone(),
                 file_system.clone(),
             ),
@@ -507,12 +509,15 @@ mod tests {
                 members,
                 conversations,
                 folders,
+                places,
+                file_system: file_system.clone(),
                 runtime: Arc::new(ScriptedRuntime::new()),
                 listener: Arc::new(RecordingWorkListener::default()),
                 clock,
             }),
             file_system,
             project,
+            projects: project_service,
         }
     }
 
@@ -794,6 +799,22 @@ mod tests {
 
         assert_eq!(error.code(), "storage_failed");
         assert!(error.to_string().contains("/Downloads/missing.pdf"));
+    }
+
+    #[test]
+    fn forgets_the_folders_of_a_project_that_is_deleted() {
+        let workspace = workspace();
+        workspace.set_work_folder("/Work/sensor-node").unwrap();
+
+        workspace.projects.delete(workspace.project.id()).unwrap();
+
+        let error = workspace.places.places(workspace.project.id()).unwrap_err();
+        assert_eq!(error.code(), "not_found");
+        assert!(
+            workspace
+                .file_system
+                .is_folder(Path::new("/Work/sensor-node"))
+        );
     }
 
     #[test]

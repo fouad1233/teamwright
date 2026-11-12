@@ -32,11 +32,15 @@ The shell is where the work of an AI specialist meets the outside world
   reads how the user is signed in; it only asks the program whether they
   are. `TEAMWRIGHT_AGENT_PROGRAM` names another program to use, which is how
   the tools for tests and pictures put a stand-in in its place.
-- **The folder of a project.** A specialist works in
-  `Teamwright/<key of the project>` in the user's documents. The folder is
-  created when a turn first needs it. When `TEAMWRIGHT_DATA_DIR` names a
-  data folder, the folders of the projects are in `projects` inside it
-  instead, so a test never writes into the user's documents.
+- **The folders of a project.** A specialist works in the work folder of
+  its project ([decision 0013](../../docs/decisions/0013-the-folders-of-a-project.md)):
+  the one the manager chose, or else `Teamwright/<key of the project>` in the
+  user's documents, which is created when it is first needed. When
+  `TEAMWRIGHT_DATA_DIR` names a data folder, the folders Teamwright gives the
+  projects are in `projects` inside it instead, so a test never writes into
+  the user's documents. The reference folders of the project are given to
+  each turn to read. `state.rs` reaches the disk for the application through
+  `LocalFileSystem`, on the standard library.
 - **The team bus.** A specialist asks the manager to decide through a tool,
   `ask_manager`
   ([decision 0012](../../docs/decisions/0012-a-specialist-asks-through-a-tool.md)).

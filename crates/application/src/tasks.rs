@@ -543,8 +543,8 @@ mod tests {
 
     use super::*;
     use crate::in_memory::{
-        InMemoryConversationRepository, InMemoryMemberRepository, InMemoryProjectRepository,
-        InMemoryTaskRepository, ManualClock,
+        InMemoryConversationRepository, InMemoryMemberRepository, InMemoryPlacesRepository,
+        InMemoryProjectRepository, InMemoryTaskRepository, ManualClock,
     };
     use crate::projects::{NewProject, ProjectService};
     use crate::team::{NewMember, TeamService};
@@ -578,6 +578,7 @@ mod tests {
                 task_repository.clone(),
                 member_repository.clone(),
                 conversation_repository.clone(),
+                Arc::new(InMemoryPlacesRepository::default()),
                 clock.clone(),
             ),
             tasks: TaskService::new(

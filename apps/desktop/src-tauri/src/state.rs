@@ -1,20 +1,21 @@
 //! The services the commands work with, built once when the application
 //! starts.
 
-use std::path::PathBuf;
+use std::io::{self, ErrorKind};
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::{env, fs};
 
 use tauri::{AppHandle, Emitter, Manager};
 use teamwright_application::{
-    AgentRuntime, ApplicationError, ProjectFolders, ProjectService, StorageError, SystemClock,
-    TaskService, TeamService, WorkListener, WorkPorts, WorkService,
+    AgentRuntime, ApplicationError, FileSystem, ProjectFolders, ProjectService, StorageError,
+    SystemClock, TaskService, TeamService, WorkListener, WorkPorts, WorkService,
 };
 use teamwright_domain::{Conversation, Project, Turn};
 use teamwright_runtime::ClaudeCode;
 use teamwright_storage::{
-    Database, SqliteConversationRepository, SqliteMemberRepository, SqliteProjectRepository,
-    SqliteTaskRepository,
+    Database, SqliteConversationRepository, SqliteMemberRepository, SqlitePlacesRepository,
+    SqliteProjectRepository, SqliteTaskRepository,
 };
 
 use crate::dto::ConversationDto;
@@ -103,6 +104,7 @@ impl AppState {
         let project_repository = Arc::new(SqliteProjectRepository::new(database.clone()));
         let task_repository = Arc::new(SqliteTaskRepository::new(database.clone()));
         let member_repository = Arc::new(SqliteMemberRepository::new(database.clone()));
+        let places_repository = Arc::new(SqlitePlacesRepository::new(database.clone()));
         let conversation_repository = Arc::new(SqliteConversationRepository::new(database));
         let runtime: Arc<dyn AgentRuntime> = Arc::new(agent_program());
         let clock = Arc::new(SystemClock);
@@ -115,6 +117,8 @@ impl AppState {
             folders: Arc::new(FoldersOfProjects {
                 root: projects_directory(app).map_err(|error| error.to_string()),
             }),
+            places: places_repository.clone(),
+            file_system: Arc::new(LocalFileSystem),
             runtime,
             listener: Arc::new(EventToInterface { app: app.clone() }),
             clock: clock.clone(),
@@ -127,6 +131,7 @@ impl AppState {
                 task_repository.clone(),
                 member_repository.clone(),
                 conversation_repository.clone(),
+                places_repository,
                 clock.clone(),
             ),
             tasks: TaskService::new(
@@ -217,6 +222,67 @@ impl ProjectFolders for FoldersOfProjects {
             )
         })?;
         Ok(folder)
+    }
+}
+
+/// The files and folders of this computer, through the standard library.
+struct LocalFileSystem;
+
+impl FileSystem for LocalFileSystem {
+    fn is_folder(&self, path: &Path) -> bool {
+        path.is_dir()
+    }
+
+    fn resolve(&self, path: &Path) -> Result<PathBuf, StorageError> {
+        fs::canonicalize(path).map_err(|error| {
+            StorageError::caused_by(
+                format!("the folder {} could not be reached", path.display()),
+                error,
+            )
+        })
+    }
+
+    fn file_names_in(&self, folder: &Path) -> Result<Vec<String>, StorageError> {
+        let could_not_read = |error: io::Error| {
+            StorageError::caused_by(
+                format!("the folder {} could not be read", folder.display()),
+                error,
+            )
+        };
+        let entries = match fs::read_dir(folder) {
+            Ok(entries) => entries,
+            Err(error) if error.kind() == ErrorKind::NotFound => return Ok(Vec::new()),
+            Err(error) => return Err(could_not_read(error)),
+        };
+        entries
+            .map(|entry| {
+                entry
+                    .map(|entry| entry.file_name().to_string_lossy().into_owned())
+                    .map_err(could_not_read)
+            })
+            .collect()
+    }
+
+    fn copy_file(&self, from: &Path, to: &Path) -> Result<(), StorageError> {
+        if let Some(folder) = to.parent() {
+            fs::create_dir_all(folder).map_err(|error| {
+                StorageError::caused_by(
+                    format!("the folder {} could not be created", folder.display()),
+                    error,
+                )
+            })?;
+        }
+        fs::copy(from, to).map_err(|error| {
+            StorageError::caused_by(
+                format!(
+                    "the file {} could not be copied to {}",
+                    from.display(),
+                    to.display()
+                ),
+                error,
+            )
+        })?;
+        Ok(())
     }
 }
 

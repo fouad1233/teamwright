@@ -8,6 +8,7 @@
 //! [`WorkListener`].
 
 use std::collections::{BTreeSet, HashMap};
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError, Weak};
 
 use teamwright_domain::{
@@ -22,9 +23,10 @@ use crate::agent_runtime::{
     TurnRequest,
 };
 use crate::error::ApplicationError;
+use crate::places::{PlacesService, REFERENCES_FOLDER};
 use crate::ports::{
-    Clock, ConversationRepository, MemberRepository, ProjectFolders, ProjectRepository,
-    TaskRepository, WorkListener,
+    Clock, ConversationRepository, FileSystem, MemberRepository, PlacesRepository, ProjectFolders,
+    ProjectRepository, TaskRepository, WorkListener,
 };
 
 /// The failure text of a turn whose program said the user is not signed in.
@@ -123,8 +125,12 @@ pub struct WorkPorts {
     pub members: Arc<dyn MemberRepository>,
     /// Where conversations and their turns are stored.
     pub conversations: Arc<dyn ConversationRepository>,
-    /// The folder each project's specialists work in.
+    /// The folder Teamwright gives each project.
     pub folders: Arc<dyn ProjectFolders>,
+    /// Where the folders the manager chose for each project are stored.
+    pub places: Arc<dyn PlacesRepository>,
+    /// The files and folders of the computer.
+    pub file_system: Arc<dyn FileSystem>,
     /// The program that runs the specialists.
     pub runtime: Arc<dyn AgentRuntime>,
     /// Who is told about every change to a conversation.
@@ -145,6 +151,9 @@ pub struct WorkService {
 /// The parts of the service, shared with the runtime's threads.
 struct Inner {
     ports: WorkPorts,
+    /// The folders of the projects: where a turn works, and what it may
+    /// read besides.
+    places: PlacesService,
     /// The turns this program has started and that have not ended yet, so
     /// that they can be stopped. Whether a specialist is busy is read from
     /// storage instead, which also knows the turns of earlier runs.
@@ -160,9 +169,19 @@ impl WorkService {
     /// Creates the service.
     #[must_use]
     pub fn new(ports: WorkPorts) -> Self {
+        let places = PlacesService::new(
+            Arc::clone(&ports.projects),
+            Arc::clone(&ports.tasks),
+            Arc::clone(&ports.members),
+            Arc::clone(&ports.conversations),
+            Arc::clone(&ports.places),
+            Arc::clone(&ports.folders),
+            Arc::clone(&ports.file_system),
+        );
         Self {
             inner: Arc::new(Inner {
                 ports,
+                places,
                 running: Mutex::new(HashMap::new()),
                 work: Mutex::new(()),
             }),
@@ -517,7 +536,7 @@ impl WorkService {
             .ok_or(ApplicationError::SessionNotStarted)?;
         let session = SessionId::parse(session)?;
         let project = self.inner.require_project(conversation.project_id())?;
-        let folder = ports.folders.folder_of(&project)?;
+        let folder = self.inner.places.work_folder_of(&project)?;
         ports.runtime.open_in_desktop_app(&session, &folder)?;
         Ok(())
     }
@@ -580,16 +599,19 @@ impl WorkService {
             None => SessionChoice::New,
             Some(session_id) => SessionChoice::Resume(SessionId::parse(session_id)?),
         };
+        // A reference folder that is gone from the disk is left out, so
+        // that the turn can still start.
+        let readable_folders = self.inner.places.existing_reference_folders(project)?;
         let request = TurnRequest {
-            working_folder: ports.folders.folder_of(project)?,
+            working_folder: self.inner.places.work_folder_of(project)?,
             prompt: turn.request().to_owned(),
             session,
             model: member.model().map(ToString::to_string),
             effort: member.effort(),
-            extra_instructions: Some(instructions_for(member, project)),
+            extra_instructions: Some(instructions_for(member, project, &readable_folders)),
             permissions: PermissionProfile::specialist(),
             may_ask_manager: true,
-            readable_folders: Vec::new(),
+            readable_folders,
         };
         let handle = ports
             .runtime
@@ -1137,9 +1159,14 @@ pub fn brief_for(project: &Project, task: &Task, tasks: &[Task]) -> String {
 }
 
 /// Writes the instructions that are added to the agent program's own: who
-/// the specialist is, and how the team works.
+/// the specialist is, and how the team works. `reference_folders` are the
+/// folders the specialist may read and must not change.
 #[must_use]
-pub fn instructions_for(member: &Member, project: &Project) -> String {
+pub fn instructions_for(
+    member: &Member,
+    project: &Project,
+    reference_folders: &[PathBuf],
+) -> String {
     let mut lines = vec![format!(
         "You are {}, a member of the team that works on the project \"{}\" for a human \
          manager. The team is run with the program Teamwright.",
@@ -1158,6 +1185,26 @@ pub fn instructions_for(member: &Member, project: &Project) -> String {
              is already there before you begin.",
             "- Put what you produce into files in that folder, with names that say what they \
              hold. Do not write anywhere else.",
+        ]
+        .map(str::to_owned),
+    );
+    if !reference_folders.is_empty() {
+        let listed: Vec<String> = reference_folders
+            .iter()
+            .map(|folder| folder.display().to_string())
+            .collect();
+        lines.push(format!(
+            "- You may read these folders of reference material, and you must not change \
+             anything in them: {}.",
+            listed.join(", ")
+        ));
+    }
+    lines.push(format!(
+        "- Files the manager added for reference are in the folder {REFERENCES_FOLDER} inside \
+         the folder of the project."
+    ));
+    lines.extend(
+        [
             "- You cannot run commands and you cannot fetch anything from the internet. If the \
              task needs one of these, say so in your report instead of working around it.",
             "- Decide small things yourself, and write down what you decided. A decision that \
@@ -1186,9 +1233,10 @@ mod tests {
     use crate::agent_runtime::{ModelUsage, PermissionDenial, QuestionOption, SessionStarted};
     use crate::in_memory::{
         FixedProjectFolders, InMemoryConversationRepository, InMemoryMemberRepository,
-        InMemoryProjectRepository, InMemoryTaskRepository, ManualClock, RecordingWorkListener,
-        ScriptedRuntime,
+        InMemoryPlacesRepository, InMemoryProjectRepository, InMemoryTaskRepository, ManualClock,
+        PretendFileSystem, RecordingWorkListener, ScriptedRuntime,
     };
+    use crate::places::PlacesService;
     use crate::projects::{NewProject, ProjectService, WorkflowTemplate};
     use crate::tasks::{NewTask, TaskService};
     use crate::team::{NewMember, TeamService};
@@ -1218,6 +1266,8 @@ mod tests {
         tasks: Arc<InMemoryTaskRepository>,
         members: Arc<InMemoryMemberRepository>,
         conversations: Arc<InMemoryConversationRepository>,
+        places: Arc<InMemoryPlacesRepository>,
+        file_system: Arc<PretendFileSystem>,
         runtime: Arc<ScriptedRuntime>,
         listener: Arc<RecordingWorkListener>,
         clock: Arc<ManualClock>,
@@ -1231,10 +1281,24 @@ mod tests {
                 members: self.members.clone(),
                 conversations: self.conversations.clone(),
                 folders: Arc::new(FixedProjectFolders::inside("projects")),
+                places: self.places.clone(),
+                file_system: self.file_system.clone(),
                 runtime: self.runtime.clone(),
                 listener: self.listener.clone(),
                 clock: self.clock.clone(),
             })
+        }
+
+        fn places_service(&self) -> PlacesService {
+            PlacesService::new(
+                self.projects.clone(),
+                self.tasks.clone(),
+                self.members.clone(),
+                self.conversations.clone(),
+                self.places.clone(),
+                Arc::new(FixedProjectFolders::inside("projects")),
+                self.file_system.clone(),
+            )
         }
     }
 
@@ -1248,6 +1312,8 @@ mod tests {
             tasks: Arc::new(InMemoryTaskRepository::default()),
             members: Arc::new(InMemoryMemberRepository::default()),
             conversations: Arc::new(InMemoryConversationRepository::default()),
+            places: Arc::new(InMemoryPlacesRepository::default()),
+            file_system: Arc::new(PretendFileSystem::default()),
             runtime: Arc::new(ScriptedRuntime::new()),
             listener: Arc::new(RecordingWorkListener::default()),
             clock: Arc::new(ManualClock::starting_at(start_of_day())),
@@ -1257,6 +1323,7 @@ mod tests {
             ports.tasks.clone(),
             ports.members.clone(),
             ports.conversations.clone(),
+            ports.places.clone(),
             ports.clock.clone(),
         );
         let tasks = TaskService::new(
@@ -1615,12 +1682,57 @@ mod tests {
         assert_eq!(request.effort, None);
         assert_eq!(
             request.extra_instructions.as_deref(),
-            Some(instructions_for(&workspace.engineer, &workspace.project).as_str())
+            Some(instructions_for(&workspace.engineer, &workspace.project, &[]).as_str())
         );
         assert!(
             request
                 .prompt
                 .starts_with("Your task is SSN-1: Draw the schematic")
+        );
+    }
+
+    #[test]
+    fn a_turn_works_in_the_chosen_work_folder_and_may_read_the_reference_folders_that_exist() {
+        let workspace = workspace();
+        for folder in ["/sample/work", "/sample/datasheets"] {
+            workspace.ports.file_system.add_folder(folder);
+        }
+        workspace
+            .ports
+            .places
+            .save(
+                workspace.project.id(),
+                &crate::places::ChosenPlaces {
+                    work_folder: Some(PathBuf::from("/sample/work")),
+                    reference_folders: vec![
+                        PathBuf::from("/sample/datasheets"),
+                        PathBuf::from("/sample/gone"),
+                    ],
+                },
+            )
+            .unwrap();
+
+        workspace.work.start_work(workspace.schematic.id()).unwrap();
+
+        let request = &workspace.ports.runtime.requests()[0];
+        assert_eq!(request.working_folder, PathBuf::from("/sample/work"));
+        assert_eq!(
+            request.readable_folders,
+            [PathBuf::from("/sample/datasheets")]
+        );
+        let instructions = request.extra_instructions.as_deref().unwrap();
+        assert!(instructions.contains(
+            "- You may read these folders of reference material, and you must not change \
+             anything in them: /sample/datasheets."
+        ));
+        assert!(!instructions.contains("/sample/gone"));
+        assert_eq!(
+            workspace
+                .ports
+                .places_service()
+                .work_folder_of(&workspace.project)
+                .unwrap(),
+            request.working_folder
         );
     }
 
@@ -2847,8 +2959,8 @@ mod tests {
             .set_responsibility(workspace.engineer.id(), "")
             .unwrap();
 
-        let instructions = instructions_for(&workspace.engineer, &workspace.project);
-        let shorter = instructions_for(&without_responsibility, &workspace.project);
+        let instructions = instructions_for(&workspace.engineer, &workspace.project, &[]);
+        let shorter = instructions_for(&without_responsibility, &workspace.project, &[]);
 
         let lines: Vec<&str> = instructions.lines().collect();
         assert_eq!(
@@ -2862,11 +2974,17 @@ mod tests {
                 "How the team works:",
             ]
         );
-        assert_eq!(lines.len(), 9);
-        assert!(lines[8].starts_with("- Write in plain words."));
-        assert!(lines[7].contains("ask with the tool ask_manager"));
-        assert!(lines[7].ends_with("The answer comes as your next message."));
-        assert_eq!(shorter.lines().count(), 8);
+        assert_eq!(lines.len(), 10);
+        assert_eq!(
+            lines[6],
+            "- Files the manager added for reference are in the folder references inside the \
+             folder of the project."
+        );
+        assert!(lines[9].starts_with("- Write in plain words."));
+        assert!(lines[8].contains("ask with the tool ask_manager"));
+        assert!(lines[8].ends_with("The answer comes as your next message."));
+        assert_eq!(shorter.lines().count(), 9);
+        assert!(!instructions.contains("folders of reference material"));
         assert!(!shorter.contains("What you are on the team for"));
     }
 }
