@@ -122,6 +122,17 @@ them.
 are terminal tools with trackers designed for agents to read. Teamwright's
 main interface is the set of views a human manager already knows.
 
+**The tools people already use have solved the shape of the screen.** ClickUp
+was read closely as the example of a tracker made for people, for how it is
+put together and why. Three things carry over. A place has a row of views,
+some there from the start and more that can be added, and a view is a kind
+with a name and settings of its own. A project is cut into lists, one for
+each job inside it. And a dashboard reads from the top: a summary in words,
+a few numbers, small charts that each answer one question, and what is due.
+What does not carry over is the amount: a store of dozens of view kinds,
+cards that each need settings, and a summary that calls a model every time
+the page opens. Teamwright takes the shapes and keeps them few.
+
 **Staying small is a survival strategy.** More than one earlier project has
 been sunset or frozen, in one case because a hosted service could not pay for
 itself. Teamwright has no server to operate: it is a local program and a
