@@ -33,6 +33,7 @@ was considered.
 | [0015](0015-light-where-something-happens.md) | Let light fall only where something happens or waits for the manager | Accepted |
 | [0016](0016-sprints-and-a-backlog.md) | Plan the work in sprints, with a backlog and story points | Accepted |
 | [0017](0017-sync-through-a-folder.md) | Keep computers in step through files of operations in a folder the user owns | Proposed |
+| [0018](0018-the-office-as-a-plan-of-a-workshop.md) | Show the team at work as a workshop drawn in plan | Accepted |
 
 ## Template
 
