@@ -156,10 +156,13 @@ Several specialists working together with the manager in the loop.
   computer has a name, writes what it did into the folder, and takes in
   what computers it accepted did, every 20 seconds or when asked. The
   place Computers and a line at the foot of the navigation show how it
-  stands. The Rust side was run with two copies of the built program on
-  one computer through one folder; the interface was seen on demo data
-  only. Two real computers with a real cloud drive between them were
-  never tried
+  stands. Run with two copies of the built program on one computer
+  through one folder: a computer is taken in with its button, the line at
+  the foot follows, and the window shows what the other computer did
+  without being loaded again. The troubles (a folder that cannot be
+  reached, two computers under one identity) were seen on demo data only.
+  Two real computers with a real cloud drive between them were never
+  tried
 - 🚧 Conflict handling: two changes to different fields of one thing both
   hold; a deletion is final, and the computer whose change was dropped is
   told in a notice; a task number or a project key used twice and two

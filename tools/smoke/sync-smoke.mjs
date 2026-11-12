@@ -272,6 +272,18 @@ try {
       )?.title === 'Write and test the firmware';
   }
   check('a change travels by itself, without anybody asking for a round', arrived);
+  await sleep(1_500);
+  const shown = await laptopWindow.evaluate('document.body.innerText');
+  check(
+    'and the window of the other computer shows it without being loaded again',
+    shown.includes('Write and test the firmware'),
+    shown.slice(0, 200),
+  );
+  check(
+    'the foot of its navigation says how syncing stands',
+    /Computers/.test(shown) && /In step/i.test(shown),
+    shown.slice(-200),
+  );
 
   // The laptop stops syncing: its data stays, and it hears nothing more.
   const stopped = await onLaptop('stop_syncing');
