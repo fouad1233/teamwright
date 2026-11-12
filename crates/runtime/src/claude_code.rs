@@ -16,6 +16,7 @@ use crate::environment::Environment;
 use crate::locate::Locator;
 use crate::process::{command, run_briefly, start_turn};
 use crate::sign_in::parse_sign_in;
+use crate::team_bus::TeamBus;
 
 /// How long a question such as the version or the sign-in state may take.
 const QUESTION_TIME_LIMIT: Duration = Duration::from_secs(30);
@@ -29,6 +30,7 @@ const DESKTOP_TIME_LIMIT: Duration = Duration::from_secs(20);
 pub struct ClaudeCode {
     environment: Environment,
     program: Option<PathBuf>,
+    team_bus: Option<TeamBus>,
 }
 
 impl Default for ClaudeCode {
@@ -46,6 +48,7 @@ impl ClaudeCode {
         Self {
             environment: Environment::inherited(),
             program: None,
+            team_bus: None,
         }
     }
 
@@ -62,6 +65,24 @@ impl ClaudeCode {
     pub fn with_program(mut self, program: impl Into<PathBuf>) -> Self {
         self.program = Some(program.into());
         self
+    }
+
+    /// Says how the team bus is started: the program that serves it and
+    /// its arguments. A turn that may ask the manager is then given the
+    /// bus and its tool. Without it, such a turn runs without the tool.
+    #[must_use]
+    pub fn with_team_bus(mut self, program: impl Into<PathBuf>, arguments: Vec<String>) -> Self {
+        self.team_bus = Some(TeamBus {
+            program: program.into(),
+            arguments,
+        });
+        self
+    }
+
+    /// The team bus a turn is given: the one this runtime knows, if the
+    /// turn may ask the manager.
+    fn team_bus_for(&self, request: &TurnRequest) -> Option<&TeamBus> {
+        self.team_bus.as_ref().filter(|_| request.may_ask_manager)
     }
 
     fn program(&self) -> Result<PathBuf, AgentRuntimeError> {
@@ -118,7 +139,12 @@ impl AgentRuntime for ClaudeCode {
         request: TurnRequest,
         listener: Box<dyn FnMut(AgentEvent) + Send>,
     ) -> Result<Box<dyn RunningTurn>, AgentRuntimeError> {
-        let arguments = turn_arguments(&request)?;
+        let readable_folders = request
+            .readable_folders
+            .iter()
+            .map(|folder| full_folder(folder))
+            .collect::<Result<Vec<_>, _>>()?;
+        let arguments = turn_arguments(&request, &readable_folders, self.team_bus_for(&request))?;
         let working_folder = full_folder(&request.working_folder)?;
         let program = self.program()?;
         refuse_a_script(&program)?;
@@ -200,7 +226,8 @@ fn refuse_a_script(program: &Path) -> Result<(), AgentRuntimeError> {
     Ok(())
 }
 
-/// The full, long form of a folder that exists.
+/// The full, long form of a folder that exists: the working folder, or a
+/// folder the session may read.
 ///
 /// Claude Code denies writing to a path that contains a Windows short name
 /// such as `LONGNA~1`, as a guard against paths that dodge its rules. The
@@ -271,6 +298,62 @@ mod tests {
     }
 
     #[test]
+    fn a_turn_gets_the_team_bus_only_if_it_may_ask_and_the_bus_is_known() {
+        use teamwright_application::{PermissionProfile, SessionChoice};
+
+        let mut request = TurnRequest {
+            working_folder: PathBuf::from("work"),
+            prompt: "Hello".to_owned(),
+            session: SessionChoice::New,
+            model: None,
+            effort: None,
+            extra_instructions: None,
+            permissions: PermissionProfile::specialist(),
+            may_ask_manager: true,
+            readable_folders: Vec::new(),
+        };
+        let without_bus = ClaudeCode::new();
+        let with_bus = ClaudeCode::new().with_team_bus("teamwright", vec!["--team-bus".to_owned()]);
+
+        assert!(without_bus.team_bus_for(&request).is_none());
+        assert_eq!(
+            with_bus.team_bus_for(&request),
+            Some(&TeamBus {
+                program: PathBuf::from("teamwright"),
+                arguments: vec!["--team-bus".to_owned()],
+            })
+        );
+        request.may_ask_manager = false;
+        assert!(with_bus.team_bus_for(&request).is_none());
+    }
+
+    #[test]
+    fn a_missing_readable_folder_is_refused_before_anything_starts() {
+        use teamwright_application::{PermissionProfile, SessionChoice};
+
+        let folder = tempfile::tempdir().unwrap();
+        let request = TurnRequest {
+            working_folder: folder.path().to_owned(),
+            prompt: "Hello".to_owned(),
+            session: SessionChoice::New,
+            model: None,
+            effort: None,
+            extra_instructions: None,
+            permissions: PermissionProfile::specialist(),
+            may_ask_manager: false,
+            readable_folders: vec![folder.path().join("missing")],
+        };
+
+        let refusal = ClaudeCode::new()
+            .with_program(folder.path().join("claude.exe"))
+            .start_turn(request, Box::new(|_| {}))
+            .err()
+            .unwrap();
+
+        assert_eq!(refusal.code(), "agent_invalid_request");
+    }
+
+    #[test]
     fn a_program_that_is_not_a_script_is_not_refused() {
         assert!(refuse_a_script(Path::new("claude.exe")).is_ok());
         assert!(refuse_a_script(Path::new("claude")).is_ok());
@@ -292,6 +375,8 @@ mod tests {
             effort: None,
             extra_instructions: Some("Two\nlines.".to_owned()),
             permissions: PermissionProfile::specialist(),
+            may_ask_manager: true,
+            readable_folders: Vec::new(),
         };
 
         let refusal = ClaudeCode::new()

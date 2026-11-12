@@ -5,11 +5,14 @@
 //! which has no length limit and needs no quoting on any system.
 
 use std::ffi::OsString;
+use std::path::PathBuf;
 
 use teamwright_application::{
     AgentRuntimeError, Effort, PermissionMode, ProgramVersion, SessionChoice, SessionId,
     TurnRequest,
 };
+
+use crate::team_bus::{ASK_MANAGER_IN_SESSION, TeamBus};
 
 /// The first version that can open a session in the Claude desktop app.
 pub const FIRST_VERSION_WITH_DESKTOP: ProgramVersion = ProgramVersion::new(2, 1, 285);
@@ -35,12 +38,20 @@ pub fn desktop_arguments(session: &SessionId) -> Vec<OsString> {
 
 /// The arguments that run one turn of a session in headless mode.
 ///
+/// `readable_folders` are the request's readable folders in their full
+/// form. `team_bus` is how the tool server to ask the manager is started,
+/// if the turn is to have it.
+///
 /// # Errors
 ///
 /// Returns [`AgentRuntimeError::InvalidRequest`] if the prompt is empty, or
-/// if a model or a tool rule is empty or starts with `-`, where Claude Code
-/// would take it for an option.
-pub fn turn_arguments(request: &TurnRequest) -> Result<Vec<OsString>, AgentRuntimeError> {
+/// if a model, a folder or a tool rule is empty or starts with `-`, where
+/// Claude Code would take it for an option.
+pub fn turn_arguments(
+    request: &TurnRequest,
+    readable_folders: &[PathBuf],
+    team_bus: Option<&TeamBus>,
+) -> Result<Vec<OsString>, AgentRuntimeError> {
     if request.prompt.trim().is_empty() {
         return Err(invalid("the prompt is empty"));
     }
@@ -89,18 +100,35 @@ pub fn turn_arguments(request: &TurnRequest) -> Result<Vec<OsString>, AgentRunti
         arguments.push("--strict-mcp-config".into());
     }
 
+    let mut allowed_tools = permissions.allowed_tools.clone();
+    let mut disallowed_tools = permissions.disallowed_tools.clone();
+    if let Some(team_bus) = team_bus {
+        // The configuration is one argument, JSON, as the program reads a
+        // configuration given in place of a file.
+        push_pair(&mut arguments, "--mcp-config", &team_bus.configuration());
+        allowed_tools.push(ASK_MANAGER_IN_SESSION.to_owned());
+    }
+    for folder in readable_folders {
+        let folder = folder.to_string_lossy();
+        check_value("folder", &folder)?;
+        push_pair(&mut arguments, "--add-dir", &folder);
+        // A rule about a path uses forward slashes on every system. A
+        // session given this rule read a text file and a PDF in such a
+        // folder and was refused when it tried to write there.
+        disallowed_tools.push(format!(
+            "Edit({}/**)",
+            folder.replace('\\', "/").trim_end_matches('/')
+        ));
+    }
+
     // The lists come last. Each takes every following argument up to the
     // next option, and an empty list must not be given at all: `--tools`
     // with nothing after it would mean "no tools".
     if let Some(tools) = &permissions.built_in_tools {
         push_list(&mut arguments, "--tools", tools)?;
     }
-    push_list(&mut arguments, "--allowedTools", &permissions.allowed_tools)?;
-    push_list(
-        &mut arguments,
-        "--disallowedTools",
-        &permissions.disallowed_tools,
-    )?;
+    push_list(&mut arguments, "--allowedTools", &allowed_tools)?;
+    push_list(&mut arguments, "--disallowedTools", &disallowed_tools)?;
 
     Ok(arguments)
 }
@@ -180,7 +208,93 @@ mod tests {
             effort: None,
             extra_instructions: None,
             permissions: PermissionProfile::specialist(),
+            may_ask_manager: true,
+            readable_folders: Vec::new(),
         }
+    }
+
+    fn bus() -> TeamBus {
+        TeamBus {
+            program: PathBuf::from(r"C:\Program Files\Teamwright\teamwright.exe"),
+            arguments: vec!["--team-bus".to_owned()],
+        }
+    }
+
+    #[test]
+    fn a_turn_with_the_team_bus_is_given_the_server_and_may_use_its_tool() {
+        let arguments = text(&turn_arguments(&request(), &[], Some(&bus())).unwrap());
+
+        let configuration = arguments
+            .windows(2)
+            .find(|pair| pair[0] == "--mcp-config")
+            .map(|pair| pair[1].clone())
+            .unwrap();
+        let configuration: serde_json::Value = serde_json::from_str(&configuration).unwrap();
+        assert_eq!(
+            configuration,
+            serde_json::json!({
+                "mcpServers": {
+                    "teamwright": {
+                        "command": r"C:\Program Files\Teamwright\teamwright.exe",
+                        "args": ["--team-bus"]
+                    }
+                }
+            })
+        );
+        let allowed_at = arguments
+            .iter()
+            .position(|argument| argument == "--allowedTools")
+            .unwrap();
+        let denied_at = arguments
+            .iter()
+            .position(|argument| argument == "--disallowedTools")
+            .unwrap();
+        assert_eq!(
+            arguments[allowed_at + 1..denied_at],
+            ["Read", "Glob", "Grep", "mcp__teamwright__ask_manager"]
+        );
+        let configuration_at = arguments
+            .iter()
+            .position(|argument| argument == "--mcp-config")
+            .unwrap();
+        assert!(configuration_at < allowed_at);
+    }
+
+    #[test]
+    fn a_readable_folder_is_added_for_reading_and_denied_for_writing() {
+        let folders = [
+            PathBuf::from(r"C:\Users\sample\Documents\Teamwright\SSN"),
+            PathBuf::from("/home/sample/shared/"),
+        ];
+
+        let arguments = text(&turn_arguments(&request(), &folders, None).unwrap());
+
+        let tools_at = arguments
+            .iter()
+            .position(|argument| argument == "--tools")
+            .unwrap();
+        let added: Vec<(usize, &String)> = arguments
+            .windows(2)
+            .enumerate()
+            .filter(|(_, pair)| pair[0] == "--add-dir")
+            .map(|(at, pair)| (at, &pair[1]))
+            .collect();
+        assert_eq!(added.len(), 2);
+        assert_eq!(added[0].1, r"C:\Users\sample\Documents\Teamwright\SSN");
+        assert!(added.iter().all(|(at, _)| *at < tools_at));
+        let denied_at = arguments
+            .iter()
+            .position(|argument| argument == "--disallowedTools")
+            .unwrap();
+        assert_eq!(
+            arguments[denied_at + 1..],
+            [
+                "Bash",
+                "PowerShell",
+                "Edit(C:/Users/sample/Documents/Teamwright/SSN/**)",
+                "Edit(/home/sample/shared/**)",
+            ]
+        );
     }
 
     fn text(arguments: &[OsString]) -> Vec<String> {
@@ -192,7 +306,7 @@ mod tests {
 
     #[test]
     fn a_specialists_new_turn_has_exactly_these_arguments() {
-        let arguments = text(&turn_arguments(&request()).unwrap());
+        let arguments = text(&turn_arguments(&request(), &[], None).unwrap());
         assert_eq!(
             arguments,
             [
@@ -228,7 +342,7 @@ mod tests {
 
     #[test]
     fn the_prompt_is_never_an_argument() {
-        let arguments = text(&turn_arguments(&request()).unwrap());
+        let arguments = text(&turn_arguments(&request(), &[], None).unwrap());
         assert!(
             !arguments
                 .iter()
@@ -241,7 +355,7 @@ mod tests {
         let id = SessionId::parse("0196f3a2-7c1e-7d53-9b6f-2f1a4c8e9d10").unwrap();
         let mut resumed = request();
         resumed.session = SessionChoice::Resume(id.clone());
-        let arguments = text(&turn_arguments(&resumed).unwrap());
+        let arguments = text(&turn_arguments(&resumed, &[], None).unwrap());
         assert!(
             arguments
                 .windows(2)
@@ -250,7 +364,7 @@ mod tests {
 
         let mut chosen = request();
         chosen.session = SessionChoice::NewWithId(id.clone());
-        let arguments = text(&turn_arguments(&chosen).unwrap());
+        let arguments = text(&turn_arguments(&chosen, &[], None).unwrap());
         assert!(
             arguments
                 .windows(2)
@@ -264,7 +378,7 @@ mod tests {
         detailed.model = Some("haiku".to_owned());
         detailed.effort = Some(Effort::ExtraHigh);
         detailed.extra_instructions = Some("-You are the tester.".to_owned());
-        let arguments = text(&turn_arguments(&detailed).unwrap());
+        let arguments = text(&turn_arguments(&detailed, &[], None).unwrap());
         assert!(
             arguments
                 .windows(2)
@@ -290,7 +404,7 @@ mod tests {
             confined_to_working_folder: false,
             only_given_tool_servers: false,
         };
-        let arguments = text(&turn_arguments(&open).unwrap());
+        let arguments = text(&turn_arguments(&open, &[], None).unwrap());
         assert_eq!(
             arguments,
             [
@@ -308,15 +422,15 @@ mod tests {
     fn values_that_would_be_read_as_options_are_refused() {
         let mut sneaky = request();
         sneaky.permissions.allowed_tools = vec!["--dangerously-skip-permissions".to_owned()];
-        assert!(turn_arguments(&sneaky).is_err());
+        assert!(turn_arguments(&sneaky, &[], None).is_err());
 
         let mut sneaky = request();
         sneaky.model = Some("-x".to_owned());
-        assert!(turn_arguments(&sneaky).is_err());
+        assert!(turn_arguments(&sneaky, &[], None).is_err());
 
         let mut empty = request();
         empty.prompt = "  ".to_owned();
-        assert!(turn_arguments(&empty).is_err());
+        assert!(turn_arguments(&empty, &[], None).is_err());
     }
 
     #[test]

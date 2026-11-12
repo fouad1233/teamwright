@@ -490,6 +490,8 @@ impl WorkService {
             effort: member.effort(),
             extra_instructions: Some(instructions_for(member, project)),
             permissions: PermissionProfile::specialist(),
+            may_ask_manager: false,
+            readable_folders: Vec::new(),
         };
         let handle = ports
             .runtime
@@ -655,6 +657,8 @@ impl Inner {
             // How much of the plan's limits is used is not shown yet. It
             // belongs with the budgets (decision 0008), which come later.
             AgentEvent::PlanUsage(_) => return Ok(()),
+            // Turns are not given the tool to ask yet.
+            AgentEvent::ManagerAsked(_) => return Ok(()),
             AgentEvent::TurnEnded(outcome) => end_turn(turn, &outcome, now),
         };
         if recorded.is_err() {

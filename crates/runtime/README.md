@@ -31,9 +31,20 @@ claude -p --output-format stream-json --verbose
        [--append-system-prompt=…]
        --permission-mode acceptEdits --permission-prompts none
        --restricted --strict-mcp-config
+       [--mcp-config <the team bus as JSON>] [--add-dir <folder> …]
        --tools Read Glob Grep Edit Write NotebookEdit Skill ToolSearch
-       --allowedTools Read Glob Grep --disallowedTools Bash PowerShell
+       --allowedTools Read Glob Grep [mcp__teamwright__ask_manager]
+       --disallowedTools Bash PowerShell [Edit(<folder>/**) …]
 ```
+
+A turn that may ask the manager (`may_ask_manager`) is given the team bus
+when the runtime knows how to start it (`ClaudeCode::with_team_bus`): the
+configuration `{"mcpServers":{"teamwright":{"command":…,"args":[…]}}}` as
+one argument, and the tool's full name among the allowed tools. Without a
+bus the turn runs without the tool. A folder the session may only read
+(`readable_folders`) is resolved to its full form like the working folder,
+added with `--add-dir`, and denied for writing with the rule
+`Edit(<folder with forward slashes>/**)`.
 
 The prompt goes to standard input, never onto the command line: Windows
 limits the length of a command line, and quoting would differ per system.
@@ -78,6 +89,13 @@ The server answers `initialize`, `tools/list`, `tools/call` and `ping`. Any
 other request is answered with the JSON-RPC error `-32601`; notifications
 and lines that are not JSON get no answer. Claude Code 2.1.322 first sends a
 request `server/discover`, which is fine to refuse that way.
+
+In the output of the turn the call appears as a use of the tool
+`mcp__teamwright__ask_manager`. The decoder turns the first one that passes
+the check into `AgentEvent::ManagerAsked` and nothing else: no tool use, and
+the result of the call is swallowed. A call that does not pass is an
+ordinary tool use with a failed result. The model then writes one last
+sentence, and the turn ends with an ordinary `result` event.
 
 ## Rules for code in this crate
 
@@ -183,6 +201,7 @@ repository:
 | `file_written.jsonl` | Wrote a file with the specialist's permissions |
 | `resumed_with_denials.jsonl` | Resumed that session; a shell command and a write outside the folder were refused |
 | `not_signed_in.jsonl` | Ran without a sign-in |
+| `manager_asked.jsonl` | Was given a tool server named `teamwright` that answers as `team_bus` does, and asked the manager how a sensor node is powered |
 
 The repository is public, so a recording is cleaned before it is saved:
 paths, identifiers of messages and requests, signatures of thinking, plan

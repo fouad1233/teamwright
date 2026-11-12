@@ -42,6 +42,8 @@ fn request(folder: &Path, prompt: &str, session: SessionChoice) -> TurnRequest {
         effort: None,
         extra_instructions: Some("Answer in one short sentence.".to_owned()),
         permissions: PermissionProfile::specialist(),
+        may_ask_manager: false,
+        readable_folders: Vec::new(),
     }
 }
 

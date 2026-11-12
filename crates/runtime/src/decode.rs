@@ -13,9 +13,11 @@ use std::time::Duration;
 use chrono::{TimeZone, Utc};
 use serde_json::{Map, Value};
 use teamwright_application::{
-    AgentEvent, McpServer, ModelUsage, PermissionDenial, PlanUsage, PlanWindow, PlanWindowKind,
-    SessionId, SessionStarted, TokenCounts, TurnFailure, TurnOutcome,
+    AgentEvent, ManagerQuestion, McpServer, ModelUsage, PermissionDenial, PlanUsage, PlanWindow,
+    PlanWindowKind, SessionId, SessionStarted, TokenCounts, TurnFailure, TurnOutcome,
 };
+
+use crate::team_bus::{ASK_MANAGER_IN_SESSION, question_from};
 
 /// The longest summary of a tool's input, in characters.
 const SUMMARY_LENGTH: usize = 120;
@@ -44,6 +46,9 @@ pub struct Decoder {
     session_id: Option<SessionId>,
     working_folder: Option<String>,
     tool_names: HashMap<String, String>,
+    /// The use of the tool that asked the manager, once a question was
+    /// taken. Its result is not reported.
+    question_use: Option<String>,
     last_text: String,
     failure_kind: Option<String>,
     result: Option<Map<String, Value>>,
@@ -263,6 +268,11 @@ impl Decoder {
                     let (Some(id), Some(tool)) = (text(block, "id"), text(block, "name")) else {
                         continue;
                     };
+                    if let Some(question) = self.question_in(tool, block.get("input")) {
+                        self.question_use = Some(id.to_owned());
+                        events.push(AgentEvent::ManagerAsked(question));
+                        continue;
+                    }
                     self.tool_names.insert(id.to_owned(), tool.to_owned());
                     events.push(AgentEvent::ToolUse {
                         id: id.to_owned(),
@@ -276,11 +286,26 @@ impl Decoder {
         events
     }
 
+    /// The question a use of a tool asks the manager: the first good
+    /// question of the turn. A question that does not pass the check, and
+    /// a second one, are ordinary uses of a tool, which the server refuses.
+    fn question_in(&self, tool: &str, input: Option<&Value>) -> Option<ManagerQuestion> {
+        if tool != ASK_MANAGER_IN_SESSION || self.question_use.is_some() {
+            return None;
+        }
+        question_from(input?).ok()
+    }
+
     fn decode_user(&self, event: &Map<String, Value>) -> Vec<AgentEvent> {
         content_blocks(event)
             .filter(|block| text(block, "type") == Some("tool_result"))
             .filter_map(|block| {
                 let tool_use_id = text(block, "tool_use_id")?;
+                if self.question_use.as_deref() == Some(tool_use_id) {
+                    // The question was reported; what the server answered
+                    // is only for the session.
+                    return None;
+                }
                 Some(AgentEvent::ToolResult {
                     tool_use_id: tool_use_id.to_owned(),
                     tool: self.tool_names.get(tool_use_id).cloned(),
@@ -436,6 +461,7 @@ mod tests {
     const RESUMED_WITH_DENIALS: &str =
         include_str!("../tests/recordings/resumed_with_denials.jsonl");
     const NOT_SIGNED_IN_RECORDING: &str = include_str!("../tests/recordings/not_signed_in.jsonl");
+    const MANAGER_ASKED: &str = include_str!("../tests/recordings/manager_asked.jsonl");
 
     fn exited() -> ProcessEnd {
         ProcessEnd::Exited {
@@ -603,6 +629,118 @@ mod tests {
         assert_eq!(outcome.failure, Some(TurnFailure::NotSignedIn));
         assert!(outcome.usage.is_empty());
         assert_eq!(outcome.estimated_cost_usd, None);
+    }
+
+    #[test]
+    fn a_question_to_the_manager_is_reported_as_such_and_not_as_a_tool_use() {
+        let (events, decoder) = replay(MANAGER_ASKED);
+
+        let AgentEvent::SessionStarted(started) = &events[0] else {
+            panic!("the first event is {:?}", events[0]);
+        };
+        assert!(
+            started
+                .tools
+                .contains(&"mcp__teamwright__ask_manager".to_owned())
+        );
+        assert_eq!(
+            started.mcp_servers,
+            [McpServer {
+                name: "teamwright".to_owned(),
+                status: "connected".to_owned()
+            }]
+        );
+
+        let questions: Vec<&ManagerQuestion> = events
+            .iter()
+            .filter_map(|event| match event {
+                AgentEvent::ManagerAsked(question) => Some(question),
+                _ => None,
+            })
+            .collect();
+        let [question] = questions.as_slice() else {
+            panic!("{events:?}");
+        };
+        assert_eq!(question.question, "How should the sensor node be powered?");
+        assert!(question.reason.starts_with("The power source changes"));
+        let labels: Vec<&str> = question
+            .options
+            .iter()
+            .map(|option| option.label.as_str())
+            .collect();
+        assert_eq!(
+            labels,
+            [
+                "Battery only",
+                "Solar with battery",
+                "Mains (wired) power",
+                "Energy harvesting"
+            ]
+        );
+        assert!(
+            question.options[0]
+                .consequence
+                .starts_with("Lowest hardware cost")
+        );
+        // The model recommended the second option, counting from 1.
+        assert_eq!(question.recommended, Some(1));
+        assert!(!events.iter().any(|event| matches!(
+            event,
+            AgentEvent::ToolUse { .. } | AgentEvent::ToolResult { .. }
+        )));
+
+        let outcome = decoder.finish(exited());
+        assert!(!outcome.failed());
+        assert!(
+            outcome
+                .final_text
+                .starts_with("I'm waiting for the manager's decision")
+        );
+        assert_eq!(outcome.total_tokens(), tokens(4, 761, 7198, 7945));
+    }
+
+    #[test]
+    fn a_question_that_does_not_pass_the_check_is_an_ordinary_failed_tool_use() {
+        let mut decoder = Decoder::new();
+        let mut events = decoder.decode_line(
+            r#"{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_sample1",
+                "name":"mcp__teamwright__ask_manager","input":{"question":"Which?","options":[]}}]}}"#,
+        );
+        events.extend(decoder.decode_line(
+            r#"{"type":"user","message":{"content":[{"type":"tool_result",
+                "tool_use_id":"toolu_sample1","is_error":true,"content":"not sent"}]}}"#,
+        ));
+        assert_eq!(
+            events,
+            [
+                AgentEvent::ToolUse {
+                    id: "toolu_sample1".to_owned(),
+                    tool: "mcp__teamwright__ask_manager".to_owned(),
+                    summary: String::new(),
+                },
+                AgentEvent::ToolResult {
+                    tool_use_id: "toolu_sample1".to_owned(),
+                    tool: Some("mcp__teamwright__ask_manager".to_owned()),
+                    failed: true,
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn only_the_first_good_question_of_a_turn_is_reported() {
+        let mut decoder = Decoder::new();
+        let ask = |id: &str| {
+            format!(
+                r#"{{"type":"assistant","message":{{"content":[{{"type":"tool_use","id":"{id}",
+                    "name":"mcp__teamwright__ask_manager","input":{{"question":"Which?",
+                    "options":[{{"label":"A"}},{{"label":"B"}}]}}}}]}}}}"#
+            )
+        };
+        let first = decoder.decode_line(&ask("toolu_sample1"));
+        let second = decoder.decode_line(&ask("toolu_sample2"));
+        assert!(matches!(first.as_slice(), [AgentEvent::ManagerAsked(_)]));
+        assert!(matches!(second.as_slice(), [AgentEvent::ToolUse { .. }]));
     }
 
     #[test]

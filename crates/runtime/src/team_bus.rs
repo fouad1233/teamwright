@@ -13,6 +13,7 @@
 //! the turn and leaves it when the turn ends.
 
 use std::io::{self, BufRead, Write};
+use std::path::PathBuf;
 
 use serde_json::{Map, Value, json};
 use teamwright_application::{ManagerQuestion, QuestionOption};
@@ -55,6 +56,31 @@ const INVALID_PARAMS: i64 = -32_602;
 
 /// The protocol version answered to a client that names none.
 const DEFAULT_PROTOCOL_VERSION: &str = "2025-11-25";
+
+/// How Claude Code starts the tool server: a program and its arguments.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct TeamBus {
+    /// The program that serves the bus.
+    pub(crate) program: PathBuf,
+    /// The arguments it is started with.
+    pub(crate) arguments: Vec<String>,
+}
+
+impl TeamBus {
+    /// The configuration of tool servers that Claude Code is given with
+    /// `--mcp-config`: this one server, under its name.
+    pub(crate) fn configuration(&self) -> String {
+        json!({
+            "mcpServers": {
+                SERVER_NAME: {
+                    "command": self.program.to_string_lossy(),
+                    "args": self.arguments,
+                }
+            }
+        })
+        .to_string()
+    }
+}
 
 /// Serves the tool server until the input ends.
 ///

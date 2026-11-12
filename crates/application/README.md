@@ -133,6 +133,12 @@ The application only knows the trait `AgentRuntime`, implemented by the
   stopped,
 - open a session in the Claude desktop app (`open_in_desktop_app`).
 
+A turn request may give the session the tool to ask the manager to decide
+(`may_ask_manager`); a question it asks arrives as
+`AgentEvent::ManagerAsked`, with the recommended option counted from 0. It
+may also name folders the session may read but not write
+(`readable_folders`).
+
 A turn request carries its permissions as data, a `PermissionProfile`.
 `PermissionProfile::specialist()` is the profile of a specialist: read,
 search, and edit inside the working folder; no shell; everything else is

@@ -408,6 +408,13 @@ pub struct TurnRequest {
     pub extra_instructions: Option<String>,
     /// What the session may do.
     pub permissions: PermissionProfile,
+    /// Whether the session is given the tool to ask the manager to decide.
+    /// A question it asks is reported as [`AgentEvent::ManagerAsked`]. A
+    /// runtime that has no such tool runs the turn without it.
+    pub may_ask_manager: bool,
+    /// Folders outside the working folder that the session may read from
+    /// and must not write to.
+    pub readable_folders: Vec<PathBuf>,
 }
 
 /// Something that happened during a turn.
@@ -441,6 +448,10 @@ pub enum AgentEvent {
     },
     /// A tool use was denied because it needed approval.
     PermissionDenied(PermissionDenial),
+    /// The session asked the manager to decide something. It is told to end
+    /// its turn; the answer is the request of the next turn. A use of the
+    /// tool that asks is reported only this way, not as a tool use.
+    ManagerAsked(ManagerQuestion),
     /// A request to the model failed and is tried again.
     Retrying {
         /// Which attempt this is, if reported.
