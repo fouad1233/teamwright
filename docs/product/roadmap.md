@@ -67,23 +67,29 @@ A single specialist that really works through Claude Code.
   session sees nothing of what the user set up in Claude Code for their own
   use
 
-## M3 · The Advisor ⬜
+## M3 · The Advisor 🚧
 
 From a conversation to an approved team and plan.
 
-- ⬜ Interview with structured, clickable questions
-- ⬜ Project brief
-- ⬜ Staffing proposal with a reason, model and effort level per member
-- ⬜ Plan proposal: tasks, owners, dependencies, estimates
-- ⬜ Review, edit and approve; apply the approved plan to the board
+- ✅ Interview with structured, clickable questions
+- ✅ Project brief: the project in the Advisor's words, for the manager to
+  check
+- ✅ Staffing proposal with a reason, model and effort level per member
+- ✅ Plan proposal: tasks, owners, dependencies, estimates
+- ✅ Review, edit and approve; apply the approved plan to the board
+- 🚧 A later round that adds to the team and the tasks that are there:
+  built, not yet run with the real program
+- ⬜ Change the title, the size or the dependencies of a proposed task
+  before approving
 - ⬜ Import earlier Claude Code conversations as context digests
 
 ## M4 · Teamwork 🚧
 
 Several specialists working together with the manager in the loop.
 
-- 🚧 Team bus: the tools specialists use to talk to the project. It has its
-  first tool, with which a specialist asks the manager to decide
+- 🚧 Team bus: the tools specialists use to talk to the project. It has
+  three: a specialist asks the manager to decide, and the Advisor asks its
+  questions and proposes a team and a plan
 - ✅ Decision requests and the manager's inbox
 - ⬜ Teammate messages, handoffs and registered artifacts
 - ⬜ Project memory: decisions, facts and interface contracts

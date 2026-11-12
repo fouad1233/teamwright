@@ -1,8 +1,9 @@
 # User manual
 
 This manual describes what Teamwright can do today. It grows with every
-milestone. This version plans and tracks projects, lets you put together a
-team, and lets the AI specialists on it carry out tasks, one at a time.
+milestone. This version plans and tracks projects, lets the Advisor propose
+a team and a plan for you to approve, lets you put together a team
+yourself, and lets the AI specialists on it carry out tasks, one at a time.
 
 ## Projects
 
@@ -24,6 +25,10 @@ or *Create a project* on the first screen.
 - **Workflow.** The statuses the project starts with.
   - *Standard:* To do, In progress, In review, Done.
   - *Engineering:* To do, In progress, In revision, In test, Done.
+
+A new project is empty. It opens on the page of the
+[Advisor](#planning-with-the-advisor), where it can be planned. The board is
+one press away if you would rather add the tasks yourself.
 
 **Switch projects** by choosing one in the sidebar. A small brass line marks
 the project that is open. Teamwright reopens the last project you worked in.
@@ -101,6 +106,65 @@ computer, and what else they may read.
 Teamwright never deletes a folder or a file of yours, also not when you
 delete the project. Keep in mind that what a specialist reads is sent to
 Anthropic under your account, like everything Claude Code reads.
+
+## Planning with the Advisor
+
+The *Advisor* turns what you want into a team and a plan. It is under the
+tab *Advisor* of every project.
+
+**Say what you want.** Write it in your own words: what is to be built, what
+you have already, what matters most. The description of the project is
+there to start from. Choose the model and the effort the Advisor runs on,
+or leave both to Claude Code. Then press *Start planning*.
+
+The Advisor can read the [folders](#folders) of the project and cannot
+change anything in them. Give it what it should know there before you
+start.
+
+**Answer its questions.** If the Advisor needs to know something before it
+can plan, it asks: up to five questions at once, each with the reason it
+asks. Where it offers options, pick one. The one it recommends is marked.
+Or pick *Something else* and say what you want. A question without options
+is answered in words. Press *Send answers* when every question has an
+answer. The Advisor may ask a second time.
+
+**Read the proposal.** The Advisor proposes three things.
+
+- *The project in its words*, for you to check: what is built, what "done"
+  means, what is left out.
+- *The specialists to add to the team.* Each has what it is responsible
+  for, why the project needs it, and the model and the effort it runs on.
+- *The tasks.* Each has who does it, its size, and the tasks it waits for.
+  Work that needs hands, money or an account is given to you. Press the
+  title of a task to read what the Advisor wrote about it.
+
+The size of a task is the Advisor's estimate of the hours a skilled person
+would need for it. It says how large the task is. It does not say how long
+a specialist takes.
+
+**Change it.** The cross at the end of a row takes a specialist or a task
+out. Press the owner of a task to give it to somebody else. Press the model
+or the effort of a specialist to choose another. The tasks of a specialist
+you take out stay in the plan and are given to nobody. *Undo my changes*
+brings the proposal back as the Advisor made it. For anything larger, write
+to the Advisor under the proposal what to change, and it proposes again.
+
+**Approve it.** Nothing is added to the project before you press *Approve*.
+Then the specialists join the team, and the tasks appear in the first status
+of the board, each given to its owner. No work starts by itself: you start a
+task when you want it started. A specialist the team already has is not
+added a second time.
+
+**Later.** Write to the Advisor again when the project needs more. It knows
+who is on the team and which tasks exist, and proposes what is to be added.
+*Plan something new* starts a new conversation.
+
+What the Advisor waits for, answers to its questions or a word about its
+proposal, is also counted in [the inbox](#the-inbox).
+
+**What it uses.** The Advisor is a session of your own Claude Code, like a
+specialist. Planning takes two or three turns, and they count against your
+plan. A lighter model makes a plan too. It will be a plainer one.
 
 ## The header of a project
 
@@ -312,17 +376,18 @@ Teamwright or its authors.
 ## The inbox
 
 The *Inbox*, at the top of the sidebar, holds what waits for you in all of
-your projects: the questions your specialists asked instead of guessing.
-The number next to it says how many there are, and the question that has
-waited longest comes first.
+your projects: the questions your specialists asked instead of guessing,
+and what an Advisor asks or proposes. The number next to it says how many
+there are, and what has waited longest comes first.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="../screenshots/specialist-inbox-dark.png">
   <img alt="The inbox with one question of a specialist: what it wants to know, why it matters, two options with what each leads to and the one it recommends, a place for a note, and the button Decide" src="../screenshots/specialist-inbox-light.png">
 </picture>
 
-Every question can be answered where it stands. The line above it names
-the project and the task, and the title of the task leads to it.
+Every question of a specialist can be answered where it stands. The line
+above it names the project and the task, and the title of the task leads to
+it. What an Advisor wants needs more room: *Open* leads to its page.
 
 ## Views
 

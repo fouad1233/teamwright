@@ -23,9 +23,11 @@ with a clear decision request whenever a choice is yours to make.
 > one you choose, reads the folders and files you give it for reference,
 > shows every step, reports, and can be answered. When a choice is yours to
 > make it stops and asks, and its question waits in your inbox with the
-> options and what each leads to. What is still missing is the team as a
-> team: the Advisor that proposes it, and specialists that hand work to
-> each other.
+> options and what each leads to. The Advisor turns what you want into a
+> team and a plan: it asks what it needs to know, proposes specialists and
+> tasks, and nothing is created before you approve. What is still missing
+> is the team as a team: specialists that hand work to each other, and a
+> coordinator that starts tasks when the work they wait for is done.
 > There is no installer; the app can be
 > [built from source](docs/development/README.md).
 > The [roadmap](docs/product/roadmap.md) says exactly what is done.

@@ -92,6 +92,7 @@ src/
     team/             The team: avatars, the Team view, adding and changing a member
     work/             The work of AI specialists: starting it, following it, answering
     inbox/            What waits for the manager in every project: questions to decide
+    advisor/          Planning a project with the Advisor: its questions, its proposal
   shared/
     api/              The Backend interface and its two implementations
     ui/               Buttons, menus, dialogs, the calendar field, tooltips
