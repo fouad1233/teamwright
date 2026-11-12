@@ -17,8 +17,8 @@ with a clear decision request whenever a choice is yours to make.
 > **Status: pre-alpha.** The project started on 11 November 2026 and is built
 > in the open, one small commit at a time. What works today is the ground
 > floor: a desktop app that keeps projects and tasks in a local database,
-> shows them on a board and in a list, and lets you put together a team and
-> give tasks to its members. The members cannot work yet: the AI team
+> shows them on a board, in a list, on a Gantt chart and on a calendar, and
+> lets you put together a team and give tasks to its members. The members cannot work yet: the AI team
 > described below is the next milestone. There is no installer; the app can
 > be [built from source](docs/development/README.md). The
 > [roadmap](docs/product/roadmap.md) says exactly what is done.

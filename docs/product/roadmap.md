@@ -71,9 +71,11 @@ Several specialists working together with the manager in the loop.
 - ⬜ Coordinator: dependency-driven start, concurrency limit, token budgets
 - ⬜ Permission requests for risky actions routed to the manager
 
-## M5 · Seeing the work ⬜
+## M5 · Seeing the work 🚧
 
-- ⬜ Timeline (Gantt) with dependencies, planned against actual
+- ✅ Gantt chart with dependencies; bars are dragged to change the dates
+- ✅ Calendar by month
+- ⬜ Planned against actual on the Gantt chart
 - ⬜ The office: specialists as characters with activity, time left and usage
 - ⬜ Dashboards: usage per teammate, plan limits, workload by status
 - ⬜ Project report at completion
@@ -104,6 +106,6 @@ Ideas that are recorded but not scheduled:
 - People on the team who use Teamwright themselves, from their own
   computers. Today a person on a team is a name that tasks can be given to
 - Voice conversation with the Advisor
-- Calendar view, whiteboards and documents inside projects
+- Whiteboards and documents inside projects
 - Automation rules
 - More agent runtimes than Claude Code

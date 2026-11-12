@@ -30,6 +30,8 @@ src/
   features/
     projects/         Sidebar, project header, creating a project, first run
     board/            The board: lanes, cards, drag and drop
+    gantt/            The Gantt chart: bars against days, lines of dependencies
+    calendar/         The calendar: a month of weeks with the tasks on their days
     tasks/            The task panel, the list, badges, the fold of subtasks, task logic
     team/             The team: avatars, the Team view, adding and changing a member
   shared/
@@ -60,7 +62,11 @@ Rules of the interface:
   browser's memory with a sample project, so the interface can be developed
   and tested without Rust.
 - **Logic is tested without rendering.** Pure functions live in `*Model.ts`
-  and `shared/lib`, next to their tests.
+  and `shared/lib`, next to their tests. The Gantt chart and the calendar
+  only draw what `ganttModel.ts` and `calendarModel.ts` work out.
+- **Dates are counted, not clocked.** A calendar date is a whole number of
+  days (`shared/lib/days.ts`), so adding days never meets a time zone or a
+  change of the clocks.
 - **The contract is mirrored by hand.** `shared/api/types.ts` and
   `src-tauri/src/dto.rs` describe the same data and change together.
 

@@ -157,6 +157,31 @@ red. The number next to the name of a status counts the tasks in its lane.
 **List.** One table of all tasks, grouped by status, with the subtasks of a
 task set in under it.
 
+**Gantt.** The plan against time: one row for every task, in the order of
+the schedule, and a bar from its start to its due date.
+
+- A bar is hollow while the work has not started. It takes the color of its
+  status once it has, and is quieter when the task is done.
+- A task with only a due date is a small mark on that day. A task with only
+  a start fades out to the right. A task without any date has a row and no
+  bar.
+- A line leads from a task to each task that waits for it. The line is red
+  when the dates contradict it: the waiting task begins before the other
+  one is due.
+- A thin red line behind a bar shows how late the task is. The line in
+  brass is today, and *Today* in the corner scrolls back to it.
+- Drag a bar to move the task. Drag one of its ends to change only its
+  start or only its due date. The new dates are shown while you drag, and
+  Escape puts the bar back.
+- Press a bar or the name of a task to open it.
+
+**Calendar.** One month at a time. A task lies on the days from its start
+to its due date, and a task with one date lies on that day. The arrows go
+to the month before and after, and *Today* comes back. A week grows with
+what is in it; a day with more than six tasks gets a note such as
+*+2 more*, which opens the list of all its tasks. Tasks without any date
+are not on the calendar: their number is shown at the top right.
+
 **Team.** You and the members of the team, each with its tasks. See
 [the team](#the-team).
 
@@ -174,6 +199,9 @@ task set in under it.
 | Space | On a card | Picks the card up, and drops it |
 | Arrow keys | While a card is picked up | Move the card |
 | Escape | While a card is picked up | Puts the card back |
+| Arrow left, arrow right | On a bar of the Gantt chart | Moves the task by a day |
+| Shift with an arrow | On a bar of the Gantt chart | Moves only the due date by a day |
+| Enter | On a bar or a name of the Gantt chart | Opens the task |
 | Escape | In a task's panel | Closes the panel |
 | Escape | In a field | Undoes the edit |
 
