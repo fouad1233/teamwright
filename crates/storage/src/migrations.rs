@@ -15,6 +15,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("schema/0003_conversations.sql"),
     include_str!("schema/0004_member_profiles.sql"),
     include_str!("schema/0005_decisions.sql"),
+    include_str!("schema/0006_project_places.sql"),
 ];
 
 /// Applies the migrations a database has not seen yet. Each one runs in its
@@ -76,6 +77,8 @@ mod tests {
             "members",
             "meta",
             "operations",
+            "project_places",
+            "project_reference_folders",
             "projects",
             "statuses",
             "task_dependencies",
@@ -199,6 +202,39 @@ mod tests {
             .query_row("SELECT count(*) FROM turn_decisions", [], |row| row.get(0))
             .unwrap();
         assert_eq!(questions, 0);
+    }
+
+    #[test]
+    fn a_database_without_the_folders_of_projects_is_brought_up_to_date_with_its_projects_kept() {
+        let mut connection = Connection::open_in_memory().unwrap();
+        for migration in &MIGRATIONS[..5] {
+            connection.execute_batch(migration).unwrap();
+        }
+        connection.pragma_update(None, "user_version", 5).unwrap();
+        connection
+            .execute(
+                "INSERT INTO projects (id, key, name, description, next_task_number, created_at)
+                 VALUES ('p1', 'SSN', 'Smart sensor node', '', 1, '2026-11-11T09:00:00.000Z')",
+                [],
+            )
+            .unwrap();
+
+        migrate(&mut connection).unwrap();
+
+        assert_eq!(
+            version_of(&connection),
+            i64::try_from(MIGRATIONS.len()).unwrap()
+        );
+        let kept: String = connection
+            .query_row("SELECT name FROM projects WHERE id = 'p1'", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(kept, "Smart sensor node");
+        let chosen: i64 = connection
+            .query_row("SELECT count(*) FROM project_places", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(chosen, 0);
     }
 
     #[test]

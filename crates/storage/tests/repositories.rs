@@ -5,6 +5,7 @@
 // recognizes functions marked `#[test]` as such.
 #![allow(clippy::unwrap_used)]
 
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use chrono::{TimeDelta, TimeZone, Utc};
@@ -12,10 +13,10 @@ use teamwright_application::in_memory::{
     FixedProjectFolders, ManualClock, RecordingWorkListener, ScriptedRuntime,
 };
 use teamwright_application::{
-    AgentEvent, ConversationRepository, ManagerQuestion, MemberRepository, ModelUsage, NewMember,
-    NewProject, NewTask, ProjectRepository, ProjectService, QuestionOption, SessionId,
-    StatusProperties, TaskRepository, TaskService, TeamService, TurnOutcome, WorkPorts,
-    WorkService, WorkflowTemplate,
+    AgentEvent, ChosenPlaces, ConversationRepository, ManagerQuestion, MemberRepository,
+    ModelUsage, NewMember, NewProject, NewTask, PlacesRepository, ProjectRepository,
+    ProjectService, QuestionOption, SessionId, StatusProperties, TaskRepository, TaskService,
+    TeamService, TurnOutcome, WorkPorts, WorkService, WorkflowTemplate,
 };
 use teamwright_domain::{
     Assignee, CalendarDate, Color, Conversation, ConversationId, DecisionOption, DecisionRequest,
@@ -26,7 +27,7 @@ use teamwright_domain::{
 };
 use teamwright_storage::{
     Database, Operation, SqliteConversationRepository, SqliteMemberRepository,
-    SqliteProjectRepository, SqliteTaskRepository,
+    SqlitePlacesRepository, SqliteProjectRepository, SqliteTaskRepository,
 };
 
 /// A database with the repositories working on it.
@@ -36,6 +37,7 @@ struct Store {
     tasks: SqliteTaskRepository,
     members: SqliteMemberRepository,
     conversations: SqliteConversationRepository,
+    places: SqlitePlacesRepository,
 }
 
 impl Store {
@@ -46,6 +48,7 @@ impl Store {
             tasks: SqliteTaskRepository::new(database.clone()),
             members: SqliteMemberRepository::new(database.clone()),
             conversations: SqliteConversationRepository::new(database.clone()),
+            places: SqlitePlacesRepository::new(database.clone()),
             database,
         }
     }
@@ -1222,6 +1225,111 @@ fn deleting_a_project_removes_its_conversations_with_a_trace_in_the_log() {
             "the removal of the {entity} is not logged"
         );
     }
+}
+
+// The folders of a project
+
+fn chosen_places(work_folder: Option<&str>, reference_folders: &[&str]) -> ChosenPlaces {
+    ChosenPlaces {
+        work_folder: work_folder.map(PathBuf::from),
+        reference_folders: reference_folders.iter().map(PathBuf::from).collect(),
+    }
+}
+
+#[test]
+fn a_project_for_which_nothing_was_chosen_has_no_folders() {
+    let store = Store::in_memory();
+    let project = store.project("Smart sensor node");
+
+    assert_eq!(
+        store.places.find(project.id()).unwrap(),
+        ChosenPlaces::default()
+    );
+}
+
+#[test]
+fn the_folders_of_a_project_are_found_again_unchanged() {
+    let store = Store::in_memory();
+    let project = store.project("Smart sensor node");
+    let other = store.project("Weather station");
+    let three = chosen_places(
+        Some("/sample/work"),
+        &[
+            "/sample/datasheets",
+            "/sample/standards",
+            "/sample/drawings",
+        ],
+    );
+    store.places.save(project.id(), &three).unwrap();
+    store
+        .places
+        .save(other.id(), &chosen_places(None, &["/sample/other"]))
+        .unwrap();
+
+    assert_eq!(store.places.find(project.id()).unwrap(), three);
+
+    let fewer = chosen_places(None, &["/sample/standards"]);
+    store.places.save(project.id(), &fewer).unwrap();
+    assert_eq!(store.places.find(project.id()).unwrap(), fewer);
+    assert_eq!(
+        store.places.find(other.id()).unwrap(),
+        chosen_places(None, &["/sample/other"])
+    );
+}
+
+#[test]
+fn changes_to_the_folders_of_a_project_are_logged_with_the_complete_state() {
+    let store = Store::in_memory();
+    let project = store.project("Smart sensor node");
+    let start = store.database.operations().unwrap().len();
+
+    store
+        .places
+        .save(
+            project.id(),
+            &chosen_places(Some("/sample/work"), &["/sample/datasheets"]),
+        )
+        .unwrap();
+    store.places.delete(project.id()).unwrap();
+    store.places.delete(project.id()).unwrap();
+
+    let log = store.database.operations().unwrap();
+    assert_eq!(
+        logged_after(&store, start),
+        pairs(&[("project_places", "upsert"), ("project_places", "delete")])
+    );
+    let state: serde_json::Value =
+        serde_json::from_str(log[start].payload.as_deref().unwrap()).unwrap();
+    assert_eq!(state["project_id"], project.id().to_string());
+    assert_eq!(state["work_folder"], "/sample/work");
+    assert_eq!(state["reference_folders"][0], "/sample/datasheets");
+    assert_eq!(log[start].entity_id, project.id().to_string());
+    assert_eq!(
+        store.places.find(project.id()).unwrap(),
+        ChosenPlaces::default()
+    );
+}
+
+#[test]
+fn deleting_a_project_forgets_its_folders_with_a_trace_in_the_log() {
+    let store = Store::in_memory();
+    let project = store.project("Smart sensor node");
+    store
+        .places
+        .save(project.id(), &chosen_places(None, &["/sample/datasheets"]))
+        .unwrap();
+    let start = store.database.operations().unwrap().len();
+
+    store.projects.delete(project.id()).unwrap();
+
+    assert_eq!(
+        logged_after(&store, start),
+        pairs(&[("project_places", "delete"), ("project", "delete")])
+    );
+    assert_eq!(
+        store.places.find(project.id()).unwrap(),
+        ChosenPlaces::default()
+    );
 }
 
 // The operation log

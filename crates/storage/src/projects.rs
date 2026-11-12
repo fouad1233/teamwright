@@ -16,6 +16,7 @@ use crate::conversations;
 use crate::database::Database;
 use crate::error::DatabaseError;
 use crate::operations::{Entity, OperationRecorder};
+use crate::places;
 
 /// The columns of the `projects` table that every query reads.
 const PROJECT_COLUMNS: &str =
@@ -221,8 +222,11 @@ impl ProjectRepository for SqliteProjectRepository {
             // are removed here one by one, each with its own entry, like any
             // other deletion. Normally the use case has removed them already
             // and nothing is left to do. The conversations go first, because
-            // they refer to the tasks and the members.
+            // they refer to the tasks and the members. The folders chosen for
+            // the project are forgotten the same way; the folders on disk are
+            // never touched.
             conversations::delete_conversations_of_project(transaction, operations, &id)?;
+            places::delete_places_of_project(transaction, operations, &id)?;
             delete_rows_of_project(transaction, operations, "tasks", Entity::Task, &id)?;
             delete_rows_of_project(transaction, operations, "members", Entity::Member, &id)?;
             // The statuses are part of the project in the log, so their

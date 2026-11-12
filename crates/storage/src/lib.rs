@@ -1,8 +1,8 @@
 //! SQLite storage for Teamwright.
 //!
 //! This crate implements the storage interfaces that the application crate
-//! declares. It keeps the current state of projects, tasks, teams and the
-//! conversations with specialists in a
+//! declares. It keeps the current state of projects, tasks, teams, the
+//! folders of the projects and the conversations with specialists in a
 //! SQLite database, and it appends every change to an operation log in the same
 //! transaction. The log records which computer made each change and in what
 //! order, which is what later allows several computers to synchronize.
@@ -26,6 +26,7 @@ mod error;
 mod members;
 mod migrations;
 mod operations;
+mod places;
 mod projects;
 mod tasks;
 
@@ -33,5 +34,6 @@ pub use conversations::SqliteConversationRepository;
 pub use database::Database;
 pub use members::SqliteMemberRepository;
 pub use operations::{DeviceId, Operation};
+pub use places::SqlitePlacesRepository;
 pub use projects::SqliteProjectRepository;
 pub use tasks::SqliteTaskRepository;

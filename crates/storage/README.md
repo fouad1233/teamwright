@@ -1,11 +1,12 @@
 # teamwright-storage
 
-Stores Teamwright's projects, tasks, teams and the conversations with
-specialists in SQLite, and appends every
-change to an operation log.
+Stores Teamwright's projects, tasks, teams, the folders of the projects and
+the conversations with specialists in SQLite, and appends every change to an
+operation log.
 
 It implements the interfaces `ProjectRepository`, `TaskRepository`,
-`MemberRepository` and `ConversationRepository` that the application crate declares. Nothing outside this crate knows that SQLite is
+`MemberRepository`, `ConversationRepository` and `PlacesRepository` that the
+application crate declares. Nothing outside this crate knows that SQLite is
 involved.
 
 ## What is in it
@@ -19,6 +20,7 @@ involved.
 | `tasks` | `SqliteTaskRepository` |
 | `members` | `SqliteMemberRepository` |
 | `conversations` | `SqliteConversationRepository`: conversations, their turns, the steps of the turns and the questions they asked the manager |
+| `places` | `SqlitePlacesRepository`: the work folder and the reference folders chosen for each project |
 | `operations` | The operation log, the hybrid logical clock, `DeviceId` |
 | `codec` | The text forms of moments, dates, identifiers and enumerations |
 | `error` | The crate's internal error type and its conversion to `StorageError` |
@@ -27,7 +29,8 @@ involved.
 
 - **Current state** is in ordinary tables: `projects`, `statuses`, `tasks`,
   `task_dependencies`, `members`, `conversations`, `turns`, `turn_steps`,
-  `turn_decisions`, `turn_decision_options`.
+  `turn_decisions`, `turn_decision_options`, `project_places`,
+  `project_reference_folders`.
   The schema with its conventions is in
   [`schema/0001_initial.sql`](src/schema/0001_initial.sql); later files in
   that folder add to it.
@@ -63,6 +66,18 @@ involved.
   step that is new or changed (a tool use whose outcome became known) is
   written and logged, and a step the turn no longer has is deleted and
   logged as such. A logged turn does not contain its steps.
+- **The folders of a project are facts about this computer.** The work
+  folder the manager chose is a row in `project_places` (NULL for the
+  folder Teamwright gives the project), and the reference folders a row
+  each in `project_reference_folders`, keyed by project and position (version
+  6). Paths are kept as text, as the manager gave them. Saving updates the
+  rows in place and deletes the positions the list no longer has. Every
+  write is logged as the entity `project_places` with the identifier of the
+  project and the complete state: the work folder and the whole list. A path
+  on this computer means nothing on another one, so **these operations must
+  not be applied on another computer** when synchronizing is built.
+  Deleting a project removes and logs them first, as it does for the
+  conversations; the folders on disk are never touched.
 - **The question a turn asked the manager** has a row in `turn_decisions`,
   keyed by the turn, and its options a row each in `turn_decision_options`.
   It is written only when it differs from what is stored: when it is asked,
