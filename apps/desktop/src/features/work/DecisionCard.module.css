@@ -104,3 +104,51 @@
   display: flex;
   justify-content: flex-end;
 }
+
+/* A decision appears the way a draftsman marks where something will go:
+   the rule is drawn down first, then the words come up into place, and the
+   options one after the other (`--place` counts them). */
+.card::before {
+  transform-origin: top;
+  animation: draw-down var(--duration-arrive) var(--ease-settle) both;
+}
+
+.asks,
+.question,
+.reason,
+.note,
+.actions {
+  animation: rise var(--duration-settle) var(--ease-arrive) both;
+  animation-delay: calc(var(--delay-words) + var(--place, 0) * var(--stagger));
+}
+
+@keyframes draw-down {
+  from {
+    transform: scaleY(0);
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(var(--arrive-travel));
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* With motion turned down, the rule and the words fade in together. */
+@media (prefers-reduced-motion: reduce) {
+  .card::before,
+  .asks,
+  .question,
+  .reason,
+  .note,
+  .actions {
+    animation: fade-in var(--duration-reveal) linear both !important;
+  }
+}

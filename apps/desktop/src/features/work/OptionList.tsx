@@ -1,4 +1,4 @@
-import { useId } from 'react';
+import { useId, type CSSProperties } from 'react';
 
 import type { DecisionOption } from '@/shared/api/types';
 import { classNames } from '@/shared/lib/classNames';
@@ -17,6 +17,13 @@ interface OptionListProps {
   /** What is picked, or nothing yet. */
   pick: OptionPick | undefined;
   onPick: (pick: OptionPick) => void;
+  /** Lets the options come up one after the other, as part of a decision that appears. */
+  isAppearing?: boolean;
+}
+
+/** The place of an option in the order in which they come up, from 1. */
+function placeOf(place: number): CSSProperties {
+  return { '--place': place + 1 } as CSSProperties;
 }
 
 /**
@@ -24,16 +31,28 @@ interface OptionListProps {
  * a small card with what it leads to, and one more for an answer in the
  * manager's own words.
  */
-export function OptionList({ label, options, recommended, pick, onPick }: OptionListProps) {
+export function OptionList({
+  label,
+  options,
+  recommended,
+  pick,
+  onPick,
+  isAppearing = false,
+}: OptionListProps) {
   const name = useId();
 
   return (
-    <div className={styles.options} role="radiogroup" aria-label={label}>
+    <div
+      className={classNames(styles.options, isAppearing && styles.appearing)}
+      role="radiogroup"
+      aria-label={label}
+    >
       {options.map((option, place) => (
         <label
           // The options of a question never change, so their place identifies them.
           key={place}
           className={classNames(styles.option, pick === place && styles.picked)}
+          style={placeOf(place)}
         >
           <input
             type="radio"
@@ -55,7 +74,10 @@ export function OptionList({ label, options, recommended, pick, onPick }: Option
           )}
         </label>
       ))}
-      <label className={classNames(styles.option, pick === 'own words' && styles.picked)}>
+      <label
+        className={classNames(styles.option, pick === 'own words' && styles.picked)}
+        style={placeOf(options.length)}
+      >
         <input
           type="radio"
           name={name}

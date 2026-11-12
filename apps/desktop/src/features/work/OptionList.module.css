@@ -68,3 +68,30 @@
   font-size: var(--text-small);
   line-height: 1.45;
 }
+
+/* As part of a decision that appears, the options come up into place one
+   after the other, after the question. */
+.appearing .option {
+  animation: rise var(--duration-settle) var(--ease-arrive) both;
+  animation-delay: calc(var(--delay-words) + var(--place, 0) * var(--stagger));
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(var(--arrive-travel));
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* With motion turned down, they fade in together with the question. */
+@media (prefers-reduced-motion: reduce) {
+  .appearing .option {
+    animation: fade-in var(--duration-reveal) linear both !important;
+  }
+}

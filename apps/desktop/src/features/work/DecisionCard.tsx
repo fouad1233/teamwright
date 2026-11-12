@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useState, type CSSProperties, type FormEvent } from 'react';
 
 import type { DecisionRequest, NewDecisionAnswer } from '@/shared/api/types';
 import { classNames } from '@/shared/lib/classNames';
@@ -31,6 +31,9 @@ export function DecisionCard({ decision, askedBy, onDecide }: DecisionCardProps)
   // An option is an answer by itself. Words alone are one too. Nothing
   // picked and nothing said is not.
   const canDecide = !isSending && (typeof pick === 'number' || saysSomething);
+  // The words of the manager and the button come up with the last option,
+  // the one for an answer in words.
+  const afterTheOptions = { '--place': decision.options.length + 1 } as CSSProperties;
 
   async function decide() {
     if (!canDecide) {
@@ -66,10 +69,12 @@ export function DecisionCard({ decision, askedBy, onDecide }: DecisionCardProps)
         recommended={decision.recommended}
         pick={pick}
         onPick={setPick}
+        isAppearing
       />
 
       <textarea
         className={styles.note}
+        style={afterTheOptions}
         aria-label="Your words"
         placeholder={
           pick === 'own words' ? 'What you decide, in your own words…' : 'Add a note, if you like…'
@@ -81,7 +86,7 @@ export function DecisionCard({ decision, askedBy, onDecide }: DecisionCardProps)
         rows={2}
       />
 
-      <div className={styles.actions}>
+      <div className={styles.actions} style={afterTheOptions}>
         <Button variant="primary" type="submit" disabled={!canDecide}>
           Decide
         </Button>
