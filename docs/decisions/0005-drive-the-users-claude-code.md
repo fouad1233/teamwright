@@ -2,6 +2,8 @@
 
 - Status: accepted
 - Date: 2026-11-11
+- Changed by: [0010](0010-one-process-for-each-turn.md), which runs one
+  process for each turn instead of one for each active team member
 
 ## Context
 

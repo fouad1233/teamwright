@@ -25,6 +25,8 @@ was considered.
 | [0007](0007-local-first-storage.md) | Store locally and sync through a user-owned folder | Accepted |
 | [0008](0008-budgets-in-tokens.md) | Measure usage and budgets in tokens | Accepted |
 | [0009](0009-a-team-per-project.md) | Give every project a team of its own, with agents and people as one kind of member | Accepted |
+| [0010](0010-one-process-for-each-turn.md) | Run one Claude Code process for each turn | Accepted |
+| [0011](0011-what-a-specialist-may-do.md) | Let a specialist read and write in the folder of the project, and nothing else | Accepted |
 
 ## Template
 
