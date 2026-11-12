@@ -349,8 +349,9 @@ export class DemoBackend implements Backend {
     return this.answer(() => this.environment.pickFiles?.() ?? [SAMPLE_FILE]);
   }
 
-  showFolder(): Promise<void> {
+  showWorkFolder(projectId: Id): Promise<void> {
     return this.answer(() => {
+      this.requireProject(projectId);
       throw new BackendError('not_available', 'the demo has no file manager to show a folder in');
     });
   }

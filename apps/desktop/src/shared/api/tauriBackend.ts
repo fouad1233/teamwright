@@ -163,8 +163,8 @@ export class TauriBackend implements Backend {
     return picked ?? [];
   }
 
-  showFolder(folder: string): Promise<void> {
-    return call('show_folder', { folder });
+  showWorkFolder(projectId: Id): Promise<void> {
+    return call('show_work_folder', { projectId });
   }
 
   listMembers(projectId: Id): Promise<Member[]> {

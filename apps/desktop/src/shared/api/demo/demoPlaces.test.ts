@@ -184,7 +184,7 @@ describe('the folders of a project in the DemoBackend', () => {
   });
 
   it('has no file manager to show a folder in', async () => {
-    expect((await refusal(backend.showFolder())).code).toBe('not_available');
+    expect((await refusal(backend.showWorkFolder(project.id))).code).toBe('not_available');
   });
 });
 

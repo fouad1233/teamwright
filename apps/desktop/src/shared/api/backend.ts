@@ -71,8 +71,12 @@ export interface Backend {
   chooseFolder(): Promise<string | null>;
   /** Lets the manager pick files of this computer. Resolves to their paths. */
   chooseFiles(): Promise<string[]>;
-  /** Shows a folder in the file manager of this computer. */
-  showFolder(folder: string): Promise<void>;
+  /**
+   * Shows the work folder of a project in the file manager of this
+   * computer. The interface names the project and not a folder, so that it
+   * can never make the program open a place the manager did not choose.
+   */
+  showWorkFolder(projectId: Id): Promise<void>;
 
   /**
    * Adds a status to the workflow of a project. It goes behind the last
