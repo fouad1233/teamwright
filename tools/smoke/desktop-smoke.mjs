@@ -152,6 +152,31 @@ try {
     JSON.stringify(namesake),
   );
 
+  const profiled = await window.command('set_member_profile', {
+    memberId: engineer.id,
+    profile: { model: ' sonnet ', effort: 'high' },
+  });
+  check(
+    'a specialist is given a model and an effort',
+    engineer?.model === null && profiled.ok?.model === 'sonnet' && profiled.ok.effort === 'high',
+    JSON.stringify(profiled),
+  );
+  const personWithModel = await window.command('set_member_profile', {
+    memberId: person.id,
+    profile: { model: 'sonnet', effort: null },
+  });
+  const twoWords = await window.command('set_member_profile', {
+    memberId: engineer.id,
+    profile: { model: 'the best one', effort: null },
+  });
+  check(
+    'a person gets no model, and the name of a model is one word',
+    personWithModel.refused?.code === 'no_specialist' &&
+      personWithModel.refused.message === 'Dana is not an AI specialist' &&
+      twoWords.refused?.code === 'rule_broken',
+    JSON.stringify([personWithModel, twoWords]),
+  );
+
   const given = await window.command('assign_task', {
     taskId: firmware.id,
     assignee: { kind: 'member', memberId: engineer.id },
@@ -395,7 +420,11 @@ try {
   const team = (await window.command('list_members', { projectId: projects[0]?.id })).ok;
   check(
     'the team survives a restart',
-    team?.length === 1 && team[0].name === 'Hardware engineer' && team[0].color === 'teal',
+    team?.length === 1 &&
+      team[0].name === 'Hardware engineer' &&
+      team[0].color === 'teal' &&
+      team[0].model === 'sonnet' &&
+      team[0].effort === 'high',
     JSON.stringify(team),
   );
   check(

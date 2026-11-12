@@ -1,15 +1,16 @@
 import { useState, type FormEvent } from 'react';
 
-import type { Member, MemberKind, Project } from '@/shared/api/types';
+import type { Effort, Member, MemberKind, Project } from '@/shared/api/types';
 import { classNames } from '@/shared/lib/classNames';
 import { Button } from '@/shared/ui/Button';
 import { Dialog } from '@/shared/ui/Dialog';
-import { Field, TextArea, TextInput } from '@/shared/ui/Field';
+import { ChoiceInput, Field, TextArea, TextInput } from '@/shared/ui/Field';
+import { ChoiceMenu, type Choice } from '@/shared/ui/Menu';
 import { describeFailure } from '@/shared/ui/Toast';
 
 import { MemberAvatar } from './Assignee';
 import styles from './MemberDialog.module.css';
-import { kindLabel } from './teamModel';
+import { EFFORTS, MODEL_NAMES, effortLabel, kindLabel, modelLabel } from './teamModel';
 import { useTeamCommands } from './teamQueries';
 
 interface KindChoice {
@@ -34,6 +35,31 @@ const KIND_CHOICES: KindChoice[] = [
     example: 'Dana Ortiz',
   },
 ];
+
+/**
+ * The value that stands, in a menu, for leaving a choice to the program
+ * that runs the specialists. A menu chooses among texts, and "nothing" is
+ * not one.
+ */
+const LEFT_TO_THE_PROGRAM = 'default';
+
+const EFFORT_CHOICES: Choice<string>[] = [
+  { value: LEFT_TO_THE_PROGRAM, label: 'The default' },
+  ...EFFORTS.map((effort) => ({ value: effort, label: effortLabel(effort) })),
+];
+
+/**
+ * The models the menu offers: the default, the short names, and the model
+ * the member has now if it is none of those.
+ */
+function modelChoices(current: string | null): Choice<string>[] {
+  const names =
+    current === null || MODEL_NAMES.includes(current) ? MODEL_NAMES : [...MODEL_NAMES, current];
+  return [
+    { value: LEFT_TO_THE_PROGRAM, label: 'The default of Claude Code' },
+    ...names.map((name) => ({ value: name, label: modelLabel(name) })),
+  ];
+}
 
 interface MemberDialogProps {
   open: boolean;
@@ -67,6 +93,8 @@ function MemberForm({ project, member, onDone }: MemberFormProps) {
   const [kind, setKind] = useState<MemberKind>(member?.kind ?? 'agent');
   const [name, setName] = useState(member?.name ?? '');
   const [responsibility, setResponsibility] = useState(member?.responsibility ?? '');
+  const [model, setModel] = useState(member?.model ?? null);
+  const [effort, setEffort] = useState(member?.effort ?? null);
   const [refusal, setRefusal] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const chosen = KIND_CHOICES.find((choice) => choice.kind === kind);
@@ -75,10 +103,12 @@ function MemberForm({ project, member, onDone }: MemberFormProps) {
     setIsSubmitting(true);
     setRefusal(null);
     try {
+      // Only an AI specialist runs on a model. A person is given neither.
+      const profile = kind === 'agent' ? { model, effort } : { model: null, effort: null };
       if (member) {
-        await commands.change(member, { name, responsibility });
+        await commands.change(member, { name, responsibility, ...profile });
       } else {
-        await commands.add({ name, kind, responsibility });
+        await commands.add({ name, kind, responsibility, ...profile });
       }
       onDone();
     } catch (failure) {
@@ -146,6 +176,43 @@ function MemberForm({ project, member, onDone }: MemberFormProps) {
           rows={2}
         />
       </Field>
+
+      {kind === 'agent' && (
+        <div className={styles.profile}>
+          <Field label="Model">
+            <ChoiceMenu
+              label="Model"
+              choices={modelChoices(member?.model ?? null)}
+              value={model ?? LEFT_TO_THE_PROGRAM}
+              onChoose={(chosenModel) => {
+                setModel(chosenModel === LEFT_TO_THE_PROGRAM ? null : chosenModel);
+              }}
+            >
+              <ChoiceInput aria-label="Model" isEmpty={model === null}>
+                {model === null ? 'The default of Claude Code' : modelLabel(model)}
+              </ChoiceInput>
+            </ChoiceMenu>
+          </Field>
+          <Field label="Effort">
+            <ChoiceMenu
+              label="Effort"
+              choices={EFFORT_CHOICES}
+              value={effort ?? LEFT_TO_THE_PROGRAM}
+              onChoose={(chosenEffort) => {
+                setEffort(chosenEffort === LEFT_TO_THE_PROGRAM ? null : (chosenEffort as Effort));
+              }}
+            >
+              <ChoiceInput aria-label="Effort" isEmpty={effort === null}>
+                {effort === null ? 'The default' : effortLabel(effort)}
+              </ChoiceInput>
+            </ChoiceMenu>
+          </Field>
+          <p className={styles.profileNote}>
+            What a specialist uses counts against your Claude plan. A lighter model and less effort
+            use less of it, and are enough for plain work.
+          </p>
+        </div>
+      )}
 
       {refusal !== null && (
         <p className={styles.refusal} role="alert">

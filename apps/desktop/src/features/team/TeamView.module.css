@@ -87,6 +87,13 @@
   color: var(--ink-soft);
 }
 
+/* How a specialist runs, under what it is. */
+.profile {
+  display: block;
+  color: var(--ink-faint);
+  font-size: var(--text-small);
+}
+
 .empty {
   max-width: 560px;
   padding: var(--space-4) 0 var(--space-2);

@@ -2,7 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo } from 'react';
 
 import { useBackend } from '@/shared/api/BackendProvider';
-import type { Id, Member, NewMember } from '@/shared/api/types';
+import type { Effort, Id, Member, NewMember } from '@/shared/api/types';
 import { describeFailure, useNotifier } from '@/shared/ui/Toast';
 
 import { tasksKey } from '../tasks/taskQueries';
@@ -22,6 +22,9 @@ export function useTeam(projectId: Id) {
 export interface MemberChanges {
   name: string;
   responsibility: string;
+  /** The model and the effort of an AI specialist. A person has neither. */
+  model: string | null;
+  effort: Effort | null;
 }
 
 /**
@@ -33,7 +36,7 @@ export interface MemberChanges {
 export interface TeamCommands {
   /** Puts someone on the team. */
   add(member: Omit<NewMember, 'projectId'>): Promise<Member>;
-  /** Gives a member another name, another responsibility, or both. */
+  /** Changes what differs: the name, the responsibility, the way a specialist runs. */
   change(member: Member, changes: MemberChanges): Promise<void>;
   /**
    * Takes a member off the team. Its tasks are given to nobody. Resolves to
@@ -72,6 +75,14 @@ export function useTeamCommands(projectId: Id): TeamCommands {
         }
         if (changes.responsibility.trim() !== member.responsibility) {
           show(await backend.setMemberResponsibility(member.id, changes.responsibility));
+        }
+        if (changes.model !== member.model || changes.effort !== member.effort) {
+          show(
+            await backend.setMemberProfile(member.id, {
+              model: changes.model,
+              effort: changes.effort,
+            }),
+          );
         }
       },
       remove: async (memberId) => {

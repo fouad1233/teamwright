@@ -71,6 +71,20 @@
   font-size: var(--text-small);
 }
 
+/* How a specialist runs: two choices side by side, and a line under both
+   about what they cost. */
+.profile {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2) var(--space-4);
+}
+
+.profileNote {
+  grid-column: 1 / -1;
+  color: var(--ink-faint);
+  font-size: var(--text-small);
+}
+
 .refusal {
   padding: var(--space-2) var(--space-3);
   border-left: 3px solid var(--danger);

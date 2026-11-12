@@ -17,7 +17,7 @@ import { MANAGER_NAME, ManagerAvatar, MemberAvatar } from './Assignee';
 import { MemberDialog } from './MemberDialog';
 import { useTeamMembers } from './TeamContext';
 import styles from './TeamView.module.css';
-import { kindLabel, tasksOfManager, tasksOfMember } from './teamModel';
+import { kindLabel, profileInWords, tasksOfManager, tasksOfMember } from './teamModel';
 import { useTeamCommands } from './teamQueries';
 
 interface TeamViewProps {
@@ -132,7 +132,12 @@ export function TeamView({ project, tasks }: TeamViewProps) {
                   </div>
                 </div>
               </td>
-              <td className={styles.kind}>{kindLabel(member.kind)}</td>
+              <td className={styles.kind}>
+                {kindLabel(member.kind)}
+                {profileInWords(member) !== null && (
+                  <span className={styles.profile}>{profileInWords(member)}</span>
+                )}
+              </td>
               <td>
                 <TaskTally project={project} tasks={tasksOfMember(tasks, member.id)} />
               </td>

@@ -41,3 +41,36 @@
   line-height: 1.5;
   resize: vertical;
 }
+
+/* A field whose value comes from a menu: the value at the left, and a mark
+   at the right that there is more to choose from. */
+.choice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  text-align: left;
+}
+
+.choice[data-state='open'] {
+  border-color: var(--brass);
+}
+
+.choice svg {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  color: var(--ink-faint);
+  stroke-width: 1.75;
+}
+
+.chosen {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.noChoice .chosen {
+  color: var(--ink-soft);
+}
