@@ -63,7 +63,12 @@ impl AppState {
         let clock = Arc::new(SystemClock);
 
         Ok(Self {
-            projects: ProjectService::new(project_repository.clone(), clock.clone()),
+            projects: ProjectService::new(
+                project_repository.clone(),
+                task_repository.clone(),
+                member_repository.clone(),
+                clock.clone(),
+            ),
             tasks: TaskService::new(
                 project_repository.clone(),
                 task_repository.clone(),

@@ -8,10 +8,10 @@ use std::str::FromStr;
 
 use chrono::SecondsFormat;
 use serde::{Deserialize, Serialize};
-use teamwright_application::{NewMember, NewProject, NewTask, WorkflowTemplate};
+use teamwright_application::{NewMember, NewProject, NewTask, StatusProperties, WorkflowTemplate};
 use teamwright_domain::{
-    Assignee, CalendarDate, DomainError, Member, MemberKind, Priority, Project, Status, Task,
-    Timestamp,
+    Assignee, CalendarDate, Color, DomainError, Member, MemberKind, Priority, Project, Status,
+    StatusCategory, Task, Timestamp,
 };
 
 use crate::error::CommandError;
@@ -205,6 +205,28 @@ impl TryFrom<NewMemberInput> for NewMember {
             name: input.name,
             kind: input.kind.parse::<MemberKind>()?,
             responsibility: input.responsibility,
+        })
+    }
+}
+
+/// What the interface sends to add or change a status: its name, category
+/// and color.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StatusPropertiesInput {
+    name: String,
+    category: String,
+    color: String,
+}
+
+impl TryFrom<StatusPropertiesInput> for StatusProperties {
+    type Error = CommandError;
+
+    fn try_from(input: StatusPropertiesInput) -> Result<Self, Self::Error> {
+        Ok(Self {
+            name: input.name,
+            category: input.category.parse::<StatusCategory>()?,
+            color: input.color.parse::<Color>()?,
         })
     }
 }
