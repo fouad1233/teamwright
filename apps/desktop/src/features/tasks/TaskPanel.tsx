@@ -18,6 +18,9 @@ import {
   MemberAvatar,
   NOBODY_NAME,
 } from '../team/Assignee';
+import { AreaChoice } from '../areas/AreaChoice';
+import { showsAreas } from '../areas/areaModel';
+import { useAreas } from '../areas/areaQueries';
 import { PointsEditor } from '../sprints/PointsEditor';
 import { useSprintCommands, useSprints } from '../sprints/sprintQueries';
 import { useTeamMembers } from '../team/TeamContext';
@@ -56,6 +59,8 @@ export function TaskPanel({ project, task, tasks, onClose }: TaskPanelProps) {
   // the way calls the closing off.
   const { isLeaving, leave } = useLeaving(panel, task.id, onClose);
   const [isConfirmingDeletion, setIsConfirmingDeletion] = useState(false);
+  // The area of the task is shown once the project has two.
+  const areas = useAreas(project.id).data ?? [];
 
   const tasksById = useMemo(() => indexById(tasks), [tasks]);
   const reference = taskReference(project, task);
@@ -239,6 +244,12 @@ export function TaskPanel({ project, task, tasks, onClose }: TaskPanelProps) {
               }}
             />
           </Property>
+
+          {showsAreas(areas) && (
+            <Property label="Area">
+              <AreaChoice project={project} areas={areas} task={task} parent={parent} />
+            </Property>
+          )}
 
           <Property label="Sprint">
             <SprintChoice project={project} task={task} parent={parent} />

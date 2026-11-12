@@ -157,6 +157,13 @@
   content: '';
 }
 
+/* The project whose area is open: it is where one is, but the mark of
+   brass belongs to the area under it. */
+.holdsOpenArea {
+  color: var(--ink);
+  font-weight: 550;
+}
+
 .projectName {
   overflow: hidden;
   text-overflow: ellipsis;

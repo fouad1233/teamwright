@@ -1,5 +1,6 @@
 import type { CalendarDate, Id, Project, Task } from '@/shared/api/types';
 
+import { useOpenArea } from '../areas/AreaContext';
 import styles from './Standing.module.css';
 import { TaskLines } from './TaskLines';
 
@@ -19,9 +20,12 @@ interface StandingProps {
  * late.
  */
 export function Standing({ project, sentences, atRisk, today, onOpenTask }: StandingProps) {
+  // With an area open, the tasks counted are those of the area.
+  const area = useOpenArea();
+  const heading = `Where ${area === undefined ? 'the project' : area.name} stands`;
   return (
-    <section className={styles.standing} aria-label="Where the project stands">
-      <h2 className="label">Where the project stands</h2>
+    <section className={styles.standing} aria-label={heading}>
+      <h2 className="label">{heading}</h2>
       <p className={styles.words} data-selectable>
         {sentences.map((sentence) => (
           <span key={sentence} className={styles.sentence}>

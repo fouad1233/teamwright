@@ -33,6 +33,57 @@
   white-space: nowrap;
 }
 
+/* With an area open, the heading says where one is: the project, a step,
+   and the area. The project is the way back to every area. */
+.withArea {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  overflow: hidden;
+  min-width: 0;
+}
+
+/* When room runs short, the name of the project gives way first: the area
+   is where one is. */
+.projectOfArea {
+  display: flex;
+  flex: 0 1 auto;
+  min-width: 1.5em;
+}
+
+.up {
+  overflow: hidden;
+  min-width: 0;
+  padding: 0 var(--space-1);
+  margin: 0 calc(-1 * var(--space-1));
+  border-radius: var(--radius-control);
+  color: var(--ink-soft);
+  font: inherit;
+  letter-spacing: inherit;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition:
+    background-color 100ms ease,
+    color 100ms ease;
+}
+
+.up:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+
+.step {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  color: var(--ink-faint);
+  stroke-width: 1.5;
+}
+
+.areaName {
+  flex: none;
+}
+
 .key {
   flex: none;
   padding: 2px 6px;

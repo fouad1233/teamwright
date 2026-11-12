@@ -1,0 +1,8 @@
+/* The area of a subtask, which cannot be chosen: plain and quiet, like the
+   sprint of a subtask. */
+.fixed {
+  overflow: hidden;
+  color: var(--ink-soft);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

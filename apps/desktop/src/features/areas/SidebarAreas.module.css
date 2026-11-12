@@ -1,0 +1,65 @@
+/* The areas hang under the name of their project: indented, smaller, and
+   joined to it by a hairline. */
+.areas {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 1px 0 var(--space-1) var(--space-4);
+}
+
+.areas::before {
+  position: absolute;
+  top: 0;
+  bottom: var(--space-2);
+  left: 15px;
+  width: 1px;
+  background: var(--rule);
+  content: '';
+}
+
+.area {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 28px;
+  padding: 0 var(--space-2) 0 10px;
+  border-radius: var(--radius-control);
+  color: var(--ink-soft);
+  font-size: var(--text-small);
+  text-align: left;
+  transition:
+    background-color 100ms ease,
+    color 100ms ease;
+}
+
+.area:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+
+.open,
+.open:hover {
+  background: var(--pressed);
+  color: var(--ink);
+  font-weight: 550;
+}
+
+/* Brass marks where you are, as it does for a project. */
+.open::before {
+  position: absolute;
+  top: 7px;
+  bottom: 7px;
+  left: 0;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--brass);
+  content: '';
+}
+
+.name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

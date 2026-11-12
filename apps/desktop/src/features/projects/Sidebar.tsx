@@ -8,6 +8,9 @@ import { classNames } from '@/shared/lib/classNames';
 import { IconButton } from '@/shared/ui/Button';
 import { Logo } from '@/shared/ui/Logo';
 
+import { areaToShow, showsAreas } from '../areas/areaModel';
+import { useAreas } from '../areas/areaQueries';
+import { SidebarAreas } from '../areas/SidebarAreas';
 import { SyncStateLine } from '../sync/SyncStateLine';
 import { useConversationsWaiting } from '../work/workQueries';
 import { ArchivedProjectsDialog } from './ArchivedProjectsDialog';
@@ -78,24 +81,13 @@ export function Sidebar({ projects, activeProjectId }: SidebarProps) {
           <p className={styles.empty}>No projects yet.</p>
         ) : (
           <ul className={styles.projects}>
-            {projects.map((project) => {
-              const isActive = project.id === activeProjectId;
-              return (
-                <li key={project.id}>
-                  <button
-                    type="button"
-                    className={classNames(styles.project, isActive && styles.activeProject)}
-                    aria-current={isActive ? 'page' : undefined}
-                    onClick={() => {
-                      navigation.openProject(project.id);
-                    }}
-                  >
-                    <span className={styles.projectName}>{project.name}</span>
-                    <span className={styles.projectKey}>{project.key}</span>
-                  </button>
-                </li>
-              );
-            })}
+            {projects.map((project) => (
+              <ProjectEntry
+                key={project.id}
+                project={project}
+                isActive={project.id === activeProjectId}
+              />
+            ))}
           </ul>
         )}
 
@@ -139,5 +131,51 @@ export function Sidebar({ projects, activeProjectId }: SidebarProps) {
         }}
       />
     </aside>
+  );
+}
+
+interface ProjectEntryProps {
+  project: Project;
+  /** Whether the project is the one on screen. */
+  isActive: boolean;
+}
+
+/**
+ * One project in the list, with its areas indented under it once it has
+ * two. Brass marks where the manager is: the project when all of it is
+ * shown, or the area that is open.
+ */
+function ProjectEntry({ project, isActive }: ProjectEntryProps) {
+  const navigation = useNavigation();
+  const areas = useAreas(project.id).data ?? [];
+  const openArea = isActive ? areaToShow(areas, navigation.areaId) : undefined;
+
+  return (
+    <li>
+      <button
+        type="button"
+        className={classNames(
+          styles.project,
+          isActive && (openArea ? styles.holdsOpenArea : styles.activeProject),
+        )}
+        aria-current={isActive && !openArea ? 'page' : undefined}
+        title={openArea ? 'Show every area of the project' : undefined}
+        onClick={() => {
+          navigation.openProject(project.id);
+        }}
+      >
+        <span className={styles.projectName}>{project.name}</span>
+        <span className={styles.projectKey}>{project.key}</span>
+      </button>
+      {showsAreas(areas) && (
+        <SidebarAreas
+          areas={areas}
+          openAreaId={openArea?.id ?? null}
+          onOpen={(areaId) => {
+            navigation.openArea(project.id, areaId);
+          }}
+        />
+      )}
+    </li>
   );
 }

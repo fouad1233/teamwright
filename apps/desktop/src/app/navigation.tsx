@@ -28,6 +28,13 @@ interface Location {
   place: 'project' | 'inbox' | 'computers';
   /** The project that is open, or was open before the inbox, if any. */
   projectId: Id | null;
+  /**
+   * The area of that project whose tasks are shown, or nothing for every
+   * area. It belongs to the project: it stays while the inbox or the
+   * computers are open. An area the project does not have (any more) means
+   * every area.
+   */
+  areaId: Id | null;
   /** What the open project shows. */
   showing: Showing;
   /** The task whose details are open, if any. */
@@ -43,7 +50,13 @@ interface Location {
  * `onClose={navigation.closeTask}`.
  */
 export interface Navigation extends Location {
+  /**
+   * Opens a project. Coming back to it from the inbox or the computers
+   * brings back the area that was open; otherwise every area is shown.
+   */
   openProject: (projectId: Id) => void;
+  /** Opens one area of a project: every view then shows only its tasks. */
+  openArea: (projectId: Id, areaId: Id) => void;
   /** Opens the inbox. The project that was open stays the one to come back to. */
   openInbox: () => void;
   /** Opens the computers. The project that was open stays the one to come back to. */
@@ -73,6 +86,7 @@ const FIRST_VIEW: Showing = { view: null };
 const STARTING_LOCATION: Location = {
   place: 'project',
   projectId: null,
+  areaId: null,
   showing: FIRST_VIEW,
   taskId: null,
   chatMemberId: null,
@@ -98,10 +112,15 @@ function restoreLocation(): Location {
     if (typeof stored !== 'object' || stored === null) {
       return STARTING_LOCATION;
     }
-    const { projectId, showing } = stored as { projectId?: unknown; showing?: unknown };
+    const { projectId, areaId, showing } = stored as {
+      projectId?: unknown;
+      areaId?: unknown;
+      showing?: unknown;
+    };
     return {
       place: 'project',
       projectId: typeof projectId === 'string' ? projectId : null,
+      areaId: typeof areaId === 'string' ? areaId : null,
       showing: restoreShowing(showing),
       taskId: null,
       chatMemberId: null,
@@ -114,14 +133,19 @@ function restoreLocation(): Location {
 }
 
 /**
- * Remembers the project and what it shows. An open task or conversation is
- * not remembered, and neither is the inbox: the application opens on a
- * project. A view is remembered by its identifier; if it has been removed by
- * the next session, the project opens on its first view.
+ * Remembers the project, its open area and what it shows. An open task or
+ * conversation is not remembered, and neither is the inbox: the application
+ * opens on a project. A view and an area are remembered by their
+ * identifiers; if one has been removed by the next session, the project
+ * opens on its first view, or on every area.
  */
 function rememberLocation(location: Location): void {
   try {
-    const remembered = { projectId: location.projectId, showing: location.showing };
+    const remembered = {
+      projectId: location.projectId,
+      areaId: location.areaId,
+      showing: location.showing,
+    };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(remembered));
   } catch {
     // Without storage the location is simply not remembered.
@@ -145,10 +169,33 @@ export function NavigationProvider({ children }: { children: ReactNode }) {
     const go = (change: Partial<Location>) => {
       setLocation((current) => ({ ...current, ...change }));
     };
+    /** Goes into a project, keeping its open area only if it is the same project. */
+    const enter = (projectId: Id, change: Partial<Location>) => {
+      setLocation((current) => ({
+        ...current,
+        place: 'project',
+        projectId,
+        areaId: current.projectId === projectId ? current.areaId : null,
+        ...change,
+      }));
+    };
     return {
       ...location,
       openProject: (projectId) => {
-        go({ place: 'project', projectId, taskId: null, chatMemberId: null });
+        setLocation((current) => ({
+          ...current,
+          place: 'project',
+          projectId,
+          // Back from the inbox or the computers, the project shows what it
+          // showed. Pressed while it is open, it shows every area.
+          areaId:
+            current.place !== 'project' && current.projectId === projectId ? current.areaId : null,
+          taskId: null,
+          chatMemberId: null,
+        }));
+      },
+      openArea: (projectId, areaId) => {
+        go({ place: 'project', projectId, areaId, taskId: null, chatMemberId: null });
       },
       openInbox: () => {
         go({ place: 'inbox', taskId: null, chatMemberId: null });
@@ -157,16 +204,10 @@ export function NavigationProvider({ children }: { children: ReactNode }) {
         go({ place: 'computers', taskId: null, chatMemberId: null });
       },
       openTaskOf: (projectId, taskId) => {
-        go({ place: 'project', projectId, taskId, chatMemberId: null });
+        enter(projectId, { taskId, chatMemberId: null });
       },
       openAdvisorOf: (projectId) => {
-        go({
-          place: 'project',
-          projectId,
-          showing: { place: 'advisor' },
-          taskId: null,
-          chatMemberId: null,
-        });
+        enter(projectId, { showing: { place: 'advisor' }, taskId: null, chatMemberId: null });
       },
       showView: (viewId) => {
         go({ showing: { view: viewId } });

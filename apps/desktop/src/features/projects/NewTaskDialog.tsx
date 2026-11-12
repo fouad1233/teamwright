@@ -6,6 +6,7 @@ import { Button } from '@/shared/ui/Button';
 import { Dialog } from '@/shared/ui/Dialog';
 import { Field, TextInput } from '@/shared/ui/Field';
 
+import { useOpenArea } from '../areas/AreaContext';
 import { useTaskCommands } from '../tasks/taskQueries';
 import styles from './NewTaskDialog.module.css';
 
@@ -45,6 +46,9 @@ function NewTaskForm({ project, assignee, onDone }: NewTaskFormProps) {
   const [title, setTitle] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const firstStatus = project.statuses.find((status) => status.category === 'todo');
+  // A task opened while an area is open goes into that area.
+  const area = useOpenArea();
+  const where = area === undefined ? '' : ` in the area ${area.name}`;
 
   async function createTask() {
     setIsSubmitting(true);
@@ -67,7 +71,7 @@ function NewTaskForm({ project, assignee, onDone }: NewTaskFormProps) {
         label="Title"
         hint={
           firstStatus
-            ? `The task starts in "${firstStatus.name}". Assign it and add details once it is open.`
+            ? `The task starts in "${firstStatus.name}"${where}. Assign it and add details once it is open.`
             : undefined
         }
       >

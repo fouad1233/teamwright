@@ -5,6 +5,7 @@ import { useBackend } from '@/shared/api/BackendProvider';
 import type { Assignee, CalendarDate, Id, NewTask, Priority, Task } from '@/shared/api/types';
 import { describeFailure, useNotifier } from '@/shared/ui/Toast';
 
+import { useOpenArea } from '../areas/AreaContext';
 import { withMovedTask, withTask } from './taskModel';
 
 /** The name under which the tasks of a project are cached. */
@@ -54,11 +55,16 @@ export interface TaskCommands {
   remove(taskId: Id): Promise<boolean>;
 }
 
-/** The commands for the tasks of a project. */
+/**
+ * The commands for the tasks of a project. A task opened while an area is
+ * open goes into that area, unless it names one or is a subtask, which goes
+ * into the area of its task.
+ */
 export function useTaskCommands(projectId: Id): TaskCommands {
   const backend = useBackend();
   const queryClient = useQueryClient();
   const notifier = useNotifier();
+  const openAreaId = useOpenArea()?.id;
 
   return useMemo(() => {
     const queryKey = tasksKey(projectId);
@@ -91,7 +97,10 @@ export function useTaskCommands(projectId: Id): TaskCommands {
 
     return {
       create: async (task) => {
-        const created = await attempt(() => backend.createTask({ ...task, projectId }));
+        const areaId = task.areaId ?? (task.parentId === undefined ? openAreaId : undefined);
+        const created = await attempt(() =>
+          backend.createTask({ ...task, projectId, ...(areaId === undefined ? {} : { areaId }) }),
+        );
         if (created) {
           show(created);
         }
@@ -144,5 +153,5 @@ export function useTaskCommands(projectId: Id): TaskCommands {
         return removed ?? false;
       },
     };
-  }, [backend, queryClient, notifier, projectId]);
+  }, [backend, queryClient, notifier, projectId, openAreaId]);
 }

@@ -3,10 +3,14 @@
   align-items: center;
   gap: var(--space-3);
   min-width: 0;
+  /* When the heading runs short of room, the count gives way at its end. */
+  overflow: hidden;
 }
 
 .count {
+  overflow: hidden;
   color: var(--ink-faint);
+  text-overflow: ellipsis;
   font-family: var(--font-mono);
   font-size: 11px;
   letter-spacing: 0.02em;

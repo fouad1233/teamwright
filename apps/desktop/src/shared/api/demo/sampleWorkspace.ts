@@ -221,7 +221,8 @@ const SAMPLE_TASKS: SampleTask[] = [
   {
     number: 5,
     title: 'Define the pin map',
-    area: 'electronics',
+    // The pins are where the firmware meets the board; the firmware needs them first.
+    area: 'firmware',
     status: 'revision',
     sprint: 'current',
     points: 2,
