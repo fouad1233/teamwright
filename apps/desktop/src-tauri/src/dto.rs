@@ -11,14 +11,14 @@ use chrono::SecondsFormat;
 use serde::{Deserialize, Serialize};
 use teamwright_application::{
     AgentProgram, ApprovedMember, ApprovedOwner, ApprovedProposal, ApprovedTask,
-    ConversationWithTurns, NewMember, NewProject, NewTask, ProjectPlaces, StatusProperties,
-    WorkflowTemplate,
+    ConversationWithTurns, NewMember, NewProject, NewSprint, NewTask, ProjectPlaces, SprintChanges,
+    SprintReport, SprintStart, StatusProperties, WorkflowTemplate,
 };
 use teamwright_domain::{
     Assignee, CalendarDate, Color, Conversation, DecisionOption, DecisionRequest, DomainError,
     Effort, Interview, InterviewAnswer, Member, MemberKind, Priority, Project, Proposal,
-    ProposedOwner, Schedule, Status, StatusCategory, Step, StepContent, StoryPoints, Task,
-    TaskChange, TaskChangeKind, Timestamp, TokenCounts, Turn,
+    ProposedOwner, Schedule, Sprint, SprintSummary, Status, StatusCategory, Step, StepContent,
+    StoryPoints, Task, TaskChange, TaskChangeKind, Timestamp, TokenCounts, Turn,
 };
 
 use crate::error::CommandError;
@@ -126,6 +126,98 @@ impl From<&Task> for TaskDto {
             created_at: moment_to_text(task.created_at()),
             updated_at: moment_to_text(task.updated_at()),
             completed_at: task.completed_at().map(moment_to_text),
+        }
+    }
+}
+
+/// A sprint as the interface sees it.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SprintDto {
+    id: String,
+    project_id: String,
+    name: String,
+    goal: String,
+    start_on: Option<String>,
+    end_on: Option<String>,
+    state: &'static str,
+    created_at: String,
+    started_at: Option<String>,
+    completed_at: Option<String>,
+    summary: Option<SprintSummaryDto>,
+}
+
+impl From<&Sprint> for SprintDto {
+    fn from(sprint: &Sprint) -> Self {
+        Self {
+            id: sprint.id().to_string(),
+            project_id: sprint.project_id().to_string(),
+            name: sprint.name().to_string(),
+            goal: sprint.goal().to_owned(),
+            start_on: sprint.dates().start_on().map(date_to_text),
+            end_on: sprint.dates().end_on().map(date_to_text),
+            state: sprint.state().as_str(),
+            created_at: moment_to_text(sprint.created_at()),
+            started_at: sprint.started_at().map(moment_to_text),
+            completed_at: sprint.completed_at().map(moment_to_text),
+            summary: sprint.summary().map(SprintSummaryDto::from),
+        }
+    }
+}
+
+/// What a completed sprint took on and what it finished, as the interface
+/// sees it.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SprintSummaryDto {
+    unit: &'static str,
+    committed: u32,
+    completed: u32,
+}
+
+impl From<SprintSummary> for SprintSummaryDto {
+    fn from(summary: SprintSummary) -> Self {
+        Self {
+            unit: summary.unit.as_str(),
+            committed: summary.committed,
+            completed: summary.completed,
+        }
+    }
+}
+
+/// The course of a sprint, for its burndown chart, as the interface sees
+/// it.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SprintReportDto {
+    sprint_id: String,
+    unit: &'static str,
+    total: u32,
+    days: Vec<SprintDayDto>,
+}
+
+/// One day of a sprint in its report.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SprintDayDto {
+    date: String,
+    remaining: Option<u32>,
+}
+
+impl From<&SprintReport> for SprintReportDto {
+    fn from(report: &SprintReport) -> Self {
+        Self {
+            sprint_id: report.sprint_id.to_string(),
+            unit: report.unit.as_str(),
+            total: report.total,
+            days: report
+                .days
+                .iter()
+                .map(|day| SprintDayDto {
+                    date: date_to_text(day.date),
+                    remaining: day.remaining,
+                })
+                .collect(),
         }
     }
 }
@@ -1068,6 +1160,92 @@ impl TryFrom<NewTaskInput> for NewTask {
     }
 }
 
+/// What the interface sends to plan a sprint.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NewSprintInput {
+    project_id: String,
+    #[serde(default)]
+    name: Option<String>,
+    #[serde(default)]
+    goal: Option<String>,
+    #[serde(default)]
+    start_on: Option<String>,
+    #[serde(default)]
+    end_on: Option<String>,
+}
+
+impl TryFrom<NewSprintInput> for NewSprint {
+    type Error = CommandError;
+
+    fn try_from(input: NewSprintInput) -> Result<Self, Self::Error> {
+        Ok(Self {
+            project_id: parse_id(&input.project_id)?,
+            name: input.name.unwrap_or_default(),
+            goal: input.goal.unwrap_or_default(),
+            start_on: parse_optional_date(input.start_on.as_deref())?,
+            end_on: parse_optional_date(input.end_on.as_deref())?,
+        })
+    }
+}
+
+/// What the interface sends to change a sprint. Every field is replaced.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SprintChangesInput {
+    name: String,
+    goal: String,
+    #[serde(default)]
+    start_on: Option<String>,
+    #[serde(default)]
+    end_on: Option<String>,
+}
+
+impl TryFrom<SprintChangesInput> for SprintChanges {
+    type Error = CommandError;
+
+    fn try_from(input: SprintChangesInput) -> Result<Self, Self::Error> {
+        Ok(Self {
+            name: input.name,
+            goal: input.goal,
+            start_on: parse_optional_date(input.start_on.as_deref())?,
+            end_on: parse_optional_date(input.end_on.as_deref())?,
+        })
+    }
+}
+
+/// What the interface sends to start a sprint.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SprintStartInput {
+    name: String,
+    goal: String,
+    start_on: String,
+    end_on: String,
+}
+
+impl TryFrom<SprintStartInput> for SprintStart {
+    type Error = CommandError;
+
+    fn try_from(input: SprintStartInput) -> Result<Self, Self::Error> {
+        Ok(Self {
+            name: input.name,
+            goal: input.goal,
+            start_on: parse_date(&input.start_on)?,
+            end_on: parse_date(&input.end_on)?,
+        })
+    }
+}
+
+/// What the interface sends to complete a sprint: where its unfinished
+/// tasks go, a sprint or nothing for the backlog.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SprintCompletionInput {
+    #[serde(default)]
+    pub move_unfinished_to: Option<String>,
+}
+
 /// Reads an identifier the interface sent.
 pub fn parse_id<T>(text: &str) -> Result<T, CommandError>
 where
@@ -1090,14 +1268,14 @@ pub fn parse_effort(text: &str) -> Result<Effort, CommandError> {
 
 /// Reads a calendar date the interface sent, if it sent one.
 pub fn parse_optional_date(text: Option<&str>) -> Result<Option<CalendarDate>, CommandError> {
-    text.map(|text| {
-        CalendarDate::parse_from_str(text, DATE_FORMAT).map_err(|_| {
-            CommandError::invalid_request(format!(
-                "'{text}' is not a date in the form year-month-day"
-            ))
-        })
+    text.map(parse_date).transpose()
+}
+
+/// Reads a calendar date the interface sent.
+pub fn parse_date(text: &str) -> Result<CalendarDate, CommandError> {
+    CalendarDate::parse_from_str(text, DATE_FORMAT).map_err(|_| {
+        CommandError::invalid_request(format!("'{text}' is not a date in the form year-month-day"))
     })
-    .transpose()
 }
 
 /// Writes a moment the way the interface expects it: UTC, RFC 3339, with

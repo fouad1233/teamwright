@@ -6,6 +6,7 @@
 
 pub mod places;
 pub mod projects;
+pub mod sprints;
 pub mod tasks;
 pub mod team;
 pub mod work;
