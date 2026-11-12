@@ -462,6 +462,9 @@ are not on the calendar: their number is shown at the top right.
   <img alt="The calendar of a project: a month of weeks with the tasks on their days" src="../screenshots/calendar-light.png">
 </picture>
 
+**Dashboard.** How the project is going, on one page. See
+[the dashboard](#the-dashboard).
+
 **Team.** You and the members of the team, each with its tasks. See
 [the team](#the-team).
 
@@ -596,6 +599,54 @@ inbox. With the keyboard, Tab moves from bench to bench and Enter presses.
 
 The title block in the corner counts the room, and its legend says what the
 lamp and the corners mean.
+
+## The dashboard
+
+The *Dashboard* tab says how the project is going, on one page that reads
+from top to bottom. There is nothing to set up.
+
+**Where the project stands.** A few short sentences at the top, such as
+*5 of 21 tasks are finished, and 4 are in work. 1 task is late. Sprint 2
+has 9 days left and 16 of 22 points to go. 1 thing waits for you.* They are
+worked out from your tasks, sprints and conversations by fixed rules, so
+opening the page costs no tokens. A sentence with nothing to say is left
+out. Under them, the tasks **at risk** are named: those that are not
+finished and are past their due date. Press one to open it.
+
+**Your note.** Beside the summary stands the description of the project,
+as the note you keep about it. Write in it where it is; it is saved when
+you leave the field, and Escape puts back what was saved.
+
+**The numbers.** Open, in work, finished, late, given to nobody, and
+waiting for you. *Finished* counts the tasks in a status that means done,
+whatever you called it; *in work* those in a status that means the work
+goes on or waits to be checked. *Waiting for you* opens the inbox, and is
+held by gold corners while anything waits.
+
+**Work by status.** One bar with a part for every status, in the order of
+your workflow and in its colors, with the name and the count of each
+under it.
+
+**Work by member.** For you, every member and the tasks given to nobody:
+a bar of what is given, filled in as far as it is finished, with the
+numbers after it.
+
+**This week.** What was finished since Monday, and what is due by Sunday
+or already late. Press a line to open its task.
+
+**The sprint.** For a project that uses sprints: the running sprint with
+its dates, its goal and its burndown, and the completed sprints with what
+each took on and what it finished. *Open the backlog* goes to the Backlog
+view.
+
+**Usage.** The tokens the Advisor and every AI specialist have used in
+this project, and the project as a whole. A person uses none and is not
+listed. A turn's tokens are counted when it ends.
+
+A project without tasks, without sprints or without a team says what is
+missing in a sentence and leaves those parts out. The dashboard does not
+show what Teamwright does not know: the limits of your plan, how long
+anything will still take, or a list of the latest changes.
 
 ## Keyboard
 

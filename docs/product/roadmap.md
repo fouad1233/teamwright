@@ -112,7 +112,14 @@ Several specialists working together with the manager in the loop.
   size of the task. Seen in the built program with a real specialist at
   work; a bench that waits for you there was seen on demo data only
   ([decision 0018](../decisions/0018-the-office-as-a-plan-of-a-workshop.md))
-- ⬜ Dashboards: usage per teammate, plan limits, workload by status
+- 🚧 Dashboards: usage per teammate, plan limits, workload by status. A
+  Dashboard view of a project: where it stands in sentences worked out by
+  rules, the manager's note, the numbers, work by status and by member,
+  this week, the sprint and the tokens used
+  ([decision 0020](../decisions/0020-a-dashboard-worked-out-not-written.md)).
+  Seen on demo data in the browser only, not in the built program. Plan
+  limits are not shown, because they are not known, and there is no
+  latest activity yet
 - ⬜ Project report at completion
 
 ## M6 · Agile 🚧

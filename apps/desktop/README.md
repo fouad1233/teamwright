@@ -100,6 +100,7 @@ src/
     tasks/            The task panel, the list, badges, the fold of subtasks, task logic
     team/             The team: avatars, the Team view, adding and changing a member
     office/           The office: the team at work, drawn as a workshop in plan
+    dashboard/        How a project is going: a summary in words, numbers, small charts
     work/             The work of AI specialists: starting it, following it, answering
     inbox/            What waits for the manager in every project: questions to decide
     advisor/          Planning a project with the Advisor: its questions, its proposal
@@ -147,6 +148,13 @@ Rules of the interface:
   and `shared/lib`, next to their tests. The Gantt chart, the calendar and
   the burndown chart only draw what `ganttModel.ts`, `calendarModel.ts` and
   `burndownModel.ts` work out.
+- **The dashboard is worked out, not written**
+  ([decision 0020](../../docs/decisions/0020-a-dashboard-worked-out-not-written.md)).
+  Its sentences, numbers and bars come from `dashboardModel.ts`, from the
+  tasks, the team, the conversations and the sprints the interface already
+  has. It asks no model and adds no command. It reuses the burndown and the
+  completed sprints of `sprints/` and the count of what waits and the words
+  for tokens of `office/officeModel.ts`.
 - **Sprints were in the contract before they were in the shell.** The
   demo backend and `demoSprints.test.ts` came first and said what the
   shell was to do; the Rust side was written against them, case by case
