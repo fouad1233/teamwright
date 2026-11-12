@@ -128,6 +128,11 @@ Or pick *Something else* and say what you want. A question without options
 is answered in words. Press *Send answers* when every question has an
 answer. The Advisor may ask a second time.
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="../screenshots/advisor-interview-dark.png">
+  <img alt="The questions of the Advisor: each with the reason it is asked, options to pick from with what each leads to, and room for a note" src="../screenshots/advisor-interview-light.png">
+</picture>
+
 **Read the proposal.** The Advisor proposes three things.
 
 - *The project in its words*, for you to check: what is built, what "done"
@@ -142,6 +147,11 @@ The size of a task is the Advisor's estimate of the hours a skilled person
 would need for it. It says how large the task is. It does not say how long
 a specialist takes.
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="../screenshots/advisor-proposal-dark.png">
+  <img alt="A proposal of the Advisor: a summary of the project, the specialists to add with the model and the effort of each, and the tasks with their owners, their sizes and the tasks they wait for" src="../screenshots/advisor-proposal-light.png">
+</picture>
+
 **Change it.** The cross at the end of a row takes a specialist or a task
 out. Press the owner of a task to give it to somebody else. Press the model
 or the effort of a specialist to choose another. The tasks of a specialist
@@ -154,6 +164,11 @@ Then the specialists join the team, and the tasks appear in the first status
 of the board, each given to its owner. No work starts by itself: you start a
 task when you want it started. A specialist the team already has is not
 added a second time.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="../screenshots/advisor-board-dark.png">
+  <img alt="The board of a project after a proposal was approved: the tasks of the plan in the first status, each with its owner" src="../screenshots/advisor-board-light.png">
+</picture>
 
 **Later.** Write to the Advisor again when the project needs more. It knows
 who is on the team and which tasks exist, and proposes what is to be added.

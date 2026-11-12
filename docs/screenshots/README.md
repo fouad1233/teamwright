@@ -18,6 +18,9 @@ show them. Every picture exists twice: `-dark.png` for the dark theme and
 | `specialist-working` | A real specialist at work on a task |
 | `specialist-report` | The same specialist's report |
 | `specialist-inbox` | A question of the same specialist, in the inbox |
+| `advisor-interview` | The questions of a real Advisor |
+| `advisor-proposal` | Its proposal: a team and a plan |
+| `advisor-board` | The board after the proposal was approved |
 
 Nobody edits these files by hand.
 [A tool](../../tools/screenshots/capture-screenshots.mjs) starts the built
@@ -36,3 +39,8 @@ when it is given this folder. What they show was done by a real session of
 Claude Code, so the words of the report and of the question differ from one
 run to the next. That test uses a part of a Claude plan, so these three are
 taken again only when the work of the specialists looks different.
+
+The three pictures of the Advisor are taken the same way by
+[the test that lets a real Advisor plan a project](../../tools/smoke/advisor-smoke.mjs).
+The questions and the proposal in them were made by a real session, so they
+differ from one run to the next.
