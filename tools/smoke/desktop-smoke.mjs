@@ -99,12 +99,76 @@ try {
   });
   check('a date that is not a date is refused', badDate.refused?.code === 'invalid_request');
 
+  // A team: members join, are given tasks, and one of them leaves.
+  const engineer = (
+    await window.command('add_member', {
+      input: {
+        projectId: project.id,
+        name: 'Hardware engineer',
+        kind: 'agent',
+        responsibility: 'The parts, the schematic and the board.',
+      },
+    })
+  ).ok;
+  const person = (
+    await window.command('add_member', {
+      input: { projectId: project.id, name: 'Dana', kind: 'human' },
+    })
+  ).ok;
+  check(
+    'members join the team, each with a color of its own',
+    engineer?.color === 'teal' && person?.color === 'blue' && person?.kind === 'human',
+    JSON.stringify([engineer, person]),
+  );
+
+  const namesake = await window.command('add_member', {
+    input: { projectId: project.id, name: 'hardware ENGINEER', kind: 'agent' },
+  });
+  check(
+    'a second member with the same name is refused',
+    namesake.refused?.code === 'member_name_taken',
+    JSON.stringify(namesake),
+  );
+
+  const given = await window.command('assign_task', {
+    taskId: firmware.id,
+    assignee: { kind: 'member', memberId: engineer.id },
+  });
+  check('a task is given to a member of the team', given.ok?.assignee?.memberId === engineer.id);
+
+  const stranger = await window.command('assign_task', {
+    taskId: firmware.id,
+    assignee: { kind: 'member', memberId: '0196f3a2-7c1e-7d53-9b6f-2f1a4c8e9d10' },
+  });
+  check(
+    'a task is not given to a member that does not exist',
+    stranger.refused?.code === 'not_found',
+    JSON.stringify(stranger),
+  );
+
+  await window.command('assign_task', {
+    taskId: enclosure.id,
+    assignee: { kind: 'member', memberId: person.id },
+  });
+  await window.command('remove_member', { memberId: person.id });
+  const afterLeaving = (await window.command('list_tasks', { projectId: project.id })).ok;
+  check(
+    'the tasks of a member who leaves are given to nobody',
+    afterLeaving?.find((stored) => stored.id === enclosure.id)?.assignee === null,
+  );
+
   // The interface shows what the commands stored.
   await window.reload();
   const shown = await window.waitForText('Write the firmware');
   check('the board shows the project', shown.includes('Smart sensor node'));
   check('the board shows every task', ['Design the board', 'Design the enclosure'].every((title) => shown.includes(title)));
   check('the header counts the tasks', shown.includes('3 tasks · 1 done'), shown.slice(0, 200));
+  check(
+    'the board shows who a task is given to',
+    await window.evaluate(
+      `document.querySelector('li [role="img"][aria-label="Hardware engineer"]') !== null`,
+    ),
+  );
   if (screenshotPath) {
     await window.screenshot(screenshotPath);
     console.log(`      screenshot written to ${screenshotPath}`);
@@ -121,6 +185,16 @@ try {
   const storedBoard = tasks?.find((stored) => stored.number === 1);
   check('the project survives a restart', projects?.length === 1 && projects[0].key === 'SSN');
   check('the tasks survive a restart', tasks?.length === 3);
+  const team = (await window.command('list_members', { projectId: projects[0]?.id })).ok;
+  check(
+    'the team survives a restart',
+    team?.length === 1 && team[0].name === 'Hardware engineer' && team[0].color === 'teal',
+    JSON.stringify(team),
+  );
+  check(
+    'a task is still given to the same member',
+    tasks?.find((stored) => stored.number === 2)?.assignee?.memberId === team?.[0]?.id,
+  );
   check(
     'a task keeps everything that was set on it',
     storedBoard?.assignee?.kind === 'manager' &&
