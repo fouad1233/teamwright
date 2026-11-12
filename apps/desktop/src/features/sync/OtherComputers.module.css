@@ -1,0 +1,158 @@
+.part {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.part > h2 {
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--rule);
+}
+
+.empty {
+  color: var(--ink-faint);
+  line-height: 1.55;
+}
+
+.computers {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* A computer is a flat card, like a task at rest. */
+.computer {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+}
+
+.line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-3);
+  min-width: 0;
+}
+
+.name {
+  font-weight: 600;
+}
+
+/* What is counted or dated is set in the monospace. */
+.fact {
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+
+.space {
+  flex: 1;
+}
+
+/* A quiet mark: a computer whose clock is ahead, or whose Teamwright is
+   newer. Words, not color, say it. */
+.marks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  color: var(--ink-soft);
+  font-size: var(--text-small);
+  line-height: 1.5;
+}
+
+.marks > li {
+  padding-left: var(--space-3);
+  border-left: 1px solid var(--rule-strong);
+}
+
+.decide {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.question {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-2);
+  color: var(--ink-soft);
+}
+
+.waitsForYou {
+  color: var(--brass-text);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* A new computer waits for the manager: it is held by four gold joints at
+   its corners, like a task that waits for a decision (decision 0015). The
+   frame holds the top two; the span inside it the bottom two. */
+.joints,
+.joints > span {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.joints {
+  z-index: 1;
+  inset: -1px;
+}
+
+.joints::before,
+.joints::after,
+.joints > span::before,
+.joints > span::after {
+  position: absolute;
+  width: var(--joint-length);
+  height: var(--joint-length);
+  border: 0 solid var(--brass);
+  content: '';
+}
+
+.joints::before {
+  top: 0;
+  left: 0;
+  border-top-width: var(--joint-weight);
+  border-left-width: var(--joint-weight);
+}
+
+.joints::after {
+  top: 0;
+  right: 0;
+  border-top-width: var(--joint-weight);
+  border-right-width: var(--joint-weight);
+}
+
+.joints > span::before {
+  bottom: 0;
+  left: 0;
+  border-bottom-width: var(--joint-weight);
+  border-left-width: var(--joint-weight);
+}
+
+.joints > span::after {
+  right: 0;
+  bottom: 0;
+  border-right-width: var(--joint-weight);
+  border-bottom-width: var(--joint-weight);
+}

@@ -1,0 +1,179 @@
+/* Computers is a page to read down, like the inbox: one column, this
+   computer first, then the others, then what syncing has to tell. */
+.place {
+  --column: 680px;
+
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  height: 100%;
+  padding: var(--space-5) var(--space-5) var(--space-7);
+  overflow-y: auto;
+}
+
+.header {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-4);
+  max-width: var(--column);
+}
+
+.title {
+  font-size: var(--text-title);
+  font-weight: 650;
+  letter-spacing: -0.012em;
+}
+
+.note {
+  color: var(--ink-faint);
+}
+
+/* Before a folder is chosen: a few words and one button, in a narrow
+   column. */
+.intro {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  max-width: 520px;
+  padding-top: var(--space-4);
+}
+
+.introText {
+  margin-bottom: var(--space-2);
+  color: var(--ink-soft);
+  line-height: 1.55;
+}
+
+.intro > .path {
+  margin-bottom: var(--space-3);
+}
+
+.path {
+  overflow-wrap: anywhere;
+  font-family: var(--font-mono);
+  font-size: var(--text-small);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.parts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  max-width: var(--column);
+}
+
+/* A part of the page: a label over a hairline, then its lines. */
+.part {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.part > h2 {
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--rule);
+}
+
+.name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: var(--control-height);
+}
+
+.nameValue {
+  font-size: var(--text-strong);
+  font-weight: 600;
+}
+
+.nameInput {
+  max-width: 320px;
+}
+
+.aside {
+  color: var(--ink-faint);
+  font-size: var(--text-small);
+}
+
+.round {
+  color: var(--ink-soft);
+}
+
+/* What went wrong in the last round, and what to look at. */
+.trouble {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding-left: var(--space-3);
+  border-left: 2px solid var(--danger);
+}
+
+.problem {
+  color: var(--danger);
+}
+
+.troubleHint {
+  color: var(--ink-soft);
+  line-height: 1.55;
+}
+
+/* Another computer uses this one's identity: the one thing on the page
+   that is the manager's to do, in the frame of what waits for the manager. */
+.identity {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-4) var(--space-4) var(--space-5);
+}
+
+/* Set inside the frame, so that it wins over the faint ink of the global
+   label style, which is loaded after it. */
+.identity .identityLabel {
+  color: var(--brass-text);
+}
+
+.identityTitle {
+  font-size: var(--text-strong);
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.identityText {
+  color: var(--ink-soft);
+  line-height: 1.55;
+}
+
+.identityText em {
+  color: var(--ink);
+  font-style: normal;
+  font-weight: 600;
+}
+
+.identity .actions {
+  padding-top: var(--space-2);
+}
+
+/* A new identity waits for Teamwright to start again: said plainly, with
+   a rule of brass, because the next move is the manager's. */
+.restart {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-1) 0 var(--space-1) var(--space-4);
+  border-left: 2px solid var(--brass);
+}
+
+.restartTitle {
+  color: var(--brass-text);
+  font-weight: 600;
+}
+
+.restartText {
+  color: var(--ink-soft);
+  line-height: 1.55;
+}

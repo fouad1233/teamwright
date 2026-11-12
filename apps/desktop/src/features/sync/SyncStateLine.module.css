@@ -1,0 +1,120 @@
+/* The way to Computers: a line like the inbox, with the state of syncing
+   under its name in the monospace of what is counted and dated. */
+.line {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  min-height: 32px;
+  padding: 7px var(--space-2) 7px 10px;
+  border-radius: var(--radius-control);
+  color: var(--ink-soft);
+  text-align: left;
+  transition:
+    background-color 100ms ease,
+    color 100ms ease;
+}
+
+.line svg {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  margin-top: 2px;
+  stroke-width: 1.75;
+}
+
+.line:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+
+.here,
+.here:hover {
+  background: var(--pressed);
+  color: var(--ink);
+}
+
+/* Brass marks where you are. */
+.here::before {
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  left: 0;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--brass);
+  content: '';
+}
+
+.text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.here .name {
+  font-weight: 550;
+}
+
+/* The words may take a second line: a state cut short says nothing. */
+.words {
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.02em;
+  line-height: 1.45;
+}
+
+/* Something is wrong or waits for the manager: the words turn gold and the
+   line is held by the four joints of what waits (decision 0015). */
+.lit .words {
+  color: var(--brass-text);
+}
+
+.joints,
+.joints > span {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.joints::before,
+.joints::after,
+.joints > span::before,
+.joints > span::after {
+  position: absolute;
+  width: var(--joint-length);
+  height: var(--joint-length);
+  border: 0 solid var(--brass);
+  content: '';
+}
+
+.joints::before {
+  top: 0;
+  left: 0;
+  border-top-width: var(--joint-weight);
+  border-left-width: var(--joint-weight);
+}
+
+.joints::after {
+  top: 0;
+  right: 0;
+  border-top-width: var(--joint-weight);
+  border-right-width: var(--joint-weight);
+}
+
+.joints > span::before {
+  bottom: 0;
+  left: 0;
+  border-bottom-width: var(--joint-weight);
+  border-left-width: var(--joint-weight);
+}
+
+.joints > span::after {
+  right: 0;
+  bottom: 0;
+  border-right-width: var(--joint-weight);
+  border-bottom-width: var(--joint-weight);
+}

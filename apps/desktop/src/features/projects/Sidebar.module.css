@@ -208,3 +208,14 @@
   padding: 0 var(--space-2);
   line-height: 1.7;
 }
+
+/* The foot of the navigation: what is about this computer, not a project,
+   under a hairline. The gap of the sidebar is meant for its sections; the
+   foot sits closer to the note above it. */
+.foot {
+  display: flex;
+  flex-direction: column;
+  padding-top: var(--space-2);
+  margin-top: calc(-1 * var(--space-2));
+  border-top: 1px solid var(--rule);
+}

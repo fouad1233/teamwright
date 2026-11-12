@@ -20,10 +20,11 @@ export type ProjectView = (typeof PROJECT_VIEWS)[number];
 /** Where the user is in the application. */
 interface Location {
   /**
-   * Whether the user looks at a project or at the inbox, which holds what
-   * waits for the manager in every project.
+   * Whether the user looks at a project, at the inbox, which holds what
+   * waits for the manager in every project, or at the computers that are
+   * kept in step.
    */
-  place: 'project' | 'inbox';
+  place: 'project' | 'inbox' | 'computers';
   /** The project that is open, or was open before the inbox, if any. */
   projectId: Id | null;
   /** How the open project is shown. */
@@ -44,6 +45,8 @@ export interface Navigation extends Location {
   openProject: (projectId: Id) => void;
   /** Opens the inbox. The project that was open stays the one to come back to. */
   openInbox: () => void;
+  /** Opens the computers. The project that was open stays the one to come back to. */
+  openComputers: () => void;
   showView: (view: ProjectView) => void;
   openTask: (taskId: Id) => void;
   /** Opens a task of any project, for example from the inbox. */
@@ -126,6 +129,9 @@ export function NavigationProvider({ children }: { children: ReactNode }) {
       },
       openInbox: () => {
         go({ place: 'inbox', taskId: null, chatMemberId: null });
+      },
+      openComputers: () => {
+        go({ place: 'computers', taskId: null, chatMemberId: null });
       },
       openTaskOf: (projectId, taskId) => {
         go({ place: 'project', projectId, taskId, chatMemberId: null });

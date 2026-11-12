@@ -8,6 +8,7 @@ import { classNames } from '@/shared/lib/classNames';
 import { IconButton } from '@/shared/ui/Button';
 import { Logo } from '@/shared/ui/Logo';
 
+import { SyncStateLine } from '../sync/SyncStateLine';
 import { useConversationsWaiting } from '../work/workQueries';
 import { ArchivedProjectsDialog } from './ArchivedProjectsDialog';
 import { CreateProjectDialog } from './CreateProjectDialog';
@@ -22,7 +23,8 @@ interface SidebarProps {
 
 /**
  * The column on the left: the name of the application, the way to the
- * inbox, and the list of projects.
+ * inbox, the list of projects, and at its foot the way to the computers
+ * with the state of syncing.
  */
 export function Sidebar({ projects, activeProjectId }: SidebarProps) {
   const navigation = useNavigation();
@@ -118,6 +120,10 @@ export function Sidebar({ projects, activeProjectId }: SidebarProps) {
           Changes are not saved
         </p>
       )}
+
+      <div className={styles.foot}>
+        <SyncStateLine />
+      </div>
 
       <CreateProjectDialog
         open={isCreatingProject}
