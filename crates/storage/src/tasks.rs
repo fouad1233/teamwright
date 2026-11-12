@@ -325,6 +325,13 @@ pub(crate) fn write_state(
     write_rows(transaction, &TaskRecord::of(&record.into_task()?))
 }
 
+/// Rebuilds a task from a state the log keeps, checking it against the
+/// rules of the domain.
+pub(crate) fn task_from_state(state: &Map<String, Value>) -> Result<Task, DatabaseError> {
+    let record: TaskRecord = codec::record_from_state("task", state)?;
+    record.into_task()
+}
+
 /// Removes the row of a task, without logging it, and says whether there
 /// was one. What it waits for goes with it.
 pub(crate) fn remove_task(transaction: &Transaction<'_>, id: &str) -> Result<bool, DatabaseError> {

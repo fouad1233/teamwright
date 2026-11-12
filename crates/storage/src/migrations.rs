@@ -20,6 +20,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("schema/0008_sprints.sql"),
     include_str!("schema/0009_home_computer.sql"),
     include_str!("schema/0010_merged_states.sql"),
+    include_str!("schema/0011_notices.sql"),
 ];
 
 /// Applies the migrations a database has not seen yet. Each one runs in its
@@ -81,6 +82,7 @@ mod tests {
             "members",
             "merged_states",
             "meta",
+            "notices",
             "operations",
             "project_places",
             "project_reference_folders",

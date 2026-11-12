@@ -190,22 +190,7 @@ impl ProjectRepository for SqliteProjectRepository {
     }
 
     fn list(&self) -> Result<Vec<Project>, StorageError> {
-        self.database.read(|connection| {
-            let mut statuses_by_project = statuses_of_all_projects(connection)?;
-            let query = format!("SELECT {PROJECT_COLUMNS} FROM projects ORDER BY created_at, id");
-            let mut statement = connection.prepare(&query)?;
-            let records = statement
-                .query_map([], ProjectRecord::from_row)?
-                .collect::<Result<Vec<_>, _>>()?;
-
-            records
-                .into_iter()
-                .map(|mut record| {
-                    record.statuses = statuses_by_project.remove(&record.id).unwrap_or_default();
-                    record.into_project()
-                })
-                .collect()
-        })
+        self.database.read(all_projects)
     }
 
     fn delete(&self, id: ProjectId) -> Result<(), StorageError> {
@@ -266,6 +251,49 @@ pub(crate) fn write_state(
     let record = ProjectRecord::of(&record.into_project()?);
     upsert_project(transaction, &record)?;
     replace_statuses(transaction, &record)
+}
+
+/// Writes the rows of a project and its statuses from a state the log
+/// keeps, without logging anything, and returns the project. Statuses the
+/// workflow no longer has are kept until [`remove_statuses_not_in_workflow`]
+/// removes them, so that the tasks in them can be moved first. The state is
+/// checked against the rules of the domain before anything is written.
+pub(crate) fn write_state_keeping_statuses(
+    transaction: &Transaction<'_>,
+    state: &Map<String, Value>,
+) -> Result<Project, DatabaseError> {
+    let record: ProjectRecord = codec::record_from_state("project", state)?;
+    let project = record.into_project()?;
+    let record = ProjectRecord::of(&project);
+    upsert_project(transaction, &record)?;
+    upsert_statuses(transaction, &record)?;
+    Ok(project)
+}
+
+/// Removes the statuses of a project that its workflow no longer has. No
+/// task may be in one of them any more.
+pub(crate) fn remove_statuses_not_in_workflow(
+    transaction: &Transaction<'_>,
+    project: &Project,
+) -> Result<(), DatabaseError> {
+    remove_obsolete_statuses(transaction, &ProjectRecord::of(project))
+}
+
+/// Reads every project inside a transaction, the oldest first.
+pub(crate) fn all_projects(connection: &Connection) -> Result<Vec<Project>, DatabaseError> {
+    let mut statuses_by_project = statuses_of_all_projects(connection)?;
+    let query = format!("SELECT {PROJECT_COLUMNS} FROM projects ORDER BY created_at, id");
+    let mut statement = connection.prepare(&query)?;
+    let records = statement
+        .query_map([], ProjectRecord::from_row)?
+        .collect::<Result<Vec<_>, _>>()?;
+    records
+        .into_iter()
+        .map(|mut record| {
+            record.statuses = statuses_by_project.remove(&record.id).unwrap_or_default();
+            record.into_project()
+        })
+        .collect()
 }
 
 /// Reads a project inside a transaction, if it is stored.
@@ -354,6 +382,15 @@ fn replace_statuses(
     transaction: &Transaction<'_>,
     record: &ProjectRecord,
 ) -> Result<(), DatabaseError> {
+    upsert_statuses(transaction, record)?;
+    remove_obsolete_statuses(transaction, record)
+}
+
+/// Updates the statuses of the record in place and adds the new ones.
+fn upsert_statuses(
+    transaction: &Transaction<'_>,
+    record: &ProjectRecord,
+) -> Result<(), DatabaseError> {
     for (position, status) in (0_i64..).zip(&record.statuses) {
         transaction.execute(
             UPSERT_STATUS,
@@ -367,7 +404,14 @@ fn replace_statuses(
             },
         )?;
     }
+    Ok(())
+}
 
+/// Removes the stored statuses of a project that the record no longer has.
+fn remove_obsolete_statuses(
+    transaction: &Transaction<'_>,
+    record: &ProjectRecord,
+) -> Result<(), DatabaseError> {
     let kept: HashSet<&str> = record
         .statuses
         .iter()

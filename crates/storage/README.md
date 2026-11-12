@@ -27,6 +27,8 @@ involved.
 | `operations` | The operation log, the hybrid logical clock, and the recorder that keeps the stamps of the fields |
 | `merge` | How each kind of thing merges field by field, and `MergedState`, a row of `merged_states` |
 | `apply` | Writes the rows of a thing from a logged state, and removes them, without logging the thing itself |
+| `take_in` | Takes in the operations of another computer: merge, deletions, waiting, repairs |
+| `notices` | What syncing tells the manager, kept on this computer |
 | `codec` | The text forms of moments, dates, identifiers and enumerations |
 | `error` | The crate's internal error type and its conversion to `StorageError` |
 
@@ -196,6 +198,52 @@ removed with a logged deletion of this computer. This is how an operation
 taken in from another computer, which is in the log already, reaches the
 tables.
 
+## Taking in the operations of another computer
+
+`Database::operations_to_send(after)` hands out the operations this
+computer made after a number, without the folders of the projects, as
+`ExchangedOperation`s of the application crate.
+`Database::take_in(operations)` takes in operations of other computers, all
+in one transaction:
+
+1. The operations are sorted by stamp. Each is stored in the log once, with
+   its computer and its number there; one the log has already is passed
+   over, so taking in twice changes nothing and logs nothing. The clock
+   moves on to at least its stamp.
+2. An operation of an entity this version does not know waits (`waiting =
+   'unknown entity'`). One of `project_places` is kept and never applied
+   (`'never'`).
+3. An operation for a thing whose parent was deleted (a task of a deleted
+   project) is dropped. One whose parent, or something its merged state
+   refers to (a task it waits for, its member, its sprint), has not arrived
+   yet waits (`'parent'`) and is tried again until a pass makes no progress.
+4. An upsert is merged into the merged state field by field: a field takes
+   the incoming value if its stamp is later, and a field whose larger value
+   wins takes the larger one. A deleted thing stays deleted, except a step
+   of a turn that a later change writes again. If the merged state changed,
+   its rows are written. A reference to something deleted, or to a status
+   the workflow no longer has, is repaired as the rows are written, with a
+   logged change of this computer: the task moves to the first status of
+   the same category (else the first status), and loses its deleted parent,
+   blocker, member or sprint; a conversation about a deleted task is
+   deleted, and one with a deleted member forgets it.
+5. A deletion first repairs, with logged changes of this computer, what
+   still refers to the thing (the subtasks and the tasks that wait for a
+   task, the conversations about it, the tasks given to a member, the tasks
+   of a sprint), then removes its rows. If it throws away a change this
+   computer made that it had not seen, the manager gets a notice. Two
+   deletions of one thing keep the earlier stamp.
+6. An operation whose state breaks a rule, or that the database refuses, is
+   kept in the log as `'damaged'` and never applied; the batch goes on.
+
+`TakeInReport` says how many operations were new, which projects and
+conversations changed, which turns that ran here were deleted elsewhere
+(their programs are to be stopped), how many notices were added, and how
+far the latest stamp is ahead of this computer's clock. The notices
+(`notices` table, version 11) are bookkeeping of syncing and are not logged:
+`Database::notices` lists them, `Database::dismiss_notice` forgets one. The
+history of a task passes over operations that wait.
+
 ## The clock stamp
 
 Stamps come from a hybrid logical clock: the time of day in milliseconds, a
@@ -240,9 +288,12 @@ of being read wrongly.
 cargo test -p teamwright-storage
 ```
 
-Unit tests cover the codecs, the migrations, the clock and the database
-wrapper. `tests/repositories.rs` runs the repositories, the operation log and
-the application's use cases against a real SQLite database.
+Unit tests cover the codecs, the migrations, the clock, the field stamps,
+writing rows from a stored state, and the database wrapper.
+`tests/repositories.rs` runs the repositories, the operation log and the
+application's use cases against a real SQLite database. `tests/take_in.rs`
+runs two real databases that take in each other's operations, handed over
+in memory.
 
 ## Building
 

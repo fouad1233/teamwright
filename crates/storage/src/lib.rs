@@ -19,10 +19,6 @@
 //! # }
 //! ```
 
-#[cfg_attr(
-    not(test),
-    allow(dead_code, reason = "taking in operations of other computers calls it")
-)]
 mod apply;
 mod codec;
 mod conversations;
@@ -31,11 +27,13 @@ mod error;
 mod members;
 mod merge;
 mod migrations;
+mod notices;
 mod operations;
 mod places;
 mod planning;
 mod projects;
 mod sprints;
+mod take_in;
 mod tasks;
 
 pub use conversations::SqliteConversationRepository;

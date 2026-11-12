@@ -75,10 +75,6 @@ pub(crate) enum Entity {
 
 impl Entity {
     /// Every kind of thing whose changes are logged.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "taking in operations of other computers uses it")
-    )]
     pub(crate) const ALL: [Self; 11] = [
         Self::Project,
         Self::Task,
@@ -94,7 +90,6 @@ impl Entity {
     ];
 
     /// The entity of a name in the log, if this version knows it.
-    #[cfg(test)]
     pub(crate) fn from_name(name: &str) -> Option<Self> {
         Self::ALL.into_iter().find(|entity| entity.as_str() == name)
     }
@@ -154,6 +149,11 @@ impl Stamp {
         let counter = parts.next()?.parse().ok()?;
         Some(Self { millis, counter })
     }
+
+    /// Milliseconds since 1 January 1970, UTC.
+    pub(crate) const fn millis(self) -> i64 {
+        self.millis
+    }
 }
 
 /// Issues stamps that always increase.
@@ -171,10 +171,6 @@ impl HybridLogicalClock {
 
     /// Moves the clock on to at least a stamp seen elsewhere, so that the
     /// next stamp it issues is later than it. The clock never moves back.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "taking in operations of other computers uses it")
-    )]
     pub(crate) fn witness(&mut self, seen: Stamp) {
         self.last = self.last.max(seen);
     }
@@ -256,6 +252,19 @@ impl<'transaction> OperationRecorder<'transaction> {
             transaction,
             device_id,
             clock,
+        }
+    }
+
+    /// The identity of the computer the recorder logs for.
+    pub(crate) const fn device_id(&self) -> ComputerId {
+        self.device_id
+    }
+
+    /// Moves the clock on to at least a stamp seen elsewhere, so that the
+    /// next change made here is stamped later than everything seen.
+    pub(crate) fn witness(&mut self, stamp: &str) {
+        if let Some(seen) = Stamp::from_text(stamp) {
+            self.clock.witness(seen);
         }
     }
 

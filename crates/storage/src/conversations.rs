@@ -708,6 +708,46 @@ pub(crate) fn write_conversation_state(
     )
 }
 
+/// Rebuilds a conversation from a state the log keeps, checking it.
+pub(crate) fn conversation_from_state(
+    state: &Map<String, Value>,
+) -> Result<Conversation, DatabaseError> {
+    let record: ConversationRecord = codec::record_from_state("conversation", state)?;
+    record.into_conversation()
+}
+
+/// The identifiers of the conversations about a task.
+pub(crate) fn conversations_about_task(
+    connection: &Connection,
+    task_id: &str,
+) -> Result<Vec<String>, DatabaseError> {
+    let ids = connection
+        .prepare("SELECT id FROM conversations WHERE task_id = :task_id")?
+        .query_map(named_params! { ":task_id": task_id }, |row| row.get(0))?
+        .collect::<Result<_, _>>()?;
+    Ok(ids)
+}
+
+/// The conversations with a member of a team.
+pub(crate) fn conversations_with_member(
+    connection: &Connection,
+    member_id: &str,
+) -> Result<Vec<Conversation>, DatabaseError> {
+    let query =
+        format!("SELECT {CONVERSATION_COLUMNS} FROM conversations WHERE member_id = :member_id");
+    let records = connection
+        .prepare(&query)?
+        .query_map(
+            named_params! { ":member_id": member_id },
+            ConversationRecord::from_row,
+        )?
+        .collect::<Result<Vec<_>, _>>()?;
+    records
+        .into_iter()
+        .map(ConversationRecord::into_conversation)
+        .collect()
+}
+
 /// Writes the row of a turn, without its steps, from a state the log keeps,
 /// without logging anything. The state is checked first.
 pub(crate) fn write_turn_state(

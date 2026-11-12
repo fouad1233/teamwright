@@ -4,14 +4,18 @@
 use std::path::Path;
 use std::sync::{Mutex, MutexGuard, PoisonError};
 
-use rusqlite::{Connection, OptionalExtension, Transaction};
-use teamwright_application::StorageError;
+use rusqlite::{Connection, OptionalExtension, Transaction, named_params};
+use teamwright_application::{
+    ExchangedChange, ExchangedOperation, StorageError, SyncNotice, TakeInReport,
+};
 use teamwright_domain::ComputerId;
 
 use crate::codec;
 use crate::error::DatabaseError;
 use crate::migrations;
+use crate::notices;
 use crate::operations::{HybridLogicalClock, Operation, OperationRecorder, Stamp};
+use crate::take_in;
 
 /// The key under which the identity of this computer is kept in the `meta`
 /// table.
@@ -122,6 +126,108 @@ impl Database {
             }
             Ok(operations)
         })
+    }
+
+    /// The operations this computer made after the one numbered `after`, in
+    /// the order it made them, as they go to other computers. The folders of
+    /// the projects never leave the computer and are not among them.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the log cannot be read.
+    pub fn operations_to_send(&self, after: u64) -> Result<Vec<ExchangedOperation>, StorageError> {
+        let this_computer = self.device_id;
+        self.read(|connection| {
+            let mut statement = connection.prepare(
+                "SELECT device_sequence, stamp, entity, entity_id, payload, field_stamps, seen
+                 FROM operations
+                 WHERE device_id = :device_id AND device_sequence > :after
+                   AND entity <> 'project_places'
+                 ORDER BY device_sequence",
+            )?;
+            let after = i64::try_from(after).unwrap_or(i64::MAX);
+            let rows = statement
+                .query_map(
+                    named_params! {
+                        ":device_id": this_computer.to_string(),
+                        ":after": after,
+                    },
+                    |row| {
+                        Ok((
+                            row.get::<_, i64>(0)?,
+                            row.get::<_, String>(1)?,
+                            row.get::<_, String>(2)?,
+                            row.get::<_, String>(3)?,
+                            row.get::<_, Option<String>>(4)?,
+                            row.get::<_, Option<String>>(5)?,
+                            row.get::<_, Option<String>>(6)?,
+                        ))
+                    },
+                )?
+                .collect::<Result<Vec<_>, _>>()?;
+            rows.into_iter()
+                .map(
+                    |(sequence, stamp, entity, entity_id, payload, field_stamps, seen)| {
+                        let sequence = u64::try_from(sequence).map_err(|reason| {
+                            DatabaseError::damaged(
+                                "the number of an operation",
+                                &sequence.to_string(),
+                                reason,
+                            )
+                        })?;
+                        Ok(ExchangedOperation {
+                            computer: this_computer,
+                            sequence,
+                            stamp,
+                            entity,
+                            entity_id,
+                            change: match payload {
+                                Some(state) => ExchangedChange::Upsert {
+                                    state,
+                                    field_stamps,
+                                },
+                                None => ExchangedChange::Delete { seen },
+                            },
+                        })
+                    },
+                )
+                .collect()
+        })
+    }
+
+    /// Takes in operations of other computers, in one transaction: each is
+    /// stored in the log once, merged field by field into what this
+    /// computer has, and written to the tables; what waits for something
+    /// that has not arrived yet is tried again later; and what breaks a
+    /// rule across records is repaired with logged changes of this
+    /// computer. Taking in the same operations again changes nothing.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error, and keeps nothing of the batch, if the database
+    /// fails. An operation whose state is damaged does not fail the batch:
+    /// it is kept in the log and never applied.
+    pub fn take_in(&self, operations: &[ExchangedOperation]) -> Result<TakeInReport, StorageError> {
+        self.write(|transaction, recorder| take_in::take_in(transaction, recorder, operations))
+    }
+
+    /// The notices syncing keeps for the manager, the newest first.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if they cannot be read.
+    pub fn notices(&self) -> Result<Vec<SyncNotice>, StorageError> {
+        self.read(notices::all)
+    }
+
+    /// Forgets a notice. A notice that is not kept is ignored.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if it cannot be removed.
+    pub fn dismiss_notice(&self, id: i64) -> Result<(), StorageError> {
+        // A notice is bookkeeping of syncing: nothing is logged.
+        self.write(|transaction, _| notices::dismiss(transaction, id))
     }
 
     /// Runs a query.
