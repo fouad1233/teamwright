@@ -1,0 +1,87 @@
+.frame {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* A slim strip above the lanes: which sprint the board shows, and the
+   switch to all tasks. It lines up with the title of the project. */
+.header {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-3);
+  height: 40px;
+  padding: 0 var(--space-5);
+  border-bottom: 1px solid var(--rule);
+}
+
+.sprint {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.name {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.facts {
+  display: inline-flex;
+  align-items: center;
+  overflow: hidden;
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.separator {
+  width: 1px;
+  height: 9px;
+  margin: 0 var(--space-2);
+  background: var(--rule-strong);
+}
+
+.space {
+  flex: 1;
+}
+
+/* Two keys set side by side in one frame; the one that is down is ink. */
+.switch {
+  display: inline-flex;
+  flex: none;
+  padding: 2px;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius-control);
+}
+
+.choice {
+  height: 22px;
+  padding: 0 var(--space-2);
+  border-radius: 3px;
+  color: var(--ink-faint);
+  font-size: var(--text-small);
+  font-weight: 550;
+  transition:
+    background-color 100ms ease,
+    color 100ms ease;
+}
+
+.choice:hover {
+  color: var(--ink);
+}
+
+.chosen,
+.chosen:hover {
+  background: var(--pressed);
+  color: var(--ink);
+}
+
+.board {
+  flex: 1;
+  min-height: 0;
+}

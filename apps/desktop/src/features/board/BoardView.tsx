@@ -119,6 +119,14 @@ interface Drop {
 interface BoardViewProps {
   project: Project;
   tasks: Task[];
+  /**
+   * Which tasks get a card, for a board of one sprint. The others keep
+   * their places, so a card dropped among the shown ones lands where it
+   * was dropped. Left out, every task is shown.
+   */
+  shows?: (task: Task) => boolean;
+  /** Called with a task opened from a lane, for example to plan it into the sprint shown. */
+  onCreated?: (task: Task) => void;
 }
 
 /**
@@ -126,7 +134,7 @@ interface BoardViewProps {
  * card of its own in a column: it is shown under its parent, which has a row
  * that folds its subtasks away.
  */
-export function BoardView({ project, tasks }: BoardViewProps) {
+export function BoardView({ project, tasks, shows, onCreated }: BoardViewProps) {
   const commands = useTaskCommands(project.id);
   const navigation = useNavigation();
   const folds = useSubtaskFolds(project.id);
@@ -224,11 +232,14 @@ export function BoardView({ project, tasks }: BoardViewProps) {
             key={status.id}
             board={board}
             status={status}
-            tasks={(arrangement.get(status.id) ?? []).flatMap(
-              (taskId) => tasksById.get(taskId) ?? [],
-            )}
+            tasks={(arrangement.get(status.id) ?? [])
+              .flatMap((taskId) => tasksById.get(taskId) ?? [])
+              .filter((task) => shows?.(task) ?? true)}
             onCreateTask={async (title) => {
               const created = await commands.create({ title, statusId: status.id });
+              if (created) {
+                onCreated?.(created);
+              }
               return created !== undefined;
             }}
           />

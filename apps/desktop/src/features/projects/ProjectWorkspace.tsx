@@ -8,11 +8,11 @@ import { Button } from '@/shared/ui/Button';
 import { describeFailure } from '@/shared/ui/Toast';
 
 import { AdvisorView } from '../advisor/AdvisorView';
-import { BoardView } from '../board/BoardView';
 import { CalendarView } from '../calendar/CalendarView';
 import { GanttView } from '../gantt/GanttView';
 import { OfficeView } from '../office/OfficeView';
 import { BacklogView } from '../sprints/BacklogView';
+import { SprintBoard } from '../sprints/SprintBoard';
 import { TaskListView } from '../tasks/TaskListView';
 import { TaskPanel } from '../tasks/TaskPanel';
 import { useTasks } from '../tasks/taskQueries';
@@ -170,7 +170,7 @@ interface ChosenViewProps {
 function ChosenView({ view, project, tasks }: ChosenViewProps) {
   switch (view) {
     case 'board':
-      return <BoardView project={project} tasks={tasks} />;
+      return <SprintBoard project={project} tasks={tasks} />;
     case 'backlog':
       return <BacklogView project={project} tasks={tasks} />;
     case 'list':
