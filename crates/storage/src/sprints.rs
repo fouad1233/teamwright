@@ -277,6 +277,32 @@ pub(crate) fn remove_sprint(
     Ok(rows_removed > 0)
 }
 
+/// Reads the sprints of a project inside a transaction, in no particular
+/// order.
+pub(crate) fn sprints_of_project(
+    connection: &rusqlite::Connection,
+    project_id: &str,
+) -> Result<Vec<Sprint>, DatabaseError> {
+    let query = format!("SELECT {SPRINT_COLUMNS} FROM sprints WHERE project_id = :project_id");
+    let mut statement = connection.prepare(&query)?;
+    let records = statement
+        .query_map(
+            named_params! { ":project_id": project_id },
+            SprintRecord::from_row,
+        )?
+        .collect::<Result<Vec<_>, _>>()?;
+    records.into_iter().map(SprintRecord::into_sprint).collect()
+}
+
+/// Writes one sprint and logs the change.
+pub(crate) fn store_sprint(
+    transaction: &Transaction<'_>,
+    operations: &mut OperationRecorder<'_>,
+    sprint: &Sprint,
+) -> Result<(), DatabaseError> {
+    store(transaction, operations, &SprintRecord::of(sprint))
+}
+
 /// Writes one sprint and logs the change.
 fn store(
     transaction: &Transaction<'_>,

@@ -356,6 +356,17 @@ impl Sprint {
         self.state == SprintState::Active
     }
 
+    /// Takes an active sprint back to planned, as if it had not started.
+    /// Only keeping two computers in step does this: when both started a
+    /// sprint of one project at the same time, the one started later goes
+    /// back. A sprint that is not active is left as it is.
+    pub fn return_to_planned(&mut self) {
+        if self.is_active() {
+            self.state = SprintState::Planned;
+            self.started_at = None;
+        }
+    }
+
     /// Replaces the name, the goal and the dates of a planned or an active
     /// sprint. The name and the goal are tidied.
     ///
@@ -541,6 +552,20 @@ mod tests {
         let mut sprint = active();
         sprint.complete(SprintSummary::of(&[]), moment(11)).unwrap();
         sprint
+    }
+
+    #[test]
+    fn an_active_sprint_can_go_back_to_planned_and_a_completed_one_cannot() {
+        let mut sprint = active();
+        sprint.return_to_planned();
+        assert_eq!(sprint.state(), SprintState::Planned);
+        assert_eq!(sprint.started_at(), None);
+        assert_eq!(sprint.dates(), active().dates());
+
+        let mut done = completed();
+        let before = done.clone();
+        done.return_to_planned();
+        assert_eq!(done, before);
     }
 
     fn counted(points: Option<u16>, is_finished: bool) -> CountedTask {

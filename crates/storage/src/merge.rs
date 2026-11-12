@@ -25,8 +25,8 @@ use crate::operations::Entity;
 pub(crate) enum Rule {
     /// The value with the later stamp wins.
     Later,
-    /// The larger value wins, whatever its stamp: a counter that only grows,
-    /// or the moment of the last change.
+    /// The larger value wins, whatever its stamp: a counter that only
+    /// grows. Two computers that each hand out a number both move it on.
     Larger,
 }
 
@@ -101,7 +101,10 @@ const TASK_FIELDS: &[Field] = &[
     later("sprint", &["sprint_id"]),
     later("points", &["points"]),
     later("number", &["number"]),
-    larger("updated_at", &["updated_at"]),
+    // The moment of the last change goes with the later change. A larger
+    // value would win against a later write here whose clock disagrees,
+    // and the rows would then differ from the merged state.
+    later("updated_at", &["updated_at"]),
 ];
 
 const MEMBER_FIELDS: &[Field] = &[
@@ -109,7 +112,7 @@ const MEMBER_FIELDS: &[Field] = &[
     later("responsibility", &["responsibility"]),
     later("profile", &["model", "effort"]),
     later("color", &["color"]),
-    larger("updated_at", &["updated_at"]),
+    later("updated_at", &["updated_at"]),
 ];
 
 const SPRINT_FIELDS: &[Field] = &[

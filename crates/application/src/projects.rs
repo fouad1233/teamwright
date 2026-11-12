@@ -75,10 +75,6 @@ pub struct ProjectService {
 }
 
 impl ProjectService {
-    /// The highest number that is appended to a suggested key to make it
-    /// unique (`IOT2` … `IOT9999`).
-    const LAST_KEY_SUFFIX: u32 = 9999;
-
     /// Creates the service. The tasks, the members, the conversations, the
     /// folders and the sprints are needed because removing a project removes
     /// them too, changing the workflow can move or complete tasks, and a
@@ -466,22 +462,10 @@ impl ProjectService {
     /// dropped from the end as needed to stay within the length limit:
     /// `IOT`, `IOT2`, `IOT3`, …
     fn unused_key_for(name: &ProjectName, existing: &[Project]) -> ProjectKey {
-        let suggested = ProjectKey::suggest(name);
-        if !is_key_in_use(existing, &suggested) {
-            return suggested;
-        }
-
-        (2..=Self::LAST_KEY_SUFFIX)
-            .filter_map(|number| {
-                let suffix = number.to_string();
-                let letters_kept = ProjectKey::MAX_LENGTH.saturating_sub(suffix.len());
-                let stem: String = suggested.as_str().chars().take(letters_kept).collect();
-                ProjectKey::parse(&format!("{stem}{suffix}")).ok()
-            })
-            .find(|candidate| !is_key_in_use(existing, candidate))
-            // Only reachable with thousands of projects that share a key
-            // stem. Task numbers stay usable even with a repeated key.
-            .unwrap_or(suggested)
+        // With thousands of projects that share a key stem, the suggestion
+        // comes back as it is. Task numbers stay usable even with a
+        // repeated key.
+        ProjectKey::suggest(name).first_free(|candidate| is_key_in_use(existing, candidate))
     }
 }
 

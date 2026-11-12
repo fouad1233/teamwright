@@ -27,6 +27,9 @@ impl ProjectKey {
     const SUGGESTED_PREFIX_LENGTH: usize = 3;
     /// The key suggested for a name that contains no letter at all.
     const FALLBACK: &'static str = "PRJ";
+    /// The highest number that is appended to a key to make it unique
+    /// (`IOT2` … `IOT9999`).
+    const LAST_SUFFIX: u32 = 9999;
 
     /// Checks a key. Lower-case letters are accepted and stored as capitals.
     ///
@@ -81,6 +84,34 @@ impl ProjectKey {
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
+    }
+
+    /// The key with a number appended, the first one that `is_taken` does
+    /// not refuse: `IOT2`, `IOT3`, … A key that ends in a number already
+    /// is counted on (`IOT2` gives `IOT3`). Letters are dropped from the end
+    /// as needed to stay within the length limit. The key itself comes back
+    /// if it is free, and also, unchanged, in the unlikely case that every
+    /// number up to 9999 is taken.
+    #[must_use]
+    pub fn first_free(&self, is_taken: impl Fn(&Self) -> bool) -> Self {
+        if !is_taken(self) {
+            return self.clone();
+        }
+        let without_number = self.0.trim_end_matches(|c: char| c.is_ascii_digit());
+        let stem = if without_number.len() >= Self::MIN_LENGTH {
+            without_number
+        } else {
+            self.0.as_str()
+        };
+        (2..=Self::LAST_SUFFIX)
+            .filter_map(|number| {
+                let suffix = number.to_string();
+                let letters_kept = Self::MAX_LENGTH.saturating_sub(suffix.len());
+                let stem: String = stem.chars().take(letters_kept).collect();
+                Self::parse(&format!("{stem}{suffix}")).ok()
+            })
+            .find(|candidate| !is_taken(candidate))
+            .unwrap_or_else(|| self.clone())
     }
 }
 
@@ -236,6 +267,13 @@ impl Project {
         self.name = name;
     }
 
+    /// Gives the project another key. Only keeping two computers in step
+    /// does this: when both gave one key to two projects at the same time,
+    /// one of them gets another.
+    pub fn rekey(&mut self, key: ProjectKey) {
+        self.key = key;
+    }
+
     /// Replaces the description of the project.
     pub fn describe(&mut self, description: String) {
         self.description = description;
@@ -319,6 +357,39 @@ impl Project {
     /// left without a "todo" or a "done" status.
     pub fn remove_status(&mut self, id: StatusId) -> Result<Status, DomainError> {
         self.workflow.remove_status(id)
+    }
+}
+
+#[cfg(test)]
+mod sync_tests {
+    use super::*;
+
+    #[test]
+    fn a_taken_key_gets_the_first_free_number() {
+        let key = ProjectKey::parse("SSN").unwrap();
+        let taken = ["SSN", "SSN2"];
+
+        let free = key.first_free(|candidate| taken.contains(&candidate.as_str()));
+
+        assert_eq!(free.as_str(), "SSN3");
+        assert_eq!(key.first_free(|_| false), key);
+        let numbered = ProjectKey::parse("SSN2").unwrap();
+        assert_eq!(
+            numbered
+                .first_free(|candidate| taken.contains(&candidate.as_str()))
+                .as_str(),
+            "SSN3"
+        );
+    }
+
+    #[test]
+    fn a_long_key_drops_letters_for_its_number() {
+        let key = ProjectKey::parse("SENSOR").unwrap();
+
+        assert_eq!(
+            key.first_free(|candidate| candidate == &key).as_str(),
+            "SENSO2"
+        );
     }
 }
 

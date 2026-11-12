@@ -467,6 +467,14 @@ impl Task {
         self.touch(now);
     }
 
+    /// Gives the task another number of its project. Only keeping two
+    /// computers in step does this: when both gave one number to two tasks
+    /// at the same time, one of them is renumbered.
+    pub fn renumber(&mut self, number: u32, now: Timestamp) {
+        self.number = number;
+        self.touch(now);
+    }
+
     /// Replaces the description of the task.
     pub fn describe(&mut self, description: String, now: Timestamp) {
         self.description = description;

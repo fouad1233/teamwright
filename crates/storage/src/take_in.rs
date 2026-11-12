@@ -11,13 +11,13 @@
 //! writes of this computer, which go out in the next round like any other
 //! change.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use chrono::Utc;
 use rusqlite::{ErrorCode, OptionalExtension, Transaction, named_params};
 use serde_json::{Map, Value};
 use teamwright_application::{ExchangedChange, ExchangedOperation, NoticeKind, TakeInReport};
-use teamwright_domain::{Assignee, Project, Status, StatusCategory, Task, TaskId};
+use teamwright_domain::{Assignee, Project, Sprint, Status, StatusCategory, Task, TaskId};
 
 use crate::apply;
 use crate::codec;
@@ -27,6 +27,7 @@ use crate::merge::{MergedState, Rule, Stamps, all_fields, object_from_text, stam
 use crate::notices;
 use crate::operations::{Entity, OperationRecorder, Stamp, latest_changes_seen, wall_clock_millis};
 use crate::projects;
+use crate::sprints;
 use crate::tasks;
 
 /// Why an operation waits: it refers to something that has not arrived.
@@ -136,6 +137,7 @@ pub(crate) fn take_in(
     }
     if round.taken_in > 0 {
         round.retry_waiting(transaction, operations)?;
+        round.repair(transaction, operations)?;
     }
 
     Ok(TakeInReport {
@@ -1062,6 +1064,223 @@ impl Round {
         self.conversations.extend(conversation);
         Ok(())
     }
+
+    /// Checks the rules that span records in the projects this take-in
+    /// changed, and repairs what broke, with ordinary logged writes of this
+    /// computer.
+    fn repair(
+        &mut self,
+        transaction: &Transaction<'_>,
+        operations: &mut OperationRecorder<'_>,
+    ) -> Result<(), DatabaseError> {
+        let projects: Vec<String> = self.projects.iter().cloned().collect();
+        for project_id in &projects {
+            if projects::find_project(transaction, project_id)?.is_some() {
+                self.repair_project(transaction, operations, project_id)?;
+            }
+        }
+        if !projects.is_empty() {
+            self.repair_keys(transaction, operations)?;
+        }
+        Ok(())
+    }
+
+    /// Repairs the rules of one project: one active sprint, unique task
+    /// numbers, no task that waits for itself or is a part of itself
+    /// through a chain.
+    fn repair_project(
+        &mut self,
+        transaction: &Transaction<'_>,
+        operations: &mut OperationRecorder<'_>,
+        project_id: &str,
+    ) -> Result<(), DatabaseError> {
+        let now = Utc::now();
+
+        // Two active sprints: the one started later goes back to planned.
+        let mut active: Vec<Sprint> = sprints::sprints_of_project(transaction, project_id)?
+            .into_iter()
+            .filter(Sprint::is_active)
+            .collect();
+        active.sort_by_key(|sprint| (sprint.started_at(), sprint.id()));
+        for sprint in active.iter_mut().skip(1) {
+            sprint.return_to_planned();
+            sprints::store_sprint(transaction, operations, sprint)?;
+        }
+
+        // Two tasks with one number: the one whose number was set later
+        // gets the next free number, but only from the computer that
+        // created it, because a number is handed out once.
+        let mut tasks = tasks::tasks_of_project(transaction, project_id)?;
+        let mut by_number: BTreeMap<u32, Vec<(String, String)>> = BTreeMap::new();
+        for task in &tasks {
+            let id = task.id().to_string();
+            let stamp = self.field_stamp(transaction, Entity::Task, &id, "number")?;
+            by_number
+                .entry(task.number())
+                .or_default()
+                .push((stamp, id));
+        }
+        let mut to_renumber = Vec::new();
+        for (_, mut holders) in by_number {
+            holders.sort();
+            for (_, id) in holders.into_iter().skip(1) {
+                if self.created_here(transaction, Entity::Task, &id)? {
+                    to_renumber.push(id);
+                }
+            }
+        }
+        if !to_renumber.is_empty()
+            && let Some(mut project) = projects::find_project(transaction, project_id)?
+        {
+            let highest = tasks.iter().map(Task::number).max().unwrap_or_default();
+            for id in to_renumber {
+                let Some(task) = tasks.iter_mut().find(|task| task.id().to_string() == id) else {
+                    continue;
+                };
+                let mut number = project.allocate_task_number();
+                while number <= highest {
+                    number = project.allocate_task_number();
+                }
+                let old_number = task.number();
+                task.renumber(number, now);
+                tasks::store_task(transaction, operations, task)?;
+                self.tell(
+                    transaction,
+                    NoticeKind::TaskRenumbered,
+                    Some(project_id),
+                    Some(&id),
+                    &format!(
+                        "{key}-{old_number} is now {key}-{number}: another computer gave the \
+                         number {old_number} to another task at the same time.",
+                        key = project.key()
+                    ),
+                )?;
+            }
+            projects::store_project(transaction, operations, &project)?;
+        }
+
+        // Chains of waiting and of parts that close on themselves: the link
+        // set last is removed, until none is left.
+        for field in ["waits_for", "parent"] {
+            loop {
+                let tasks = tasks::tasks_of_project(transaction, project_id)?;
+                let Some(cycle) = find_cycle(&tasks, field) else {
+                    break;
+                };
+                let mut latest: Option<(String, TaskId, TaskId)> = None;
+                for (task, next) in cycle {
+                    let stamp =
+                        self.field_stamp(transaction, Entity::Task, &task.to_string(), field)?;
+                    if latest.as_ref().is_none_or(|(kept, _, _)| stamp > *kept) {
+                        latest = Some((stamp, task, next));
+                    }
+                }
+                let Some((_, task_id, next)) = latest else {
+                    break;
+                };
+                let Some(mut task) = tasks.into_iter().find(|task| task.id() == task_id) else {
+                    break;
+                };
+                if field == "waits_for" {
+                    task.unblock_from(next, now);
+                } else {
+                    task.set_parent(None, now).map_err(|reason| {
+                        codec::damaged_record("task", &task_id.to_string(), &reason)
+                    })?;
+                }
+                tasks::store_task(transaction, operations, &task)?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Two projects with one key: the one whose key was set later gets the
+    /// key with a number, as a new project would, but only from the
+    /// computer that created it.
+    fn repair_keys(
+        &mut self,
+        transaction: &Transaction<'_>,
+        operations: &mut OperationRecorder<'_>,
+    ) -> Result<(), DatabaseError> {
+        let mut all = projects::all_projects(transaction)?;
+        let mut by_key: BTreeMap<String, Vec<(String, String)>> = BTreeMap::new();
+        for project in &all {
+            let id = project.id().to_string();
+            let stamp = self.field_stamp(transaction, Entity::Project, &id, "key")?;
+            by_key
+                .entry(project.key().to_string())
+                .or_default()
+                .push((stamp, id));
+        }
+        for (_, mut holders) in by_key {
+            holders.sort();
+            for (_, id) in holders.into_iter().skip(1) {
+                if !self.created_here(transaction, Entity::Project, &id)? {
+                    continue;
+                }
+                let taken: Vec<String> = all
+                    .iter()
+                    .map(|project| project.key().to_string())
+                    .collect();
+                let Some(project) = all
+                    .iter_mut()
+                    .find(|project| project.id().to_string() == id)
+                else {
+                    continue;
+                };
+                let old_key = project.key().clone();
+                let new_key = old_key
+                    .first_free(|candidate| taken.iter().any(|key| key == candidate.as_str()));
+                project.rekey(new_key.clone());
+                projects::store_project(transaction, operations, project)?;
+                self.tell(
+                    transaction,
+                    NoticeKind::ProjectRekeyed,
+                    Some(&id),
+                    None,
+                    &format!(
+                        "The project \"{}\" now has the key {new_key}: another computer gave \
+                         {old_key} to another project at the same time.",
+                        project.name()
+                    ),
+                )?;
+            }
+        }
+        Ok(())
+    }
+
+    /// The stamp of a field of a thing, or nothing if it has none.
+    fn field_stamp(
+        &self,
+        transaction: &Transaction<'_>,
+        entity: Entity,
+        id: &str,
+        field: &str,
+    ) -> Result<String, DatabaseError> {
+        Ok(MergedState::read(transaction, entity, id)?
+            .and_then(|merged| merged.stamps.get(field).cloned())
+            .unwrap_or_default())
+    }
+
+    /// Whether this computer created a thing: the first operation of the
+    /// thing is its own.
+    fn created_here(
+        &self,
+        transaction: &Transaction<'_>,
+        entity: Entity,
+        id: &str,
+    ) -> Result<bool, DatabaseError> {
+        let creator: Option<String> = transaction
+            .query_row(
+                "SELECT device_id FROM operations
+                 WHERE entity = :entity AND entity_id = :entity_id
+                 ORDER BY stamp LIMIT 1",
+                named_params! { ":entity": entity.as_str(), ":entity_id": id },
+                |row| row.get(0),
+            )
+            .optional()?;
+        Ok(creator.as_deref() == Some(self.this_computer.as_str()))
+    }
 }
 
 /// The status a task goes to whose status was removed: the first status of
@@ -1115,4 +1334,54 @@ fn category_of_status(
         }
     }
     Ok(None)
+}
+
+/// Finds a chain of tasks that closes on itself, by what they wait for
+/// (`waits_for`) or by their parents (`parent`), as the links of the chain:
+/// each task with the task it points to.
+fn find_cycle(tasks: &[Task], field: &str) -> Option<Vec<(TaskId, TaskId)>> {
+    let links: BTreeMap<TaskId, Vec<TaskId>> = tasks
+        .iter()
+        .map(|task| {
+            let targets = if field == "parent" {
+                task.parent_id().into_iter().collect()
+            } else {
+                task.blocked_by().iter().copied().collect()
+            };
+            (task.id(), targets)
+        })
+        .collect();
+    // A depth-first search that remembers the path it is on.
+    let mut finished: BTreeSet<TaskId> = BTreeSet::new();
+    for start in links.keys() {
+        let mut path: Vec<(TaskId, usize)> = vec![(*start, 0)];
+        let mut on_path: BTreeSet<TaskId> = BTreeSet::from([*start]);
+        while let Some((task, next_index)) = path.last().copied() {
+            let targets = links.get(&task).map(Vec::as_slice).unwrap_or_default();
+            let Some(target) = targets.get(next_index).copied() else {
+                finished.insert(task);
+                on_path.remove(&task);
+                path.pop();
+                continue;
+            };
+            if let Some(last) = path.last_mut() {
+                last.1 += 1;
+            }
+            if on_path.contains(&target) {
+                let from = path.iter().position(|(on, _)| *on == target).unwrap_or(0);
+                let chain: Vec<TaskId> = path[from..].iter().map(|(on, _)| *on).collect();
+                let mut cycle: Vec<(TaskId, TaskId)> =
+                    chain.windows(2).map(|pair| (pair[0], pair[1])).collect();
+                if let Some(last) = chain.last() {
+                    cycle.push((*last, target));
+                }
+                return Some(cycle);
+            }
+            if !finished.contains(&target) && links.contains_key(&target) {
+                path.push((target, 0));
+                on_path.insert(target);
+            }
+        }
+    }
+    None
 }

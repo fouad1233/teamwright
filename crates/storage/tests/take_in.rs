@@ -11,8 +11,9 @@ use chrono::{TimeZone, Utc};
 use teamwright_application::in_memory::ManualClock;
 use teamwright_application::{
     ChosenPlaces, ConversationRepository, ExchangedChange, ExchangedOperation, MemberRepository,
-    NewMember, NewProject, NoticeKind, PlacesRepository, ProjectRepository, ProjectService,
-    SprintRepository, TaskRepository, TaskService, TeamService, WorkflowTemplate,
+    NewMember, NewProject, NewSprint, NewTask, NoticeKind, PlacesRepository, ProjectRepository,
+    ProjectService, SprintRepository, SprintService, SprintStart, TaskRepository, TaskService,
+    TeamService, WorkflowTemplate,
 };
 use teamwright_domain::{Assignee, ComputerId, MemberKind, Priority, Project, Task, Timestamp};
 use teamwright_storage::{
@@ -26,6 +27,7 @@ struct Computer {
     projects: ProjectService,
     tasks: TaskService,
     team: TeamService,
+    sprints: SprintService,
     places: SqlitePlacesRepository,
 }
 
@@ -58,9 +60,10 @@ impl Computer {
                 tasks.clone(),
                 members.clone(),
                 conversations.clone(),
-                sprints,
+                sprints.clone(),
                 clock.clone(),
             ),
+            sprints: SprintService::new(projects.clone(), tasks.clone(), sprints, clock.clone()),
             team: TeamService::new(projects, members, tasks, conversations, clock),
             places: SqlitePlacesRepository::new(database.clone()),
             database,
@@ -142,9 +145,9 @@ fn desk_and_laptop() -> (Computer, Computer, Project, Task) {
         .unwrap();
     let task = desk
         .tasks
-        .create(teamwright_application::NewTask {
+        .create(NewTask {
             description: "Two layers.".to_owned(),
-            ..teamwright_application::NewTask::titled(project.id(), "Design the board")
+            ..NewTask::titled(project.id(), "Design the board")
         })
         .unwrap();
     laptop.take_in_from(&desk);
@@ -223,10 +226,7 @@ fn creating_a_task_on_one_computer_keeps_a_rename_of_the_project_on_the_other() 
         .unwrap();
     laptop
         .tasks
-        .create(teamwright_application::NewTask::titled(
-            project.id(),
-            "Write the firmware",
-        ))
+        .create(NewTask::titled(project.id(), "Write the firmware"))
         .unwrap();
 
     keep_in_step(&desk, &laptop);
@@ -261,10 +261,7 @@ fn a_project_deleted_on_one_computer_takes_the_task_added_on_the_other_with_it()
     let (desk, laptop, project, _) = desk_and_laptop();
     let added = laptop
         .tasks
-        .create(teamwright_application::NewTask::titled(
-            project.id(),
-            "Write the firmware",
-        ))
+        .create(NewTask::titled(project.id(), "Write the firmware"))
         .unwrap();
     desk.projects.delete(project.id()).unwrap();
 
@@ -289,10 +286,7 @@ fn a_task_that_arrives_before_its_project_waits_for_it() {
         .unwrap();
     let task = desk
         .tasks
-        .create(teamwright_application::NewTask::titled(
-            project.id(),
-            "Design the board",
-        ))
+        .create(NewTask::titled(project.id(), "Design the board"))
         .unwrap();
     let operations = desk.database.operations_to_send(0).unwrap();
     let (of_the_project, of_the_task): (Vec<_>, Vec<_>) = operations
@@ -477,6 +471,143 @@ fn after_a_stamp_from_the_future_the_next_change_here_is_later_still() {
 }
 
 #[test]
+fn two_tasks_numbered_alike_are_told_apart_by_the_computer_that_made_the_later_one() {
+    let (desk, laptop, project, _) = desk_and_laptop();
+    let earlier = desk
+        .tasks
+        .create(NewTask::titled(project.id(), "Write the firmware"))
+        .unwrap();
+    let later = laptop
+        .tasks
+        .create(NewTask::titled(project.id(), "Test the radio"))
+        .unwrap();
+    assert_eq!((earlier.number(), later.number()), (2, 2));
+
+    keep_in_step(&desk, &laptop);
+
+    assert_eq!(desk.task(&earlier).unwrap().number(), 2);
+    assert_eq!(desk.task(&later).unwrap().number(), 3);
+    assert_eq!(
+        laptop
+            .projects
+            .get(project.id())
+            .unwrap()
+            .next_task_number(),
+        4
+    );
+    assert_eq!(laptop.everything(), desk.everything());
+    let told = laptop.database.notices().unwrap();
+    assert_eq!(told.len(), 1);
+    assert_eq!(told[0].kind, NoticeKind::TaskRenumbered);
+    assert!(told[0].message.starts_with("SSN-2 is now SSN-3"));
+    assert!(desk.database.notices().unwrap().is_empty());
+}
+
+#[test]
+fn two_projects_with_one_key_are_told_apart_by_the_computer_that_made_the_later_one() {
+    let (desk, laptop, _, _) = desk_and_laptop();
+    let earlier = desk
+        .projects
+        .create(NewProject {
+            name: "Signal strength node".to_owned(),
+            ..NewProject::default()
+        })
+        .unwrap();
+    let later = laptop
+        .projects
+        .create(NewProject {
+            name: "Soil sensor net".to_owned(),
+            ..NewProject::default()
+        })
+        .unwrap();
+    assert_eq!(earlier.key(), later.key());
+
+    keep_in_step(&desk, &laptop);
+
+    let earlier = desk.projects.get(earlier.id()).unwrap();
+    let later = desk.projects.get(later.id()).unwrap();
+    assert_eq!(earlier.key().as_str(), "SSN2");
+    assert_eq!(later.key().as_str(), "SSN3");
+    assert_eq!(laptop.everything(), desk.everything());
+    assert_eq!(
+        laptop.database.notices().unwrap()[0].kind,
+        NoticeKind::ProjectRekeyed
+    );
+}
+
+#[test]
+fn a_chain_of_waiting_closed_by_two_computers_is_opened_again() {
+    let (desk, laptop, project, board) = desk_and_laptop();
+    let firmware = desk
+        .tasks
+        .create(NewTask::titled(project.id(), "Write the firmware"))
+        .unwrap();
+    laptop.take_in_from(&desk);
+    desk.tasks
+        .add_dependency(firmware.id(), board.id())
+        .unwrap();
+    laptop
+        .tasks
+        .add_dependency(board.id(), firmware.id())
+        .unwrap();
+
+    keep_in_step(&desk, &laptop);
+
+    let firmware = desk.task(&firmware).unwrap();
+    let board = desk.task(&board).unwrap();
+    assert!(firmware.blocked_by().contains(&board.id()));
+    assert!(
+        board.blocked_by().is_empty(),
+        "the link set last is removed"
+    );
+    assert_eq!(laptop.everything(), desk.everything());
+}
+
+#[test]
+fn of_two_sprints_started_apart_the_one_started_later_goes_back_to_planned() {
+    let (desk, laptop, project, board) = desk_and_laptop();
+    let firmware = desk
+        .tasks
+        .create(NewTask::titled(project.id(), "Write the firmware"))
+        .unwrap();
+    let sprint = |name: &str| {
+        desk.sprints
+            .create(NewSprint {
+                project_id: project.id(),
+                name: name.to_owned(),
+                goal: String::new(),
+                start_on: None,
+                end_on: None,
+            })
+            .unwrap()
+    };
+    let first = sprint("Sprint 1");
+    let second = sprint("Sprint 2");
+    desk.tasks.plan(board.id(), Some(first.id())).unwrap();
+    desk.tasks.plan(firmware.id(), Some(second.id())).unwrap();
+    laptop.take_in_from(&desk);
+    let start = |name: &str| SprintStart {
+        name: name.to_owned(),
+        goal: String::new(),
+        start_on: chrono::NaiveDate::from_ymd_opt(2026, 11, 16).unwrap(),
+        end_on: chrono::NaiveDate::from_ymd_opt(2026, 11, 27).unwrap(),
+    };
+    desk.sprints.start(first.id(), start("Sprint 1")).unwrap();
+    laptop
+        .sprints
+        .start(second.id(), start("Sprint 2"))
+        .unwrap();
+
+    keep_in_step(&desk, &laptop);
+
+    assert!(desk.sprints.get(first.id()).unwrap().is_active());
+    let second = desk.sprints.get(second.id()).unwrap();
+    assert!(!second.is_active());
+    assert_eq!(second.started_at(), None);
+    assert_eq!(laptop.everything(), desk.everything());
+}
+
+#[test]
 fn a_conversation_about_a_task_deleted_elsewhere_goes_with_it() {
     let (desk, laptop, project, task) = desk_and_laptop();
     let engineer = laptop
@@ -518,4 +649,147 @@ fn a_conversation_about_a_task_deleted_elsewhere_goes_with_it() {
     assert_eq!(report.turns_to_stop, [turn.id()]);
     assert!(conversations.find(conversation.id()).unwrap().is_none());
     assert_eq!(laptop.everything(), desk.everything());
+}
+
+/// A small generator of numbers that are random enough for a test and the
+/// same in every run.
+struct Dice(u64);
+
+impl Dice {
+    fn roll(&mut self, sides: usize) -> usize {
+        self.0 = self
+            .0
+            .wrapping_mul(6_364_136_223_846_793_005)
+            .wrapping_add(1_442_695_040_888_963_407);
+        usize::try_from(self.0 >> 33).unwrap() % sides
+    }
+}
+
+/// One random change on a computer. Changes that the rules refuse, or that
+/// meet something the other computer deleted, are simply not made.
+fn random_change(computer: &Computer, project: &Project, dice: &mut Dice) {
+    let tasks = computer
+        .tasks
+        .list_for_project(project.id())
+        .unwrap_or_default();
+    let pick = |dice: &mut Dice| -> Option<&Task> {
+        if tasks.is_empty() {
+            None
+        } else {
+            tasks.get(dice.roll(tasks.len()))
+        }
+    };
+    let Ok(current) = computer.projects.get(project.id()) else {
+        return;
+    };
+    let statuses = current.workflow().statuses().to_vec();
+    let members = computer
+        .team
+        .list_for_project(project.id())
+        .unwrap_or_default();
+    let _ = match dice.roll(9) {
+        0 | 1 => computer
+            .tasks
+            .create(NewTask::titled(
+                project.id(),
+                format!("Task {}", dice.roll(1000)),
+            ))
+            .map(|_| ()),
+        2 => match pick(dice) {
+            Some(task) => computer
+                .tasks
+                .rename(task.id(), &format!("Renamed {}", dice.roll(1000)))
+                .map(|_| ()),
+            None => Ok(()),
+        },
+        3 => match pick(dice) {
+            Some(task) => {
+                let status = &statuses[dice.roll(statuses.len())];
+                computer
+                    .tasks
+                    .move_to(task.id(), status.id(), 0)
+                    .map(|_| ())
+            }
+            None => Ok(()),
+        },
+        4 => match (pick(dice), pick(dice)) {
+            (Some(task), Some(blocker)) => computer
+                .tasks
+                .add_dependency(task.id(), blocker.id())
+                .map(|_| ()),
+            _ => Ok(()),
+        },
+        5 => match pick(dice) {
+            Some(task) if dice.roll(3) == 0 => computer.tasks.delete(task.id()),
+            _ => Ok(()),
+        },
+        6 => computer
+            .projects
+            .rename(project.id(), &format!("Project {}", dice.roll(1000)))
+            .map(|_| ()),
+        7 => match (pick(dice), members.first()) {
+            (Some(task), Some(member)) => computer
+                .tasks
+                .assign(task.id(), Some(Assignee::Member(member.id())))
+                .map(|_| ()),
+            _ => Ok(()),
+        },
+        _ => {
+            if members.is_empty() || dice.roll(4) == 0 {
+                computer
+                    .team
+                    .add(NewMember {
+                        project_id: project.id(),
+                        name: format!("Member {}", dice.roll(1000)),
+                        kind: MemberKind::Human,
+                        responsibility: String::new(),
+                        model: None,
+                        effort: None,
+                    })
+                    .map(|_| ())
+            } else {
+                computer.team.remove(members[dice.roll(members.len())].id())
+            }
+        }
+    };
+}
+
+/// Hands a random part of what one computer made to the other.
+fn exchange_some(from: &Computer, to: &Computer, dice: &mut Dice) {
+    let operations = from.database.operations_to_send(0).unwrap();
+    let chosen: Vec<_> = operations
+        .into_iter()
+        .filter(|_| dice.roll(3) != 0)
+        .collect();
+    to.database.take_in(&chosen).unwrap();
+}
+
+#[test]
+fn two_computers_that_change_things_at_random_end_up_equal() {
+    let (desk, laptop, project, _) = desk_and_laptop();
+    let mut dice = Dice(20_261_112);
+
+    for _ in 0..300 {
+        let computer = if dice.roll(2) == 0 { &desk } else { &laptop };
+        random_change(computer, &project, &mut dice);
+        if dice.roll(10) == 0 {
+            if dice.roll(2) == 0 {
+                exchange_some(&desk, &laptop, &mut dice);
+            } else {
+                exchange_some(&laptop, &desk, &mut dice);
+            }
+        }
+    }
+    keep_in_step(&desk, &laptop);
+
+    assert_eq!(laptop.everything(), desk.everything());
+    let tasks = desk.tasks.list_for_project(project.id()).unwrap();
+    let mut numbers: Vec<u32> = tasks.iter().map(Task::number).collect();
+    numbers.sort_unstable();
+    numbers.dedup();
+    assert_eq!(
+        numbers.len(),
+        tasks.len(),
+        "every task has a number of its own"
+    );
 }

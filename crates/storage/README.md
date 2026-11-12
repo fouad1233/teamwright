@@ -155,7 +155,7 @@ For that, every stored thing keeps the stamp of each of its fields (version
   state belong together and merge as one field (a status with the moment of
   completion, a start date with a due date, who a task is given to), and
   which rule a field follows: the later stamp wins, or the larger value
-  wins (the next task number, the next sprint number, `updated_at`). A key
+  wins (the next task number, the next sprint number). A key
   no field names is a field of its own, so a key written by a newer version
   is kept and merged too. A turn and its parts merge whole; the folders of
   a project never leave the computer. The list is an exhaustive `match` on
@@ -235,6 +235,20 @@ in one transaction:
    deletions of one thing keep the earlier stamp.
 6. An operation whose state breaks a rule, or that the database refuses, is
    kept in the log as `'damaged'` and never applied; the batch goes on.
+7. The rules that span records are checked in the projects that changed,
+   and what broke is repaired with ordinary logged writes of this computer,
+   which go out in the next round:
+
+   | What broke | Repair | Who repairs |
+   |---|---|---|
+   | Two sprints of a project are active | the one started later goes back to planned | any computer |
+   | Two tasks of a project have one number | the task whose number was set later gets the next free number | only the computer that created that task |
+   | Two projects have one key | the project whose key was set later gets the key with the next number (`SSN2` gives `SSN3`) | only the computer that created it |
+   | A chain of waiting or of parts closes on itself | the link whose field was set last is removed | any computer |
+
+   "Set later" is decided by the stamp of the field, and the creator of a
+   thing is the computer of its first operation. A renumbered task and a
+   project with a new key leave a notice.
 
 `TakeInReport` says how many operations were new, which projects and
 conversations changed, which turns that ran here were deleted elsewhere
