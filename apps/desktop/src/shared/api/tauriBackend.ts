@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
+import { open } from '@tauri-apps/plugin-dialog';
 
 import { BackendError, type Backend } from './backend';
 import type {
@@ -16,6 +17,7 @@ import type {
   NewTask,
   Priority,
   Project,
+  ProjectPlaces,
   StatusProperties,
   Task,
   TaskChange,
@@ -128,6 +130,41 @@ export class TauriBackend implements Backend {
 
   listTaskHistory(taskId: Id): Promise<TaskChange[]> {
     return call('list_task_history', { taskId });
+  }
+
+  projectPlaces(projectId: Id): Promise<ProjectPlaces> {
+    return call('project_places', { projectId });
+  }
+
+  setWorkFolder(projectId: Id, folder: string | null): Promise<ProjectPlaces> {
+    return call('set_work_folder', { projectId, folder });
+  }
+
+  addReferenceFolder(projectId: Id, folder: string): Promise<ProjectPlaces> {
+    return call('add_reference_folder', { projectId, folder });
+  }
+
+  removeReferenceFolder(projectId: Id, folder: string): Promise<ProjectPlaces> {
+    return call('remove_reference_folder', { projectId, folder });
+  }
+
+  addReferenceFiles(projectId: Id, files: string[]): Promise<string[]> {
+    return call('add_reference_files', { projectId, files });
+  }
+
+  async chooseFolder(): Promise<string | null> {
+    // The window of the operating system for picking a folder. It answers
+    // with nothing when the manager closes it without picking.
+    return open({ directory: true, multiple: false, title: 'Choose a folder' });
+  }
+
+  async chooseFiles(): Promise<string[]> {
+    const picked = await open({ directory: false, multiple: true, title: 'Choose files' });
+    return picked ?? [];
+  }
+
+  showFolder(folder: string): Promise<void> {
+    return call('show_folder', { folder });
   }
 
   listMembers(projectId: Id): Promise<Member[]> {

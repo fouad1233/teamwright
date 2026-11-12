@@ -54,6 +54,29 @@ export interface Project {
   archivedAt: Moment | null;
 }
 
+/**
+ * Where the specialists of a project work on this computer, and what else
+ * they may read there. These are facts about one computer: the same project
+ * on another computer has folders of its own.
+ */
+export interface ProjectPlaces {
+  /**
+   * The folder the specialists work in. They read, create and change files
+   * there, and nowhere else.
+   */
+  workFolder: string;
+  /**
+   * Whether the manager chose the work folder. If not, it is the folder
+   * Teamwright gives every project.
+   */
+  isWorkFolderChosen: boolean;
+  /**
+   * Folders with reference material, such as data sheets or an existing
+   * design. The specialists may read them and cannot change them.
+   */
+  referenceFolders: string[];
+}
+
 /** Whether a member of a team is an AI agent or a person. */
 export type MemberKind = 'agent' | 'human';
 

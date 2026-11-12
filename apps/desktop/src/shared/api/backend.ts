@@ -12,6 +12,7 @@ import type {
   NewTask,
   Priority,
   Project,
+  ProjectPlaces,
   StatusProperties,
   Task,
   TaskChange,
@@ -38,6 +39,40 @@ export interface Backend {
   restoreProject(projectId: Id): Promise<Project>;
   /** Removes a project for good, with its tasks and its team. */
   deleteProject(projectId: Id): Promise<void>;
+
+  /** Says where the specialists of a project work and what else they may read. */
+  projectPlaces(projectId: Id): Promise<ProjectPlaces>;
+  /**
+   * Lets the specialists of a project work in a folder the manager chose,
+   * for example one that already holds the project. With nothing, they work
+   * in the folder Teamwright gives the project. It holds from the next turn
+   * on, and cannot change while a specialist works in the project.
+   */
+  setWorkFolder(projectId: Id, folder: string | null): Promise<ProjectPlaces>;
+  /**
+   * Lets the specialists of a project read a folder, and not change it. The
+   * folder cannot be the work folder, lie inside it, or contain it.
+   */
+  addReferenceFolder(projectId: Id, folder: string): Promise<ProjectPlaces>;
+  /** Takes a folder away from what the specialists of a project may read. */
+  removeReferenceFolder(projectId: Id, folder: string): Promise<ProjectPlaces>;
+  /**
+   * Copies files into the folder `references` inside the work folder of a
+   * project, where its specialists can read them. Nothing else of the
+   * folders the files come from is shown to them. Answers with the names
+   * the files have there, which differ from their own when a name was
+   * taken.
+   */
+  addReferenceFiles(projectId: Id, files: string[]): Promise<string[]>;
+  /**
+   * Lets the manager pick a folder of this computer. Resolves to its path,
+   * or to nothing if the manager changed their mind.
+   */
+  chooseFolder(): Promise<string | null>;
+  /** Lets the manager pick files of this computer. Resolves to their paths. */
+  chooseFiles(): Promise<string[]>;
+  /** Shows a folder in the file manager of this computer. */
+  showFolder(folder: string): Promise<void>;
 
   /**
    * Adds a status to the workflow of a project. It goes behind the last

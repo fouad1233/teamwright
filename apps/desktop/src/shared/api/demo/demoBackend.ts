@@ -20,6 +20,7 @@ import type {
   NewTask,
   Priority,
   Project,
+  ProjectPlaces,
   Status,
   StatusCategory,
   StatusProperties,
@@ -29,6 +30,7 @@ import type {
   WorkflowTemplate,
 } from '../types';
 import { briefFor } from './brief';
+import { freeName, isInside, isSameFolder, nameOf } from './places';
 import { historyOf } from './taskHistory';
 import {
   SIMULATED_MODEL,
@@ -48,7 +50,41 @@ export interface DemoEnvironment {
    * the demo act through it. Left out, a timer of the browser is used.
    */
   later?: (work: () => void, milliseconds: number) => void;
+  /**
+   * The folders that exist on the computer the demo pretends to run on.
+   * Left out, every folder is taken to exist: a browser cannot look.
+   */
+  folders?: readonly string[];
+  /**
+   * What the manager picks when asked for a folder. Left out, the demo
+   * hands out sample folders in turn: it has no window of the computer to
+   * ask with.
+   */
+  pickFolder?: () => string | null;
+  /** What the manager picks when asked for files. Left out, a sample file. */
+  pickFiles?: () => string[];
 }
+
+/** The folders of a project that the manager has chosen. */
+interface ChosenPlaces {
+  /** The work folder, or nothing while Teamwright's own folder is used. */
+  workFolder: string | null;
+  referenceFolders: string[];
+  /** The names of the files in the folder `references`. */
+  referenceFiles: string[];
+}
+
+/** The folder in which the pretended computer keeps the folders of the projects. */
+const PROJECTS_FOLDER = 'C:\\Users\\you\\Documents\\Teamwright';
+
+/** The folders the browser demo hands out when the manager is asked to pick one. */
+const SAMPLE_FOLDERS = [
+  'C:\\Users\\you\\Projects\\sensor-node',
+  'C:\\Users\\you\\Documents\\Datasheets',
+];
+
+/** The file the browser demo hands out when the manager is asked to pick files. */
+const SAMPLE_FILE = 'C:\\Users\\you\\Downloads\\BME680 datasheet.pdf';
 
 /** The projects, tasks and team members a demo backend starts with. */
 export interface DemoWorkspace {
@@ -127,6 +163,8 @@ export class DemoBackend implements Backend {
    */
   private readonly versions = new Map<Id, Task[]>();
   private readonly nextTaskNumbers = new Map<Id, number>();
+  private readonly places = new Map<Id, ChosenPlaces>();
+  private sampleFoldersHandedOut = 0;
   /** The turns whose script is still being played. A turn that is stopped leaves this set. */
   private readonly playing = new Set<Id>();
   private readonly conversationListeners = new Set<(conversation: Conversation) => void>();
@@ -228,8 +266,126 @@ export class DemoBackend implements Backend {
         this.forget(conversation);
       }
       this.nextTaskNumbers.delete(project.id);
+      // The folders stay on the computer. Only what the project knew about
+      // them goes with it: Teamwright never removes a file of the manager.
+      this.places.delete(project.id);
       this.projects.delete(project.id);
     });
+  }
+
+  projectPlaces(projectId: Id): Promise<ProjectPlaces> {
+    return this.answer(() => this.placesOf(this.requireProject(projectId)));
+  }
+
+  setWorkFolder(projectId: Id, folder: string | null): Promise<ProjectPlaces> {
+    return this.answer(() => {
+      const project = this.requireProject(projectId);
+      this.refuseWhileWorkedOn(this.conversationsOf(project.id));
+      const chosen = this.chosenPlacesOf(project.id);
+      if (folder === null) {
+        chosen.workFolder = null;
+        return this.placesOf(project);
+      }
+      const tidy = this.requireFolder(folder);
+      for (const reference of chosen.referenceFolders) {
+        refuseFoldersThatOverlap(tidy, reference);
+      }
+      chosen.workFolder = tidy;
+      return this.placesOf(project);
+    });
+  }
+
+  addReferenceFolder(projectId: Id, folder: string): Promise<ProjectPlaces> {
+    return this.answer(() => {
+      const project = this.requireProject(projectId);
+      const chosen = this.chosenPlacesOf(project.id);
+      const tidy = this.requireFolder(folder);
+      refuseFoldersThatOverlap(this.placesOf(project).workFolder, tidy);
+      if (!chosen.referenceFolders.some((other) => isSameFolder(other, tidy))) {
+        chosen.referenceFolders.push(tidy);
+      }
+      return this.placesOf(project);
+    });
+  }
+
+  removeReferenceFolder(projectId: Id, folder: string): Promise<ProjectPlaces> {
+    return this.answer(() => {
+      const project = this.requireProject(projectId);
+      const chosen = this.chosenPlacesOf(project.id);
+      chosen.referenceFolders = chosen.referenceFolders.filter(
+        (other) => !isSameFolder(other, folder),
+      );
+      return this.placesOf(project);
+    });
+  }
+
+  addReferenceFiles(projectId: Id, files: string[]): Promise<string[]> {
+    return this.answer(() => {
+      const project = this.requireProject(projectId);
+      const chosen = this.chosenPlacesOf(project.id);
+      return files.map((file) => {
+        const name = freeName(nameOf(file), chosen.referenceFiles);
+        if (name === '') {
+          throw new BackendError('rule_broken', 'a file to copy has no name');
+        }
+        chosen.referenceFiles.push(name);
+        return name;
+      });
+    });
+  }
+
+  chooseFolder(): Promise<string | null> {
+    return this.answer(() => {
+      if (this.environment.pickFolder) {
+        return this.environment.pickFolder();
+      }
+      const folder = SAMPLE_FOLDERS[this.sampleFoldersHandedOut % SAMPLE_FOLDERS.length];
+      this.sampleFoldersHandedOut += 1;
+      return folder ?? null;
+    });
+  }
+
+  chooseFiles(): Promise<string[]> {
+    return this.answer(() => this.environment.pickFiles?.() ?? [SAMPLE_FILE]);
+  }
+
+  showFolder(): Promise<void> {
+    return this.answer(() => {
+      throw new BackendError('not_available', 'the demo has no file manager to show a folder in');
+    });
+  }
+
+  /** What the manager has chosen for a project, kept from the first time it is asked for. */
+  private chosenPlacesOf(projectId: Id): ChosenPlaces {
+    let chosen = this.places.get(projectId);
+    if (!chosen) {
+      chosen = { workFolder: null, referenceFolders: [], referenceFiles: [] };
+      this.places.set(projectId, chosen);
+    }
+    return chosen;
+  }
+
+  /** The folders of a project as the interface sees them. */
+  private placesOf(project: Project): ProjectPlaces {
+    const chosen = this.chosenPlacesOf(project.id);
+    return {
+      workFolder: chosen.workFolder ?? `${PROJECTS_FOLDER}\\${project.key}`,
+      isWorkFolderChosen: chosen.workFolder !== null,
+      referenceFolders: [...chosen.referenceFolders],
+    };
+  }
+
+  /** Checks that a folder is named and exists, and answers with its tidy path. */
+  private requireFolder(folder: string): string {
+    const tidy = folder.trim();
+    if (tidy === '') {
+      throw new BackendError('rule_broken', 'the folder must be named');
+    }
+    const known = this.environment.folders;
+    if (known && !known.some((other) => isSameFolder(other, tidy))) {
+      throw new BackendError('folder_not_found', `the folder ${tidy} does not exist`);
+    }
+    return tidy;
   }
 
   addStatus(projectId: Id, properties: StatusProperties): Promise<Project> {
@@ -1372,6 +1528,32 @@ function answerInWords(option: string | undefined, note: string): string {
     return note;
   }
   return note === '' ? `Decision: ${option}` : `Decision: ${option}\n\n${note}`;
+}
+
+/**
+ * Refuses a work folder and a reference folder that get in each other's
+ * way. The specialists write in the work folder and only read a reference
+ * folder, so the one cannot be the other, lie inside it, or contain it.
+ */
+function refuseFoldersThatOverlap(workFolder: string, referenceFolder: string): void {
+  if (isSameFolder(referenceFolder, workFolder)) {
+    throw new BackendError(
+      'rule_broken',
+      `the work folder and a reference folder cannot be the same folder: ${workFolder}`,
+    );
+  }
+  if (isInside(referenceFolder, workFolder)) {
+    throw new BackendError(
+      'rule_broken',
+      `${referenceFolder} lies inside the work folder ${workFolder}, where the specialists read everything already`,
+    );
+  }
+  if (isInside(workFolder, referenceFolder)) {
+    throw new BackendError(
+      'rule_broken',
+      `the work folder ${workFolder} lies inside the reference folder ${referenceFolder}, where the specialists may not write`,
+    );
+  }
 }
 
 function tidyMessage(raw: string): string {
