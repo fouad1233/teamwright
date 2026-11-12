@@ -3,7 +3,9 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 import type { Id } from '@/shared/api/types';
 
 /** The ways a project can be looked at. */
-export type ProjectView = 'board' | 'list';
+export const PROJECT_VIEWS = ['board', 'list', 'team'] as const;
+
+export type ProjectView = (typeof PROJECT_VIEWS)[number];
 
 /** Where the user is in the application. */
 interface Location {
@@ -43,7 +45,7 @@ function restoreLocation(): Location {
     const { projectId, view } = stored as Partial<Location>;
     return {
       projectId: typeof projectId === 'string' ? projectId : null,
-      view: view === 'list' ? 'list' : 'board',
+      view: PROJECT_VIEWS.find((known) => known === view) ?? STARTING_LOCATION.view,
       taskId: null,
     };
   } catch {

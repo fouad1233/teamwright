@@ -31,6 +31,7 @@ src/
     projects/         Sidebar, project header, creating a project, first run
     board/            The board: lanes, cards, drag and drop
     tasks/            The task panel, the list, badges, and task logic
+    team/             The team: avatars, the Team view, adding and changing a member
   shared/
     api/              The Backend interface and its two implementations
     ui/               Buttons, menus, dialogs, the calendar field, tooltips
@@ -44,8 +45,12 @@ Rules of the interface:
   Where it shows a change before the backend has answered (moving a card), it
   repeats the backend's arithmetic and corrects itself if the answer differs.
 - **One way to the backend.** Components use `useBackend()` or the hooks
-  built on it (`useProjects`, `useTasks`, `useTaskCommands`). Nothing calls
-  Tauri directly except `shared/api/tauriBackend.ts`.
+  built on it (`useProjects`, `useTasks`, `useTaskCommands`, `useTeam`,
+  `useTeamCommands`). Nothing calls Tauri directly except
+  `shared/api/tauriBackend.ts`.
+- **The team of the open project is known everywhere.** `TeamProvider` puts
+  it in a context, so a card, a row or a menu can show who a task is given
+  to without the team being handed down to it.
 - **Two backends.** `TauriBackend` calls the shell. `DemoBackend` runs in the
   browser's memory with a sample project, so the interface can be developed
   and tested without Rust.
@@ -68,6 +73,10 @@ The interface follows the design philosophy in
 - Menus, dialogs, popovers and tooltips are built on Radix primitives, which
   handle focus and the keyboard. The calendar is `react-day-picker`.
 - Labels use the global class `label`: small capitals in the monospace.
+- Who a task is given to looks the same everywhere. The manager is a brass
+  circle. An AI specialist is a block with its initials in its own color,
+  like a part of the logo. A person is a circle with initials. Nobody is a
+  dashed outline.
 
 ## Commands
 

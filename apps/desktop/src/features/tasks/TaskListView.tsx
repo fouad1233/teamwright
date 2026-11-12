@@ -3,7 +3,8 @@ import type { Project, Task } from '@/shared/api/types';
 import { classNames } from '@/shared/lib/classNames';
 import { formatDate, formatEstimate, isOverdue, taskReference } from '@/shared/lib/format';
 
-import { AssigneeAvatar, PriorityFlag, StatusLabel, assigneeLabel } from './TaskBadges';
+import { AssigneeAvatar, AssigneeName } from '../team/Assignee';
+import { PriorityFlag, StatusLabel } from './TaskBadges';
 import styles from './TaskListView.module.css';
 import { tasksOfStatus } from './taskModel';
 
@@ -65,7 +66,7 @@ export function TaskListView({ project, tasks }: TaskListViewProps) {
                   <td>
                     <span className={styles.assignee}>
                       <AssigneeAvatar assignee={task.assignee} />
-                      {assigneeLabel(task.assignee)}
+                      <AssigneeName assignee={task.assignee} />
                     </span>
                   </td>
                   <td className={classNames(styles.number, isOverdue(task) && styles.overdue)}>

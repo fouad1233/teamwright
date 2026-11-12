@@ -1,0 +1,78 @@
+.avatar {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  line-height: 1;
+}
+
+.small {
+  width: 20px;
+  height: 20px;
+}
+
+.large {
+  width: 32px;
+  height: 32px;
+}
+
+.small svg {
+  width: 12px;
+  height: 12px;
+  stroke-width: 2;
+}
+
+.large svg {
+  width: 17px;
+  height: 17px;
+  stroke-width: 1.75;
+}
+
+/* Nobody: an outline waiting to be filled. */
+.nobody,
+.unknown {
+  width: 20px;
+  height: 20px;
+  border: 1.25px dashed var(--ink-faint);
+  opacity: 0.7;
+}
+
+.unknown {
+  border-style: solid;
+}
+
+.manager {
+  background: var(--brass);
+  color: var(--ink-inverse);
+}
+
+/* A member wears its own pigment: a wash for the ground, a hairline of the
+   tone around it, and its initials set like the label of a part. */
+.member {
+  background: var(--tone-wash);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tone) 42%, transparent);
+  color: var(--tone-text);
+  font-family: var(--font-mono);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  /* The letters are data, not text to select with a task's title. */
+  user-select: none;
+}
+
+.small.member {
+  font-size: 8.5px;
+}
+
+.large.member {
+  font-size: 12px;
+}
+
+/* An AI specialist is a block, like the parts of the logo. */
+.small.block {
+  border-radius: 5px;
+}
+
+.large.block {
+  border-radius: 7px;
+}

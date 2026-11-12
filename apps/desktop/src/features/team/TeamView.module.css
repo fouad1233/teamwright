@@ -1,0 +1,139 @@
+.view {
+  height: 100%;
+  padding: 0 var(--space-5) var(--space-6);
+  overflow-y: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+/* The headings of the columns stay in view while the rows scroll. */
+.table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  height: 36px;
+  padding: 0 var(--space-3);
+  border-bottom: 1px solid var(--rule);
+  background: var(--ground);
+  text-align: left;
+}
+
+.table thead th:first-child,
+.table td:first-child {
+  padding-left: 0;
+}
+
+.kindColumn {
+  width: 168px;
+}
+
+.tasksColumn {
+  width: 320px;
+}
+
+.actionsColumn {
+  width: 44px;
+}
+
+/* Present for screen readers, which announce the heading of a column. */
+.hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.row td {
+  height: 60px;
+  padding: 0 var(--space-3);
+  border-bottom: 1px solid var(--rule);
+}
+
+.who {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.words {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.name {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.responsibility {
+  overflow: hidden;
+  color: var(--ink-faint);
+  font-size: var(--text-small);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kind {
+  color: var(--ink-soft);
+}
+
+.empty {
+  max-width: 560px;
+  padding: var(--space-4) 0 var(--space-2);
+  color: var(--ink-soft);
+}
+
+.add {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 36px;
+  margin-top: var(--space-2);
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-control);
+  color: var(--ink-faint);
+  transition:
+    color 100ms ease,
+    background-color 100ms ease;
+}
+
+.add:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+
+.add svg {
+  width: 15px;
+  height: 15px;
+}
+
+/* What is not built yet is said plainly, below a rule, in a quiet voice. */
+.note {
+  max-width: 560px;
+  margin-top: var(--space-5);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--rule);
+  color: var(--ink-faint);
+  font-size: var(--text-small);
+}
+
+.warning {
+  color: var(--ink-soft);
+}
+
+.dialogActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-top: var(--space-5);
+}

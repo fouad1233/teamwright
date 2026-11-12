@@ -1,6 +1,6 @@
-import { Bot, Flag, UserRound } from 'lucide-react';
+import { Flag } from 'lucide-react';
 
-import type { Assignee, Priority, Status, Color } from '@/shared/api/types';
+import type { Color, Priority, Status } from '@/shared/api/types';
 import { classNames } from '@/shared/lib/classNames';
 
 import styles from './TaskBadges.module.css';
@@ -26,14 +26,6 @@ const PRIORITY_TONES: Record<Priority, Color> = {
 /** The name of a priority for people. */
 export function priorityLabel(priority: Priority): string {
   return PRIORITY_LABELS[priority];
-}
-
-/** Says who is responsible for a task, in a word or two. */
-export function assigneeLabel(assignee: Assignee | null): string {
-  if (assignee === null) {
-    return 'Unassigned';
-  }
-  return assignee.kind === 'manager' ? 'You' : 'Team member';
 }
 
 /**
@@ -123,23 +115,6 @@ export function PriorityFlag({ priority, withLabel = false }: PriorityFlagProps)
     >
       <Flag aria-hidden={withLabel} aria-label={label} />
       {withLabel && label}
-    </span>
-  );
-}
-
-/**
- * A small round picture of who is responsible for a task. The manager is
- * brass, like the keystone of the logo.
- */
-export function AssigneeAvatar({ assignee }: { assignee: Assignee | null }) {
-  const label = assigneeLabel(assignee);
-  if (assignee === null) {
-    return <span className={classNames(styles.avatar, styles.unassigned)} title={label} />;
-  }
-  const Icon = assignee.kind === 'manager' ? UserRound : Bot;
-  return (
-    <span className={classNames(styles.avatar, styles[assignee.kind])} title={label}>
-      <Icon aria-label={label} />
     </span>
   );
 }

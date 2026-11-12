@@ -12,13 +12,13 @@ import { ActionMenu, ChoiceMenu, type Choice } from '@/shared/ui/Menu';
 
 import {
   AssigneeAvatar,
-  PRIORITIES,
-  PriorityFlag,
-  StatusLabel,
-  StatusMark,
-  assigneeLabel,
-  priorityLabel,
-} from './TaskBadges';
+  AssigneeName,
+  MANAGER_NAME,
+  MemberAvatar,
+  NOBODY_NAME,
+} from '../team/Assignee';
+import { useTeamMembers } from '../team/TeamContext';
+import { PRIORITIES, PriorityFlag, StatusLabel, StatusMark, priorityLabel } from './TaskBadges';
 import { TaskComposer } from './TaskComposer';
 import styles from './TaskPanel.module.css';
 import { TaskPicker } from './TaskPicker';
@@ -44,6 +44,7 @@ interface TaskPanelProps {
 export function TaskPanel({ project, task, tasks, onClose }: TaskPanelProps) {
   const commands = useTaskCommands(project.id);
   const navigation = useNavigation();
+  const team = useTeamMembers();
   const panel = useRef<HTMLElement>(null);
   const [isConfirmingDeletion, setIsConfirmingDeletion] = useState(false);
 
@@ -63,16 +64,18 @@ export function TaskPanel({ project, task, tasks, onClose }: TaskPanelProps) {
     icon: <StatusMark status={choice} />,
   }));
   const assigneeChoices: Choice<string>[] = [
-    { value: UNASSIGNED, label: 'Unassigned', icon: <AssigneeAvatar assignee={null} /> },
-    { value: MANAGER, label: 'You', icon: <AssigneeAvatar assignee={{ kind: 'manager' }} /> },
+    { value: UNASSIGNED, label: NOBODY_NAME, icon: <AssigneeAvatar assignee={null} /> },
+    {
+      value: MANAGER,
+      label: MANAGER_NAME,
+      icon: <AssigneeAvatar assignee={{ kind: 'manager' }} />,
+    },
+    ...team.map((member) => ({
+      value: member.id,
+      label: member.name,
+      icon: <MemberAvatar member={member} />,
+    })),
   ];
-  if (task.assignee?.kind === 'member') {
-    assigneeChoices.push({
-      value: task.assignee.memberId,
-      label: 'Team member',
-      icon: <AssigneeAvatar assignee={task.assignee} />,
-    });
-  }
   const priorityChoices = PRIORITIES.map((priority) => ({
     value: priority,
     label: priorityLabel(priority),
@@ -178,7 +181,7 @@ export function TaskPanel({ project, task, tasks, onClose }: TaskPanelProps) {
             >
               <ValueButton aria-label="Assignee" isEmpty={task.assignee === null}>
                 <AssigneeAvatar assignee={task.assignee} />
-                {assigneeLabel(task.assignee)}
+                <AssigneeName assignee={task.assignee} />
               </ValueButton>
             </ChoiceMenu>
           </Property>

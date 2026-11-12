@@ -8,7 +8,7 @@ import { describeFailure, useNotifier } from '@/shared/ui/Toast';
 import { withMovedTask, withTask } from './taskModel';
 
 /** The name under which the tasks of a project are cached. */
-function tasksKey(projectId: Id) {
+export function tasksKey(projectId: Id) {
   return ['tasks', projectId] as const;
 }
 

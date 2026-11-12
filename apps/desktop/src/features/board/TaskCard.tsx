@@ -7,7 +7,8 @@ import type { Project, Task } from '@/shared/api/types';
 import { classNames } from '@/shared/lib/classNames';
 import { formatDate, formatEstimate, isOverdue, taskReference } from '@/shared/lib/format';
 
-import { AssigneeAvatar, PriorityFlag } from '../tasks/TaskBadges';
+import { PriorityFlag } from '../tasks/TaskBadges';
+import { AssigneeAvatar } from '../team/Assignee';
 import styles from './TaskCard.module.css';
 
 interface TaskCardProps {
