@@ -197,6 +197,10 @@ For that, every stored thing keeps the stamp of each of its fields (version
 - **Numbers.** Every operation has `device_sequence`, its number on the
   computer that made it; for an operation of this computer it equals
   `sequence`.
+- **Counters never go back.** Saving a project keeps the larger of its
+  next task number and next sprint number and the ones stored. A use case
+  that loaded the project before a take-in raised a counter would otherwise
+  store the lower number it loaded and hand a number out twice.
 
 The table `merged_states` is bookkeeping of the log and is not logged
 itself.

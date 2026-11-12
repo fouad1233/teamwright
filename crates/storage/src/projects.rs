@@ -346,7 +346,22 @@ pub(crate) fn store_project(
     operations: &mut OperationRecorder<'_>,
     project: &Project,
 ) -> Result<(), DatabaseError> {
-    let record = ProjectRecord::of(project);
+    let mut record = ProjectRecord::of(project);
+    // The counters of task and sprint numbers never go back. A use case
+    // that loaded the project before a take-in raised a counter would
+    // otherwise store the lower number it loaded, and hand out a number
+    // twice.
+    let stored: Option<(u32, u32)> = transaction
+        .query_row(
+            "SELECT next_task_number, next_sprint_number FROM projects WHERE id = :id",
+            named_params! { ":id": record.id },
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .optional()?;
+    if let Some((next_task_number, next_sprint_number)) = stored {
+        record.next_task_number = record.next_task_number.max(next_task_number);
+        record.next_sprint_number = record.next_sprint_number.max(next_sprint_number);
+    }
     upsert_project(transaction, &record)?;
     replace_statuses(transaction, &record)?;
     operations.record_upsert(Entity::Project, &record.id, &record)

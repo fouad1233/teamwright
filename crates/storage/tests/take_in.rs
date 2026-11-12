@@ -1027,3 +1027,31 @@ fn a_project_whose_views_were_all_removed_on_two_computers_gets_a_board_again() 
     );
     assert_eq!(laptop.everything(), desk.everything());
 }
+
+#[test]
+fn a_project_saved_from_before_a_take_in_does_not_take_its_counters_back() {
+    let (desk, laptop, project, _) = desk_and_laptop();
+    let repository = SqliteProjectRepository::new(laptop.database.clone());
+    let mut loaded_before = repository.find(project.id()).unwrap().unwrap();
+    assert_eq!(loaded_before.next_task_number(), 2);
+    desk.tasks
+        .create(NewTask::titled(project.id(), "Write the firmware"))
+        .unwrap();
+    laptop.take_in_from(&desk);
+
+    // A use case that loaded the project before the take-in stores it.
+    loaded_before.rename(teamwright_domain::ProjectName::parse("Renamed").unwrap());
+    repository.save(&loaded_before).unwrap();
+    let created = laptop
+        .tasks
+        .create(NewTask::titled(project.id(), "Test the radio"))
+        .unwrap();
+
+    assert_eq!(created.number(), 3);
+    let stored = repository.find(project.id()).unwrap().unwrap();
+    assert_eq!(stored.name().as_str(), "Renamed");
+    assert_eq!(stored.next_task_number(), 4);
+    keep_in_step(&desk, &laptop);
+    assert_eq!(laptop.everything(), desk.everything());
+    assert!(laptop.database.notices().unwrap().is_empty());
+}
