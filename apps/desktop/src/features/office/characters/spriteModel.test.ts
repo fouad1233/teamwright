@@ -182,6 +182,15 @@ describe('benchScene', () => {
     }
   });
 
+  it('sets the things on the top of a desk, wood with a rule of gold', () => {
+    const scene = benchScene(lookFor('writer'), 'seatRest', 0, false);
+    const below = scene.rows.slice(DESK_ROW).join('');
+    expect(below).toMatch(/T/);
+    expect(below).toMatch(/\$/);
+    const bare = benchScene(lookFor('writer'), 'seatRest', 0, false, false);
+    expect(bare.rows.slice(DESK_ROW).join('')).not.toMatch(/[T$]/);
+  });
+
   it('keeps the chair and the things of somebody who is away', () => {
     const away = benchScene(lookFor('software'), null, 0, false);
     expect(away.rows.join('')).not.toMatch(/[sh]/);

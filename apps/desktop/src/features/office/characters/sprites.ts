@@ -276,9 +276,12 @@ export const HAIR: Readonly<Record<HairStyle, Readonly<Record<Facing, Part>>>> =
         '..hhhhhhhh..',
         '.hhhhhhhhhh.',
         '.hhhhhhhhhh.',
-        '.hj......jh.',
+        '.hj......jhh',
         '.h........hh',
+        '..........hh',
         '..........hj',
+        '..........hj',
+        '..........jj',
         '...........j',
       ],
     },
@@ -527,6 +530,34 @@ export const BODIES = {
       '....ss..........',
     ],
   },
+  /** Idle: the right hand lifts a cup to the mouth. The arm and cup are drawn over the head. */
+  seatSip: {
+    x: 0,
+    y: BODY_TOP,
+    rows: [
+      '...lcccnnccdL...',
+      '...lcccnnccd....',
+      '...lcccnnccd....',
+      '...lbbbnnbbB....',
+      '....lbbnnbB.....',
+      '....lbbbbbB.....',
+      '....ss..........',
+    ],
+  },
+  /** Idle: both arms up, a stretch. The arms are drawn over the head. */
+  seatStretch: {
+    x: 0,
+    y: BODY_TOP,
+    rows: [
+      '..llcccnnccdLL..',
+      '....cccnnccd....',
+      '....cccnnccd....',
+      '....bbbnnbbB....',
+      '....bbbnnbbB....',
+      '....bbbbbbbB....',
+      '................',
+    ],
+  },
 } as const satisfies Record<string, Part>;
 
 export type BodyName = keyof typeof BODIES;
@@ -536,6 +567,34 @@ export const RAISED_ARM: Part = {
   x: 12,
   y: 1,
   rows: ['.ss.', '.ss.', '.LL.', '.LL.', '.LL.', '.LL.', '.LL.', '.LL.', '.LL.', 'LL..'],
+};
+
+/** The left arm raised as well, for a stretch. */
+export const RAISED_LEFT_ARM: Part = {
+  x: 0,
+  y: 1,
+  rows: ['.ss.', '.ss.', '.ll.', '.ll.', '.ll.', '.ll.', '.ll.', '.ll.', '.ll.', '..ll'],
+};
+
+/** A cup lifted to the mouth in the right hand, its arm bent up from the shoulder. */
+export const CUP_TO_MOUTH: Part = {
+  x: 8,
+  y: 7,
+  rows: ['xxxx..', 'xwwvx.', 'xwwvss', '.xxxss', '....L.', '....L.'],
+};
+
+/** The top of a desk under the things on a bench: wood, with a rule of brass along its edge. */
+export const DESK_TOP: Part = {
+  x: 1,
+  y: 17,
+  rows: [
+    '.TTTTTTTTTTTTTTTTTTTTTTTT.',
+    'TTTTTTTTTTTTTTTTTTTTTTTTTT',
+    'TTTTTTTTTTTTTTTTTTTTTTTTTT',
+    '$$$$$$$$$$$$$$$$$$$$$$$$$$',
+    'oooooooooooooooooooooooooo',
+    'OOOOOOOOOOOOOOOOOOOOOOOOOO',
+  ],
 };
 
 /** The parts of the body a role may dress differently. */

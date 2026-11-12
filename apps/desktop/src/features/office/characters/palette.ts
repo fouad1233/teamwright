@@ -50,8 +50,8 @@ export const MATERIALS = {
   eyes: { base: '#211a15', shade: '#211a15' },
   /** The lab coat of a test engineer: parchment. */
   coat: { base: '#ece4d4', shade: '#c4b9a5' },
-  /** The apron of a mechanical engineer: leather. */
-  apron: { base: '#86603e', shade: '#694a2f' },
+  /** The apron of a mechanical engineer: dark leather, so that it stands apart from any shirt. */
+  apron: { base: '#5c4029', shade: '#45301f' },
   /** The cardigan of a technical writer: oat. */
   cardigan: { base: '#ab9a7e', shade: '#8b7b62' },
   /** The sweater vest of a researcher: moss. */

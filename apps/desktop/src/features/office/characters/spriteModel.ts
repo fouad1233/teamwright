@@ -2,7 +2,9 @@ import { OUTFITS, type Look } from './characterModel';
 import {
   BODIES,
   CHAIR,
+  CUP_TO_MOUTH,
   DESK_ROW,
+  DESK_TOP,
   FIGURE_HEIGHT,
   FIGURE_WIDTH,
   HAIR,
@@ -10,6 +12,7 @@ import {
   HEADWEAR,
   PROPS,
   RAISED_ARM,
+  RAISED_LEFT_ARM,
   SCENE_WIDTH,
   type BodyName,
   type Facing,
@@ -106,7 +109,10 @@ export type Pose =
   | 'seatRest'
   | 'seatGlance'
   | 'seatWork'
-  | 'seatWait';
+  | 'seatWait'
+  | 'seatSip'
+  | 'seatStretch'
+  | 'seatPage';
 
 /** How many frames each pose has. A pose of one frame stands still. */
 export const FRAMES: Readonly<Record<Pose, number>> = {
@@ -121,6 +127,9 @@ export const FRAMES: Readonly<Record<Pose, number>> = {
   seatGlance: 1,
   seatWork: 4,
   seatWait: 2,
+  seatSip: 2,
+  seatStretch: 2,
+  seatPage: 2,
 };
 
 /** Whether a pose is seated behind a bench. */
@@ -134,12 +143,18 @@ interface Arrangement {
   facing: Facing;
   /** How far the head alone is lowered: a nod over the work, the dip of a step. */
   nod: number;
-  raisedArm: boolean;
+  /** Arms and what they hold, drawn last, over the head. */
+  over: readonly Part[];
+}
+
+/** A part moved down by some pixels. */
+function lowered(part: Part, by: number): Part {
+  return { ...part, y: part.y + by };
 }
 
 /** The parts of a pose at one of its frames. */
 function arrangementOf(pose: Pose, frame: number): Arrangement {
-  const still = { nod: 0, raisedArm: false };
+  const still = { nod: 0, over: [] };
   const step = frame % 4;
   // A walk is a step, a pass, the other step, a pass. The head dips a
   // pixel on each step and rises as it passes over the foot it stands on.
@@ -191,13 +206,45 @@ function arrangementOf(pose: Pose, frame: number): Arrangement {
     }
     case 'seatWait':
       // The raised hand dips a pixel every other beat, a small wave.
-      return { ...still, body: 'seatWait', head: 'front', facing: 'front', raisedArm: true };
+      return {
+        ...still,
+        body: 'seatWait',
+        head: 'front',
+        facing: 'front',
+        over: [lowered(RAISED_ARM, frame % 2)],
+      };
+    case 'seatSip':
+      // The cup at the mouth, then a pixel lower as it is put down a little.
+      return {
+        ...still,
+        body: 'seatSip',
+        head: 'down',
+        facing: 'front',
+        over: [lowered(CUP_TO_MOUTH, frame % 2)],
+      };
+    case 'seatStretch':
+      // Both arms up, then a pixel lower: a slow stretch.
+      return {
+        ...still,
+        body: 'seatStretch',
+        head: 'glance',
+        facing: 'front',
+        over: [lowered(RAISED_ARM, frame % 2), lowered(RAISED_LEFT_ARM, frame % 2)],
+      };
+    case 'seatPage':
+      // A hand turns a page on the bench, first the right, then the left.
+      return {
+        ...still,
+        body: frame % 2 === 0 ? 'seatWorkRight' : 'seatWorkLeft',
+        head: 'down',
+        facing: 'front',
+      };
   }
 }
 
 /** The figure of a character in a pose, without its outline. */
 export function figure(look: Look, pose: Pose, frame: number): Sprite {
-  const { body, head, facing, nod, raisedArm } = arrangementOf(pose, frame);
+  const { body, head, facing, nod, over } = arrangementOf(pose, frame);
   const canvas = blank(FIGURE_WIDTH, FIGURE_HEIGHT);
   const bodyPart = BODIES[body];
   // From behind there is no strip down the front and no apron: the back is
@@ -217,15 +264,28 @@ export function figure(look: Look, pose: Pose, frame: number): Sprite {
   if (headwear) {
     stamp(canvas, HEADWEAR[headwear][facing], 0, nod);
   }
-  if (raisedArm) {
-    stamp(canvas, RAISED_ARM, 0, frame % 2 === 1 ? 1 : 0);
+  for (const part of over) {
+    stamp(canvas, part);
   }
   return toSprite(canvas);
 }
 
+/** One outlined picture laid over another: where the upper one is drawn, it wins. */
+function laid(under: Sprite, over: Sprite): Sprite {
+  return {
+    ...under,
+    rows: under.rows.map((row, y) =>
+      Array.from(row, (letter, x) => {
+        const upper = over.rows[y]?.[x] ?? EMPTY;
+        return upper === EMPTY ? letter : upper;
+      }).join(''),
+    ),
+  };
+}
+
 /**
  * A seated character at its bench: the figure cut where the bench begins,
- * and in front of it and beside it what its role works with. While it
+ * the top of its desk, and on it what its role works with. While it
  * works, the moving parts of its things are drawn over them. Without a
  * pose, the bench of somebody who is away: the empty chair and the things.
  */
@@ -234,6 +294,7 @@ export function benchScene(
   pose: Pose | null,
   frame: number,
   isWorking: boolean,
+  hasDesk = true,
 ): Sprite {
   const canvas = blank(SCENE_WIDTH, FIGURE_HEIGHT);
   stamp(canvas, CHAIR);
@@ -255,17 +316,15 @@ export function benchScene(
       stamp(things, part);
     }
   }
-  // The things are outlined on their own, so that a line runs between a
-  // thing and the figure behind it.
-  const outlinedThings = outlined(toSprite(things));
-  const outlinedPerson = outlined(toSprite(canvas));
-  const merged = outlinedPerson.rows.map((row, y) =>
-    Array.from(row, (letter, x) => {
-      const thing = outlinedThings.rows[y]?.[x] ?? EMPTY;
-      return thing === EMPTY ? letter : thing;
-    }).join(''),
-  );
-  return { width: SCENE_WIDTH, height: FIGURE_HEIGHT, rows: merged };
+  // The desk, the figure and the things are outlined each on its own, so
+  // that a line runs between a thing and what stands behind it. The hands
+  // rest on the desk, and the things stand on it.
+  const person = outlined(toSprite(canvas));
+  const desk = blank(SCENE_WIDTH, FIGURE_HEIGHT);
+  if (hasDesk) {
+    stamp(desk, DESK_TOP);
+  }
+  return laid(laid(outlined(toSprite(desk)), person), outlined(toSprite(things)));
 }
 
 /** A figure in a pose, outlined and turned the way it faces. */
