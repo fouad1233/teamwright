@@ -51,6 +51,13 @@ export function formatDate(date: CalendarDate, now: Date = new Date()): string {
   }).format(localDate);
 }
 
+/** Writes a month for people: "November 2026". `month` counts from 1. */
+export function formatMonth(year: number, month: number): string {
+  return new Intl.DateTimeFormat(INTERFACE_LOCALE, { month: 'long', year: 'numeric' }).format(
+    new Date(year, month - 1, 1),
+  );
+}
+
 /** Writes a moment for people, in the user's time zone: "11 Nov 2026, 10:00". */
 export function formatMoment(moment: Moment): string {
   return new Intl.DateTimeFormat(INTERFACE_LOCALE, {
