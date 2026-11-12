@@ -638,7 +638,12 @@ export const PROPS = {
       },
       MUG,
     ],
-    working: [[{ x: 4, y: 12, rows: ['Y......Y'] }], [{ x: 4, y: 12, rows: ['YyyyyyyY'] }]],
+    // The light of the screen falls on whoever looks into it, and flickers.
+    working: [
+      [{ x: 4, y: 12, rows: ['yyyyyyyy'] }],
+      [{ x: 4, y: 12, rows: ['yyYyyyyy'] }],
+      [{ x: 4, y: 12, rows: ['yyyyyYyy'] }],
+    ],
   },
   /** A circuit board, a soldering iron in its stand, and a wisp of smoke while it works. */
   solder: {
@@ -657,9 +662,11 @@ export const PROPS = {
   caliper: {
     still: [
       { x: 3, y: 16, rows: ['.mmmmm.', 'mmiiimm', 'mmmmmmm', 'MMMMMMM'] },
-      { x: 11, y: 18, rows: ['iiiiiiiiii', 'm.m.......', 'm.m.......'] },
+      { x: 11, y: 18, rows: ['iiiiiiiiii', 'm.........', 'm.........'] },
       { x: 18, y: 16, rows: ['.xx.', 'xmmx', '.xx.'] },
     ],
+    // The slide of the caliper opens and closes on the part.
+    working: [[{ x: 13, y: 18, rows: ['M', 'm', 'm'] }], [{ x: 15, y: 18, rows: ['M', 'm', 'm'] }]],
   },
   /** An open notebook and a pen, and a stack of books. */
   notebook: {
@@ -710,6 +717,8 @@ export const PROPS = {
         rows: ['wwwwww', 'wwwwgw', 'wwrwgw', 'w$rwgw', 'w$rwgw', 'vvvvvv', '.o..o.'],
       },
     ],
+    // The lines are marked as they are read.
+    working: [[{ x: 4, y: 19, rows: ['ttt'] }], [{ x: 7, y: 19, rows: ['ttt'] }]],
   },
   /** The plan of the project spread out, and rolled plans beside it. */
   plan: {
@@ -717,6 +726,8 @@ export const PROPS = {
       { x: 2, y: 18, rows: ['wwwwwwwwwwwww', 'wt$tttwt$tttw', 'vvvvvvvvvvvvv'] },
       { x: 16, y: 15, rows: ['...ww', '..wwv', '.wwv.', 'wwv..', 'wv...'] },
     ],
+    // A pencil draws on the plan.
+    working: [[{ x: 6, y: 16, rows: ['.x', 'r.'] }], [{ x: 9, y: 16, rows: ['.x', 'r.'] }]],
   },
   /** A tray of letters, and a mug. */
   tray: {
@@ -729,6 +740,8 @@ export const PROPS = {
   /** Papers and a mug. */
   mug: {
     still: [{ x: 3, y: 18, rows: ['wwwwwwww', 'wttwtttw', 'vvvvvvvv'] }, MUG],
+    // Steam rises from the mug.
+    working: [[{ x: 17, y: 13, rows: ['f.', '.f'] }], [{ x: 17, y: 13, rows: ['.f', 'f.'] }]],
   },
 } as const satisfies Record<string, Prop>;
 
