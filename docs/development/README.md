@@ -103,6 +103,26 @@ what a specialist may do. The specialist of the test above knows its folders
 and does not try to leave them, so that test shows that nothing leaked, and
 this one shows that the program would have refused.
 
+## The Advisor at work
+
+```bash
+node tools/smoke/advisor-smoke.mjs target/debug/teamwright-desktop.exe
+```
+
+This test is not free either. It lets the Advisor plan a small project with
+the Claude Code that is installed on this computer. It says in five
+sentences what is wanted, answers the questions the Advisor asks the way the
+Advisor recommends, and checks the proposal. Then it approves the proposal
+with the button of the interface, and checks that the members and the tasks
+are there as proposed, also after a restart. It prints the questions, the
+proposal and what every turn used.
+
+Planning takes two or three turns. The Advisor of the test runs on `sonnet`,
+which is enough for a plan of this size, or on the model named in
+`TEAMWRIGHT_ADVISOR_MODEL`. Run it by hand after a change to the Advisor. It
+ends with code 2, without a failure, if Claude Code is not installed or not
+signed in. Windows only for now.
+
 ## Pictures for the documentation
 
 ```bash
