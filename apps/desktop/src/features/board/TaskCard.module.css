@@ -3,18 +3,192 @@
 }
 
 /* A card is one piece with up to two parts: the face, which opens the task,
-   and under a hairline the row that folds its subtasks. */
+   and under a hairline the row that folds its subtasks. At rest it is flat.
+   It makes a layer of its own, so that its lights sit over its ground and
+   under its words. */
 .card {
+  position: relative;
+  isolation: isolate;
   display: flex;
   flex-direction: column;
   border: 1px solid var(--rule);
   border-radius: var(--radius-card);
   background: var(--surface);
-  transition: border-color 100ms ease;
+  transition: border-color var(--duration-quick) ease;
 }
 
 .card:hover {
   border-color: var(--rule-strong);
+}
+
+/* The lamp: a soft light that follows the pointer over the card
+   (`followPointer` sets where it is). It is a pleasure, not information,
+   so nothing depends on it. */
+.card::before {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(
+    var(--lamp-reach) circle at var(--pointer-x, 50%) var(--pointer-y, 0%),
+    rgb(var(--brass-rgb) / var(--glow-strength)),
+    rgb(var(--brass-rgb) / 0) 70%
+  );
+  opacity: 0;
+  transition: opacity var(--duration-settle) ease;
+  pointer-events: none;
+  content: '';
+}
+
+.card:hover::before {
+  opacity: 1;
+}
+
+/* The rim under the pointer catches more light than the face. Without
+   masks that cut one area out of another, the rim would light the whole
+   card, so it is left out. */
+@supports (mask-composite: exclude) or (-webkit-mask-composite: xor) {
+  .card::after {
+    position: absolute;
+    inset: -1px;
+    padding: 1px;
+    border-radius: inherit;
+    background: radial-gradient(
+      var(--rim-reach) circle at var(--pointer-x, 50%) var(--pointer-y, 0%),
+      rgb(var(--brass-rgb) / var(--rim-strength)),
+      rgb(var(--brass-rgb) / 0) 70%
+    );
+    opacity: 0;
+    transition: opacity var(--duration-settle) ease;
+    pointer-events: none;
+    content: '';
+    -webkit-mask:
+      var(--mask-opaque) content-box,
+      var(--mask-opaque);
+    -webkit-mask-composite: xor;
+    mask:
+      var(--mask-opaque) content-box exclude,
+      var(--mask-opaque);
+  }
+
+  .card:hover::after {
+    opacity: 1;
+  }
+}
+
+/* A specialist works on the task: the sun rises in the corner of this card
+   alone. */
+.working {
+  background:
+    radial-gradient(
+      100% 120% at 0% 0%,
+      rgb(var(--brass-rgb) / var(--sun-at-work)),
+      rgb(var(--brass-rgb) / 0) 60%
+    ),
+    var(--surface);
+}
+
+/* ...and a point of light travels round its edge, at the even pace of work
+   that goes on. It turns a custom property, which repaints the card on
+   every frame, so it is only ever on the few cards that are being worked
+   on. Where the property cannot be animated, the point stands still; where
+   masks cannot cut out the rim, the edge is a plain gold line. */
+.edge {
+  position: absolute;
+  inset: -1px;
+  border: 1px solid var(--brass);
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+@supports (mask-composite: exclude) or (-webkit-mask-composite: xor) {
+  .edge {
+    padding: 1px;
+    border: 0;
+    background: conic-gradient(
+      from var(--edge-angle),
+      rgb(var(--brass-rgb) / 0) 0deg 230deg,
+      rgb(var(--brass-rgb) / 15%) 270deg,
+      var(--brass) 330deg,
+      rgb(var(--brass-rgb) / 0) 360deg
+    );
+    animation: orbit var(--duration-orbit) linear infinite;
+    -webkit-mask:
+      var(--mask-opaque) content-box,
+      var(--mask-opaque);
+    -webkit-mask-composite: xor;
+    mask:
+      var(--mask-opaque) content-box exclude,
+      var(--mask-opaque);
+  }
+}
+
+@property --edge-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@keyframes orbit {
+  to {
+    --edge-angle: 360deg;
+  }
+}
+
+/* The specialist has stopped and waits for the manager: the card is held
+   by four gold joints at its corners, like the fittings of a drawing chest.
+   Each joint is two sides of a small box. Borders are drawn on whole
+   pixels of the screen, so the joints stay sharp at every scale, where a
+   painted or masked line would blur into its neighbors. The frame holds
+   the top two; the span inside it the bottom two. */
+.joints,
+.joints > span {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.joints {
+  inset: -1px;
+}
+
+.joints::before,
+.joints::after,
+.joints > span::before,
+.joints > span::after {
+  position: absolute;
+  width: var(--joint-length);
+  height: var(--joint-length);
+  border: 0 solid var(--brass);
+  content: '';
+}
+
+.joints::before {
+  top: 0;
+  left: 0;
+  border-top-width: var(--joint-weight);
+  border-left-width: var(--joint-weight);
+}
+
+.joints::after {
+  top: 0;
+  right: 0;
+  border-top-width: var(--joint-weight);
+  border-right-width: var(--joint-weight);
+}
+
+.joints > span::before {
+  bottom: 0;
+  left: 0;
+  border-bottom-width: var(--joint-weight);
+  border-left-width: var(--joint-weight);
+}
+
+.joints > span::after {
+  right: 0;
+  bottom: 0;
+  border-right-width: var(--joint-weight);
+  border-bottom-width: var(--joint-weight);
 }
 
 .face {
@@ -41,6 +215,8 @@
 }
 
 .lifted > .card > *,
+.lifted > .card::before,
+.lifted > .card::after,
 .lifted > .subtasks {
   visibility: hidden;
 }
@@ -65,8 +241,9 @@
 /* The facts of a task, set small on one line like the notes on a drawing. */
 .facts {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-3);
+  gap: var(--space-1) var(--space-3);
   min-height: 20px;
   color: var(--ink-faint);
   font-size: var(--text-small);
@@ -108,18 +285,20 @@
   margin-left: auto;
 }
 
-/* Somebody is working on the task at this moment: a block in brass that
-   comes and goes, next to the one who works. */
+/* Somebody is working on the task at this moment: a block in gold that
+   comes and goes, next to the one who works. It says the same as the light
+   on the edge, and still says it in a picture or with motion turned down. */
 .atWork {
   width: 7px;
   height: 7px;
   border-radius: 1.5px;
   background: var(--brass);
-  animation: at-work 1.1s ease-in-out infinite alternate;
+  animation: at-work var(--duration-at-work) ease-in-out infinite alternate;
 }
 
 /* The specialist has stopped and waits for the manager to decide: the
-   same block, hollow and still. It is the manager's move. */
+   same block, hollow and still. It is the manager's move, and the words
+   say so. */
 .waits {
   width: 7px;
   height: 7px;
@@ -127,9 +306,24 @@
   border-radius: 1.5px;
 }
 
+.waitsForYou {
+  color: var(--brass-text);
+  font-weight: 550;
+  white-space: nowrap;
+}
+
 @keyframes at-work {
   to {
     opacity: 0.25;
+  }
+}
+
+/* With motion turned down, work that goes on stands still: the solid
+   block and the bright point on the edge still say "at work". */
+@media (prefers-reduced-motion: reduce) {
+  .atWork,
+  .edge {
+    animation: none !important;
   }
 }
 

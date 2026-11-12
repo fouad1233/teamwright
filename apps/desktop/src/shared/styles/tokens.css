@@ -121,6 +121,10 @@
   --joint-length: 9px;
   --joint-weight: 2px;
 
+  /* A mask that keeps all it covers. Two of them, one cut out of the other,
+     leave only the rim of an element for a light to fall on. */
+  --mask-opaque: linear-gradient(#000 0 0);
+
   /*
    * Motion (decision 0015). Things arrive by slowing down and leave by
    * speeding up. Leaving is quicker than arriving. Nothing bounces, and

@@ -161,6 +161,15 @@ The interface follows the design philosophy in
   circle. An AI specialist is a block with its initials in its own color,
   like a part of the logo. A person is a circle with initials. Nobody is a
   dashed outline.
+- Light falls only where something happens or waits for the manager
+  ([decision 0015](../../docs/decisions/0015-light-where-something-happens.md)).
+  A card at rest is flat. Under the pointer a lamp follows it
+  (`shared/ui/lamplight.ts`). A card a specialist works on has a point of
+  light that travels round its edge and a sun in its corner, next to the
+  gold block. A card that waits for the manager is held by four gold
+  corners and says "Waits for you". Every light stands beside a mark or a
+  word that says the same, because a picture or reduced motion shows no
+  light.
 - A subtask is shown under its task, never next to it: as a smaller card on
   the board and as a row set in on the list, each with the mark of its own
   status. The task ends in a fold (`SubtaskFold`) that counts its subtasks

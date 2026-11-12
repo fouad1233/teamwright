@@ -6,6 +6,7 @@ import type { HTMLAttributes, KeyboardEvent, Ref } from 'react';
 import type { Id, Project, Status, Task } from '@/shared/api/types';
 import { classNames } from '@/shared/lib/classNames';
 import { formatDate, formatEstimate, isOverdue, taskReference } from '@/shared/lib/format';
+import { followPointer } from '@/shared/ui/lamplight';
 
 import { SubtaskFold } from '../tasks/SubtaskFold';
 import { PriorityFlag, StatusMark } from '../tasks/TaskBadges';
@@ -79,7 +80,17 @@ export function TaskCard({
   const waitsForManager = useWaitsForManager(task.id);
 
   return (
-    <div className={classNames(styles.card, status && styles.part)}>
+    <div
+      className={classNames(styles.card, status && styles.part, isBeingWorkedOn && styles.working)}
+      onPointerEnter={followPointer}
+      onPointerMove={followPointer}
+    >
+      {isBeingWorkedOn && <span className={styles.edge} aria-hidden />}
+      {waitsForManager && (
+        <span className={styles.joints} aria-hidden>
+          <span />
+        </span>
+      )}
       <div className={styles.face} {...face}>
         <p className={styles.title}>
           {status && (
@@ -92,6 +103,11 @@ export function TaskCard({
 
         <div className={styles.facts}>
           <span className={styles.reference}>{taskReference(project, task)}</span>
+          {waitsForManager && (
+            <span className={styles.waitsForYou} title="A specialist waits for your decision">
+              Waits for you
+            </span>
+          )}
           {hasRaisedPriority && <PriorityFlag priority={task.priority} />}
           {unfinishedBlockerCount > 0 && (
             <span className={styles.waiting} title="Waits for tasks that are not finished">
@@ -121,14 +137,8 @@ export function TaskCard({
                 title="A specialist is working on this task"
               />
             )}
-            {waitsForManager && (
-              <span
-                className={styles.waits}
-                role="img"
-                aria-label="A specialist waits for your decision"
-                title="A specialist waits for your decision"
-              />
-            )}
+            {/* The words before it say the same, for screen readers too. */}
+            {waitsForManager && <span className={styles.waits} aria-hidden />}
             <AssigneeAvatar assignee={task.assignee} />
           </span>
         </div>
