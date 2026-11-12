@@ -27,6 +27,8 @@ was considered.
 | [0009](0009-a-team-per-project.md) | Give every project a team of its own, with agents and people as one kind of member | Accepted |
 | [0010](0010-one-process-for-each-turn.md) | Run one Claude Code process for each turn | Accepted |
 | [0011](0011-what-a-specialist-may-do.md) | Let a specialist read and write in the folder of the project, and nothing else | Accepted |
+| [0012](0012-a-specialist-asks-through-a-tool.md) | Let a specialist ask the manager through a tool of its own | Accepted |
+| [0013](0013-the-folders-of-a-project.md) | Give a project a work folder the manager can choose, and folders that are only read | Accepted |
 
 ## Template
 
