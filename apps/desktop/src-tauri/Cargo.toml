@@ -18,6 +18,8 @@ teamwright-storage.workspace = true
 chrono.workspace = true
 serde.workspace = true
 tauri = { version = "2", features = [] }
+# The windows of the operating system for choosing a folder or files.
+tauri-plugin-dialog = "2"
 thiserror.workspace = true
 
 [lints]

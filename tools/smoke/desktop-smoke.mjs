@@ -20,6 +20,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import {
+  closeWindowTitled,
   DesktopApplication,
   removeDataDirectory,
   STAND_IN_AGENT_VERSION,
@@ -33,6 +34,9 @@ if (!executable) {
 
 /** The port on which the web view of the application offers its debugging protocol. */
 const DEBUGGING_PORT = 9333;
+
+/** The title the test gives the window for choosing a folder, to find it again. */
+const FOLDER_DIALOG_TITLE = 'Teamwright smoke test: choose a folder';
 
 // ------------------------------------------------------------------ checks
 
@@ -362,6 +366,19 @@ try {
     await window.screenshot(screenshotPath);
     console.log(`      screenshot written to ${screenshotPath}`);
   }
+
+  // The window of the operating system in which the manager chooses a
+  // folder. Nobody is there to choose, so the test closes that window, and
+  // closing it must choose nothing.
+  const choosing = window.command('plugin:dialog|open', {
+    options: { directory: true, multiple: false, title: FOLDER_DIALOG_TITLE },
+  });
+  const [wasOpen, chosen] = await Promise.all([closeWindowTitled(FOLDER_DIALOG_TITLE), choosing]);
+  check(
+    'the interface may open the window for choosing a folder, and closing it chooses nothing',
+    wasOpen && 'ok' in chosen && chosen.ok === null,
+    JSON.stringify({ wasOpen, chosen }),
+  );
 
   // The work of a specialist, as far as it goes without a real one. The
   // application is pointed at a stand-in for Claude Code, which says that it

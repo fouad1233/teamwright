@@ -270,3 +270,47 @@ export class Window {
     this.#socket.close();
   }
 }
+
+/** The message that asks a window to close, as the cross in its corner does. */
+const CLOSE_MESSAGE = '0x0010';
+
+/**
+ * Waits for a window of the operating system with the given title and asks
+ * it to close. Resolves to whether the window was found in time.
+ *
+ * The application opens such windows for choosing a folder or files. They
+ * belong to the operating system and not to the web view, so the debugging
+ * protocol does not reach them. A short PowerShell script looks for the
+ * window instead. It is handed over encoded, so that no script file has to
+ * be allowed to run.
+ */
+export function closeWindowTitled(title, timeoutSeconds = 15) {
+  const script = `
+Add-Type -Namespace Teamwright -Name Desktop -MemberDefinition @'
+[DllImport("user32.dll", CharSet = CharSet.Unicode)]
+public static extern IntPtr FindWindow(IntPtr className, string windowName);
+[DllImport("user32.dll")]
+public static extern bool PostMessage(IntPtr window, uint message, IntPtr wParam, IntPtr lParam);
+'@
+$deadline = (Get-Date).AddSeconds(${String(timeoutSeconds)})
+while ((Get-Date) -lt $deadline) {
+  $window = [Teamwright.Desktop]::FindWindow([IntPtr]::Zero, '${title.replaceAll("'", "''")}')
+  if ($window -ne [IntPtr]::Zero) {
+    [void][Teamwright.Desktop]::PostMessage($window, ${CLOSE_MESSAGE}, [IntPtr]::Zero, [IntPtr]::Zero)
+    exit 0
+  }
+  Start-Sleep -Milliseconds 200
+}
+exit 1
+`;
+  const encoded = Buffer.from(script, 'utf16le').toString('base64');
+  return new Promise((resolve) => {
+    const powershell = spawn(
+      'powershell.exe',
+      ['-NoProfile', '-NonInteractive', '-EncodedCommand', encoded],
+      { stdio: 'ignore', windowsHide: true },
+    );
+    powershell.on('error', () => resolve(false));
+    powershell.on('exit', (code) => resolve(code === 0));
+  });
+}

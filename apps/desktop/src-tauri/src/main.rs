@@ -28,6 +28,9 @@ fn main() -> ExitCode {
     }
 
     let application = tauri::Builder::default()
+        // Lets the interface open the window of the operating system in
+        // which the manager chooses a folder or files.
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let state = AppState::open(app.handle())?;
             app.manage(state);
