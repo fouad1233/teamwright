@@ -35,6 +35,10 @@ involved.
   an upsert the complete new state as JSON. State and log therefore cannot
   disagree. The log is what computers will exchange when they sync
   ([decision 0007](../../docs/decisions/0007-local-first-storage.md)).
+- **The log is also the history.** Because it keeps the complete state of a
+  task after every write, the versions of a task are read straight from it
+  (`TaskRepository::versions_of`), in the order of their stamps. The history
+  a manager sees needs no table of its own.
 - **Each database file has a device identity**, created when the file is
   first opened and stored in `meta`.
 - **Statuses are part of their project.** They have rows of their own in

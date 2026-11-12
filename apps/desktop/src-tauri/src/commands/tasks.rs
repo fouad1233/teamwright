@@ -4,7 +4,8 @@ use tauri::State;
 use teamwright_domain::Assignee;
 
 use crate::dto::{
-    AssigneeDto, NewTaskInput, TaskDto, parse_id, parse_optional_date, parse_priority,
+    AssigneeDto, NewTaskInput, TaskChangeDto, TaskDto, parse_id, parse_optional_date,
+    parse_priority,
 };
 use crate::error::CommandError;
 use crate::state::AppState;
@@ -148,4 +149,14 @@ pub async fn remove_task_dependency(
 pub async fn delete_task(state: State<'_, AppState>, task_id: String) -> Result<(), CommandError> {
     state.tasks.delete(parse_id(&task_id)?)?;
     Ok(())
+}
+
+/// Tells the history of a task, the oldest change first.
+#[tauri::command]
+pub async fn list_task_history(
+    state: State<'_, AppState>,
+    task_id: String,
+) -> Result<Vec<TaskChangeDto>, CommandError> {
+    let history = state.tasks.history(parse_id(&task_id)?)?;
+    Ok(history.iter().map(TaskChangeDto::from).collect())
 }

@@ -8,7 +8,7 @@ window or agent runtime.
 | Module | Contents |
 |---|---|
 | `projects` | `ProjectService`: start, find, list, rename, describe, archive, restore and delete projects; add, change, move and remove the statuses of their workflows |
-| `tasks` | `TaskService`: open, change, move, connect and remove tasks |
+| `tasks` | `TaskService`: open, change, move, connect and remove tasks, and tell the history of one from the versions storage has kept |
 | `team` | `TeamService`: put members on the team of a project, change them, take them off |
 | `work` | `WorkService`: let AI specialists work: start on a task, ask, reply, stop, follow every event, open a session in the desktop app, recover after a restart; `brief_for` and `instructions_for` |
 | `ports` | The interfaces the services need: `ProjectRepository`, `TaskRepository`, `MemberRepository`, `ConversationRepository`, `ProjectFolders`, `WorkListener`, `Clock` |

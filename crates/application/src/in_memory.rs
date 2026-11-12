@@ -59,22 +59,26 @@ impl ProjectRepository for InMemoryProjectRepository {
     }
 }
 
-/// Keeps tasks in memory.
+/// Keeps tasks in memory, together with every version they were stored in.
 #[derive(Debug, Default)]
 pub struct InMemoryTaskRepository {
     tasks: Mutex<BTreeMap<TaskId, Task>>,
+    /// Every version of every task, in the order they were stored. Real
+    /// storage reads them from its log of operations.
+    versions: Mutex<BTreeMap<TaskId, Vec<Task>>>,
 }
 
 impl TaskRepository for InMemoryTaskRepository {
     fn save(&self, task: &Task) -> Result<(), StorageError> {
-        lock(&self.tasks).insert(task.id(), task.clone());
-        Ok(())
+        self.save_all(std::slice::from_ref(task))
     }
 
     fn save_all(&self, tasks: &[Task]) -> Result<(), StorageError> {
         let mut stored = lock(&self.tasks);
+        let mut versions = lock(&self.versions);
         for task in tasks {
             stored.insert(task.id(), task.clone());
+            versions.entry(task.id()).or_default().push(task.clone());
         }
         Ok(())
     }
@@ -97,6 +101,10 @@ impl TaskRepository for InMemoryTaskRepository {
             stored.remove(id);
         }
         Ok(())
+    }
+
+    fn versions_of(&self, id: TaskId) -> Result<Vec<Task>, StorageError> {
+        Ok(lock(&self.versions).get(&id).cloned().unwrap_or_default())
     }
 }
 

@@ -4,7 +4,7 @@ use std::collections::{BTreeSet, HashMap};
 use std::sync::Arc;
 
 use rusqlite::{Connection, OptionalExtension, Row, Transaction, named_params};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use teamwright_application::{StorageError, TaskRepository};
 use teamwright_domain::{
     Assignee, DomainError, ProjectId, Rank, Schedule, Task, TaskId, TaskSnapshot, TaskTitle,
@@ -13,7 +13,7 @@ use teamwright_domain::{
 use crate::codec;
 use crate::database::Database;
 use crate::error::DatabaseError;
-use crate::operations::{Entity, OperationRecorder};
+use crate::operations::{self, Entity, OperationRecorder};
 
 /// The columns of the `tasks` table that every query reads.
 const TASK_COLUMNS: &str = "id, project_id, number, title, description, status_id, priority, \
@@ -58,7 +58,7 @@ const UPSERT_TASK: &str = "
 
 /// A task as the database and the operation log keep it: plain text and
 /// numbers.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 struct TaskRecord {
     id: String,
     project_id: String,
@@ -287,6 +287,24 @@ impl TaskRepository for SqliteTaskRepository {
                 }
             }
             Ok(())
+        })
+    }
+
+    fn versions_of(&self, id: TaskId) -> Result<Vec<Task>, StorageError> {
+        self.database.read(|connection| {
+            // The log holds the complete state of the task after every
+            // write, so the versions need no table of their own.
+            operations::states_of(connection, Entity::Task, &id.to_string())?
+                .iter()
+                .map(|state| {
+                    let record: TaskRecord = serde_json::from_str(state).map_err(|reason| {
+                        DatabaseError::Damaged(format!(
+                            "a version of the task {id} in the log cannot be read: {reason}"
+                        ))
+                    })?;
+                    record.into_task()
+                })
+                .collect()
         })
     }
 }

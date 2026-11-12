@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use teamwright_domain::{
     Assignee, CalendarDate, DependencyGraph, Priority, Project, ProjectId, Rank, Schedule, Status,
-    StatusId, Task, TaskDraft, TaskId, TaskTitle, Timestamp,
+    StatusId, Task, TaskChange, TaskDraft, TaskId, TaskTitle, Timestamp, history_of,
 };
 
 use crate::error::ApplicationError;
@@ -168,6 +168,26 @@ impl TaskService {
         let mut tasks = self.tasks.list_for_project(project.id())?;
         sort_as_arranged(&mut tasks);
         Ok(tasks)
+    }
+
+    /// Tells the history of a task, the oldest change first: that it was
+    /// opened, and then everything that changed about it since. A move up
+    /// or down within a status is not a change.
+    ///
+    /// Nothing is kept for the history itself. It is read off the versions
+    /// of the task that storage has kept.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if there is no such task or if storage fails.
+    pub fn history(&self, id: TaskId) -> Result<Vec<TaskChange>, ApplicationError> {
+        let task = self.require_task(id)?;
+        let mut versions = self.tasks.versions_of(id)?;
+        if versions.is_empty() {
+            // Storage that kept no versions still knows the task as it is.
+            versions.push(task);
+        }
+        Ok(history_of(&versions))
     }
 
     /// Gives a task a new title.
@@ -1365,6 +1385,95 @@ mod tests {
                 kind: "project",
                 ..
             }
+        ));
+    }
+
+    #[test]
+    fn the_history_of_a_task_tells_what_happened_to_it_the_oldest_first() {
+        use teamwright_domain::TaskChangeKind;
+
+        let workspace = workspace();
+        let project = workspace.project("Smart sensor node");
+        let active = status_in(&project, StatusCategory::Active);
+        let task = workspace.task(&project, "Draw the schematic");
+        workspace.clock.advance(TimeDelta::hours(1));
+        workspace
+            .tasks
+            .prioritize(task.id(), Priority::Urgent)
+            .unwrap();
+        workspace.clock.advance(TimeDelta::hours(1));
+        workspace.tasks.move_to(task.id(), active, 0).unwrap();
+
+        let history = workspace.tasks.history(task.id()).unwrap();
+
+        assert_eq!(
+            history,
+            [
+                TaskChange {
+                    at: start_of_day(),
+                    kind: TaskChangeKind::Created
+                },
+                TaskChange {
+                    at: start_of_day() + TimeDelta::hours(1),
+                    kind: TaskChangeKind::Prioritized {
+                        from: Priority::Normal,
+                        to: Priority::Urgent
+                    }
+                },
+                TaskChange {
+                    at: start_of_day() + TimeDelta::hours(2),
+                    kind: TaskChangeKind::Moved {
+                        from: task.status_id(),
+                        to: active
+                    }
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn the_history_lists_what_happens_to_a_task_through_another_task() {
+        use teamwright_domain::TaskChangeKind;
+
+        let workspace = workspace();
+        let project = workspace.project("Smart sensor node");
+        let schematic = workspace.task(&project, "Draw the schematic");
+        let board = workspace.task(&project, "Route the board");
+        workspace
+            .tasks
+            .add_dependency(board.id(), schematic.id())
+            .unwrap();
+
+        workspace.tasks.delete(schematic.id()).unwrap();
+
+        let kinds: Vec<_> = workspace
+            .tasks
+            .history(board.id())
+            .unwrap()
+            .into_iter()
+            .map(|change| change.kind)
+            .collect();
+        assert_eq!(
+            kinds,
+            [
+                TaskChangeKind::Created,
+                TaskChangeKind::NowWaitsFor {
+                    blocker: schematic.id()
+                },
+                TaskChangeKind::NoLongerWaitsFor {
+                    blocker: schematic.id()
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn the_history_of_a_task_that_does_not_exist_is_reported() {
+        let error = workspace().tasks.history(TaskId::generate()).unwrap_err();
+
+        assert!(matches!(
+            error,
+            ApplicationError::NotFound { kind: "task", .. }
         ));
     }
 }

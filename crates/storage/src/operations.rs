@@ -14,7 +14,7 @@
 use std::fmt;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use rusqlite::{Transaction, named_params};
+use rusqlite::{Connection, Transaction, named_params};
 use serde::Serialize;
 use uuid::Uuid;
 
@@ -168,6 +168,30 @@ impl HybridLogicalClock {
         };
         self.last
     }
+}
+
+/// Reads every state something has been stored in, the oldest first, each as
+/// the JSON the log keeps. Deletions are passed over: they have no state.
+///
+/// The states are ordered by their stamps, which is the order the changes
+/// happened in, also for changes that came from another computer.
+pub(crate) fn states_of(
+    connection: &Connection,
+    entity: Entity,
+    entity_id: &str,
+) -> Result<Vec<String>, DatabaseError> {
+    let mut statement = connection.prepare(
+        "SELECT payload FROM operations
+         WHERE entity = :entity AND entity_id = :entity_id AND payload IS NOT NULL
+         ORDER BY stamp, sequence",
+    )?;
+    let states = statement
+        .query_map(
+            named_params! { ":entity": entity.as_str(), ":entity_id": entity_id },
+            |row| row.get(0),
+        )?
+        .collect::<Result<_, _>>()?;
+    Ok(states)
 }
 
 /// The time of day in milliseconds since 1 January 1970, UTC.

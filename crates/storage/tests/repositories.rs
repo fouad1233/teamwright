@@ -546,6 +546,46 @@ fn deleting_tasks_removes_them_and_the_dependencies_that_mention_them() {
     assert!(firmware.blocked_by().is_empty());
 }
 
+#[test]
+fn every_version_a_task_was_stored_in_can_be_read_back_the_oldest_first() {
+    let store = Store::in_memory();
+    let project = store.project("Smart sensor node");
+    let blocker = store.task(&project, 1, "Choose the microcontroller");
+    let opened = store.task(&project, 2, "Draw the schematic");
+    let mut waiting = opened.clone();
+    waiting.block_on(blocker.id(), moment(10)).unwrap();
+    store.tasks.save(&waiting).unwrap();
+    let mut done = waiting.clone();
+    done.move_to(
+        project.workflow().first_in(StatusCategory::Done).unwrap(),
+        Rank::FIRST,
+        moment(11),
+    );
+    done.assign(Some(Assignee::Manager), moment(11));
+    store.tasks.save(&done).unwrap();
+
+    let versions = store.tasks.versions_of(opened.id()).unwrap();
+
+    assert_eq!(versions, [opened, waiting, done.clone()]);
+    assert_eq!(
+        versions.last(),
+        store.tasks.find(done.id()).unwrap().as_ref(),
+        "the last version is the task as it is stored"
+    );
+    assert_eq!(
+        store.tasks.versions_of(blocker.id()).unwrap().len(),
+        1,
+        "the versions of another task are not mixed in"
+    );
+}
+
+#[test]
+fn a_task_that_was_never_stored_has_no_versions() {
+    let store = Store::in_memory();
+
+    assert_eq!(store.tasks.versions_of(TaskId::generate()).unwrap(), []);
+}
+
 // Team members
 
 #[test]

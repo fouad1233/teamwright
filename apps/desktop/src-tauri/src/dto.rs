@@ -14,7 +14,8 @@ use teamwright_application::{
 };
 use teamwright_domain::{
     Assignee, CalendarDate, Color, Conversation, DomainError, Member, MemberKind, Priority,
-    Project, Status, StatusCategory, Step, StepContent, Task, Timestamp, TokenCounts, Turn,
+    Project, Schedule, Status, StatusCategory, Step, StepContent, Task, TaskChange, TaskChangeKind,
+    Timestamp, TokenCounts, Turn,
 };
 
 use crate::error::CommandError;
@@ -118,6 +119,142 @@ impl From<&Task> for TaskDto {
             created_at: moment_to_text(task.created_at()),
             updated_at: moment_to_text(task.updated_at()),
             completed_at: task.completed_at().map(moment_to_text),
+        }
+    }
+}
+
+/// One change in the life of a task, as the interface sees it:
+/// `{"at": "…", "kind": "moved", "fromStatusId": "…", "toStatusId": "…"}`,
+/// and so on for the other kinds.
+#[derive(Debug, Serialize)]
+pub struct TaskChangeDto {
+    at: String,
+    #[serde(flatten)]
+    change: TaskChangeKindDto,
+}
+
+/// What happened in a change, with its kind as the field `kind`.
+#[derive(Debug, Serialize)]
+#[serde(
+    tag = "kind",
+    rename_all = "snake_case",
+    rename_all_fields = "camelCase"
+)]
+pub enum TaskChangeKindDto {
+    /// The task was opened.
+    Created,
+    /// It got another title.
+    Renamed {
+        /// The title before.
+        from: String,
+        /// The title since.
+        to: String,
+    },
+    /// Its description changed.
+    Described,
+    /// It went to another status.
+    Moved {
+        /// The status before.
+        from_status_id: String,
+        /// The status since.
+        to_status_id: String,
+    },
+    /// It was given to someone else, or to nobody.
+    Assigned {
+        /// Who was responsible before.
+        from: Option<AssigneeDto>,
+        /// Who is responsible since.
+        to: Option<AssigneeDto>,
+    },
+    /// Its priority changed.
+    Prioritized {
+        /// The priority before.
+        from: &'static str,
+        /// The priority since.
+        to: &'static str,
+    },
+    /// Its estimate changed. The numbers are minutes.
+    Estimated {
+        /// The estimate before.
+        from: Option<u32>,
+        /// The estimate since.
+        to: Option<u32>,
+    },
+    /// Its dates changed.
+    Rescheduled {
+        /// The dates before.
+        from: TaskDatesDto,
+        /// The dates since.
+        to: TaskDatesDto,
+    },
+    /// It began to wait for another task.
+    NowWaitsFor {
+        /// The task it waits for.
+        task_id: String,
+    },
+    /// It stopped waiting for another task.
+    NoLongerWaitsFor {
+        /// The task it waited for.
+        task_id: String,
+    },
+}
+
+/// The dates of a task: when it starts and when it is due.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskDatesDto {
+    start_on: Option<String>,
+    due_on: Option<String>,
+}
+
+impl From<Schedule> for TaskDatesDto {
+    fn from(schedule: Schedule) -> Self {
+        Self {
+            start_on: schedule.start_on().map(date_to_text),
+            due_on: schedule.due_on().map(date_to_text),
+        }
+    }
+}
+
+impl From<&TaskChange> for TaskChangeDto {
+    fn from(change: &TaskChange) -> Self {
+        let kind = match &change.kind {
+            TaskChangeKind::Created => TaskChangeKindDto::Created,
+            TaskChangeKind::Renamed { from, to } => TaskChangeKindDto::Renamed {
+                from: from.to_string(),
+                to: to.to_string(),
+            },
+            TaskChangeKind::Described => TaskChangeKindDto::Described,
+            TaskChangeKind::Moved { from, to } => TaskChangeKindDto::Moved {
+                from_status_id: from.to_string(),
+                to_status_id: to.to_string(),
+            },
+            TaskChangeKind::Assigned { from, to } => TaskChangeKindDto::Assigned {
+                from: from.map(AssigneeDto::from),
+                to: to.map(AssigneeDto::from),
+            },
+            TaskChangeKind::Prioritized { from, to } => TaskChangeKindDto::Prioritized {
+                from: from.as_str(),
+                to: to.as_str(),
+            },
+            TaskChangeKind::Estimated { from, to } => TaskChangeKindDto::Estimated {
+                from: *from,
+                to: *to,
+            },
+            TaskChangeKind::Rescheduled { from, to } => TaskChangeKindDto::Rescheduled {
+                from: TaskDatesDto::from(*from),
+                to: TaskDatesDto::from(*to),
+            },
+            TaskChangeKind::NowWaitsFor { blocker } => TaskChangeKindDto::NowWaitsFor {
+                task_id: blocker.to_string(),
+            },
+            TaskChangeKind::NoLongerWaitsFor { blocker } => TaskChangeKindDto::NoLongerWaitsFor {
+                task_id: blocker.to_string(),
+            },
+        };
+        Self {
+            at: moment_to_text(change.at),
+            change: kind,
         }
     }
 }

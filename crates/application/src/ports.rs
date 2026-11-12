@@ -119,6 +119,15 @@ pub trait TaskRepository: Send + Sync {
     ///
     /// Returns an error if the tasks could not be removed.
     fn delete(&self, ids: &[TaskId]) -> Result<(), StorageError>;
+
+    /// Lists every version a task has been stored in, the oldest first. The
+    /// last one is the task as [`find`](Self::find) returns it. A task that
+    /// was never stored has none.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if stored data could not be read.
+    fn versions_of(&self, id: TaskId) -> Result<Vec<Task>, StorageError>;
 }
 
 /// Stores the members of the teams.
