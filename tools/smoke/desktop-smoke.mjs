@@ -157,12 +157,154 @@ try {
     afterLeaving?.find((stored) => stored.id === enclosure.id)?.assignee === null,
   );
 
+  // A subtask: it belongs to its parent, and a place on the board does not count it.
+  const part = (
+    await window.command('create_task', {
+      input: { projectId: project.id, title: 'Choose the material', parentId: enclosure.id },
+    })
+  ).ok;
+  const todo = project.statuses.find((status) => status.category === 'todo');
+  await window.command('move_task', { taskId: enclosure.id, statusId: todo.id, index: 0 });
+  const arranged = (await window.command('list_tasks', { projectId: project.id })).ok;
+  const mainTasksToDo = arranged
+    ?.filter((stored) => stored.statusId === todo.id && stored.parentId === null)
+    .map((stored) => stored.title);
+  check(
+    'a subtask is stored with its parent and is not counted among the cards of a status',
+    part?.parentId === enclosure.id && mainTasksToDo?.join(', ') === 'Design the enclosure, Write the firmware',
+    JSON.stringify(mainTasksToDo),
+  );
+
+  // The statuses of the project: one is added, used, changed, and removed.
+  const names = (changed) => changed?.statuses.map((status) => status.name).join(', ');
+  const withWaiting = await window.command('add_status', {
+    projectId: project.id,
+    status: { name: 'Waiting for parts', category: 'active', color: 'pink' },
+  });
+  check(
+    'a new step of the work is placed with the other steps, in front of review and done',
+    names(withWaiting.ok) === 'To do, In progress, In revision, Waiting for parts, In test, Done',
+    JSON.stringify(withWaiting),
+  );
+  const waiting = withWaiting.ok?.statuses.find((status) => status.name === 'Waiting for parts');
+  const inProgress = project.statuses.find((status) => status.category === 'active');
+  await window.command('move_task', { taskId: firmware.id, statusId: waiting.id, index: 0 });
+  const storedTask = async (id) =>
+    (await window.command('list_tasks', { projectId: project.id })).ok?.find((stored) => stored.id === id);
+
+  const sameName = await window.command('add_status', {
+    projectId: project.id,
+    status: { name: 'in TEST', category: 'review', color: 'amber' },
+  });
+  check('a second status with the same name is refused', sameName.refused?.code === 'rule_broken', JSON.stringify(sameName));
+
+  const noTodo = await window.command('remove_status', {
+    projectId: project.id,
+    statusId: todo.id,
+    moveTasksTo: inProgress.id,
+  });
+  check(
+    'the only status in which work has not started cannot be removed',
+    noTodo.refused?.code === 'rule_broken',
+    JSON.stringify(noTodo),
+  );
+
+  const inUse = await window.command('remove_status', {
+    projectId: project.id,
+    statusId: waiting.id,
+    moveTasksTo: null,
+  });
+  check(
+    'a status with tasks is not removed while they have nowhere to go',
+    inUse.refused?.code === 'status_in_use' &&
+      inUse.refused?.message ===
+        'the status "Waiting for parts" still has 1 task, which need another status to go to',
+    JSON.stringify(inUse),
+  );
+
+  const accepted = await window.command('change_status', {
+    projectId: project.id,
+    statusId: waiting.id,
+    status: { name: 'Accepted', category: 'done', color: 'green' },
+  });
+  check(
+    'a status that becomes a done status completes its tasks',
+    names(accepted.ok)?.includes('Accepted') && typeof (await storedTask(firmware.id))?.completedAt === 'string',
+    JSON.stringify(accepted),
+  );
+
+  const reordered = await window.command('move_status', {
+    projectId: project.id,
+    statusId: waiting.id,
+    index: 1,
+  });
+  check(
+    'a status moves to another place of the workflow',
+    names(reordered.ok) === 'To do, Accepted, In progress, In revision, In test, Done',
+    JSON.stringify(reordered),
+  );
+
+  const removed = await window.command('remove_status', {
+    projectId: project.id,
+    statusId: waiting.id,
+    moveTasksTo: inProgress.id,
+  });
+  const firmwareAfter = await storedTask(firmware.id);
+  check(
+    'removing a status sends its tasks to another one, which reopens them',
+    names(removed.ok) === 'To do, In progress, In revision, In test, Done' &&
+      firmwareAfter?.statusId === inProgress.id &&
+      firmwareAfter?.completedAt === null,
+    JSON.stringify([removed, firmwareAfter]),
+  );
+
+  // A second project is put away, brought back, and deleted for good.
+  const spare = (
+    await window.command('create_project', { input: { name: 'Display driver', workflow: 'standard' } })
+  ).ok;
+  await window.command('create_task', { input: { projectId: spare.id, title: 'Write the driver' } });
+  await window.command('rename_project', { projectId: spare.id, name: 'Display driver, second try' });
+  await window.command('archive_project', { projectId: spare.id });
+  const openProjects = (await window.command('list_projects')).ok;
+  const archived = (await window.command('list_archived_projects')).ok;
+  check(
+    'a project that is put away is listed with the archived ones only',
+    openProjects?.length === 1 &&
+      archived?.length === 1 &&
+      archived[0].name === 'Display driver, second try',
+    JSON.stringify(archived),
+  );
+  const restored = await window.command('restore_project', { projectId: spare.id });
+  check(
+    'a project that was put away is brought back',
+    restored.ok?.archivedAt === null && (await window.command('list_projects')).ok?.length === 2,
+    JSON.stringify(restored),
+  );
+  const deleted = await window.command('delete_project', { projectId: spare.id });
+  const tasksOfDeleted = await window.command('list_tasks', { projectId: spare.id });
+  check(
+    'a project is deleted for good, with its tasks',
+    deleted.refused === undefined &&
+      tasksOfDeleted.refused?.code === 'not_found' &&
+      (await window.command('list_projects')).ok?.length === 1,
+    JSON.stringify([deleted, tasksOfDeleted]),
+  );
+
   // The interface shows what the commands stored.
   await window.reload();
   const shown = await window.waitForText('Write the firmware');
   check('the board shows the project', shown.includes('Smart sensor node'));
   check('the board shows every task', ['Design the board', 'Design the enclosure'].every((title) => shown.includes(title)));
-  check('the header counts the tasks', shown.includes('3 tasks · 1 done'), shown.slice(0, 200));
+  check('the header counts the tasks', shown.includes('4 tasks · 1 done'), shown.slice(0, 200));
+  check(
+    'the board shows a subtask behind the fold of its parent, not as a card of its own',
+    shown.includes('1 subtask') && !shown.includes('Choose the material'),
+    shown.slice(0, 400),
+  );
+  check(
+    'the views of a project are offered as tabs',
+    ['Board', 'List', 'Gantt', 'Calendar', 'Team'].every((view) => shown.includes(view)),
+  );
   check(
     'the board shows who a task is given to',
     await window.evaluate(
@@ -184,7 +326,14 @@ try {
   const tasks = (await window.command('list_tasks', { projectId: projects[0]?.id })).ok;
   const storedBoard = tasks?.find((stored) => stored.number === 1);
   check('the project survives a restart', projects?.length === 1 && projects[0].key === 'SSN');
-  check('the tasks survive a restart', tasks?.length === 3);
+  check('the tasks survive a restart', tasks?.length === 4);
+  check(
+    'the workflow is as it was left, and the deleted project stays deleted',
+    projects[0].statuses.map((status) => status.name).join(', ') ===
+      'To do, In progress, In revision, In test, Done' &&
+      (await window.command('list_archived_projects')).ok?.length === 0,
+    JSON.stringify(projects[0].statuses),
+  );
   const team = (await window.command('list_members', { projectId: projects[0]?.id })).ok;
   check(
     'the team survives a restart',
