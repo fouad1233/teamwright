@@ -31,7 +31,7 @@ use crate::planning::{
 
 /// The columns of the `conversations` table that every query reads.
 const CONVERSATION_COLUMNS: &str = "id, project_id, member_id, task_id, started_at, session_id, \
-     with_advisor, advisor_model, advisor_effort";
+     with_advisor, advisor_model, advisor_effort, home_computer";
 
 /// The columns of the `turns` table that every query reads.
 const TURN_COLUMNS: &str = "id, conversation_id, request, origin, state, started_at, ended_at, \
@@ -46,11 +46,11 @@ const STEP_COLUMNS: &str = "turn_id, position, at, kind, text, tool_use_id, tool
 const UPSERT_CONVERSATION: &str = "
     INSERT INTO conversations (
         id, project_id, member_id, task_id, started_at, session_id, with_advisor,
-        advisor_model, advisor_effort
+        advisor_model, advisor_effort, home_computer
     )
     VALUES (
         :id, :project_id, :member_id, :task_id, :started_at, :session_id, :with_advisor,
-        :advisor_model, :advisor_effort
+        :advisor_model, :advisor_effort, :home_computer
     )
     ON CONFLICT (id) DO UPDATE SET
         project_id = excluded.project_id,
@@ -60,7 +60,8 @@ const UPSERT_CONVERSATION: &str = "
         session_id = excluded.session_id,
         with_advisor = excluded.with_advisor,
         advisor_model = excluded.advisor_model,
-        advisor_effort = excluded.advisor_effort";
+        advisor_effort = excluded.advisor_effort,
+        home_computer = excluded.home_computer";
 
 const UPSERT_TURN: &str = "
     INSERT INTO turns (
@@ -140,6 +141,10 @@ struct ConversationRecord {
     advisor_model: Option<String>,
     /// The effort of the Advisor; `None` leaves it to the program.
     advisor_effort: Option<String>,
+    /// The computer the conversation was started on. A row without one is
+    /// damaged: the migration that added it gave every conversation its
+    /// computer.
+    home_computer: Option<String>,
 }
 
 impl ConversationRecord {
@@ -160,6 +165,7 @@ impl ConversationRecord {
             advisor_effort: advisor
                 .and_then(|profile| profile.effort)
                 .map(|effort| effort.as_str().to_owned()),
+            home_computer: Some(conversation.home_computer().to_string()),
         }
     }
 
@@ -175,6 +181,7 @@ impl ConversationRecord {
             with_advisor: row.get("with_advisor")?,
             advisor_model: row.get("advisor_model")?,
             advisor_effort: row.get("advisor_effort")?,
+            home_computer: row.get("home_computer")?,
         })
     }
 
@@ -206,6 +213,12 @@ impl ConversationRecord {
         } else {
             None
         };
+        let home_computer = self.home_computer.as_deref().ok_or_else(|| {
+            DatabaseError::Damaged(format!(
+                "the conversation {} does not say which computer it runs on",
+                self.id
+            ))
+        })?;
         Ok(Conversation::restore(ConversationSnapshot {
             id: codec::parse(&self.id)?,
             project_id: codec::parse(&self.project_id)?,
@@ -214,6 +227,7 @@ impl ConversationRecord {
             started_at: codec::moment_from_text(&self.started_at)?,
             session_id: self.session_id,
             advisor,
+            home_computer: codec::parse(home_computer)?,
         }))
     }
 }
@@ -560,6 +574,7 @@ impl ConversationRepository for SqliteConversationRepository {
                     ":with_advisor": record.with_advisor,
                     ":advisor_model": record.advisor_model,
                     ":advisor_effort": record.advisor_effort,
+                    ":home_computer": record.home_computer,
                 },
             )?;
             operations.record_upsert(Entity::Conversation, &record.id, &record)
@@ -1037,7 +1052,13 @@ mod tests {
         SqliteMemberRepository::new(database.clone())
             .save(&member)
             .unwrap();
-        let conversation = Conversation::start(project.id(), member.id(), None, moment());
+        let conversation = Conversation::start(
+            project.id(),
+            member.id(),
+            None,
+            moment(),
+            database.device_id(),
+        );
         let mut turn = Turn::start(
             conversation.id(),
             "Which regulator?",

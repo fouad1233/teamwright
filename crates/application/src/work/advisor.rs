@@ -108,7 +108,8 @@ impl WorkService {
             .map(ModelName::parse)
             .transpose()?;
         let now = ports.clock.now();
-        let conversation = Conversation::start_with_advisor(project.id(), model, effort, now);
+        let conversation =
+            Conversation::start_with_advisor(project.id(), model, effort, now, ports.this_computer);
         let turn = Turn::start(conversation.id(), brief, TurnOrigin::Message, now)?;
         self.inner
             .guard()
@@ -138,7 +139,8 @@ impl WorkService {
     /// Returns an error if there is no such conversation, if no questions
     /// are open in it (`no_interview_open`), if the answers do not fit the
     /// questions (`rule_broken`), if the Advisor works on the project
-    /// (`advisor_busy`), if the program cannot start the turn, or if
+    /// (`advisor_busy`), if the conversation runs on another computer
+    /// (`runs_elsewhere`), if the program cannot start the turn, or if
     /// storage fails. The answers are stored only if the new turn starts.
     pub fn answer_interview(
         &self,
@@ -147,7 +149,7 @@ impl WorkService {
     ) -> Result<ConversationWithTurns, ApplicationError> {
         let _work = self.inner.hold_work();
         let ports = &self.inner.ports;
-        let conversation = self.inner.require_conversation(conversation_id)?;
+        let conversation = self.inner.require_conversation_here(conversation_id)?;
         let mut earlier_turns = ports.conversations.turns_of(conversation.id())?;
         if open_interview_of(&earlier_turns).is_none() {
             return Err(ApplicationError::NoInterviewOpen);
@@ -208,7 +210,9 @@ impl WorkService {
     /// rule (`rule_broken`): a name or a title, two members of one name, a
     /// task given to somebody who is neither on the team nor in the
     /// proposal, a task waiting for no other task of the proposal, tasks
-    /// waiting in a circle, or nothing left at all; or if storage fails.
+    /// waiting in a circle, or nothing left at all; if the conversation runs
+    /// on another computer (`runs_elsewhere`), where approving it a second
+    /// time would create the same tasks twice; or if storage fails.
     pub fn approve_proposal(
         &self,
         conversation_id: ConversationId,
@@ -216,7 +220,7 @@ impl WorkService {
     ) -> Result<ConversationWithTurns, ApplicationError> {
         let _work = self.inner.hold_work();
         let ports = &self.inner.ports;
-        let conversation = self.inner.require_conversation(conversation_id)?;
+        let conversation = self.inner.require_conversation_here(conversation_id)?;
         let mut turns = ports.conversations.turns_of(conversation.id())?;
         if open_proposal_of(&turns).is_none() {
             return Err(ApplicationError::NoProposalOpen);

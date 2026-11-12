@@ -24,7 +24,7 @@ involved.
 | `conversations` | `SqliteConversationRepository`: conversations, their turns, the steps of the turns and the questions they asked the manager |
 | `planning` | The interviews and the proposals of the Advisor, as parts of their turns; `SqlitePlanningRepository`, which stores an approved plan |
 | `places` | `SqlitePlacesRepository`: the work folder and the reference folders chosen for each project |
-| `operations` | The operation log, the hybrid logical clock, `DeviceId` |
+| `operations` | The operation log and the hybrid logical clock |
 | `codec` | The text forms of moments, dates, identifiers and enumerations |
 | `error` | The crate's internal error type and its conversion to `StorageError` |
 
@@ -48,8 +48,15 @@ involved.
   task after every write, the versions of a task are read straight from it
   (`TaskRepository::versions_of`), in the order of their stamps. The history
   a manager sees needs no table of its own.
-- **Each database file has a device identity**, created when the file is
-  first opened and stored in `meta`.
+- **Each database file has the identity of its computer** (a `ComputerId` of
+  the domain), created when the file is first opened and stored in `meta`
+  under `device_id`. `Database::device_id` returns it.
+- **A conversation knows the computer it runs on** (version 9): the column
+  `home_computer` of `conversations`, and the key `home_computer` of its
+  logged state. The migration gave every existing conversation, and every
+  logged state of one, the identity of this computer, because every
+  conversation of an earlier version was started here. A row without it is
+  damaged data.
 - **Statuses are part of their project.** They have rows of their own in
   `statuses`, but the log keeps them inside the state of the project. Saving
   a project updates the rows of its statuses in place (name, category, color,

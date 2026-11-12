@@ -38,7 +38,9 @@ pub use conversation::{
 };
 pub use dependencies::DependencyGraph;
 pub use error::DomainError;
-pub use ids::{ConversationId, MemberId, ProjectId, SprintId, StatusId, TaskId, TurnId};
+pub use ids::{
+    ComputerId, ConversationId, MemberId, ProjectId, SprintId, StatusId, TaskId, TurnId,
+};
 pub use member::{Effort, Member, MemberKind, MemberProfile, MemberSnapshot};
 pub use planning::{
     Interview, InterviewAnswer, InterviewQuestion, InterviewSnapshot, Proposal, ProposalSnapshot,

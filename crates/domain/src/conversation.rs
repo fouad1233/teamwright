@@ -10,7 +10,7 @@
 //! took while it worked, its answer, and how many tokens it used.
 
 use crate::error::DomainError;
-use crate::ids::{ConversationId, MemberId, ProjectId, TaskId, TurnId};
+use crate::ids::{ComputerId, ConversationId, MemberId, ProjectId, TaskId, TurnId};
 use crate::macros::text_enum;
 use crate::member::{Effort, MemberProfile};
 use crate::planning::{Interview, InterviewAnswer, Proposal, ProposedMember, ProposedTask};
@@ -36,6 +36,9 @@ pub struct ConversationSnapshot {
     /// The model and the effort of the Advisor, if the conversation is
     /// with the Advisor; nothing for a conversation with a specialist.
     pub advisor: Option<MemberProfile>,
+    /// The computer the conversation was started on, where its session of
+    /// the agent program lives.
+    pub home_computer: ComputerId,
 }
 
 /// A thread of work with one AI specialist, or with the Advisor.
@@ -52,16 +55,19 @@ pub struct Conversation {
     started_at: Timestamp,
     session_id: Option<String>,
     advisor: Option<MemberProfile>,
+    home_computer: ComputerId,
 }
 
 impl Conversation {
-    /// Starts a conversation with a specialist, about a task or not.
+    /// Starts a conversation with a specialist, about a task or not, on
+    /// the computer `home_computer`.
     #[must_use]
     pub fn start(
         project_id: ProjectId,
         member_id: MemberId,
         task_id: Option<TaskId>,
         now: Timestamp,
+        home_computer: ComputerId,
     ) -> Self {
         Self {
             id: ConversationId::generate(),
@@ -71,18 +77,20 @@ impl Conversation {
             started_at: now,
             session_id: None,
             advisor: None,
+            home_computer,
         }
     }
 
     /// Starts a conversation with the Advisor, which runs on this model and
     /// at this effort, or on the defaults of the program where they are
-    /// absent.
+    /// absent. It is started on the computer `home_computer`.
     #[must_use]
     pub fn start_with_advisor(
         project_id: ProjectId,
         model: Option<ModelName>,
         effort: Option<Effort>,
         now: Timestamp,
+        home_computer: ComputerId,
     ) -> Self {
         Self {
             id: ConversationId::generate(),
@@ -92,6 +100,7 @@ impl Conversation {
             started_at: now,
             session_id: None,
             advisor: Some(MemberProfile { model, effort }),
+            home_computer,
         }
     }
 
@@ -106,6 +115,7 @@ impl Conversation {
             started_at: snapshot.started_at,
             session_id: snapshot.session_id,
             advisor: snapshot.advisor,
+            home_computer: snapshot.home_computer,
         }
     }
 
@@ -144,6 +154,20 @@ impl Conversation {
     #[must_use]
     pub fn session_id(&self) -> Option<&str> {
         self.session_id.as_deref()
+    }
+
+    /// The computer the conversation was started on. Its session of the
+    /// agent program lives there, and it never moves.
+    #[must_use]
+    pub const fn home_computer(&self) -> ComputerId {
+        self.home_computer
+    }
+
+    /// Whether the conversation was started on this computer. Only there can
+    /// a turn of it be started, answered or stopped.
+    #[must_use]
+    pub fn is_at_home_on(&self, computer: ComputerId) -> bool {
+        self.home_computer == computer
     }
 
     /// Whether the conversation is with the Advisor.
@@ -1065,7 +1089,13 @@ mod tests {
         let member_id = MemberId::generate();
         let task_id = TaskId::generate();
 
-        let conversation = Conversation::start(project_id, member_id, Some(task_id), moment(0));
+        let conversation = Conversation::start(
+            project_id,
+            member_id,
+            Some(task_id),
+            moment(0),
+            ComputerId::generate(),
+        );
 
         assert_eq!(conversation.project_id(), project_id);
         assert_eq!(conversation.member_id(), Some(member_id));
@@ -1076,8 +1106,13 @@ mod tests {
 
     #[test]
     fn a_conversation_remembers_its_session_and_can_lose_its_specialist() {
-        let mut conversation =
-            Conversation::start(ProjectId::generate(), MemberId::generate(), None, moment(0));
+        let mut conversation = Conversation::start(
+            ProjectId::generate(),
+            MemberId::generate(),
+            None,
+            moment(0),
+            ComputerId::generate(),
+        );
 
         conversation.remember_session("0196f3a2".to_owned());
         conversation.forget_member();
@@ -1096,6 +1131,7 @@ mod tests {
             started_at: moment(3),
             session_id: Some("abc".to_owned()),
             advisor: None,
+            home_computer: ComputerId::generate(),
         };
 
         let conversation = Conversation::restore(snapshot.clone());
@@ -1104,6 +1140,24 @@ mod tests {
         assert_eq!(conversation.member_id(), None);
         assert_eq!(conversation.task_id(), snapshot.task_id);
         assert_eq!(conversation.session_id(), Some("abc"));
+        assert_eq!(conversation.home_computer(), snapshot.home_computer);
+    }
+
+    #[test]
+    fn a_conversation_is_at_home_on_the_computer_it_was_started_on() {
+        let desk = ComputerId::generate();
+        let laptop = ComputerId::generate();
+
+        let conversation = Conversation::start(
+            ProjectId::generate(),
+            MemberId::generate(),
+            None,
+            moment(0),
+            desk,
+        );
+
+        assert!(conversation.is_at_home_on(desk));
+        assert!(!conversation.is_at_home_on(laptop));
     }
 
     #[test]
@@ -1509,8 +1563,13 @@ mod tests {
         let project_id = ProjectId::generate();
         let model = ModelName::parse("opus").unwrap();
 
-        let conversation =
-            Conversation::start_with_advisor(project_id, Some(model.clone()), None, moment(0));
+        let conversation = Conversation::start_with_advisor(
+            project_id,
+            Some(model.clone()),
+            None,
+            moment(0),
+            ComputerId::generate(),
+        );
 
         assert!(conversation.is_with_advisor());
         assert_eq!(conversation.member_id(), None);
@@ -1522,8 +1581,13 @@ mod tests {
                 effort: None
             })
         );
-        let with_specialist =
-            Conversation::start(project_id, MemberId::generate(), None, moment(0));
+        let with_specialist = Conversation::start(
+            project_id,
+            MemberId::generate(),
+            None,
+            moment(0),
+            ComputerId::generate(),
+        );
         assert!(!with_specialist.is_with_advisor());
         assert_eq!(with_specialist.advisor_profile(), None);
     }

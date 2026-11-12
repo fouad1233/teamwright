@@ -15,10 +15,10 @@ use teamwright_application::{
     SprintReport, SprintStart, StatusProperties, WorkflowTemplate,
 };
 use teamwright_domain::{
-    Assignee, CalendarDate, Color, Conversation, DecisionOption, DecisionRequest, DomainError,
-    Effort, Interview, InterviewAnswer, Member, MemberKind, Priority, Project, Proposal,
-    ProposedOwner, Schedule, Sprint, SprintSummary, Status, StatusCategory, Step, StepContent,
-    StoryPoints, Task, TaskChange, TaskChangeKind, Timestamp, TokenCounts, Turn,
+    Assignee, CalendarDate, Color, ComputerId, Conversation, DecisionOption, DecisionRequest,
+    DomainError, Effort, Interview, InterviewAnswer, Member, MemberKind, Priority, Project,
+    Proposal, ProposedOwner, Schedule, Sprint, SprintSummary, Status, StatusCategory, Step,
+    StepContent, StoryPoints, Task, TaskChange, TaskChangeKind, Timestamp, TokenCounts, Turn,
 };
 
 use crate::error::CommandError;
@@ -495,12 +495,18 @@ pub struct ConversationDto {
     member_id: Option<String>,
     task_id: Option<String>,
     started_at: String,
+    /// The identity of the computer the conversation runs on.
+    home_computer: String,
+    /// Whether that is this computer. Only there can the manager reply,
+    /// answer, approve or stop.
+    is_here: bool,
     turns: Vec<TurnDto>,
 }
 
 impl ConversationDto {
-    /// Takes a conversation and its turns, the oldest first.
-    pub fn new(conversation: &Conversation, turns: &[Turn]) -> Self {
+    /// Takes a conversation and its turns, the oldest first, as seen from
+    /// the computer `this_computer`.
+    pub fn new(conversation: &Conversation, turns: &[Turn], this_computer: ComputerId) -> Self {
         Self {
             id: conversation.id().to_string(),
             project_id: conversation.project_id().to_string(),
@@ -508,14 +514,20 @@ impl ConversationDto {
             member_id: conversation.member_id().map(|id| id.to_string()),
             task_id: conversation.task_id().map(|id| id.to_string()),
             started_at: moment_to_text(conversation.started_at()),
+            home_computer: conversation.home_computer().to_string(),
+            is_here: conversation.is_at_home_on(this_computer),
             turns: turns.iter().map(TurnDto::from).collect(),
         }
     }
-}
 
-impl From<&ConversationWithTurns> for ConversationDto {
-    fn from(conversation: &ConversationWithTurns) -> Self {
-        Self::new(&conversation.conversation, &conversation.turns)
+    /// Takes a conversation with its turns, as seen from the computer
+    /// `this_computer`.
+    pub fn of(conversation: &ConversationWithTurns, this_computer: ComputerId) -> Self {
+        Self::new(
+            &conversation.conversation,
+            &conversation.turns,
+            this_computer,
+        )
     }
 }
 

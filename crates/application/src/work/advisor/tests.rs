@@ -8,8 +8,8 @@ use std::sync::Arc;
 
 use chrono::{TimeDelta, TimeZone};
 use teamwright_domain::{
-    Color, ConversationId, DomainError, Effort, InterviewAnswer, MemberKind, Priority, Project,
-    Proposal, ProposedOwner, Timestamp, TurnOrigin, TurnState,
+    Color, ComputerId, ConversationId, DomainError, Effort, InterviewAnswer, MemberKind, Priority,
+    Project, Proposal, ProposedOwner, Timestamp, TurnOrigin, TurnState,
 };
 
 use super::*;
@@ -102,6 +102,7 @@ fn planning() -> Planning {
         runtime: runtime.clone(),
         listener: listener.clone(),
         clock: clock.clone(),
+        this_computer: ComputerId::generate(),
     });
     let project = projects
         .create(NewProject {

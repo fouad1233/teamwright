@@ -205,6 +205,16 @@ question; every request to the specialist is a turn of it.
   the program. Stopping a conversation in which nothing runs changes nothing.
 - `recover` ends, as failed, the turns that storage still calls running when
   the program starts: closing Teamwright cut them off.
+- **A conversation has a home computer** (`WorkPorts::this_computer`): the
+  one it was started on, where its session of the agent program lives.
+  `reply`, `answer_decision`, `answer_interview`, `approve_proposal`, `stop`
+  and `open_in_desktop_app` refuse a conversation whose home is another
+  computer (`runs_elsewhere`); approving there would create the same tasks
+  twice, and a reply could not resume a session that is not there.
+  `recover` and `close` end only the turns of conversations at home here,
+  and never a turn another computer runs. The guards of work in progress
+  count the running turns of every computer, so nothing is removed from
+  under a specialist that works elsewhere.
 
 ## Planning with the Advisor
 

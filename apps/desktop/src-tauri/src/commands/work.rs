@@ -30,7 +30,10 @@ pub async fn list_conversations(
     project_id: String,
 ) -> Result<Vec<ConversationDto>, CommandError> {
     let conversations = state.work.list_for_project(parse_id(&project_id)?)?;
-    Ok(conversations.iter().map(ConversationDto::from).collect())
+    Ok(conversations
+        .iter()
+        .map(|conversation| ConversationDto::of(conversation, state.this_computer))
+        .collect())
 }
 
 /// Starts the work on a task: the specialist it is given to gets its brief.
@@ -40,7 +43,7 @@ pub fn start_work(
     task_id: String,
 ) -> Result<ConversationDto, CommandError> {
     let conversation = state.work.start_work(parse_id(&task_id)?)?;
-    Ok(ConversationDto::from(&conversation))
+    Ok(ConversationDto::of(&conversation, state.this_computer))
 }
 
 /// Goes on with a conversation with the manager's message.
@@ -51,7 +54,7 @@ pub fn reply(
     message: String,
 ) -> Result<ConversationDto, CommandError> {
     let conversation = state.work.reply(parse_id(&conversation_id)?, &message)?;
-    Ok(ConversationDto::from(&conversation))
+    Ok(ConversationDto::of(&conversation, state.this_computer))
 }
 
 /// Asks a specialist something, in a conversation that is not about a task.
@@ -62,7 +65,7 @@ pub fn ask(
     message: String,
 ) -> Result<ConversationDto, CommandError> {
     let conversation = state.work.ask(parse_id(&member_id)?, &message)?;
-    Ok(ConversationDto::from(&conversation))
+    Ok(ConversationDto::of(&conversation, state.this_computer))
 }
 
 /// Answers the question the specialist of a conversation asked, with an
@@ -78,7 +81,7 @@ pub fn answer_decision(
         state
             .work
             .answer_decision(parse_id(&conversation_id)?, answer.option, &answer.note)?;
-    Ok(ConversationDto::from(&conversation))
+    Ok(ConversationDto::of(&conversation, state.this_computer))
 }
 
 /// Starts planning a project with the Advisor: a new conversation that
@@ -96,7 +99,7 @@ pub fn advise(
         advice.model.as_deref(),
         effort,
     )?;
-    Ok(ConversationDto::from(&conversation))
+    Ok(ConversationDto::of(&conversation, state.this_computer))
 }
 
 /// Answers the questions the Advisor asked in a conversation, one answer
@@ -111,7 +114,7 @@ pub fn answer_interview(
         parse_id(&conversation_id)?,
         answers.into_iter().map(Into::into).collect(),
     )?;
-    Ok(ConversationDto::from(&conversation))
+    Ok(ConversationDto::of(&conversation, state.this_computer))
 }
 
 /// Approves the proposal of the latest turn of a conversation with the
@@ -126,7 +129,7 @@ pub fn approve_proposal(
         parse_id(&conversation_id)?,
         ApprovedProposal::try_from(proposal)?,
     )?;
-    Ok(ConversationDto::from(&conversation))
+    Ok(ConversationDto::of(&conversation, state.this_computer))
 }
 
 /// Lists the conversations that wait for the manager, in every project that
@@ -137,7 +140,10 @@ pub async fn list_conversations_waiting(
     state: State<'_, AppState>,
 ) -> Result<Vec<ConversationDto>, CommandError> {
     let conversations = state.work.waiting_for_manager()?;
-    Ok(conversations.iter().map(ConversationDto::from).collect())
+    Ok(conversations
+        .iter()
+        .map(|conversation| ConversationDto::of(conversation, state.this_computer))
+        .collect())
 }
 
 /// Stops the turn that is running in a conversation.
@@ -147,7 +153,7 @@ pub async fn stop_work(
     conversation_id: String,
 ) -> Result<ConversationDto, CommandError> {
     let conversation = state.work.stop(parse_id(&conversation_id)?)?;
-    Ok(ConversationDto::from(&conversation))
+    Ok(ConversationDto::of(&conversation, state.this_computer))
 }
 
 /// Opens the session of a conversation in the Claude desktop app.

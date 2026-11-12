@@ -11,38 +11,13 @@
 //! therefore always ordered the way they happened on one computer, and
 //! sensibly ordered between computers whose clocks disagree a little.
 
-use std::fmt;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use rusqlite::{Connection, Transaction, named_params};
 use serde::Serialize;
-use uuid::Uuid;
+use teamwright_domain::ComputerId;
 
 use crate::error::DatabaseError;
-
-/// Identifies a computer that runs Teamwright.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct DeviceId(Uuid);
-
-impl DeviceId {
-    /// Creates the identity of a computer that has none yet.
-    pub(crate) fn generate() -> Self {
-        Self(Uuid::now_v7())
-    }
-
-    /// Reads an identity from its text form.
-    pub(crate) fn from_text(text: &str) -> Result<Self, DatabaseError> {
-        Uuid::parse_str(text)
-            .map(Self)
-            .map_err(|reason| DatabaseError::damaged("the device identifier", text, reason))
-    }
-}
-
-impl fmt::Display for DeviceId {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.fmt(formatter)
-    }
-}
 
 /// One entry of the operation log.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -50,7 +25,7 @@ pub struct Operation {
     /// The position of the operation in this computer's log.
     pub sequence: i64,
     /// The computer that made the change.
-    pub device_id: DeviceId,
+    pub device_id: ComputerId,
     /// The hybrid logical clock stamp. Stamps sort as text in the order the
     /// changes happened.
     pub stamp: String,
@@ -135,7 +110,7 @@ impl Stamp {
 
     /// Writes the stamp as text that sorts in clock order: zero-padded
     /// milliseconds, zero-padded counter, and the device as a tie-breaker.
-    fn to_text(self, device_id: DeviceId) -> String {
+    fn to_text(self, device_id: ComputerId) -> String {
         format!(
             "{millis:0millis_digits$}-{counter:0counter_digits$}-{device_id}",
             millis = self.millis,
@@ -228,7 +203,7 @@ fn wall_clock_millis() -> i64 {
 /// Appends operations to the log as part of a write transaction.
 pub(crate) struct OperationRecorder<'transaction> {
     transaction: &'transaction Transaction<'transaction>,
-    device_id: DeviceId,
+    device_id: ComputerId,
     clock: &'transaction mut HybridLogicalClock,
 }
 
@@ -236,7 +211,7 @@ impl<'transaction> OperationRecorder<'transaction> {
     /// Creates a recorder for one transaction.
     pub(crate) const fn new(
         transaction: &'transaction Transaction<'transaction>,
-        device_id: DeviceId,
+        device_id: ComputerId,
         clock: &'transaction mut HybridLogicalClock,
     ) -> Self {
         Self {
@@ -383,7 +358,7 @@ mod tests {
 
     #[test]
     fn stamps_as_text_sort_in_clock_order() {
-        let device_id = DeviceId::generate();
+        let device_id = ComputerId::generate();
         let earlier = Stamp {
             millis: 999,
             counter: 12,
@@ -410,7 +385,7 @@ mod tests {
             counter: 42,
         };
 
-        let text = stamp.to_text(DeviceId::generate());
+        let text = stamp.to_text(ComputerId::generate());
 
         assert_eq!(Stamp::from_text(&text), Some(stamp));
         assert!(text.starts_with("1762851600000-00042-"));

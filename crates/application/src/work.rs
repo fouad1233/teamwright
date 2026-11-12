@@ -14,10 +14,10 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError, Weak};
 
 use teamwright_domain::{
-    Assignee, Conversation, ConversationId, DecisionOption, DecisionRequest, DomainError,
-    Interview, InterviewQuestion, Member, MemberId, MemberKind, MemberName, ModelName, Project,
-    ProjectId, Proposal, ProposedMember, ProposedOwner, ProposedTask, Rank, StatusCategory, Task,
-    TaskId, TaskTitle, Timestamp, Turn, TurnId, TurnOrigin, TurnState,
+    Assignee, ComputerId, Conversation, ConversationId, DecisionOption, DecisionRequest,
+    DomainError, Interview, InterviewQuestion, Member, MemberId, MemberKind, MemberName, ModelName,
+    Project, ProjectId, Proposal, ProposedMember, ProposedOwner, ProposedTask, Rank,
+    StatusCategory, Task, TaskId, TaskTitle, Timestamp, Turn, TurnId, TurnOrigin, TurnState,
 };
 
 use crate::agent_runtime::{
@@ -155,6 +155,10 @@ pub struct WorkPorts {
     pub listener: Arc<dyn WorkListener>,
     /// The time.
     pub clock: Arc<dyn Clock>,
+    /// The identity of this computer. A conversation started here has it as
+    /// its home, and only the turns of conversations at home here are run,
+    /// answered, stopped or ended here.
+    pub this_computer: ComputerId,
 }
 
 /// The use cases of the work of AI specialists.
@@ -306,7 +310,13 @@ impl WorkService {
             &task,
             &ports.tasks.list_for_project(project.id())?,
         );
-        let conversation = Conversation::start(project.id(), member.id(), Some(task.id()), now);
+        let conversation = Conversation::start(
+            project.id(),
+            member.id(),
+            Some(task.id()),
+            now,
+            ports.this_computer,
+        );
         let turn = Turn::start(conversation.id(), &brief, TurnOrigin::Brief, now)?;
         self.begin_turn(
             NewTurn {
@@ -341,6 +351,9 @@ impl WorkService {
     /// planning. It is refused while the Advisor waits for the answers to
     /// its questions (`interview_open`) and while it works on the project
     /// (`advisor_busy`).
+    ///
+    /// A conversation that runs on another computer is refused
+    /// (`runs_elsewhere`): its session is there.
     pub fn reply(
         &self,
         conversation_id: ConversationId,
@@ -348,7 +361,7 @@ impl WorkService {
     ) -> Result<ConversationWithTurns, ApplicationError> {
         let _work = self.inner.hold_work();
         let ports = &self.inner.ports;
-        let conversation = self.inner.require_conversation(conversation_id)?;
+        let conversation = self.inner.require_conversation_here(conversation_id)?;
         if conversation.is_with_advisor() {
             return self.reply_to_advisor(conversation, message);
         }
@@ -392,7 +405,8 @@ impl WorkService {
     /// Returns an error if there is no such conversation, if no question is
     /// open in it (`no_decision_open`), if its specialist has left the team,
     /// if the answer does not fit the question (`rule_broken`), if the
-    /// specialist is working on something, if the program cannot start the
+    /// specialist is working on something, if the conversation runs on
+    /// another computer (`runs_elsewhere`), if the program cannot start the
     /// turn, or if storage fails.
     pub fn answer_decision(
         &self,
@@ -402,7 +416,7 @@ impl WorkService {
     ) -> Result<ConversationWithTurns, ApplicationError> {
         let _work = self.inner.hold_work();
         let ports = &self.inner.ports;
-        let conversation = self.inner.require_conversation(conversation_id)?;
+        let conversation = self.inner.require_conversation_here(conversation_id)?;
         let mut earlier_turns = ports.conversations.turns_of(conversation.id())?;
         if open_decision_of(&earlier_turns).is_none() {
             return Err(ApplicationError::NoDecisionOpen);
@@ -500,7 +514,13 @@ impl WorkService {
             });
         }
         let now = ports.clock.now();
-        let conversation = Conversation::start(member.project_id(), member.id(), None, now);
+        let conversation = Conversation::start(
+            member.project_id(),
+            member.id(),
+            None,
+            now,
+            ports.this_computer,
+        );
         let turn = Turn::start(conversation.id(), message, TurnOrigin::Message, now)?;
         self.inner.guard().refuse_while_busy(&member)?;
 
@@ -525,15 +545,15 @@ impl WorkService {
     ///
     /// # Errors
     ///
-    /// Returns an error if there is no such conversation or if storage
-    /// fails.
+    /// Returns an error if there is no such conversation, if it runs on
+    /// another computer (`runs_elsewhere`), or if storage fails.
     pub fn stop(
         &self,
         conversation_id: ConversationId,
     ) -> Result<ConversationWithTurns, ApplicationError> {
         let _work = self.inner.hold_work();
         let ports = &self.inner.ports;
-        let conversation = self.inner.require_conversation(conversation_id)?;
+        let conversation = self.inner.require_conversation_here(conversation_id)?;
         let mut turns = ports.conversations.turns_of(conversation.id())?;
 
         if let Some(turn) = turns.iter_mut().find(|turn| turn.is_running()) {
@@ -558,15 +578,15 @@ impl WorkService {
     ///
     /// # Errors
     ///
-    /// Returns an error if there is no such conversation, if the program has
-    /// not started its session yet, if the program cannot open it, or if
-    /// storage fails.
+    /// Returns an error if there is no such conversation, if it runs on
+    /// another computer (`runs_elsewhere`), if the program has not started
+    /// its session yet, if the program cannot open it, or if storage fails.
     pub fn open_in_desktop_app(
         &self,
         conversation_id: ConversationId,
     ) -> Result<(), ApplicationError> {
         let ports = &self.inner.ports;
-        let conversation = self.inner.require_conversation(conversation_id)?;
+        let conversation = self.inner.require_conversation_here(conversation_id)?;
         let session = conversation
             .session_id()
             .ok_or(ApplicationError::SessionNotStarted)?;
@@ -582,6 +602,9 @@ impl WorkService {
     /// as failed, with a text that says so. Call it once, when the program
     /// starts.
     ///
+    /// A turn of a conversation whose home is another computer is left
+    /// alone: that computer runs it, and only it ends it.
+    ///
     /// # Errors
     ///
     /// Returns an error if storage fails.
@@ -590,10 +613,10 @@ impl WorkService {
         self.inner.end_turns_nothing_runs()
     }
 
-    /// Stops every turn that is running, because Teamwright is closing: a
-    /// specialist must not go on working with nobody to follow it. Each
-    /// turn ends as failed, with a text that says so. Call it once, when
-    /// the program closes.
+    /// Stops every turn that is running here, because Teamwright is
+    /// closing: a specialist must not go on working with nobody to follow
+    /// it. Each turn ends as failed, with a text that says so. Call it once,
+    /// when the program closes. The turns of other computers go on.
     ///
     /// # Errors
     ///
@@ -792,7 +815,8 @@ impl Inner {
     /// Ends the turns that storage calls running although this run of the
     /// program runs nothing for them: Teamwright was closed, or is closing,
     /// while they ran. Each ends as failed, with a text that says so. The
-    /// caller holds the lock on the work.
+    /// turns of conversations whose home is another computer run there and
+    /// are left alone. The caller holds the lock on the work.
     fn end_turns_nothing_runs(&self) -> Result<(), ApplicationError> {
         let ports = &self.ports;
         let now = ports.clock.now();
@@ -801,12 +825,16 @@ impl Inner {
                 // Started by this run of the program: it is really running.
                 continue;
             }
+            let Some(conversation) = ports.conversations.find(turn.conversation_id())? else {
+                continue;
+            };
+            if !conversation.is_at_home_on(ports.this_computer) {
+                continue;
+            }
             turn.fail(CLOSED_WHILE_WORKING.to_owned(), None, now)?;
             ports.conversations.save_turn(&turn)?;
-            if let Some(conversation) = ports.conversations.find(turn.conversation_id())? {
-                let turns = ports.conversations.turns_of(conversation.id())?;
-                ports.listener.conversation_changed(&conversation, &turns);
-            }
+            let turns = ports.conversations.turns_of(conversation.id())?;
+            ports.listener.conversation_changed(&conversation, &turns);
         }
         Ok(())
     }
@@ -966,6 +994,22 @@ impl Inner {
             .conversations
             .find(id)?
             .ok_or_else(|| not_found("conversation", id))
+    }
+
+    /// The conversation, if its home is this computer. Only there does its
+    /// session live, so only there can it be acted on.
+    fn require_conversation_here(
+        &self,
+        id: ConversationId,
+    ) -> Result<Conversation, ApplicationError> {
+        let conversation = self.require_conversation(id)?;
+        if conversation.is_at_home_on(self.ports.this_computer) {
+            Ok(conversation)
+        } else {
+            Err(ApplicationError::ConversationRunsElsewhere {
+                computer: conversation.home_computer(),
+            })
+        }
     }
 }
 
@@ -1466,6 +1510,7 @@ mod tests {
         runtime: Arc<ScriptedRuntime>,
         listener: Arc<RecordingWorkListener>,
         clock: Arc<ManualClock>,
+        this_computer: ComputerId,
     }
 
     impl Ports {
@@ -1487,6 +1532,7 @@ mod tests {
                 runtime: self.runtime.clone(),
                 listener: self.listener.clone(),
                 clock: self.clock.clone(),
+                this_computer: self.this_computer,
             })
         }
 
@@ -1518,6 +1564,7 @@ mod tests {
             runtime: Arc::new(ScriptedRuntime::new()),
             listener: Arc::new(RecordingWorkListener::default()),
             clock: Arc::new(ManualClock::starting_at(start_of_day())),
+            this_computer: ComputerId::generate(),
         };
         let projects = ProjectService::new(
             ports.projects.clone(),
@@ -3105,6 +3152,106 @@ mod tests {
             workspace.team.remove(workspace.engineer.id()).is_ok(),
             "the specialist is no longer busy"
         );
+    }
+
+    // Conversations that run on another computer
+
+    impl Workspace {
+        /// Stores a conversation of the engineer that was started on
+        /// another computer, as one that came over from it, with a turn
+        /// that runs there.
+        fn running_elsewhere(&self) -> Conversation {
+            let conversation = Conversation::start(
+                self.project.id(),
+                self.engineer.id(),
+                None,
+                start_of_day(),
+                ComputerId::generate(),
+            );
+            let turn = Turn::start(
+                conversation.id(),
+                "Check the regulator.",
+                TurnOrigin::Message,
+                start_of_day(),
+            )
+            .unwrap();
+            self.ports
+                .conversations
+                .save_conversation(&conversation)
+                .unwrap();
+            self.ports.conversations.save_turn(&turn).unwrap();
+            conversation
+        }
+    }
+
+    #[test]
+    fn a_conversation_started_here_has_this_computer_as_its_home() {
+        let workspace = workspace();
+
+        let started = workspace.work.start_work(workspace.schematic.id()).unwrap();
+
+        assert_eq!(
+            started.conversation.home_computer(),
+            workspace.ports.this_computer
+        );
+    }
+
+    #[test]
+    fn starting_and_closing_leave_the_turns_of_another_computer_running() {
+        let workspace = workspace();
+        let elsewhere = workspace.running_elsewhere();
+
+        workspace.ports.work_service().recover().unwrap();
+        workspace.work.close().unwrap();
+
+        let turns = workspace
+            .ports
+            .conversations
+            .turns_of(elsewhere.id())
+            .unwrap();
+        assert_eq!(turns[0].state(), TurnState::Running);
+    }
+
+    #[test]
+    fn a_conversation_of_another_computer_is_only_read_here() {
+        let workspace = workspace();
+        let elsewhere = workspace.running_elsewhere();
+
+        let refused = [
+            workspace.work.reply(elsewhere.id(), "Go on.").unwrap_err(),
+            workspace
+                .work
+                .answer_decision(elsewhere.id(), Some(0), "")
+                .unwrap_err(),
+            workspace.work.stop(elsewhere.id()).unwrap_err(),
+            workspace
+                .work
+                .open_in_desktop_app(elsewhere.id())
+                .unwrap_err(),
+        ];
+
+        assert_eq!(
+            refused.each_ref().map(ApplicationError::code),
+            ["runs_elsewhere"; 4]
+        );
+        assert!(workspace.ports.runtime.requests().is_empty());
+        let turns = workspace
+            .ports
+            .conversations
+            .turns_of(elsewhere.id())
+            .unwrap();
+        assert_eq!(turns.len(), 1);
+        assert_eq!(turns[0].state(), TurnState::Running);
+    }
+
+    #[test]
+    fn a_specialist_working_on_another_computer_stays_on_the_team() {
+        let workspace = workspace();
+        workspace.running_elsewhere();
+
+        let error = workspace.team.remove(workspace.engineer.id()).unwrap_err();
+
+        assert_eq!(error.code(), "member_busy");
     }
 
     // The brief and the instructions

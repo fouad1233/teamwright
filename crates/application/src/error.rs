@@ -1,6 +1,6 @@
 //! The errors of the use cases.
 
-use teamwright_domain::DomainError;
+use teamwright_domain::{ComputerId, DomainError};
 
 use crate::agent_runtime::AgentRuntimeError;
 use crate::ports::StorageError;
@@ -158,6 +158,15 @@ pub enum ApplicationError {
     #[error("the specialist has not started its session yet")]
     SessionNotStarted,
 
+    /// A conversation was to be acted on (replied to, answered, approved,
+    /// stopped or opened) on a computer that is not its home. Its session
+    /// lives on its home computer.
+    #[error("this conversation runs on another computer, and can only be continued there")]
+    ConversationRunsElsewhere {
+        /// The computer the conversation runs on.
+        computer: ComputerId,
+    },
+
     /// A folder was to be used without a name.
     #[error("the folder must be named")]
     FolderNotNamed,
@@ -310,6 +319,7 @@ impl ApplicationError {
             Self::NoInterviewOpen => "no_interview_open",
             Self::NoProposalOpen => "no_proposal_open",
             Self::SessionNotStarted => "session_not_started",
+            Self::ConversationRunsElsewhere { .. } => "runs_elsewhere",
             Self::AgentProgram(error) => error.code(),
             Self::Storage(_) => "storage_failed",
         }

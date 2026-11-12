@@ -70,7 +70,9 @@ The shell is where the work of an AI specialist meets the outside world
   and `approve_proposal` in `commands/work.rs` carry it out; `reply` and
   `list_conversations_waiting` serve conversations with the Advisor too. In
   `dto.rs`, a conversation says whether it `isWithAdvisor`, a turn carries
-  its `interview` and its `proposal`, and an owner of a proposed task is
+  its `interview` and its `proposal`, a conversation names the computer it
+  runs on (`homeComputer`) and says whether that is this one (`isHere`),
+  and an owner of a proposed task is
   `{"kind": "manager"}` or `{"kind": "member", "name": "…"}`. A place sent
   as a number that is not a whole number from 0, such as `-1` or `1.5`, is
   read as a place that is not there, so that the use case refuses it with

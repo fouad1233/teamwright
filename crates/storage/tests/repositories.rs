@@ -21,11 +21,11 @@ use teamwright_application::{
     WorkPorts, WorkService, WorkflowTemplate,
 };
 use teamwright_domain::{
-    Assignee, CalendarDate, Color, Conversation, ConversationId, DecisionOption, DecisionRequest,
-    Effort, Interview, InterviewAnswer, InterviewQuestion, Member, MemberId, MemberKind,
-    MemberName, MemberProfile, ModelName, Priority, Project, ProjectKey, ProjectName, Proposal,
-    ProposedMember, ProposedOwner, ProposedTask, Rank, Schedule, Sprint, SprintDates, SprintId,
-    SprintName, SprintSummary, SprintUnit, Status, StatusCategory, StatusId, StatusName,
+    Assignee, CalendarDate, Color, ComputerId, Conversation, ConversationId, DecisionOption,
+    DecisionRequest, Effort, Interview, InterviewAnswer, InterviewQuestion, Member, MemberId,
+    MemberKind, MemberName, MemberProfile, ModelName, Priority, Project, ProjectKey, ProjectName,
+    Proposal, ProposedMember, ProposedOwner, ProposedTask, Rank, Schedule, Sprint, SprintDates,
+    SprintId, SprintName, SprintSummary, SprintUnit, Status, StatusCategory, StatusId, StatusName,
     StepContent, StoryPoints, Task, TaskDraft, TaskId, TaskTitle, Timestamp, TokenCounts,
     ToolOutcome, Turn, TurnOrigin, TurnState, Workflow,
 };
@@ -801,7 +801,13 @@ fn stored_conversation(store: &Store) -> (Project, Member, Task, Conversation) {
     let project = store.project("Smart sensor node");
     let member = store.member(&project, "Hardware engineer");
     let task = store.task(&project, 1, "Draw the schematic");
-    let conversation = Conversation::start(project.id(), member.id(), Some(task.id()), moment(9));
+    let conversation = Conversation::start(
+        project.id(),
+        member.id(),
+        Some(task.id()),
+        moment(9),
+        store.database.device_id(),
+    );
     store
         .conversations
         .save_conversation(&conversation)
@@ -907,6 +913,20 @@ fn a_saved_conversation_and_its_turns_are_found_again_unchanged() {
 }
 
 #[test]
+fn a_conversation_keeps_the_computer_it_runs_on() {
+    let store = Store::in_memory();
+    let (project, member, _, _) = stored_conversation(&store);
+    let laptop = ComputerId::generate();
+    let elsewhere = Conversation::start(project.id(), member.id(), None, moment(8), laptop);
+
+    store.conversations.save_conversation(&elsewhere).unwrap();
+
+    let found = store.conversations.find(elsewhere.id()).unwrap().unwrap();
+    assert_eq!(found.home_computer(), laptop);
+    assert!(!found.is_at_home_on(store.database.device_id()));
+}
+
+#[test]
 fn a_conversation_that_was_never_saved_is_not_found() {
     let store = Store::in_memory();
 
@@ -930,7 +950,13 @@ fn a_conversation_that_was_never_saved_is_not_found() {
 fn conversations_are_listed_for_their_own_project_oldest_first() {
     let store = Store::in_memory();
     let (project, member, _, about_the_task) = stored_conversation(&store);
-    let question = Conversation::start(project.id(), member.id(), None, moment(8));
+    let question = Conversation::start(
+        project.id(),
+        member.id(),
+        None,
+        moment(8),
+        store.database.device_id(),
+    );
     store.conversations.save_conversation(&question).unwrap();
     let other = store.project("Thermostat");
 
@@ -1172,6 +1198,7 @@ fn stored_conversation_with_advisor(store: &Store) -> Conversation {
         Some(ModelName::parse("opus").unwrap()),
         Some(Effort::High),
         moment(9),
+        store.database.device_id(),
     );
     store
         .conversations
@@ -1406,7 +1433,13 @@ fn deleting_conversations_removes_their_turns_and_logs_each_removal() {
     let mut turn = running_turn(&conversation, "Draw the schematic", moment(9));
     turn.say("Hello.".to_owned(), moment(9)).unwrap();
     store.conversations.save_turn(&turn).unwrap();
-    let kept = Conversation::start(project.id(), member.id(), None, moment(10));
+    let kept = Conversation::start(
+        project.id(),
+        member.id(),
+        None,
+        moment(10),
+        store.database.device_id(),
+    );
     store.conversations.save_conversation(&kept).unwrap();
     let start = store.database.operations().unwrap().len();
 
@@ -2249,6 +2282,7 @@ fn the_work_of_a_specialist_is_kept_on_the_real_database() {
             runtime: runtime.clone(),
             listener: Arc::new(RecordingWorkListener::default()),
             clock: clock.clone(),
+            this_computer: database.device_id(),
         })
     };
     let projects = ProjectService::new(
@@ -2469,6 +2503,7 @@ fn approving_a_proposal_creates_the_team_and_the_plan_in_one_logged_write() {
         runtime: runtime.clone(),
         listener: Arc::new(RecordingWorkListener::default()),
         clock: clock.clone(),
+        this_computer: database.device_id(),
     });
     let project = projects
         .create(NewProject {

@@ -6,10 +6,12 @@ use std::sync::{Mutex, MutexGuard, PoisonError};
 
 use rusqlite::{Connection, OptionalExtension, Transaction};
 use teamwright_application::StorageError;
+use teamwright_domain::ComputerId;
 
+use crate::codec;
 use crate::error::DatabaseError;
 use crate::migrations;
-use crate::operations::{DeviceId, HybridLogicalClock, Operation, OperationRecorder, Stamp};
+use crate::operations::{HybridLogicalClock, Operation, OperationRecorder, Stamp};
 
 /// The key under which the identity of this computer is kept in the `meta`
 /// table.
@@ -22,7 +24,7 @@ const DEVICE_ID_KEY: &str = "device_id";
 #[derive(Debug)]
 pub struct Database {
     state: Mutex<State>,
-    device_id: DeviceId,
+    device_id: ComputerId,
 }
 
 /// What a write needs exclusive access to.
@@ -77,7 +79,7 @@ impl Database {
     /// The identity of this computer. It is created when the database is
     /// first opened and never changes.
     #[must_use]
-    pub const fn device_id(&self) -> DeviceId {
+    pub const fn device_id(&self) -> ComputerId {
         self.device_id
     }
 
@@ -110,7 +112,7 @@ impl Database {
                 let (sequence, device_id, stamp, entity, entity_id, kind, payload) = row?;
                 operations.push(Operation {
                     sequence,
-                    device_id: DeviceId::from_text(&device_id)?,
+                    device_id: codec::parse(&device_id)?,
                     stamp,
                     entity,
                     entity_id,
@@ -159,7 +161,7 @@ impl Database {
 
 /// Reads the identity of this computer from the database, or creates and
 /// stores one if the database is new.
-fn identify_device(connection: &Connection) -> Result<DeviceId, DatabaseError> {
+fn identify_device(connection: &Connection) -> Result<ComputerId, DatabaseError> {
     let stored: Option<String> = connection
         .query_row(
             "SELECT value FROM meta WHERE key = ?1",
@@ -168,10 +170,10 @@ fn identify_device(connection: &Connection) -> Result<DeviceId, DatabaseError> {
         )
         .optional()?;
     if let Some(text) = stored {
-        return DeviceId::from_text(&text);
+        return codec::parse(&text);
     }
 
-    let device_id = DeviceId::generate();
+    let device_id = ComputerId::generate();
     connection.execute(
         "INSERT INTO meta (key, value) VALUES (?1, ?2)",
         [DEVICE_ID_KEY, &device_id.to_string()],

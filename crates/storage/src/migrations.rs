@@ -18,6 +18,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("schema/0006_project_places.sql"),
     include_str!("schema/0007_planning.sql"),
     include_str!("schema/0008_sprints.sql"),
+    include_str!("schema/0009_home_computer.sql"),
 ];
 
 /// Applies the migrations a database has not seen yet. Each one runs in its
@@ -374,6 +375,50 @@ mod tests {
             .query_row("SELECT count(*) FROM sprints", [], |row| row.get(0))
             .unwrap();
         assert_eq!(sprints, 0);
+    }
+
+    #[test]
+    fn a_database_without_home_computers_gives_every_conversation_this_computer() {
+        let mut connection = Connection::open_in_memory().unwrap();
+        for migration in &MIGRATIONS[..8] {
+            connection.execute_batch(migration).unwrap();
+        }
+        connection.pragma_update(None, "user_version", 8).unwrap();
+        connection
+            .execute_batch(
+                "INSERT INTO meta (key, value)
+                 VALUES ('device_id', '0196f3a2-7c1e-7d53-9b6f-2f1a4c8e9d10');
+                 INSERT INTO projects (id, key, name, description, next_task_number, created_at)
+                 VALUES ('p1', 'SSN', 'Smart sensor node', '', 1, '2026-11-11T09:00:00.000Z');
+                 INSERT INTO conversations (id, project_id, member_id, task_id, started_at)
+                 VALUES ('c1', 'p1', NULL, NULL, '2026-11-11T09:00:00.000Z');
+                 INSERT INTO operations (device_id, stamp, entity, entity_id, kind, payload)
+                 VALUES (
+                     '0196f3a2-7c1e-7d53-9b6f-2f1a4c8e9d10',
+                     '1762851600000-00000-0196f3a2-7c1e-7d53-9b6f-2f1a4c8e9d10',
+                     'conversation', 'c1', 'upsert', '{\"id\":\"c1\",\"project_id\":\"p1\"}'
+                 );",
+            )
+            .unwrap();
+
+        migrate(&mut connection).unwrap();
+
+        let home: String = connection
+            .query_row(
+                "SELECT home_computer FROM conversations WHERE id = 'c1'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(home, "0196f3a2-7c1e-7d53-9b6f-2f1a4c8e9d10");
+        let logged: String = connection
+            .query_row(
+                "SELECT json_extract(payload, '$.home_computer') FROM operations",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(logged, home);
     }
 
     #[test]

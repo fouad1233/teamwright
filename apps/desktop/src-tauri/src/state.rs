@@ -12,7 +12,7 @@ use teamwright_application::{
     SprintService, StorageError, SystemClock, TaskService, TeamService, WorkListener, WorkPorts,
     WorkService,
 };
-use teamwright_domain::{Conversation, Project, Turn};
+use teamwright_domain::{ComputerId, Conversation, Project, Turn};
 use teamwright_runtime::ClaudeCode;
 use teamwright_storage::{
     Database, SqliteConversationRepository, SqliteMemberRepository, SqlitePlacesRepository,
@@ -93,6 +93,9 @@ pub struct AppState {
     pub places: PlacesService,
     /// The use cases for the work of the AI specialists.
     pub work: WorkService,
+    /// The identity of this computer, which tells a conversation that runs
+    /// here from one that runs on another computer.
+    pub this_computer: ComputerId,
 }
 
 impl AppState {
@@ -106,6 +109,7 @@ impl AppState {
         let data_directory = data_directory(app)?;
         fs::create_dir_all(&data_directory)?;
         let database = Arc::new(Database::open(data_directory.join(DATABASE_FILE_NAME))?);
+        let this_computer = database.device_id();
 
         let project_repository = Arc::new(SqliteProjectRepository::new(database.clone()));
         let task_repository = Arc::new(SqliteTaskRepository::new(database.clone()));
@@ -131,8 +135,12 @@ impl AppState {
             places: places_repository.clone(),
             file_system: file_system.clone(),
             runtime,
-            listener: Arc::new(EventToInterface { app: app.clone() }),
+            listener: Arc::new(EventToInterface {
+                app: app.clone(),
+                this_computer,
+            }),
             clock: clock.clone(),
+            this_computer,
         });
         work.recover()?;
 
@@ -177,6 +185,7 @@ impl AppState {
                 clock,
             ),
             work,
+            this_computer,
         })
     }
 }
@@ -321,6 +330,7 @@ impl FileSystem for LocalFileSystem {
 /// `conversation-changed`.
 struct EventToInterface {
     app: AppHandle,
+    this_computer: ComputerId,
 }
 
 impl WorkListener for EventToInterface {
@@ -330,7 +340,7 @@ impl WorkListener for EventToInterface {
         // conversations again.
         let _ = self.app.emit(
             CONVERSATION_CHANGED,
-            ConversationDto::new(conversation, turns),
+            ConversationDto::new(conversation, turns, self.this_computer),
         );
     }
 }

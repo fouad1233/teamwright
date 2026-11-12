@@ -531,6 +531,7 @@ mod tests {
                 runtime: Arc::new(ScriptedRuntime::new()),
                 listener: Arc::new(RecordingWorkListener::default()),
                 clock,
+                this_computer: teamwright_domain::ComputerId::generate(),
             }),
             file_system,
             project,
