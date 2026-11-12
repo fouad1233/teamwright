@@ -191,6 +191,13 @@
   border-bottom-width: var(--joint-weight);
 }
 
+/* The marks of a state lie over the lamp on the rim, which would otherwise
+   wash them out under the pointer. */
+.edge,
+.joints {
+  z-index: 1;
+}
+
 .face {
   display: flex;
   flex-direction: column;

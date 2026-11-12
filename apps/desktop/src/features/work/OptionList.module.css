@@ -63,6 +63,11 @@
   color: var(--ink-faint);
 }
 
+/* On the gold of a picked option the faint ink would fall under 4.5 to 1. */
+.picked .recommended {
+  color: var(--ink-soft);
+}
+
 .consequence {
   color: var(--ink-soft);
   font-size: var(--text-small);
