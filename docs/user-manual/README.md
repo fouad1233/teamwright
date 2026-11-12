@@ -462,6 +462,46 @@ are not on the calendar: their number is shown at the top right.
 **Team.** You and the members of the team, each with its tasks. See
 [the team](#the-team).
 
+**Office.** The team at work, at a glance. See [the office](#the-office).
+
+## The office
+
+The *Office* tab draws your project as a workshop seen from above. You and
+the Advisor sit at the front of the room, where the plan is made. Every
+member of the team has a bench on the floor. Each place has a reference on
+the edge of the drawing, such as *B2*, and the arrangement follows from the
+size of the team and of the window: you do not arrange it.
+
+A lamp hangs over every bench. It is lit only where a specialist or the
+Advisor is working. A bench that waits for you is held by four gold
+corners, like a waiting card on the board. The words on the bench always
+say the same as the light, so the office reads in a picture and with
+motion turned down too.
+
+| What the bench says | What it shows |
+|---|---|
+| *At work* | The task, or *A question of yours*; the last thing done, such as *Reads README.md*; how long the work has gone on, counted as you watch; and the size of the task, if it has one |
+| *Waits for you* | The task, and the decision it asks of you. For the Advisor: its questions, or its proposal |
+| *Free* | How many of the tasks given to it have not started |
+| *Person* | How many of the tasks given to them are not finished |
+
+The last line of a bench is what that specialist, or the Advisor, has used
+in this project so far, in tokens. On your own place it is what the whole
+project has used, and the line above says how many things wait for you.
+A turn's tokens are known only when it ends.
+
+The office shows no time left. Teamwright does not know how long a task will
+still take, so it shows how long the work has taken so far and the size you
+gave the task, and nothing it would have to guess.
+
+**Press a bench** to go on: a specialist at work or waiting opens its task,
+or its conversation when the work is a question of yours; a free specialist
+opens a conversation; the Advisor opens its page; your own place opens the
+inbox. With the keyboard, Tab moves from bench to bench and Enter presses.
+
+The title block in the corner counts the room, and its legend says what the
+lamp and the corners mean.
+
 ## Keyboard
 
 | Key | Where | What it does |

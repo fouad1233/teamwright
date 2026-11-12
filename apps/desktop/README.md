@@ -90,6 +90,7 @@ src/
     calendar/         The calendar: a month of weeks with the tasks on their days
     tasks/            The task panel, the list, badges, the fold of subtasks, task logic
     team/             The team: avatars, the Team view, adding and changing a member
+    office/           The office: the team at work, drawn as a workshop in plan
     work/             The work of AI specialists: starting it, following it, answering
     inbox/            What waits for the manager in every project: questions to decide
     advisor/          Planning a project with the Advisor: its questions, its proposal
@@ -169,7 +170,12 @@ The interface follows the design philosophy in
   gold block. A card that waits for the manager is held by four gold
   corners and says "Waits for you". Every light stands beside a mark or a
   word that says the same, because a picture or reduced motion shows no
-  light.
+  light. The office draws the same rule as a room
+  ([decision 0018](../../docs/decisions/0018-the-office-as-a-plan-of-a-workshop.md)):
+  a lamp is lit over a bench where work goes on, and a bench that waits
+  for the manager borrows the corners of a waiting card. What each bench
+  shows, and how many benches stand in a row, is worked out in
+  `officeModel.ts`.
 - Movement comes from the motion tokens: named curves and durations, with
   a reduced form for each under `prefers-reduced-motion`, declared with
   `!important` so that it wins over the rule in `base.css` that ends every

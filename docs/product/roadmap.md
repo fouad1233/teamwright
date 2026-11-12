@@ -106,7 +106,11 @@ Several specialists working together with the manager in the loop.
   that waits for the manager, a card that is new or carried
   ([decision 0015](../decisions/0015-light-where-something-happens.md))
 - ⬜ Planned against actual on the Gantt chart
-- ⬜ The office: specialists as characters with activity, time left and usage
+- ✅ The office: specialists as characters with activity, time left and usage.
+  A workshop in plan with a bench for everybody and a lamp lit where work
+  goes on; "time left" is answered with how long work has taken and the
+  size of the task
+  ([decision 0018](../decisions/0018-the-office-as-a-plan-of-a-workshop.md))
 - ⬜ Dashboards: usage per teammate, plan limits, workload by status
 - ⬜ Project report at completion
 
