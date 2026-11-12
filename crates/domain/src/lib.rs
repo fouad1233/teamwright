@@ -21,6 +21,7 @@ pub mod dependencies;
 pub mod error;
 pub mod ids;
 pub mod member;
+pub mod planning;
 pub mod project;
 pub mod task;
 pub mod task_history;
@@ -38,6 +39,10 @@ pub use dependencies::DependencyGraph;
 pub use error::DomainError;
 pub use ids::{ConversationId, MemberId, ProjectId, StatusId, TaskId, TurnId};
 pub use member::{Effort, Member, MemberKind, MemberProfile, MemberSnapshot};
+pub use planning::{
+    Interview, InterviewAnswer, InterviewQuestion, InterviewSnapshot, Proposal, ProposalSnapshot,
+    ProposedMember, ProposedOwner, ProposedTask,
+};
 pub use project::{Project, ProjectKey, ProjectSnapshot};
 pub use task::{Assignee, Priority, Rank, Schedule, Task, TaskDraft, TaskSnapshot};
 pub use task_history::{TaskChange, TaskChangeKind, changes_between, history_of};

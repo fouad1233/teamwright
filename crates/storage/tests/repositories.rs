@@ -1105,6 +1105,8 @@ fn asking_and_answering_are_logged_with_the_whole_question() {
         model: None,
         tokens: asked.tokens(),
         decision: asked.decision().cloned(),
+        interview: None,
+        proposal: None,
     });
     let start = store.database.operations().unwrap().len();
 

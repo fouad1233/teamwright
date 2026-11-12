@@ -1,8 +1,10 @@
-//! Conversations with AI specialists, and the turns they are made of.
+//! Conversations with AI specialists and with the Advisor, and the turns
+//! they are made of.
 //!
 //! A conversation is a thread of work with one specialist: about a task, or
-//! about a question the manager asked. It is one session of the program that
-//! runs the specialist, so the specialist remembers the earlier turns.
+//! about a question the manager asked. Or it is a thread with the Advisor,
+//! in which a project is planned. It is one session of the program that
+//! runs the specialist or the Advisor, so the earlier turns are remembered.
 //!
 //! A turn is one request to the specialist and what came of it: the steps it
 //! took while it worked, its answer, and how many tokens it used.
@@ -10,6 +12,9 @@
 use crate::error::DomainError;
 use crate::ids::{ConversationId, MemberId, ProjectId, TaskId, TurnId};
 use crate::macros::text_enum;
+use crate::member::{Effort, MemberProfile};
+use crate::planning::{Interview, InterviewAnswer, Proposal, ProposedMember, ProposedTask};
+use crate::text::ModelName;
 use crate::time::Timestamp;
 
 /// The plain data of a conversation, used to recreate one that was stored.
@@ -19,7 +24,8 @@ pub struct ConversationSnapshot {
     pub id: ConversationId,
     /// The project the conversation belongs to.
     pub project_id: ProjectId,
-    /// The specialist, or nothing if it has left the team since.
+    /// The specialist, or nothing if it has left the team since, or if
+    /// the conversation is with the Advisor.
     pub member_id: Option<MemberId>,
     /// The task the conversation is about, if it is about one.
     pub task_id: Option<TaskId>,
@@ -27,9 +33,16 @@ pub struct ConversationSnapshot {
     pub started_at: Timestamp,
     /// The identifier of the agent program's session, once it is known.
     pub session_id: Option<String>,
+    /// The model and the effort of the Advisor, if the conversation is
+    /// with the Advisor; nothing for a conversation with a specialist.
+    pub advisor: Option<MemberProfile>,
 }
 
-/// A thread of work with one AI specialist.
+/// A thread of work with one AI specialist, or with the Advisor.
+///
+/// The Advisor is not a member of the team, so a conversation with it has
+/// no member and no task. It has the model and the effort the Advisor runs
+/// on in it, chosen when it starts.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Conversation {
     id: ConversationId,
@@ -38,6 +51,7 @@ pub struct Conversation {
     task_id: Option<TaskId>,
     started_at: Timestamp,
     session_id: Option<String>,
+    advisor: Option<MemberProfile>,
 }
 
 impl Conversation {
@@ -56,6 +70,28 @@ impl Conversation {
             task_id,
             started_at: now,
             session_id: None,
+            advisor: None,
+        }
+    }
+
+    /// Starts a conversation with the Advisor, which runs on this model and
+    /// at this effort, or on the defaults of the program where they are
+    /// absent.
+    #[must_use]
+    pub fn start_with_advisor(
+        project_id: ProjectId,
+        model: Option<ModelName>,
+        effort: Option<Effort>,
+        now: Timestamp,
+    ) -> Self {
+        Self {
+            id: ConversationId::generate(),
+            project_id,
+            member_id: None,
+            task_id: None,
+            started_at: now,
+            session_id: None,
+            advisor: Some(MemberProfile { model, effort }),
         }
     }
 
@@ -69,6 +105,7 @@ impl Conversation {
             task_id: snapshot.task_id,
             started_at: snapshot.started_at,
             session_id: snapshot.session_id,
+            advisor: snapshot.advisor,
         }
     }
 
@@ -84,7 +121,8 @@ impl Conversation {
         self.project_id
     }
 
-    /// The specialist, or nothing if it has left the team since.
+    /// The specialist, or nothing if it has left the team since, or if the
+    /// conversation is with the Advisor.
     #[must_use]
     pub const fn member_id(&self) -> Option<MemberId> {
         self.member_id
@@ -106,6 +144,20 @@ impl Conversation {
     #[must_use]
     pub fn session_id(&self) -> Option<&str> {
         self.session_id.as_deref()
+    }
+
+    /// Whether the conversation is with the Advisor.
+    #[must_use]
+    pub const fn is_with_advisor(&self) -> bool {
+        self.advisor.is_some()
+    }
+
+    /// The model and the effort the Advisor runs on in this conversation,
+    /// if it is with the Advisor. Either may be absent, for the default of
+    /// the program.
+    #[must_use]
+    pub const fn advisor_profile(&self) -> Option<&MemberProfile> {
+        self.advisor.as_ref()
     }
 
     /// Records that the specialist has left the team. What it did stays on
@@ -130,12 +182,15 @@ pub enum TurnOrigin {
     Message,
     /// It is the manager's answer to a question the specialist asked.
     Decision,
+    /// It is the manager's answers to the questions the Advisor asked.
+    Interview,
 }
 
 text_enum!(TurnOrigin, kind = "origin of a turn", {
     Brief => "brief",
     Message => "message",
     Decision => "decision",
+    Interview => "interview",
 });
 
 /// One of the answers a specialist offers the manager for a decision.
@@ -451,12 +506,17 @@ pub struct TurnSnapshot {
     /// What the specialist asked the manager to decide in this turn, if
     /// anything.
     pub decision: Option<DecisionRequest>,
+    /// What the Advisor asked the manager in this turn, if anything.
+    pub interview: Option<Interview>,
+    /// What the Advisor proposed in this turn, if anything.
+    pub proposal: Option<Proposal>,
 }
 
-/// One request to a specialist, and what came of it.
+/// One request to a specialist or to the Advisor, and what came of it.
 ///
 /// A turn runs until it ends, and it ends exactly once: finished, failed or
-/// stopped. Steps are only added while it runs.
+/// stopped. Steps are only added while it runs. It carries at most one of a
+/// question to decide, an interview and a proposal.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Turn {
     id: TurnId,
@@ -472,6 +532,8 @@ pub struct Turn {
     model: Option<String>,
     tokens: Option<TokenCounts>,
     decision: Option<DecisionRequest>,
+    interview: Option<Interview>,
+    proposal: Option<Proposal>,
 }
 
 impl Turn {
@@ -508,6 +570,8 @@ impl Turn {
             model: None,
             tokens: None,
             decision: None,
+            interview: None,
+            proposal: None,
         })
     }
 
@@ -528,6 +592,8 @@ impl Turn {
             model: snapshot.model,
             tokens: snapshot.tokens,
             decision: snapshot.decision,
+            interview: snapshot.interview,
+            proposal: snapshot.proposal,
         }
     }
 
@@ -624,12 +690,95 @@ impl Turn {
     ///
     /// Returns an error if the turn has ended or has asked already.
     pub fn ask(&mut self, request: DecisionRequest) -> Result<(), DomainError> {
-        self.require_running()?;
-        if self.decision.is_some() {
-            return Err(DomainError::AlreadyAsked);
-        }
+        self.require_nothing_asked()?;
         self.decision = Some(request);
         Ok(())
+    }
+
+    /// What the Advisor asked the manager in this turn, if anything.
+    #[must_use]
+    pub const fn interview(&self) -> Option<&Interview> {
+        self.interview.as_ref()
+    }
+
+    /// What the Advisor proposed in this turn, if anything.
+    #[must_use]
+    pub const fn proposal(&self) -> Option<&Proposal> {
+        self.proposal.as_ref()
+    }
+
+    /// Records that the Advisor asked the manager the questions of an
+    /// interview. Like a question to decide, it counts as asked when the
+    /// turn ends.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the turn has ended, or if it has asked or
+    /// proposed already.
+    pub fn ask_interview(&mut self, interview: Interview) -> Result<(), DomainError> {
+        self.require_nothing_asked()?;
+        self.interview = Some(interview);
+        Ok(())
+    }
+
+    /// Records that the Advisor proposed a team and a plan.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the turn has ended, or if it has asked or
+    /// proposed already.
+    pub fn propose(&mut self, proposal: Proposal) -> Result<(), DomainError> {
+        self.require_nothing_asked()?;
+        self.proposal = Some(proposal);
+        Ok(())
+    }
+
+    /// Records the manager's answers to the interview of the turn, one for
+    /// each question: an option, words, or both. Whitespace around the
+    /// words is removed.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the turn is still running, if it asked no
+    /// interview, if the interview has been answered already, if there is
+    /// not one answer for each question, or if an answer names an option
+    /// its question does not have, or no option and no words.
+    pub fn answer_interview(
+        &mut self,
+        answers: Vec<InterviewAnswer>,
+        now: Timestamp,
+    ) -> Result<(), DomainError> {
+        if self.is_running() {
+            return Err(DomainError::TurnStillRunning);
+        }
+        self.interview
+            .as_mut()
+            .ok_or(DomainError::NothingAsked)?
+            .answer(answers, now)
+    }
+
+    /// Records that the manager approved the proposal of the turn, with
+    /// the members and the tasks the manager left in it. The proposal
+    /// keeps them in place of what was proposed.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the turn is still running, if it proposed
+    /// nothing, if the proposal has been approved already, or if what is
+    /// approved breaks a rule of a plan.
+    pub fn approve_proposal(
+        &mut self,
+        members: Vec<ProposedMember>,
+        tasks: Vec<ProposedTask>,
+        now: Timestamp,
+    ) -> Result<(), DomainError> {
+        if self.is_running() {
+            return Err(DomainError::TurnStillRunning);
+        }
+        self.proposal
+            .as_mut()
+            .ok_or(DomainError::NothingProposed)?
+            .approve(members, tasks, now)
     }
 
     /// Records the manager's answer to the question of the turn: one of its
@@ -858,6 +1007,16 @@ impl Turn {
         self.ended_at = Some(now);
     }
 
+    /// Refuses to ask or to propose in a turn that has ended, or that has
+    /// asked or proposed already.
+    fn require_nothing_asked(&self) -> Result<(), DomainError> {
+        self.require_running()?;
+        if self.decision.is_some() || self.interview.is_some() || self.proposal.is_some() {
+            return Err(DomainError::AlreadyAsked);
+        }
+        Ok(())
+    }
+
     /// Refuses a change to a turn that has ended.
     fn require_running(&self) -> Result<(), DomainError> {
         if self.is_running() {
@@ -873,6 +1032,7 @@ mod tests {
     use chrono::TimeZone;
 
     use super::*;
+    use crate::planning::InterviewQuestion;
 
     fn moment(minute: u32) -> Timestamp {
         chrono::Utc
@@ -935,6 +1095,7 @@ mod tests {
             task_id: Some(TaskId::generate()),
             started_at: moment(3),
             session_id: Some("abc".to_owned()),
+            advisor: None,
         };
 
         let conversation = Conversation::restore(snapshot.clone());
@@ -1164,6 +1325,8 @@ mod tests {
             model: Some("claude-model".to_owned()),
             tokens: turn.tokens(),
             decision: None,
+            interview: None,
+            proposal: None,
         };
 
         assert_eq!(Turn::restore(snapshot), turn);
@@ -1339,6 +1502,147 @@ mod tests {
         });
 
         assert_eq!(restored, decision);
+    }
+
+    #[test]
+    fn a_conversation_with_the_advisor_has_no_member_and_no_task_but_a_profile() {
+        let project_id = ProjectId::generate();
+        let model = ModelName::parse("opus").unwrap();
+
+        let conversation =
+            Conversation::start_with_advisor(project_id, Some(model.clone()), None, moment(0));
+
+        assert!(conversation.is_with_advisor());
+        assert_eq!(conversation.member_id(), None);
+        assert_eq!(conversation.task_id(), None);
+        assert_eq!(
+            conversation.advisor_profile(),
+            Some(&MemberProfile {
+                model: Some(model),
+                effort: None
+            })
+        );
+        let with_specialist =
+            Conversation::start(project_id, MemberId::generate(), None, moment(0));
+        assert!(!with_specialist.is_with_advisor());
+        assert_eq!(with_specialist.advisor_profile(), None);
+    }
+
+    fn interview() -> Interview {
+        Interview::new(vec![InterviewQuestion {
+            question: "What is fixed?".to_owned(),
+            reason: String::new(),
+            options: Vec::new(),
+            recommended: None,
+        }])
+        .unwrap()
+    }
+
+    fn proposal() -> Proposal {
+        Proposal::new(
+            "A device.",
+            vec![ProposedMember {
+                name: crate::text::MemberName::parse("Hardware engineer").unwrap(),
+                responsibility: String::new(),
+                reason: String::new(),
+                model: None,
+                effort: None,
+            }],
+            Vec::new(),
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn a_turn_carries_at_most_one_of_a_question_an_interview_and_a_proposal() {
+        let mut interviewing = running_turn();
+        interviewing.ask_interview(interview()).unwrap();
+        assert_eq!(interviewing.interview(), Some(&interview()));
+        assert_eq!(
+            interviewing.propose(proposal()),
+            Err(DomainError::AlreadyAsked)
+        );
+        assert_eq!(
+            interviewing.ask(battery_question()),
+            Err(DomainError::AlreadyAsked)
+        );
+
+        let mut proposing = running_turn();
+        proposing.propose(proposal()).unwrap();
+        assert_eq!(proposing.proposal(), Some(&proposal()));
+        assert_eq!(
+            proposing.ask_interview(interview()),
+            Err(DomainError::AlreadyAsked)
+        );
+
+        let mut asking = running_turn();
+        asking.ask(battery_question()).unwrap();
+        assert_eq!(asking.propose(proposal()), Err(DomainError::AlreadyAsked));
+
+        let mut ended = running_turn();
+        ended.stop(None, moment(2)).unwrap();
+        assert_eq!(
+            ended.ask_interview(interview()),
+            Err(DomainError::TurnEnded)
+        );
+    }
+
+    #[test]
+    fn an_interview_is_answered_after_its_turn_has_ended() {
+        let mut turn = running_turn();
+        turn.ask_interview(interview()).unwrap();
+        let answers = || {
+            vec![InterviewAnswer {
+                option: None,
+                note: " Nothing. ".to_owned(),
+            }]
+        };
+        assert_eq!(
+            turn.answer_interview(answers(), moment(3)),
+            Err(DomainError::TurnStillRunning)
+        );
+        turn.finish("I wait for your answers.", tokens(), moment(4))
+            .unwrap();
+
+        turn.answer_interview(answers(), moment(5)).unwrap();
+
+        let interview = turn.interview().unwrap();
+        assert_eq!(interview.answers().unwrap()[0].note, "Nothing.");
+        assert_eq!(interview.answered_at(), Some(moment(5)));
+        let mut nothing_asked = running_turn();
+        nothing_asked
+            .finish("Report.", tokens(), moment(3))
+            .unwrap();
+        assert_eq!(
+            nothing_asked.answer_interview(answers(), moment(4)),
+            Err(DomainError::NothingAsked)
+        );
+    }
+
+    #[test]
+    fn a_proposal_is_approved_after_its_turn_has_ended() {
+        let mut turn = running_turn();
+        turn.propose(proposal()).unwrap();
+        let members = || proposal().members().to_vec();
+        assert_eq!(
+            turn.approve_proposal(members(), Vec::new(), moment(3)),
+            Err(DomainError::TurnStillRunning)
+        );
+        turn.finish("I propose one specialist.", tokens(), moment(4))
+            .unwrap();
+
+        turn.approve_proposal(members(), Vec::new(), moment(5))
+            .unwrap();
+
+        assert_eq!(turn.proposal().unwrap().approved_at(), Some(moment(5)));
+        let mut nothing_proposed = running_turn();
+        nothing_proposed
+            .finish("Report.", tokens(), moment(3))
+            .unwrap();
+        assert_eq!(
+            nothing_proposed.approve_proposal(members(), Vec::new(), moment(4)),
+            Err(DomainError::NothingProposed)
+        );
     }
 
     #[test]

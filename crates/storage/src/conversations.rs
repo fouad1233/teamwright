@@ -157,6 +157,7 @@ impl ConversationRecord {
             task_id: self.task_id.as_deref().map(codec::parse).transpose()?,
             started_at: codec::moment_from_text(&self.started_at)?,
             session_id: self.session_id,
+            advisor: None,
         }))
     }
 }
@@ -253,6 +254,8 @@ impl TurnRecord {
             model: self.model,
             tokens,
             decision: decision.map(DecisionRecord::into_decision).transpose()?,
+            interview: None,
+            proposal: None,
         }))
     }
 

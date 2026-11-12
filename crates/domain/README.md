@@ -1,8 +1,9 @@
 # teamwright-domain
 
 The Teamwright model and its rules. This crate knows what a project, a
-workflow, a task, a team member and a conversation with a specialist are, and what may and may not be done with them. It does
-no input or output.
+workflow, a task, a team member, a conversation with a specialist or with
+the Advisor, and a plan the Advisor proposes are, and what may and may not be
+done with them. It does no input or output.
 
 ## What is in it
 
@@ -17,7 +18,8 @@ no input or output.
 | `task_history` | `TaskChange`, `history_of`: what changed from one version of a task to the next |
 | `dependencies` | `DependencyGraph`: which task waits for which |
 | `member` | `Member`, `MemberKind`: an AI agent or a person on the team of a project; `MemberProfile`, `Effort`: the model and the effort of a specialist |
-| `conversation` | `Conversation`, `Turn`, `Step`, `TokenCounts`: the work of an AI specialist, one request at a time; `DecisionRequest`, `DecisionOption`, `DecisionAnswer`: a question a specialist asks the manager to decide |
+| `conversation` | `Conversation`, `Turn`, `Step`, `TokenCounts`: the work of an AI specialist or of the Advisor, one request at a time; `DecisionRequest`, `DecisionOption`, `DecisionAnswer`: a question a specialist asks the manager to decide |
+| `planning` | `Interview`, `InterviewQuestion`, `InterviewAnswer`: the questions the Advisor asks before it proposes; `Proposal`, `ProposedMember`, `ProposedTask`, `ProposedOwner`: the team and the plan it proposes |
 | `error` | `DomainError`: every rule that can be broken |
 | `time` | `Timestamp`, `CalendarDate` |
 
@@ -55,6 +57,24 @@ no input or output.
   runs, and at most once. It is answered after the turn has ended, once,
   with one of its options, with words of the manager's own, or with both,
   never with neither.
+- A conversation is with a specialist or with the Advisor. One with the
+  Advisor has no member and no task, and keeps the model and the effort the
+  Advisor runs on in it.
+- A turn carries at most one of a question to decide, an interview and a
+  proposal, and records it only while it runs.
+- An interview has one to five questions. Each is not empty and has two to
+  four options, or none for a question answered in words; a recommended
+  option is one of them. It is answered after its turn has ended, once,
+  with one answer for each question, each an option of that question, words,
+  or both (`every question needs an answer`, `question 2 has no such
+  option`, `the answer to question 3 names one of the options or says
+  something in words`).
+- A proposal has a summary and at least one member or task. No two of its
+  members have the same name, whatever the capitals. A task waits only for
+  other tasks of the same proposal, by their places, and the tasks do not
+  wait for each other in a circle. Names and titles follow the rules of
+  members and tasks. It is approved after its turn has ended, once, and
+  then keeps what the manager approved, which the same rules check.
 
 ## How to work in it
 
