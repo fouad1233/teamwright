@@ -5,9 +5,15 @@
 //! Both are kept in rows of their own, keyed by the turn, and are written
 //! only when they differ from what is stored. Each is logged as one entity
 //! (`interview`, `proposal`) whose state is the whole of it.
+//!
+//! [`SqlitePlanningRepository`] stores what approving a proposal creates in
+//! one transaction.
+
+use std::sync::Arc;
 
 use rusqlite::{Connection, OptionalExtension, Transaction, named_params};
 use serde::Serialize;
+use teamwright_application::{ApprovedPlan, PlanningRepository, StorageError};
 use teamwright_domain::{
     DecisionOption, DomainError, Interview, InterviewAnswer, InterviewQuestion, InterviewSnapshot,
     MemberName, ModelName, Proposal, ProposalSnapshot, ProposedMember, ProposedOwner, ProposedTask,
@@ -15,8 +21,45 @@ use teamwright_domain::{
 };
 
 use crate::codec;
+use crate::conversations::store_turn;
+use crate::database::Database;
 use crate::error::DatabaseError;
+use crate::members::store_member;
 use crate::operations::{Entity, OperationRecorder};
+use crate::projects::store_project;
+use crate::tasks::store_task;
+
+/// Stores what approving a proposal creates in the SQLite database.
+#[derive(Debug, Clone)]
+pub struct SqlitePlanningRepository {
+    database: Arc<Database>,
+}
+
+impl SqlitePlanningRepository {
+    /// Creates a repository that works on the given database.
+    #[must_use]
+    pub const fn new(database: Arc<Database>) -> Self {
+        Self { database }
+    }
+}
+
+impl PlanningRepository for SqlitePlanningRepository {
+    fn save_approved_plan(&self, plan: &ApprovedPlan) -> Result<(), StorageError> {
+        // One transaction: the project with its next task number, every
+        // member, every task and the approved proposal are stored and
+        // logged together, or nothing is.
+        self.database.write(|transaction, operations| {
+            store_project(transaction, operations, &plan.project)?;
+            for member in &plan.members {
+                store_member(transaction, operations, member)?;
+            }
+            for task in &plan.tasks {
+                store_task(transaction, operations, task)?;
+            }
+            store_turn(transaction, operations, &plan.turn)
+        })
+    }
+}
 
 /// The text form of an owner who is the manager.
 const OWNER_MANAGER: &str = "manager";

@@ -36,5 +36,6 @@ pub use database::Database;
 pub use members::SqliteMemberRepository;
 pub use operations::{DeviceId, Operation};
 pub use places::SqlitePlacesRepository;
+pub use planning::SqlitePlanningRepository;
 pub use projects::SqliteProjectRepository;
 pub use tasks::SqliteTaskRepository;

@@ -122,6 +122,37 @@ pub enum ApplicationError {
         name: String,
     },
 
+    /// A conversation with the Advisor was to start, or to go on, while
+    /// the Advisor works on the project. One conversation with the Advisor
+    /// runs in a project at a time.
+    #[error("the Advisor is still working on this project")]
+    AdvisorBusy,
+
+    /// A conversation with the Advisor was to go on with an ordinary
+    /// message while the Advisor waits for the answers to its questions.
+    #[error("the Advisor waits for your answers: answer its questions first")]
+    InterviewOpen,
+
+    /// The questions of the Advisor were to be answered in a conversation
+    /// in which none are open.
+    #[error("no questions are open in this conversation")]
+    NoInterviewOpen,
+
+    /// A proposal was to be approved in a conversation in which none is
+    /// open.
+    #[error("no proposal is open in this conversation")]
+    NoProposalOpen,
+
+    /// A task of an approved proposal was given to somebody who is
+    /// neither on the team nor in the proposal.
+    #[error("\"{title}\" is given to \"{name}\", who is neither on the team nor in the proposal")]
+    OwnerNotThere {
+        /// The title of the task.
+        title: String,
+        /// The name it was given to.
+        name: String,
+    },
+
     /// A conversation was to be opened in the agent program before the
     /// program had started its session.
     #[error("the specialist has not started its session yet")]
@@ -211,7 +242,8 @@ impl ApplicationError {
             | Self::WorkFolderIsReference { .. }
             | Self::ReferenceInsideWorkFolder { .. }
             | Self::WorkFolderInsideReference { .. }
-            | Self::FileWithoutName => "rule_broken",
+            | Self::FileWithoutName
+            | Self::OwnerNotThere { .. } => "rule_broken",
             Self::FolderNotFound { .. } => "folder_not_found",
             Self::NotFound { .. } => "not_found",
             Self::ProjectKeyTaken { .. } => "project_key_taken",
@@ -228,6 +260,10 @@ impl ApplicationError {
             Self::WorkInProgress { .. } => "work_in_progress",
             Self::NoDecisionOpen => "no_decision_open",
             Self::DecisionOpen { .. } => "decision_open",
+            Self::AdvisorBusy => "advisor_busy",
+            Self::InterviewOpen => "interview_open",
+            Self::NoInterviewOpen => "no_interview_open",
+            Self::NoProposalOpen => "no_proposal_open",
             Self::SessionNotStarted => "session_not_started",
             Self::AgentProgram(error) => error.code(),
             Self::Storage(_) => "storage_failed",

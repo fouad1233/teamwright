@@ -13,10 +13,11 @@ use teamwright_application::in_memory::{
     FixedProjectFolders, ManualClock, PretendFileSystem, RecordingWorkListener, ScriptedRuntime,
 };
 use teamwright_application::{
-    AgentEvent, ChosenPlaces, ConversationRepository, ManagerQuestion, MemberRepository,
-    ModelUsage, NewMember, NewProject, NewTask, PlacesRepository, ProjectRepository,
-    ProjectService, QuestionOption, SessionId, StatusProperties, TaskRepository, TaskService,
-    TeamService, TurnOutcome, WorkPorts, WorkService, WorkflowTemplate,
+    AgentEvent, ApprovedMember, ApprovedOwner, ApprovedProposal, ApprovedTask, ChosenPlaces,
+    ConversationRepository, ManagerQuestion, MemberRepository, ModelUsage, NewMember, NewProject,
+    NewTask, PlacesRepository, PlanProposal, PlannedMember, PlannedOwner, PlannedTask,
+    ProjectRepository, ProjectService, QuestionOption, SessionId, StatusProperties, TaskRepository,
+    TaskService, TeamService, TurnOutcome, WorkPorts, WorkService, WorkflowTemplate,
 };
 use teamwright_domain::{
     Assignee, CalendarDate, Color, Conversation, ConversationId, DecisionOption, DecisionRequest,
@@ -28,7 +29,8 @@ use teamwright_domain::{
 };
 use teamwright_storage::{
     Database, Operation, SqliteConversationRepository, SqliteMemberRepository,
-    SqlitePlacesRepository, SqliteProjectRepository, SqliteTaskRepository,
+    SqlitePlacesRepository, SqlitePlanningRepository, SqliteProjectRepository,
+    SqliteTaskRepository,
 };
 
 /// A database with the repositories working on it.
@@ -1880,6 +1882,7 @@ fn the_work_of_a_specialist_is_kept_on_the_real_database() {
     let member_repository = Arc::new(SqliteMemberRepository::new(database.clone()));
     let places_repository = Arc::new(SqlitePlacesRepository::new(database.clone()));
     let conversation_repository = Arc::new(SqliteConversationRepository::new(database.clone()));
+    let planning_repository = Arc::new(SqlitePlanningRepository::new(database.clone()));
     let clock = Arc::new(ManualClock::starting_at(moment(9)));
     let runtime = Arc::new(ScriptedRuntime::new());
     let work_service = || {
@@ -1888,6 +1891,7 @@ fn the_work_of_a_specialist_is_kept_on_the_real_database() {
             tasks: task_repository.clone(),
             members: member_repository.clone(),
             conversations: conversation_repository.clone(),
+            planning: planning_repository.clone(),
             folders: Arc::new(FixedProjectFolders::inside("projects")),
             places: places_repository.clone(),
             file_system: Arc::new(PretendFileSystem::default()),
@@ -2078,6 +2082,160 @@ fn the_work_of_a_specialist_is_kept_on_the_real_database() {
         log.iter()
             .any(|op| op.entity == "turn" && op.kind == "delete")
     );
+}
+
+#[test]
+fn approving_a_proposal_creates_the_team_and_the_plan_in_one_logged_write() {
+    let database = Arc::new(Database::open_in_memory().unwrap());
+    let project_repository = Arc::new(SqliteProjectRepository::new(database.clone()));
+    let task_repository = Arc::new(SqliteTaskRepository::new(database.clone()));
+    let member_repository = Arc::new(SqliteMemberRepository::new(database.clone()));
+    let conversation_repository = Arc::new(SqliteConversationRepository::new(database.clone()));
+    let places_repository = Arc::new(SqlitePlacesRepository::new(database.clone()));
+    let clock = Arc::new(ManualClock::starting_at(moment(9)));
+    let runtime = Arc::new(ScriptedRuntime::new());
+    let projects = ProjectService::new(
+        project_repository.clone(),
+        task_repository.clone(),
+        member_repository.clone(),
+        conversation_repository.clone(),
+        places_repository.clone(),
+        clock.clone(),
+    );
+    let work = WorkService::new(WorkPorts {
+        projects: project_repository.clone(),
+        tasks: task_repository.clone(),
+        members: member_repository.clone(),
+        conversations: conversation_repository.clone(),
+        planning: Arc::new(SqlitePlanningRepository::new(database.clone())),
+        folders: Arc::new(FixedProjectFolders::inside("projects")),
+        places: places_repository,
+        file_system: Arc::new(PretendFileSystem::default()),
+        runtime: runtime.clone(),
+        listener: Arc::new(RecordingWorkListener::default()),
+        clock: clock.clone(),
+    });
+    let project = projects
+        .create(NewProject {
+            name: "Air quality node".to_owned(),
+            ..NewProject::default()
+        })
+        .unwrap();
+    let conversation = work
+        .advise(project.id(), "A small air sensor.", Some("opus"), None)
+        .unwrap();
+    let id = conversation.conversation.id();
+    runtime.deliver(
+        0,
+        AgentEvent::PlanProposed(PlanProposal {
+            summary: "A device that measures the air.".to_owned(),
+            members: vec![PlannedMember {
+                name: "Hardware engineer".to_owned(),
+                responsibility: "The board.".to_owned(),
+                reason: "It is a board.".to_owned(),
+                model: None,
+                effort: Some(Effort::High),
+            }],
+            tasks: vec![
+                PlannedTask {
+                    title: "Draw the schematic".to_owned(),
+                    description: String::new(),
+                    owner: PlannedOwner::Member("Hardware engineer".to_owned()),
+                    estimate_minutes: Some(480),
+                    priority: Priority::Normal,
+                    waits_for: Vec::new(),
+                },
+                PlannedTask {
+                    title: "Order the parts".to_owned(),
+                    description: String::new(),
+                    owner: PlannedOwner::Manager,
+                    estimate_minutes: None,
+                    priority: Priority::High,
+                    waits_for: vec![0],
+                },
+            ],
+        }),
+    );
+    runtime.deliver(
+        0,
+        AgentEvent::TurnEnded(TurnOutcome {
+            session_id: Some(SessionId::parse("abc-123").unwrap()),
+            failure: None,
+            final_text: "I propose one specialist.".to_owned(),
+            usage: Vec::new(),
+            estimated_cost_usd: None,
+            duration: None,
+            model_calls: None,
+            permission_denials: Vec::new(),
+        }),
+    );
+    let approval = ApprovedProposal {
+        members: vec![ApprovedMember {
+            name: "Hardware engineer".to_owned(),
+            responsibility: "The board.".to_owned(),
+            reason: "It is a board.".to_owned(),
+            model: None,
+            effort: Some(Effort::High),
+        }],
+        tasks: vec![
+            ApprovedTask {
+                title: "Draw the schematic".to_owned(),
+                description: String::new(),
+                owner: Some(ApprovedOwner::Member("Hardware engineer".to_owned())),
+                estimate_minutes: Some(480),
+                priority: Priority::Normal,
+                waits_for: Vec::new(),
+            },
+            ApprovedTask {
+                title: "Order the parts".to_owned(),
+                description: String::new(),
+                owner: Some(ApprovedOwner::Manager),
+                estimate_minutes: None,
+                priority: Priority::High,
+                waits_for: vec![0],
+            },
+        ],
+    };
+    let start = database.operations().unwrap().len();
+
+    work.approve_proposal(id, approval).unwrap();
+
+    let logged: Vec<(String, String)> = database
+        .operations()
+        .unwrap()
+        .into_iter()
+        .skip(start)
+        .map(|op| (op.entity, op.kind))
+        .collect();
+    assert_eq!(
+        logged,
+        pairs(&[
+            ("project", "upsert"),
+            ("member", "upsert"),
+            ("task", "upsert"),
+            ("task", "upsert"),
+            ("proposal", "upsert"),
+        ])
+    );
+    let found = conversation_repository.find(id).unwrap().unwrap();
+    assert!(found.is_with_advisor());
+    assert_eq!(
+        found
+            .advisor_profile()
+            .and_then(|profile| profile.model.as_ref())
+            .map(ToString::to_string),
+        Some("opus".to_owned())
+    );
+    let team = member_repository.list_for_project(project.id()).unwrap();
+    assert_eq!(team.len(), 1);
+    let mut tasks = task_repository.list_for_project(project.id()).unwrap();
+    tasks.sort_by_key(Task::number);
+    assert_eq!(tasks[0].assignee(), Some(Assignee::Member(team[0].id())));
+    assert!(tasks[1].blocked_by().contains(&tasks[0].id()));
+    let turns = conversation_repository.turns_of(id).unwrap();
+    assert!(turns[0].proposal().unwrap().approved_at().is_some());
+    let stored = project_repository.find(project.id()).unwrap().unwrap();
+    assert_eq!(stored.next_task_number(), 3);
 }
 
 fn status_named(project: &Project, name: &str) -> StatusId {

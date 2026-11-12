@@ -426,8 +426,9 @@ mod tests {
     use super::*;
     use crate::in_memory::{
         FixedProjectFolders, InMemoryConversationRepository, InMemoryMemberRepository,
-        InMemoryPlacesRepository, InMemoryProjectRepository, InMemoryTaskRepository, ManualClock,
-        PretendFileSystem, RecordingWorkListener, ScriptedRuntime,
+        InMemoryPlacesRepository, InMemoryPlanningRepository, InMemoryProjectRepository,
+        InMemoryTaskRepository, ManualClock, PretendFileSystem, RecordingWorkListener,
+        ScriptedRuntime,
     };
     use crate::projects::{NewProject, ProjectService, WorkflowTemplate};
     use crate::tasks::{NewTask, TaskService};
@@ -511,6 +512,12 @@ mod tests {
                 clock.clone(),
             ),
             work: WorkService::new(WorkPorts {
+                planning: Arc::new(InMemoryPlanningRepository::new(
+                    projects.clone(),
+                    members.clone(),
+                    tasks.clone(),
+                    conversations.clone(),
+                )),
                 projects,
                 tasks,
                 members,

@@ -310,6 +310,16 @@ impl TaskRepository for SqliteTaskRepository {
 }
 
 /// Writes one task with its dependencies and logs the change.
+pub(crate) fn store_task(
+    transaction: &Transaction<'_>,
+    operations: &mut OperationRecorder<'_>,
+    task: &Task,
+) -> Result<(), DatabaseError> {
+    store(transaction, operations, &TaskRecord::of(task))
+}
+
+/// Writes the stored form of one task with its dependencies and logs the
+/// change.
 fn store(
     transaction: &Transaction<'_>,
     operations: &mut OperationRecorder<'_>,

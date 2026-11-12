@@ -169,12 +169,8 @@ impl SqliteProjectRepository {
 
 impl ProjectRepository for SqliteProjectRepository {
     fn save(&self, project: &Project) -> Result<(), StorageError> {
-        let record = ProjectRecord::of(project);
-        self.database.write(|transaction, operations| {
-            upsert_project(transaction, &record)?;
-            replace_statuses(transaction, &record)?;
-            operations.record_upsert(Entity::Project, &record.id, &record)
-        })
+        self.database
+            .write(|transaction, operations| store_project(transaction, operations, project))
     }
 
     fn find(&self, id: ProjectId) -> Result<Option<Project>, StorageError> {
@@ -272,6 +268,18 @@ fn delete_rows_of_project(
         operations.record_delete(entity, &id)?;
     }
     Ok(())
+}
+
+/// Writes a project with its statuses and logs the change.
+pub(crate) fn store_project(
+    transaction: &Transaction<'_>,
+    operations: &mut OperationRecorder<'_>,
+    project: &Project,
+) -> Result<(), DatabaseError> {
+    let record = ProjectRecord::of(project);
+    upsert_project(transaction, &record)?;
+    replace_statuses(transaction, &record)?;
+    operations.record_upsert(Entity::Project, &record.id, &record)
 }
 
 /// Writes the `projects` row.

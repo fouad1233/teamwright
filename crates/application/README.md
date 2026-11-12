@@ -11,12 +11,12 @@ window or agent runtime.
 | `tasks` | `TaskService`: open, change, move, connect and remove tasks, and tell the history of one from the versions storage has kept |
 | `team` | `TeamService`: put members on the team of a project, change them, take them off |
 | `places` | `PlacesService`: the folders of a project: choose its work folder, add and take away reference folders, copy reference files into it |
-| `work` | `WorkService`: let AI specialists work: start on a task, ask, reply, answer a specialist's question, list what waits for the manager, stop, follow every event, open a session in the desktop app, recover after a restart; `brief_for` and `instructions_for` |
-| `ports` | The interfaces the services need: `ProjectRepository`, `TaskRepository`, `MemberRepository`, `ConversationRepository`, `PlacesRepository`, `ProjectFolders`, `FileSystem`, `WorkListener`, `Clock` |
+| `work` | `WorkService`: let AI specialists work: start on a task, ask, reply, answer a specialist's question, list what waits for the manager, stop, follow every event, open a session in the desktop app, recover after a restart; `brief_for` and `instructions_for`. Its part `advisor`: plan a project with the Advisor (`advise`, `answer_interview`, `approve_proposal`); `ApprovedProposal`, `answers_in_words` and `instructions_for_advisor` |
+| `ports` | The interfaces the services need: `ProjectRepository`, `TaskRepository`, `MemberRepository`, `ConversationRepository`, `PlanningRepository`, `PlacesRepository`, `ProjectFolders`, `FileSystem`, `WorkListener`, `Clock` |
 | `agent_runtime` | `AgentRuntime`: the interface to the program that runs a team member's session, and the data it speaks |
 | `error` | `ApplicationError`, with a stable `code()` for interfaces |
 | `clock` | `SystemClock`, the real clock |
-| `in_memory` | In-memory repositories, fixed project folders, a pretended file system, a listener that records, a scripted agent runtime and a settable clock, for tests and demos |
+| `in_memory` | In-memory repositories (`InMemoryPlanningRepository` stores an approved plan into the others), fixed project folders, a pretended file system, a listener that records, a scripted agent runtime and a settable clock, for tests and demos |
 
 ## How a use case is built
 
@@ -160,12 +160,66 @@ question; every request to the specialist is a turn of it.
   `member_busy`). The answer is stored only if the new turn starts.
   `reply` is refused while a question is open (`decision_open`), after the
   checks it had before.
-- `waiting_for_manager` lists the conversations with an open question in
-  every project that is not archived, the one that has waited longest first.
+- `waiting_for_manager` lists the conversations with an open question, an
+  open interview or an open proposal in every project that is not archived,
+  the one that has waited longest first.
 - `stop` records the running turn as stopped by the manager and then stops
   the program. Stopping a conversation in which nothing runs changes nothing.
 - `recover` ends, as failed, the turns that storage still calls running when
   the program starts: closing Teamwright cut them off.
+
+## Planning with the Advisor
+
+`WorkService` also carries out
+[decision 0014](../../docs/decisions/0014-the-advisor-plans-through-two-tools.md),
+in `work/advisor.rs`. The Advisor is not a member of the team: a
+conversation with it has no member and no task, and keeps the model and
+the effort it runs on, chosen when it starts. No task moves when its turns
+start or end.
+
+- `advise(project, brief, model, effort)` opens a conversation with the
+  Advisor whose first turn is the brief (origin `message`). An empty brief
+  or a model that is not one word is refused (`rule_broken`); an empty model
+  means none. One conversation with the Advisor runs in a project at a time
+  (`advisor_busy`, "the Advisor is still working on this project").
+- A turn of the Advisor runs in the work folder of the project with the
+  reference folders that exist as readable folders, with
+  `PermissionProfile::advisor()`, with the team tools `Interview` and
+  `ProposePlan { team }` (the names of the members the project has), on the
+  model and at the effort of the conversation, and with the instructions of
+  `instructions_for_advisor`: who the Advisor is and how it plans, the
+  reference folders, what the project has already when it has members or
+  tasks (it then proposes only what is to be added), and the rules not to
+  ask what a specialist works out itself and not to write "recommended"
+  into an option.
+- What the Advisor asks (`AgentEvent::InterviewAsked`) and proposes
+  (`PlanProposed`) is recorded on its turn. An interview or a proposal is
+  open while it belongs to the latest turn, that turn has ended, and the
+  manager has not answered or approved it.
+- `answer_interview` takes one answer for each question (`no_interview_open`
+  where none is open; `every question needs an answer`, `question 2 has no
+  such option`, `the answer to question 3 names one of the options or says
+  something in words`, all `rule_broken`; `advisor_busy`) and starts a turn
+  of origin `interview` whose request is `answers_in_words`. The answers are
+  stored only if the new turn starts.
+- `reply` in a conversation with the Advisor is a wish for a change or
+  another round. It is refused while the questions are open
+  (`interview_open`, "the Advisor waits for your answers: answer its
+  questions first") and while the Advisor works (`advisor_busy`).
+- `approve_proposal` takes what the manager left of the proposal
+  (`ApprovedProposal`) and checks all of it first (`no_proposal_open`; the
+  rules of names, titles and plans; a task given to somebody who is neither
+  on the team nor in the proposal, `rule_broken`). Then the members join the
+  team as AI specialists with the colors newcomers get, except a member
+  whose name the team has, whatever the capitals; tasks go into the first
+  status of the workflow, after the tasks there, numbered on, each waiting
+  for the tasks the proposal says. The project, the members, the tasks and
+  the turn with the approved proposal go to `PlanningRepository` in one
+  write, or nothing does. The proposal keeps what was approved, with the
+  moment.
+- While the Advisor works, a project can be neither archived nor deleted
+  (`work_in_progress`, "The Advisor is still working on a plan; stop the
+  work first").
 
 The runtime calls the listener of a turn on a thread of its own. The service
 holds one lock while a use case starts or stops a turn and while an event is
@@ -201,7 +255,8 @@ also name folders the session may read but not write (`readable_folders`).
 A turn request carries its permissions as data, a `PermissionProfile`.
 `PermissionProfile::specialist()` is the profile of a specialist: read,
 search, and edit inside the working folder; no shell; everything else is
-denied without waiting. The modes that approve risky tool use on the
+denied without waiting. `PermissionProfile::advisor()` reads and searches
+and has no tool to write. The modes that approve risky tool use on the
 manager's behalf are not offered.
 
 Usage is counted in tokens

@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use rusqlite::{OptionalExtension, Row, named_params};
+use rusqlite::{OptionalExtension, Row, Transaction, named_params};
 use serde::Serialize;
 use teamwright_application::{MemberRepository, StorageError};
 use teamwright_domain::{
@@ -12,7 +12,7 @@ use teamwright_domain::{
 use crate::codec;
 use crate::database::Database;
 use crate::error::DatabaseError;
-use crate::operations::Entity;
+use crate::operations::{Entity, OperationRecorder};
 
 /// The columns of the `members` table that every query reads.
 const MEMBER_COLUMNS: &str =
@@ -132,25 +132,8 @@ impl SqliteMemberRepository {
 
 impl MemberRepository for SqliteMemberRepository {
     fn save(&self, member: &Member) -> Result<(), StorageError> {
-        let record = MemberRecord::of(member);
-        self.database.write(|transaction, operations| {
-            transaction.execute(
-                UPSERT_MEMBER,
-                named_params! {
-                    ":id": record.id,
-                    ":project_id": record.project_id,
-                    ":name": record.name,
-                    ":kind": record.kind,
-                    ":responsibility": record.responsibility,
-                    ":model": record.model,
-                    ":effort": record.effort,
-                    ":color": record.color,
-                    ":joined_at": record.joined_at,
-                    ":updated_at": record.updated_at,
-                },
-            )?;
-            operations.record_upsert(Entity::Member, &record.id, &record)
-        })
+        self.database
+            .write(|transaction, operations| store_member(transaction, operations, member))
     }
 
     fn find(&self, id: MemberId) -> Result<Option<Member>, StorageError> {
@@ -197,6 +180,31 @@ impl MemberRepository for SqliteMemberRepository {
             Ok(())
         })
     }
+}
+
+/// Writes one member and logs the change.
+pub(crate) fn store_member(
+    transaction: &Transaction<'_>,
+    operations: &mut OperationRecorder<'_>,
+    member: &Member,
+) -> Result<(), DatabaseError> {
+    let record = MemberRecord::of(member);
+    transaction.execute(
+        UPSERT_MEMBER,
+        named_params! {
+            ":id": record.id,
+            ":project_id": record.project_id,
+            ":name": record.name,
+            ":kind": record.kind,
+            ":responsibility": record.responsibility,
+            ":model": record.model,
+            ":effort": record.effort,
+            ":color": record.color,
+            ":joined_at": record.joined_at,
+            ":updated_at": record.updated_at,
+        },
+    )?;
+    operations.record_upsert(Entity::Member, &record.id, &record)
 }
 
 #[cfg(test)]

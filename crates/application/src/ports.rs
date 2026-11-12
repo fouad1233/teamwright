@@ -220,6 +220,30 @@ pub trait ConversationRepository: Send + Sync {
     fn delete(&self, ids: &[ConversationId]) -> Result<(), StorageError>;
 }
 
+/// What approving a proposal of the Advisor creates and changes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ApprovedPlan {
+    /// The project, with the task numbers the new tasks took.
+    pub project: Project,
+    /// The members that join the team.
+    pub members: Vec<Member>,
+    /// The tasks that are created, each waiting for the tasks it waits for.
+    pub tasks: Vec<Task>,
+    /// The turn that proposed, with its proposal approved.
+    pub turn: Turn,
+}
+
+/// Stores what approving a proposal creates, in one write.
+pub trait PlanningRepository: Send + Sync {
+    /// Stores the project, the new members, the new tasks and the turn of
+    /// an approved plan. Either all of it is stored or nothing is.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the plan could not be written.
+    fn save_approved_plan(&self, plan: &ApprovedPlan) -> Result<(), StorageError>;
+}
+
 /// Knows the folder Teamwright gives each project. The specialists work
 /// there unless the manager chooses another work folder.
 pub trait ProjectFolders: Send + Sync {

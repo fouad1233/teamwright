@@ -1,5 +1,7 @@
 //! The work of AI specialists: starting it on a task, asking a specialist
 //! something, following what it does, going on with it, and stopping it.
+//! And the work of the Advisor, which plans a project with the manager
+//! ([`advisor`]).
 //!
 //! A specialist is a session of the agent program ([`AgentRuntime`]). Every
 //! request to it is a turn of a [`Conversation`]. The runtime reports what
@@ -26,8 +28,15 @@ use crate::agent_runtime::{
 use crate::error::ApplicationError;
 use crate::places::{PlacesService, REFERENCES_FOLDER};
 use crate::ports::{
-    Clock, ConversationRepository, FileSystem, MemberRepository, PlacesRepository, ProjectFolders,
-    ProjectRepository, TaskRepository, WorkListener,
+    Clock, ConversationRepository, FileSystem, MemberRepository, PlacesRepository,
+    PlanningRepository, ProjectFolders, ProjectRepository, TaskRepository, WorkListener,
+};
+
+mod advisor;
+
+pub use advisor::{
+    ApprovedMember, ApprovedOwner, ApprovedProposal, ApprovedTask, answers_in_words,
+    instructions_for_advisor,
 };
 
 /// The failure text of a turn whose program said the user is not signed in.
@@ -47,6 +56,12 @@ const A_QUESTION: &str = "a question";
 
 /// Who a specialist that has left the team is, in messages.
 const A_SPECIALIST: &str = "A specialist";
+
+/// Who the Advisor is, in messages.
+const THE_ADVISOR: &str = "The Advisor";
+
+/// What the Advisor works on, in messages.
+const A_PLAN: &str = "a plan";
 
 /// Whether the program that runs the specialists can be used.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -126,6 +141,8 @@ pub struct WorkPorts {
     pub members: Arc<dyn MemberRepository>,
     /// Where conversations and their turns are stored.
     pub conversations: Arc<dyn ConversationRepository>,
+    /// Where what an approved proposal creates is stored, in one write.
+    pub planning: Arc<dyn PlanningRepository>,
     /// The folder Teamwright gives each project.
     pub folders: Arc<dyn ProjectFolders>,
     /// Where the folders the manager chose for each project are stored.
@@ -299,7 +316,7 @@ impl WorkService {
                 answered_turn: None,
                 turn,
             },
-            &member,
+            Worker::Specialist(&member),
             &project,
         )
     }
@@ -317,6 +334,12 @@ impl WorkService {
     /// working on something, if it waits for the answer to a question
     /// (`decision_open`), if the program cannot start the turn, or if
     /// storage fails.
+    ///
+    /// In a conversation with the Advisor, the message goes to the
+    /// Advisor: a wish for a change of its proposal, or another round of
+    /// planning. It is refused while the Advisor waits for the answers to
+    /// its questions (`interview_open`) and while it works on the project
+    /// (`advisor_busy`).
     pub fn reply(
         &self,
         conversation_id: ConversationId,
@@ -325,6 +348,9 @@ impl WorkService {
         let _work = self.inner.hold_work();
         let ports = &self.inner.ports;
         let conversation = self.inner.require_conversation(conversation_id)?;
+        if conversation.is_with_advisor() {
+            return self.reply_to_advisor(conversation, message);
+        }
         let member = self.inner.specialist_of(&conversation)?;
         let turn = Turn::start(
             conversation.id(),
@@ -349,7 +375,7 @@ impl WorkService {
                 answered_turn: None,
                 turn,
             },
-            &member,
+            Worker::Specialist(&member),
             &project,
         )
     }
@@ -411,14 +437,16 @@ impl WorkService {
                 answered_turn: Some(answered_turn),
                 turn,
             },
-            &member,
+            Worker::Specialist(&member),
             &project,
         )
     }
 
-    /// Lists the conversations in which a specialist waits for the manager
-    /// to decide, in every project that is not archived. The one that has
-    /// waited longest, by the end of the turn that asked, comes first.
+    /// Lists the conversations that wait for the manager, in every project
+    /// that is not archived: a specialist waits for a decision, or the
+    /// Advisor waits for the answers to its questions or for a word about
+    /// its proposal. The one that has waited longest, by the end of the
+    /// turn that asked, comes first.
     ///
     /// # Errors
     ///
@@ -432,7 +460,10 @@ impl WorkService {
             }
             for conversation in ports.conversations.list_for_project(project.id())? {
                 let turns = ports.conversations.turns_of(conversation.id())?;
-                if open_decision_of(&turns).is_some() {
+                let waits = open_decision_of(&turns).is_some()
+                    || open_interview_of(&turns).is_some()
+                    || open_proposal_of(&turns).is_some();
+                if waits {
                     waiting.push(ConversationWithTurns {
                         conversation,
                         turns,
@@ -479,7 +510,7 @@ impl WorkService {
                 answered_turn: None,
                 turn,
             },
-            &member,
+            Worker::Specialist(&member),
             &project,
         )
     }
@@ -584,7 +615,7 @@ impl WorkService {
     fn begin_turn(
         &self,
         new_turn: NewTurn,
-        member: &Member,
+        worker: Worker<'_>,
         project: &Project,
     ) -> Result<ConversationWithTurns, ApplicationError> {
         let ports = &self.inner.ports;
@@ -603,15 +634,42 @@ impl WorkService {
         // A reference folder that is gone from the disk is left out, so
         // that the turn can still start.
         let readable_folders = self.inner.places.existing_reference_folders(project)?;
+        let (model, effort, instructions, permissions, team_tools) = match worker {
+            Worker::Specialist(member) => (
+                member.model().map(ToString::to_string),
+                member.effort(),
+                instructions_for(member, project, &readable_folders),
+                PermissionProfile::specialist(),
+                vec![TeamTool::AskManager],
+            ),
+            Worker::Advisor => {
+                let profile = conversation.advisor_profile().cloned().unwrap_or_default();
+                let mut team = ports.members.list_for_project(project.id())?;
+                team.sort_by_key(|member| (member.joined_at(), member.id()));
+                let mut tasks = ports.tasks.list_for_project(project.id())?;
+                tasks.sort_by_key(Task::number);
+                let names = team
+                    .iter()
+                    .map(|member| member.name().to_string())
+                    .collect();
+                (
+                    profile.model.map(|model| model.to_string()),
+                    profile.effort,
+                    instructions_for_advisor(project, &team, &tasks, &readable_folders),
+                    PermissionProfile::advisor(),
+                    vec![TeamTool::Interview, TeamTool::ProposePlan { team: names }],
+                )
+            }
+        };
         let request = TurnRequest {
             working_folder: self.inner.places.work_folder_of(project)?,
             prompt: turn.request().to_owned(),
             session,
-            model: member.model().map(ToString::to_string),
-            effort: member.effort(),
-            extra_instructions: Some(instructions_for(member, project, &readable_folders)),
-            permissions: PermissionProfile::specialist(),
-            team_tools: vec![TeamTool::AskManager],
+            model,
+            effort,
+            extra_instructions: Some(instructions),
+            permissions,
+            team_tools,
             readable_folders,
         };
         let handle = ports
@@ -656,14 +714,23 @@ impl WorkService {
     }
 }
 
+/// Who a turn is for.
+#[derive(Clone, Copy)]
+enum Worker<'member> {
+    /// An AI specialist of the team.
+    Specialist(&'member Member),
+    /// The Advisor, which plans the project.
+    Advisor,
+}
+
 /// A turn about to start, with the conversation it belongs to.
 struct NewTurn {
     conversation: Conversation,
     /// Whether the conversation is new and has to be stored too.
     is_new_conversation: bool,
     earlier_turns: Vec<Turn>,
-    /// The earlier turn whose question the new turn answers, with the
-    /// answer recorded. It is stored only if the new turn starts.
+    /// The earlier turn whose question or interview the new turn answers,
+    /// with the answer recorded. It is stored only if the new turn starts.
     answered_turn: Option<Turn>,
     turn: Turn,
 }
@@ -903,6 +970,27 @@ fn open_decision_of(turns: &[Turn]) -> Option<&DecisionRequest> {
         .filter(|decision| decision.is_open())
 }
 
+/// The interview that is open in a conversation: the one its latest turn
+/// ended with, if the manager has not answered it yet.
+fn open_interview_of(turns: &[Turn]) -> Option<&Interview> {
+    turns
+        .last()
+        .filter(|latest| !latest.is_running())
+        .and_then(Turn::interview)
+        .filter(|interview| interview.is_open())
+}
+
+/// The proposal that is open in a conversation: the one its latest turn
+/// ended with, if the manager has not approved it. A proposal of an
+/// earlier turn is not open: the conversation has gone on since.
+fn open_proposal_of(turns: &[Turn]) -> Option<&Proposal> {
+    turns
+        .last()
+        .filter(|latest| !latest.is_running())
+        .and_then(Turn::proposal)
+        .filter(|proposal| proposal.is_open())
+}
+
 /// When the open question of a conversation was asked: when its latest turn
 /// ended.
 fn asked_at(conversation: &ConversationWithTurns) -> Timestamp {
@@ -1089,6 +1177,12 @@ impl WorkInProgress<'_> {
         else {
             return Ok(());
         };
+        if conversation.is_with_advisor() {
+            return Err(ApplicationError::WorkInProgress {
+                who: THE_ADVISOR.to_owned(),
+                work: A_PLAN.to_owned(),
+            });
+        }
         let who = match conversation.member_id() {
             Some(member_id) => self.members.find(member_id)?,
             None => None,
@@ -1115,6 +1209,23 @@ impl WorkInProgress<'_> {
                     name: member.name().to_string(),
                     work: self.work_of(&conversation)?,
                 });
+            }
+        }
+        Ok(())
+    }
+
+    /// Refuses to go on while the Advisor works in a project: one
+    /// conversation with the Advisor runs in a project at a time.
+    pub(crate) fn refuse_while_advisor_works(
+        &self,
+        project_id: ProjectId,
+    ) -> Result<(), ApplicationError> {
+        for conversation_id in self.conversations_at_work()? {
+            let Some(conversation) = self.conversations.find(conversation_id)? else {
+                continue;
+            };
+            if conversation.is_with_advisor() && conversation.project_id() == project_id {
+                return Err(ApplicationError::AdvisorBusy);
             }
         }
         Ok(())
@@ -1306,8 +1417,9 @@ mod tests {
     use crate::agent_runtime::{ModelUsage, PermissionDenial, QuestionOption, SessionStarted};
     use crate::in_memory::{
         FixedProjectFolders, InMemoryConversationRepository, InMemoryMemberRepository,
-        InMemoryPlacesRepository, InMemoryProjectRepository, InMemoryTaskRepository, ManualClock,
-        PretendFileSystem, RecordingWorkListener, ScriptedRuntime,
+        InMemoryPlacesRepository, InMemoryPlanningRepository, InMemoryProjectRepository,
+        InMemoryTaskRepository, ManualClock, PretendFileSystem, RecordingWorkListener,
+        ScriptedRuntime,
     };
     use crate::places::PlacesService;
     use crate::projects::{NewProject, ProjectService, WorkflowTemplate};
@@ -1353,6 +1465,12 @@ mod tests {
                 tasks: self.tasks.clone(),
                 members: self.members.clone(),
                 conversations: self.conversations.clone(),
+                planning: Arc::new(InMemoryPlanningRepository::new(
+                    self.projects.clone(),
+                    self.members.clone(),
+                    self.tasks.clone(),
+                    self.conversations.clone(),
+                )),
                 folders: Arc::new(FixedProjectFolders::inside("projects")),
                 places: self.places.clone(),
                 file_system: self.file_system.clone(),

@@ -21,8 +21,9 @@ use crate::agent_runtime::{
 };
 use crate::places::ChosenPlaces;
 use crate::ports::{
-    Clock, ConversationRepository, FileSystem, MemberRepository, PlacesRepository, ProjectFolders,
-    ProjectRepository, StorageError, TaskRepository, WorkListener,
+    ApprovedPlan, Clock, ConversationRepository, FileSystem, MemberRepository, PlacesRepository,
+    PlanningRepository, ProjectFolders, ProjectRepository, StorageError, TaskRepository,
+    WorkListener,
 };
 
 /// Locks a mutex, and keeps working even if another thread panicked while it
@@ -207,6 +208,44 @@ impl ConversationRepository for InMemoryConversationRepository {
             stored.turns.retain(|_, turn| turn.conversation_id() != *id);
         }
         Ok(())
+    }
+}
+
+/// Stores an approved plan in the in-memory repositories it was given.
+/// Nothing in memory can fail half-way, so the plan is stored whole.
+pub struct InMemoryPlanningRepository {
+    projects: Arc<InMemoryProjectRepository>,
+    members: Arc<InMemoryMemberRepository>,
+    tasks: Arc<InMemoryTaskRepository>,
+    conversations: Arc<InMemoryConversationRepository>,
+}
+
+impl InMemoryPlanningRepository {
+    /// Stores into these repositories.
+    #[must_use]
+    pub const fn new(
+        projects: Arc<InMemoryProjectRepository>,
+        members: Arc<InMemoryMemberRepository>,
+        tasks: Arc<InMemoryTaskRepository>,
+        conversations: Arc<InMemoryConversationRepository>,
+    ) -> Self {
+        Self {
+            projects,
+            members,
+            tasks,
+            conversations,
+        }
+    }
+}
+
+impl PlanningRepository for InMemoryPlanningRepository {
+    fn save_approved_plan(&self, plan: &ApprovedPlan) -> Result<(), StorageError> {
+        self.projects.save(&plan.project)?;
+        for member in &plan.members {
+            self.members.save(member)?;
+        }
+        self.tasks.save_all(&plan.tasks)?;
+        self.conversations.save_turn(&plan.turn)
     }
 }
 

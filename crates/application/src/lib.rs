@@ -36,13 +36,15 @@ pub use clock::SystemClock;
 pub use error::ApplicationError;
 pub use places::{ChosenPlaces, PlacesService, ProjectPlaces, REFERENCES_FOLDER};
 pub use ports::{
-    Clock, ConversationRepository, FileSystem, MemberRepository, PlacesRepository, ProjectFolders,
-    ProjectRepository, StorageError, TaskRepository, WorkListener,
+    ApprovedPlan, Clock, ConversationRepository, FileSystem, MemberRepository, PlacesRepository,
+    PlanningRepository, ProjectFolders, ProjectRepository, StorageError, TaskRepository,
+    WorkListener,
 };
 pub use projects::{NewProject, ProjectService, StatusProperties, WorkflowTemplate};
 pub use tasks::{NewTask, TaskService};
 pub use team::{NewMember, TeamService};
 pub use work::{
-    AgentProgram, AgentProgramState, ConversationWithTurns, WorkPorts, WorkService, brief_for,
-    instructions_for,
+    AgentProgram, AgentProgramState, ApprovedMember, ApprovedOwner, ApprovedProposal, ApprovedTask,
+    ConversationWithTurns, WorkPorts, WorkService, answers_in_words, brief_for, instructions_for,
+    instructions_for_advisor,
 };

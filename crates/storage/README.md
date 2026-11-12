@@ -5,7 +5,8 @@ the conversations with specialists in SQLite, and appends every change to an
 operation log.
 
 It implements the interfaces `ProjectRepository`, `TaskRepository`,
-`MemberRepository`, `ConversationRepository` and `PlacesRepository` that the
+`MemberRepository`, `ConversationRepository`, `PlanningRepository` and
+`PlacesRepository` that the
 application crate declares. Nothing outside this crate knows that SQLite is
 involved.
 
@@ -20,7 +21,7 @@ involved.
 | `tasks` | `SqliteTaskRepository` |
 | `members` | `SqliteMemberRepository` |
 | `conversations` | `SqliteConversationRepository`: conversations, their turns, the steps of the turns and the questions they asked the manager |
-| `planning` | The interviews and the proposals of the Advisor, as parts of their turns |
+| `planning` | The interviews and the proposals of the Advisor, as parts of their turns; `SqlitePlanningRepository`, which stores an approved plan |
 | `places` | `SqlitePlacesRepository`: the work folder and the reference folders chosen for each project |
 | `operations` | The operation log, the hybrid logical clock, `DeviceId` |
 | `codec` | The text forms of moments, dates, identifiers and enumerations |
@@ -100,7 +101,12 @@ involved.
   approved. They are logged as the entities `interview` and `proposal` with
   the identifier of the turn, and the logged state is the whole of it.
   Rows are updated in place by position, and positions a list no longer has
-  are deleted. Each turn is deleted
+  are deleted.
+- **An approved plan is one transaction.** `SqlitePlanningRepository`
+  writes the project (with its next task number), every new member, every
+  new task with what it waits for, and the turn with its approved proposal,
+  each logged as usual (`project`, `member`, `task`, `proposal`), or
+  nothing. Each turn is deleted
   and logged, which stands for its steps and its question, and then the
   conversation.
   Deleting a task or a member in the database would remove or detach the
