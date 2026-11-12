@@ -244,6 +244,16 @@ ask for more. The specialist goes on in the same session, so it remembers
 what it did, and the task goes back into work until it reports again.
 Teamwright never calls a task done by itself. That is yours to say.
 
+**When a specialist needs you to decide.** A specialist does not guess at a
+choice that is yours: one that changes what is built, what it costs or when
+it is ready. It stops and asks. Its question shows in the panel of the task
+and in [the inbox](#the-inbox): what it wants to know, why it matters, the
+options with what each leads to, and the one it recommends. Pick an option
+and add a note if you like, or pick *Something else* and say what you want
+in your own words. Then press *Decide*, and the specialist goes on with your
+answer. Until then the task stays in work, its card carries a hollow brass
+mark, and the specialist is free for other work.
+
 **Ask something.** *Ask something* in the menu of a specialist in the
 *Team* view opens a conversation that is not about a task.
 
@@ -272,6 +282,21 @@ its turn says so the next time you look.
 **What it costs.** A specialist uses your own Claude plan or account,
 exactly as if you had used Claude Code yourself. Nothing goes through
 Teamwright or its authors.
+
+## The inbox
+
+The *Inbox*, at the top of the sidebar, holds what waits for you in all of
+your projects: the questions your specialists asked instead of guessing.
+The number next to it says how many there are, and the question that has
+waited longest comes first.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="../screenshots/specialist-inbox-dark.png">
+  <img alt="The inbox with one question of a specialist: what it wants to know, why it matters, two options with what each leads to and the one it recommends, a place for a note, and the button Decide" src="../screenshots/specialist-inbox-light.png">
+</picture>
+
+Every question can be answered where it stands. The line above it names
+the project and the task, and the title of the task leads to it.
 
 ## Views
 

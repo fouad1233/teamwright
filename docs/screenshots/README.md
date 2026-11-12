@@ -17,6 +17,7 @@ show them. Every picture exists twice: `-dark.png` for the dark theme and
 | `statuses` | The dialog in which the statuses of a project are edited |
 | `specialist-working` | A real specialist at work on a task |
 | `specialist-report` | The same specialist's report |
+| `specialist-inbox` | A question of the same specialist, in the inbox |
 
 Nobody edits these files by hand.
 [A tool](../../tools/screenshots/capture-screenshots.mjs) starts the built
@@ -29,9 +30,9 @@ nobody's account.
 says how to run it. Take the pictures again after a change that they would
 show.
 
-The two pictures of a specialist are taken by another tool,
+The three pictures of a specialist are taken by another tool,
 [the test that lets a real specialist work](../../tools/smoke/specialist-smoke.mjs),
 when it is given this folder. What they show was done by a real session of
-Claude Code, so the words of the report differ from one run to the next.
-That test uses a part of a Claude plan, so these two are taken again only
-when the work of the specialists looks different.
+Claude Code, so the words of the report and of the question differ from one
+run to the next. That test uses a part of a Claude plan, so these three are
+taken again only when the work of the specialists looks different.
