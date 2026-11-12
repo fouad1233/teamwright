@@ -248,8 +248,13 @@ impl TaskService {
 
     /// Moves a task to a status and to a position among the tasks there.
     ///
-    /// `index` counts the other tasks of that status from the top: `0` puts
-    /// the task first, and a number past the end puts it last.
+    /// `index` counts the other tasks of that status that are listed next to
+    /// this one, from the top: `0` puts the task first, and a number past
+    /// the end puts it last.
+    ///
+    /// The tasks listed next to a task are the ones with the same parent. A
+    /// board shows subtasks under their parent, so a position in one of its
+    /// columns counts only the tasks that are not part of another task.
     ///
     /// # Errors
     ///
@@ -266,19 +271,21 @@ impl TaskService {
         let status = project.workflow().require_status(status_id)?;
         let now = self.clock.now();
 
-        let mut others_in_status: Vec<Task> = self
+        let mut neighbours: Vec<Task> = self
             .tasks
             .list_for_project(project.id())?
             .into_iter()
-            .filter(|other| other.status_id() == status_id && other.id() != id)
+            .filter(|other| {
+                other.status_id() == status_id
+                    && other.parent_id() == task.parent_id()
+                    && other.id() != id
+            })
             .collect();
-        sort_as_arranged(&mut others_in_status);
+        sort_as_arranged(&mut neighbours);
 
-        let index = index.min(others_in_status.len());
-        let before = index
-            .checked_sub(1)
-            .and_then(|above| others_in_status.get(above));
-        let after = others_in_status.get(index);
+        let index = index.min(neighbours.len());
+        let before = index.checked_sub(1).and_then(|above| neighbours.get(above));
+        let after = neighbours.get(index);
         let (before, after) = (before.map(Task::rank), after.map(Task::rank));
         let rank = Rank::between(before, after);
         task.move_to(status, rank, now);
@@ -289,11 +296,11 @@ impl TaskService {
         }
 
         // The neighbours are too close together for another rank between
-        // them. Spread the whole status out again, with the task in place.
-        let mut whole_status = others_in_status;
-        whole_status.insert(index, task);
-        space_out(&mut whole_status, status, now);
-        self.tasks.save_all(&whole_status)?;
+        // them. Spread the whole list out again, with the task in place.
+        let mut whole_list = neighbours;
+        whole_list.insert(index, task);
+        space_out(&mut whole_list, status, now);
+        self.tasks.save_all(&whole_list)?;
         self.require_task(id)
     }
 
@@ -993,6 +1000,70 @@ mod tests {
             workspace.titles_in(&project, todo),
             ["Third", "First", "Second"]
         );
+    }
+
+    #[test]
+    fn a_position_in_a_status_does_not_count_the_subtasks_there() {
+        let workspace = workspace();
+        let project = workspace.project("Smart sensor node");
+        let todo = status_in(&project, StatusCategory::Todo);
+        let first = workspace.task(&project, "First");
+        // The subtask is in the same status and ranked between the two
+        // tasks, but a board shows it under "First", not in the column.
+        workspace
+            .tasks
+            .create(NewTask {
+                parent_id: Some(first.id()),
+                ..NewTask::titled(project.id(), "A part of the first")
+            })
+            .unwrap();
+        workspace.task(&project, "Second");
+        let third = workspace.task(&project, "Third");
+
+        workspace.tasks.move_to(third.id(), todo, 1).unwrap();
+
+        let on_their_own: Vec<String> = workspace
+            .tasks
+            .list_for_project(project.id())
+            .unwrap()
+            .into_iter()
+            .filter(|task| task.parent_id().is_none())
+            .map(|task| task.title().to_string())
+            .collect();
+        assert_eq!(on_their_own, ["First", "Third", "Second"]);
+    }
+
+    #[test]
+    fn a_subtask_is_placed_among_the_other_subtasks_of_its_parent() {
+        let workspace = workspace();
+        let project = workspace.project("Smart sensor node");
+        let todo = status_in(&project, StatusCategory::Todo);
+        let parent = workspace.task(&project, "Draw the schematic");
+        workspace.task(&project, "Route the board");
+        let part = |title: &str| {
+            workspace
+                .tasks
+                .create(NewTask {
+                    parent_id: Some(parent.id()),
+                    ..NewTask::titled(project.id(), title)
+                })
+                .unwrap()
+        };
+        part("Power supply");
+        part("Connectors");
+        let last = part("Clock");
+
+        workspace.tasks.move_to(last.id(), todo, 0).unwrap();
+
+        let parts: Vec<String> = workspace
+            .tasks
+            .list_for_project(project.id())
+            .unwrap()
+            .into_iter()
+            .filter(|task| task.parent_id() == Some(parent.id()))
+            .map(|task| task.title().to_string())
+            .collect();
+        assert_eq!(parts, ["Clock", "Power supply", "Connectors"]);
     }
 
     #[test]
