@@ -8,15 +8,16 @@ window or agent runtime.
 | Module | Contents |
 |---|---|
 | `projects` | `ProjectService`: start, find, list, rename, describe, archive, restore and delete projects; add, change, move and remove the statuses of their workflows |
-| `tasks` | `TaskService`: open, change, move, connect and remove tasks, and tell the history of one from the versions storage has kept |
+| `tasks` | `TaskService`: open, change, plan into a sprint, give points, move, connect and remove tasks, and tell the history of one from the versions storage has kept |
+| `sprints` | `SprintService`: list, plan, change, delete, start and complete the sprints of a project, and the report for the burndown chart of one (`SprintReport`) |
 | `team` | `TeamService`: put members on the team of a project, change them, take them off |
 | `places` | `PlacesService`: the folders of a project: choose its work folder, add and take away reference folders, copy reference files into it |
 | `work` | `WorkService`: let AI specialists work: start on a task, ask, reply, answer a specialist's question, list what waits for the manager, stop, follow every event, open a session in the desktop app, recover after a restart; `brief_for` and `instructions_for`. Its part `advisor`: plan a project with the Advisor (`advise`, `answer_interview`, `approve_proposal`); `ApprovedProposal`, `answers_in_words` and `instructions_for_advisor` |
-| `ports` | The interfaces the services need: `ProjectRepository`, `TaskRepository`, `MemberRepository`, `ConversationRepository`, `PlanningRepository`, `PlacesRepository`, `ProjectFolders`, `FileSystem`, `WorkListener`, `Clock` |
+| `ports` | The interfaces the services need: `ProjectRepository`, `TaskRepository`, `MemberRepository`, `ConversationRepository`, `PlanningRepository`, `PlacesRepository`, `SprintRepository`, `ProjectFolders`, `FileSystem`, `WorkListener`, `Clock` (which also tells the day a moment falls on) |
 | `agent_runtime` | `AgentRuntime`: the interface to the program that runs a team member's session, and the data it speaks |
 | `error` | `ApplicationError`, with a stable `code()` for interfaces |
 | `clock` | `SystemClock`, the real clock |
-| `in_memory` | In-memory repositories (`InMemoryPlanningRepository` stores an approved plan into the others), fixed project folders, a pretended file system, a listener that records, a scripted agent runtime and a settable clock, for tests and demos |
+| `in_memory` | In-memory repositories (`InMemoryPlanningRepository` stores an approved plan into the others, `InMemorySprintRepository` stores the tasks that change with a sprint into the task repository), fixed project folders, a pretended file system, a listener that records, a scripted agent runtime and a settable clock, for tests and demos |
 
 ## How a use case is built
 
@@ -47,8 +48,8 @@ project, two members of one team cannot have the same name.
   of a deleted project is free again.
 - Archived projects are listed with the one put away last first. Restoring
   one brings it back with its tasks and its team.
-- Deleting a project deletes its tasks, its team and what it knew about its
-  folders; the folders on disk stay. The project itself goes last, so a deletion that fails half-way can simply be repeated.
+- Deleting a project deletes its tasks, its sprints, its team and what it
+  knew about its folders; the folders on disk stay. The project itself goes last, so a deletion that fails half-way can simply be repeated.
 - Changing a status between "done" and not done completes or reopens every
   task in it, subtasks included.
 - A status that still has tasks is removed only when another status is
@@ -80,6 +81,43 @@ project, two members of one team cannot have the same name.
 - Deleting a task deletes the conversations about it and its subtasks.
   Deleting a project deletes its conversations. A member that leaves leaves
   its conversations behind, without a member.
+
+## Sprints and the backlog
+
+`SprintService` and two methods of `TaskService` carry out
+[decision 0016](../../docs/decisions/0016-sprints-and-a-backlog.md). The
+demo backend of the interface (`demoSprints.test.ts`) is the
+specification; `sprints/tests.rs` mirrors each of its cases under the same
+name, with the same codes and messages.
+
+- A task is in one sprint or in none, which is the backlog. A new task
+  starts in the backlog without points; a new subtask starts in the sprint
+  of the task it is a part of.
+- `TaskService::plan` puts a task with its subtasks into a planned or an
+  active sprint of its own project, or back into the backlog. A subtask is
+  not planned by itself (`subtask_planned_alone`), a sprint of another
+  project is refused (`different_projects`), a completed one too
+  (`sprint_completed`).
+- `TaskService::set_points` takes the points as any number, as the
+  interface sends them, and refuses one that is not whole or not from 0 to
+  999 (`rule_broken`). Planning and points are stored as changes to the
+  task, but, as in the demo, they are not part of its history.
+- A sprint left without a name is "Sprint N", N being one more than the
+  number of sprints the project has had, deleted ones included.
+- Only a planned sprint is deleted (`sprint_active`, `sprint_completed`
+  otherwise); its tasks go back to the backlog in the same write.
+- A sprint starts only with at least one task (`sprint_empty`) and while no
+  other sprint of its project is active (`another_sprint_active`).
+- Completing the active sprint sends its unfinished tasks, with their
+  subtasks, to the backlog or to another sprint of the same project that is
+  not completed, in the same write. Finished means a status of the category
+  done, whatever its name. The summary counts the tasks without their
+  subtasks, in points if any has points.
+- The report gives, for each day from the start to the end date, the work
+  that remained at the end of the day, from the moments the tasks of the
+  sprint were finished; days that have not come, or came after the sprint
+  was completed, have none. Days are counted where the program runs
+  (`Clock::day_of`).
 
 ## The folders of a project
 

@@ -9,12 +9,13 @@ done with them. It does no input or output.
 
 | Module | Concepts |
 |---|---|
-| `ids` | `ProjectId`, `StatusId`, `TaskId`, `MemberId`, `ConversationId`, `TurnId`: one identifier type per kind of thing |
-| `text` | `ProjectName`, `StatusName`, `TaskTitle`, `MemberName`: names that are never empty, never multi-line, never too long; `ModelName`: the name of a model |
+| `ids` | `ProjectId`, `StatusId`, `TaskId`, `SprintId`, `MemberId`, `ConversationId`, `TurnId`: one identifier type per kind of thing |
+| `text` | `ProjectName`, `StatusName`, `TaskTitle`, `SprintName`, `MemberName`: names that are never empty, never multi-line, never too long; `ModelName`: the name of a model |
 | `color` | `Color`: the named colors a status or a team member can have |
 | `workflow` | `Workflow`, `Status`, `StatusCategory` |
 | `project` | `Project`, `ProjectKey` |
 | `task` | `Task`, `TaskDraft`, `Priority`, `Assignee`, `Schedule`, `Rank` |
+| `sprint` | `Sprint`, `SprintState`, `SprintDates`, `SprintSummary`, `SprintUnit`: a stretch of time in which the team works on a part of the backlog; `StoryPoints`: how big a task is; `CountedTask`: a task as a sprint counts its work |
 | `task_history` | `TaskChange`, `history_of`: what changed from one version of a task to the next |
 | `dependencies` | `DependencyGraph`: which task waits for which |
 | `member` | `Member`, `MemberKind`: an AI agent or a person on the team of a project; `MemberProfile`, `Effort`: the model and the effort of a specialist |
@@ -40,6 +41,21 @@ done with them. It does no input or output.
 - A schedule does not start after it is due.
 - A task cannot wait for itself or be its own parent, and a new dependency
   must not close a loop.
+- A task is in one sprint or in none, which is the backlog, and has story
+  points or none: a whole number from 0 to 999. A new task starts in the
+  backlog without points.
+- A project counts its sprints like its tasks: a sprint left without a name
+  is "Sprint N", and a deleted sprint still counts.
+- A sprint name has at most 60 characters. A sprint does not start after it
+  ends. A sprint is planned, active or completed, in that order. A planned
+  or an active sprint can be changed, but an active one keeps both its
+  dates; only a planned one can be deleted or started, and only an active
+  one completed. A completed sprint is not touched again: it is the record
+  of what was done, with a summary of the work committed and completed,
+  counted in points if any of its tasks has points and in tasks otherwise.
+  The refusals about the state of a sprint have codes of their own
+  (`DomainError::code`): `sprint_completed`, `sprint_active`,
+  `sprint_not_active`.
 - The history of a task is not recorded as such. It is read off the versions
   the task has had: that it was opened, and then what differs from one
   version to the next. A move up or down within a status is not a change.

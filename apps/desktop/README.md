@@ -21,6 +21,15 @@ To add a command: add the use case to the application crate, add a function
 in `src/commands`, list it in `main.rs`, and add the matching method to the
 `Backend` interface on the TypeScript side.
 
+**Sprints and the backlog**
+([decision 0016](../../docs/decisions/0016-sprints-and-a-backlog.md)) are
+the commands in `commands/sprints.rs`: `list_sprints`, `create_sprint`,
+`change_sprint`, `delete_sprint`, `start_sprint`, `complete_sprint`,
+`plan_task`, `set_task_points` and `sprint_report`. A task on the wire has
+its `sprintId` and its `points`. `set_task_points` reads the points as any
+number, so that a fraction reaches the use case and is refused there with
+the rule it breaks.
+
 ### The work of the specialists
 
 The shell is where the work of an AI specialist meets the outside world

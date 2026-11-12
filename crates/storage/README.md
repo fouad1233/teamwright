@@ -1,12 +1,12 @@
 # teamwright-storage
 
-Stores Teamwright's projects, tasks, teams, the folders of the projects and
+Stores Teamwright's projects, tasks, sprints, teams, the folders of the projects and
 the conversations with specialists in SQLite, and appends every change to an
 operation log.
 
 It implements the interfaces `ProjectRepository`, `TaskRepository`,
-`MemberRepository`, `ConversationRepository`, `PlanningRepository` and
-`PlacesRepository` that the
+`MemberRepository`, `ConversationRepository`, `PlanningRepository`,
+`PlacesRepository` and `SprintRepository` that the
 application crate declares. Nothing outside this crate knows that SQLite is
 involved.
 
@@ -19,6 +19,7 @@ involved.
 | `schema/` | One SQL file per migration |
 | `projects` | `SqliteProjectRepository` |
 | `tasks` | `SqliteTaskRepository` |
+| `sprints` | `SqliteSprintRepository`: the sprints of the projects, each saved or deleted together with the tasks that change with it |
 | `members` | `SqliteMemberRepository` |
 | `conversations` | `SqliteConversationRepository`: conversations, their turns, the steps of the turns and the questions they asked the manager |
 | `planning` | The interviews and the proposals of the Advisor, as parts of their turns; `SqlitePlanningRepository`, which stores an approved plan |
@@ -34,7 +35,7 @@ involved.
   `turn_decisions`, `turn_decision_options`, `project_places`,
   `project_reference_folders`, `turn_interviews`, `turn_interview_questions`,
   `turn_interview_options`, `turn_proposals`, `turn_proposal_members`,
-  `turn_proposal_tasks`, `turn_proposal_task_waits`.
+  `turn_proposal_tasks`, `turn_proposal_task_waits`, `sprints`.
   The schema with its conventions is in
   [`schema/0001_initial.sql`](src/schema/0001_initial.sql); later files in
   that folder add to it.
@@ -102,6 +103,18 @@ involved.
   the identifier of the turn, and the logged state is the whole of it.
   Rows are updated in place by position, and positions a list no longer has
   are deleted.
+- **Sprints** (version 8) have a row each in `sprints`, with their summary
+  in three columns that are all NULL until the sprint is completed. A sprint
+  is logged as the entity `sprint` with its whole state, summary included.
+  A task has the columns `sprint_id`, NULL for the backlog, and `points`,
+  and its logged state gains `sprint_id` and `points`; a task state logged
+  before version 8 has neither and is read as a task in the backlog without
+  points. A project counts its sprints in `next_sprint_number`. Saving a
+  sprint writes the sprint first and then the tasks that changed with it;
+  deleting one writes the tasks that leave it first and then deletes the
+  sprint, all in one transaction, so the database never has to take a task
+  out of a sprint by itself. Deleting a project deletes and logs its sprints
+  after its tasks.
 - **An approved plan is one transaction.** `SqlitePlanningRepository`
   writes the project (with its next task number), every new member, every
   new task with what it waits for, and the turn with its approved proposal,
