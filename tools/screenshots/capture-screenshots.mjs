@@ -420,7 +420,8 @@ function card(title) {
 
 /**
  * Takes the pictures of the sample project in one theme: the board, a task,
- * the list, the Gantt chart, the calendar, the team, and the statuses.
+ * the list, the Gantt chart, the calendar, the team, the office, and the
+ * statuses.
  */
 async function takeProjectPictures(window, theme) {
   await window.showInTheme(theme);
@@ -449,6 +450,13 @@ async function takeProjectPictures(window, theme) {
   await window.click(tab('Team'));
   await window.waitForText('MEMBER');
   await takePicture(window, `team-${theme}`);
+
+  // Nobody works in the sample project: the stand-in for Claude Code runs
+  // no turn. The office with a lamp lit is a picture of the test that lets
+  // a real specialist work.
+  await window.click(tab('Office'));
+  await window.waitForText('PLAN OF THE OFFICE');
+  await takePicture(window, `office-${theme}`);
 
   await window.click(tab('Board'));
   await window.evaluate(press('Project'));

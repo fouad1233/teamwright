@@ -197,6 +197,58 @@ try {
     }
   };
 
+  /** JavaScript that tells whether the office shows somebody at work. */
+  const LAMP_LIT = `document.body.innerText.includes('AT WORK')`;
+
+  /**
+   * Takes a picture of the office while the specialist works, if the caller
+   * asked for pictures, and opens the task again. It is the one moment at
+   * which a lamp is lit there, and the turn may end before the picture is
+   * taken. So the picture is kept only if the lamp was lit before and
+   * after.
+   */
+  const pictureOfOfficeAtWork = async (titleOfTask) => {
+    if (!pictureFolder) {
+      return;
+    }
+    const tab = (name) =>
+      `[...document.querySelectorAll('[role="tab"]')].find((entry) => entry.innerText.trim() === ${JSON.stringify(name)})`;
+    await window.pressEscape();
+    await window.click(tab('Office'));
+    await window.waitForText('PLAN OF THE OFFICE');
+    const written = [];
+    let lit = await window.evaluate(LAMP_LIT);
+    for (const theme of ['light', 'dark']) {
+      if (!lit) {
+        break;
+      }
+      await window.showInTheme(theme);
+      await sleep(300);
+      const path = join(pictureFolder, `specialist-office-${theme}.png`);
+      await window.screenshot(path);
+      written.push(path);
+      lit = await window.evaluate(LAMP_LIT);
+    }
+    console.log(
+      lit
+        ? `      pictures of the office written to ${written.join(' and ')}`
+        : '      the turn ended before the office was in the picture: its pictures are as they were',
+    );
+    await window.click(tab('Board'));
+    await window.waitForText(titleOfTask);
+    // The task has moved into work, so it is no longer the first card.
+    await window.click(
+      `[...document.querySelectorAll('li [role="button"]')].find((entry) => entry.innerText.includes(${JSON.stringify(titleOfTask)}))`,
+    );
+    const deadline = Date.now() + 10_000;
+    while (
+      Date.now() < deadline &&
+      !(await window.evaluate(`document.querySelector('aside[aria-label^="Task "]') !== null`))
+    ) {
+      await sleep(100);
+    }
+  };
+
   /** Scrolls the panel of the open task so that its section "Work" is at the top. */
   const showWork = () =>
     window.evaluate(`(() => {
@@ -343,6 +395,7 @@ try {
     JSON.stringify(kept),
   );
   await picture('working');
+  await pictureOfOfficeAtWork('Write a greeting');
 
   const first = (await waitForEnd(started.id)).turns[0];
   report('the first turn', first);
