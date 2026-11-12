@@ -8,6 +8,7 @@ import { Button } from '@/shared/ui/Button';
 import { describeFailure } from '@/shared/ui/Toast';
 
 import { BoardView } from '../board/BoardView';
+import { CalendarView } from '../calendar/CalendarView';
 import { GanttView } from '../gantt/GanttView';
 import { TaskListView } from '../tasks/TaskListView';
 import { TaskPanel } from '../tasks/TaskPanel';
@@ -25,6 +26,7 @@ const VIEWS: { view: ProjectView; label: string }[] = [
   { view: 'board', label: 'Board' },
   { view: 'list', label: 'List' },
   { view: 'gantt', label: 'Gantt' },
+  { view: 'calendar', label: 'Calendar' },
   { view: 'team', label: 'Team' },
 ];
 
@@ -141,6 +143,8 @@ function ChosenView({ view, project, tasks }: ChosenViewProps) {
       return <TaskListView project={project} tasks={tasks} />;
     case 'gantt':
       return <GanttView project={project} tasks={tasks} />;
+    case 'calendar':
+      return <CalendarView project={project} tasks={tasks} />;
     case 'team':
       return <TeamView project={project} tasks={tasks} />;
   }

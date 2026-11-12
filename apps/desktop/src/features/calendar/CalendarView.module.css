@@ -1,0 +1,262 @@
+/*
+ * The calendar is a ruled sheet of six weeks. A week is as high as the tasks
+ * in it need: the component says how many lines of tasks each week has, as
+ * `--lanes`, and the weeks share what is left of the height.
+ */
+.calendar {
+  --day-height: 28px;
+  --lane-height: 24px;
+  --more-height: 20px;
+
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.bar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-1);
+  height: 52px;
+  padding: 0 var(--space-5);
+}
+
+.month {
+  /* Wide enough for the longest name, so the arrows next to it stay put
+     when the month changes. */
+  min-width: 172px;
+  font-size: var(--text-strong);
+  font-weight: 600;
+}
+
+.space {
+  flex: 1;
+}
+
+.undated {
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+
+.weekdays {
+  display: grid;
+  flex: none;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+}
+
+.weekdays > span {
+  padding: 7px var(--space-2) 6px;
+}
+
+.weeks {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* One week: seven days side by side, and over them the lines of tasks. It
+   is at least as high as its lines, and takes an equal share of what is
+   left of the sheet. */
+.week {
+  display: grid;
+  flex: 1 0 auto;
+  grid-template-rows:
+    var(--day-height)
+    repeat(var(--lanes), var(--lane-height))
+    minmax(var(--more-height), 1fr);
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  border-bottom: 1px solid var(--rule);
+}
+
+.day {
+  grid-row: 1 / -1;
+  padding: 6px var(--space-2) 0;
+  border-right: 1px solid var(--rule);
+}
+
+.day:nth-child(7) {
+  border-right: none;
+}
+
+.restDay {
+  background: var(--hover);
+}
+
+.dayNumber {
+  color: var(--ink-soft);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+
+.otherMonth .dayNumber {
+  color: var(--ink-faint);
+  opacity: 0.6;
+}
+
+/* Today is the one point of attention of the calendar, so it gets the
+   brass: a line over the day, and its number. */
+.today {
+  box-shadow: inset 0 2px 0 var(--brass);
+}
+
+.today .dayNumber {
+  color: var(--brass);
+  font-weight: 600;
+}
+
+/*
+ * A task on the calendar: the mark of its status and its title, on a wash
+ * of the pigment of the status. A task of several days is one piece across
+ * them. Where it comes over from the week before or goes on into the next,
+ * that end is cut straight and runs to the edge of the week.
+ */
+.piece {
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  height: calc(var(--lane-height) - 3px);
+  padding: 0 6px;
+  margin: 0 4px;
+  border-radius: 3px;
+  background: linear-gradient(var(--tone-wash), var(--tone-wash)), var(--ground);
+  color: var(--ink);
+  font-size: var(--text-small);
+  text-align: left;
+  transition: box-shadow 100ms ease;
+}
+
+.piece:hover {
+  box-shadow: inset 0 0 0 1px var(--rule-strong);
+}
+
+.piece:focus-visible {
+  outline-offset: 0;
+}
+
+.piece[data-progress='done'] {
+  color: var(--ink-faint);
+}
+
+.comesOver {
+  margin-left: 0;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+.goesOn {
+  margin-right: 0;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+/* A task that should have been finished ends in a red edge. */
+.late {
+  box-shadow: inset -2px 0 0 var(--danger);
+}
+
+.late:hover {
+  box-shadow:
+    inset -2px 0 0 var(--danger),
+    inset 0 0 0 1px var(--rule-strong);
+}
+
+.pieceTitle {
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The note under a crowded day. */
+.more {
+  z-index: 1;
+  grid-row: -2;
+  align-self: start;
+  justify-self: start;
+  height: var(--more-height);
+  padding: 0 6px;
+  margin: 0 4px;
+  border-radius: var(--radius-control);
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+
+.more:hover,
+.more[data-state='open'] {
+  background: var(--hover);
+  color: var(--ink);
+}
+
+/* The list of all tasks of one day. */
+.dayList {
+  z-index: 150;
+  width: 300px;
+  padding: var(--space-3) var(--space-2) var(--space-2);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius-overlay);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-overlay);
+  animation: appear 110ms ease-out;
+}
+
+@keyframes appear {
+  from {
+    transform: translateY(-3px);
+    opacity: 0;
+  }
+}
+
+.dayList > h3 {
+  padding: 0 var(--space-2) var(--space-2);
+}
+
+.dayTasks {
+  display: flex;
+  flex-direction: column;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.dayTask {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  height: 30px;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-control);
+  text-align: left;
+}
+
+.dayTask:hover {
+  background: var(--hover);
+}
+
+.dayTaskReference {
+  flex: none;
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+
+.dayTaskTitle {
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
