@@ -1230,7 +1230,33 @@ impl Round {
             }
         }
 
-        self.repair_views(transaction, operations, project_id)
+        self.repair_views(transaction, operations, project_id)?;
+        self.give_a_board_if_no_view_is_left(transaction, operations, project_id)
+    }
+
+    /// A project left with no views, because two computers each removed
+    /// other views, gets a board again, so that the manager has something
+    /// to look at. Every computer gives it the same board
+    /// ([`View::board_again`]): the first identifier that was not deleted.
+    fn give_a_board_if_no_view_is_left(
+        &mut self,
+        transaction: &Transaction<'_>,
+        operations: &mut OperationRecorder<'_>,
+        project_id: &str,
+    ) -> Result<(), DatabaseError> {
+        if !views::views_of_project(transaction, project_id)?.is_empty() {
+            return Ok(());
+        }
+        let project = codec::parse(project_id)?;
+        for attempt in 0..=View::LAST_BOARD_ATTEMPT {
+            let Some(board) = View::board_again(project, attempt) else {
+                break;
+            };
+            if presence(transaction, Entity::View, &board.id().to_string())? != Presence::Deleted {
+                return views::store_view(transaction, operations, &board);
+            }
+        }
+        Ok(())
     }
 
     /// Repairs the views of a project after two computers added or renamed

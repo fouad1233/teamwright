@@ -266,6 +266,7 @@ in one transaction:
    | A chain of waiting or of parts closes on itself | the link whose field was set last is removed | any computer |
    | A project has two backlogs, or two dashboards | the younger is removed | any computer |
    | Two views of a project have one name, whatever the capitals | the younger gets the name with the first free number from 2 on (`Board` gives `Board 2`) | any computer |
+   | A project has no view left, because two computers each removed others | it gets a board again, with the identifier of its starting board, or, if that was deleted, the next one `View::board_again` gives | any computer |
 
    "Set later" is decided by the stamp of the field, and the creator of a
    thing is the computer of its first operation. A view is as old as its

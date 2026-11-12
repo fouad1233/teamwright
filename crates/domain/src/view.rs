@@ -182,6 +182,37 @@ impl View {
         ViewId::from_uuid(Uuid::from_bytes(bytes))
     }
 
+    /// The highest attempt [`View::board_again`] knows an identifier for.
+    pub const LAST_BOARD_ATTEMPT: u8 = 8;
+
+    /// The board a project gets again when it is left with no views: two
+    /// computers that each removed other views can leave it so. Every
+    /// computer gives it the same board, with an identifier that follows
+    /// from the project: the identifier of its starting board at the first
+    /// attempt, and, because a deletion is final, one with the version
+    /// digit 8, 9, ... up to 15 at the later attempts, once the identifier
+    /// before was deleted too. Nothing beyond the last attempt.
+    #[must_use]
+    pub fn board_again(project_id: ProjectId, attempt: u8) -> Option<Self> {
+        let id = match attempt {
+            0 => Self::starting_id(project_id, ViewKind::Board),
+            1..=Self::LAST_BOARD_ATTEMPT => {
+                let mut bytes = *project_id.as_uuid().as_bytes();
+                bytes[6] = (bytes[6] & 0x0f) | ((7 + attempt) << 4);
+                ViewId::from_uuid(Uuid::from_bytes(bytes))
+            }
+            _ => return None,
+        };
+        Some(Self {
+            id,
+            project_id,
+            kind: ViewKind::Board,
+            name: ViewKind::Board.default_name(),
+            filter: ViewFilter::EVERY_TASK,
+            position: 0,
+        })
+    }
+
     /// Adds a view to a project at a place, showing every task.
     #[must_use]
     pub fn add(project_id: ProjectId, kind: ViewKind, name: ViewName, position: u32) -> Self {
@@ -379,6 +410,32 @@ mod tests {
         assert_eq!(unique.len(), 6);
         assert!(ids.iter().all(|id| !others.contains(id)));
         assert!(ids.iter().all(|id| *id != ViewId::generate()));
+    }
+
+    #[test]
+    fn a_board_given_again_has_an_identifier_of_its_own_at_each_attempt() {
+        let project = ProjectId::generate();
+
+        let ids: Vec<ViewId> = (0..=View::LAST_BOARD_ATTEMPT)
+            .filter_map(|attempt| View::board_again(project, attempt))
+            .map(|board| board.id())
+            .collect();
+
+        assert_eq!(ids.len(), 9);
+        assert_eq!(ids[0], View::starting_id(project, ViewKind::Board));
+        let mut distinct = ids.clone();
+        distinct.sort();
+        distinct.dedup();
+        assert_eq!(distinct.len(), ids.len());
+        assert!(
+            ids.iter()
+                .all(|id| *id != ViewId::from_uuid(project.as_uuid()))
+        );
+        assert_eq!(
+            View::board_again(project, View::LAST_BOARD_ATTEMPT + 1),
+            None
+        );
+        assert_eq!(View::board_again(project, 3), View::board_again(project, 3));
     }
 
     #[test]

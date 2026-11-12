@@ -993,3 +993,37 @@ fn two_computers_that_change_things_at_random_end_up_equal() {
         "every task has a number of its own"
     );
 }
+
+#[test]
+fn a_project_whose_views_were_all_removed_on_two_computers_gets_a_board_again() {
+    let (desk, laptop, project, _) = desk_and_laptop();
+    let views = desk.views.list_for_project(project.id()).unwrap();
+    assert!(views.len() >= 2);
+    let (desk_removes, laptop_removes) = views.split_at(views.len() / 2);
+    let starting_board = View::starting_id(project.id(), ViewKind::Board);
+    assert!(desk_removes.iter().any(|view| view.id() == starting_board));
+    for view in desk_removes {
+        desk.views.remove(view.id()).unwrap();
+    }
+    for view in laptop_removes {
+        laptop.views.remove(view.id()).unwrap();
+    }
+
+    keep_in_step(&desk, &laptop);
+
+    let left = desk.views.list_for_project(project.id()).unwrap();
+    assert_eq!(left.len(), 1);
+    assert_eq!(left[0].kind(), ViewKind::Board);
+    assert_eq!(left[0].name().as_str(), "Board");
+    assert_ne!(
+        left[0].id(),
+        starting_board,
+        "a deleted identifier is never used again"
+    );
+    assert_eq!(
+        Some(left[0].clone()),
+        View::board_again(project.id(), 1),
+        "every computer gives the same board"
+    );
+    assert_eq!(laptop.everything(), desk.everything());
+}
