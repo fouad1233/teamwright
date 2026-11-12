@@ -354,7 +354,9 @@ try {
   );
   check(
     'the views of a project are offered as tabs',
-    ['Board', 'List', 'Gantt', 'Calendar', 'Team'].every((view) => shown.includes(view)),
+    ['Board', 'List', 'Gantt', 'Calendar', 'Team', 'Advisor'].every((view) =>
+      shown.includes(view),
+    ),
   );
   check(
     'the board shows who a task is given to',
@@ -491,6 +493,44 @@ try {
     'an answer in a conversation that does not exist is refused',
     answerToNothing.refused?.code === 'not_found',
     JSON.stringify(answerToNothing),
+  );
+
+  // The Advisor, as far as it goes without a real program. Planning starts
+  // a turn, and the stand-in cannot run one, so a start is refused and
+  // leaves nothing behind. There are no questions to answer and nothing to
+  // approve.
+  const noPlanning = await window.command('advise', {
+    projectId: project.id,
+    advice: { brief: 'A small device that measures the air.' },
+  });
+  check(
+    'planning that the program refuses says why, and leaves no conversation behind',
+    noPlanning.refused?.code === 'agent_could_not_run' &&
+      (await window.command('list_conversations', { projectId: project.id })).ok?.length === 0,
+    JSON.stringify(noPlanning),
+  );
+  const emptyBrief = await window.command('advise', {
+    projectId: project.id,
+    advice: { brief: '   ' },
+  });
+  check(
+    'the Advisor is not started without a word of what is wanted',
+    emptyBrief.refused?.code === 'rule_broken',
+    JSON.stringify(emptyBrief),
+  );
+  const answersToNothing = await window.command('answer_interview', {
+    conversationId: project.id,
+    answers: [{ option: 0, note: '' }],
+  });
+  const approvalOfNothing = await window.command('approve_proposal', {
+    conversationId: project.id,
+    proposal: { members: [], tasks: [] },
+  });
+  check(
+    'answers and an approval in a conversation that does not exist are refused',
+    answersToNothing.refused?.code === 'not_found' &&
+      approvalOfNothing.refused?.code === 'not_found',
+    JSON.stringify([answersToNothing, approvalOfNothing]),
   );
   window.close();
 
