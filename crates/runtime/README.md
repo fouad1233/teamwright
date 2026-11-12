@@ -206,5 +206,8 @@ repository:
 The repository is public, so a recording is cleaned before it is saved:
 paths, identifiers of messages and requests, signatures of thinking, plan
 usage, and the names of the user's MCP servers, plugins and skills are
-replaced with sample values. The structure, the field names and the token
-counts are kept exactly. Never save a recording without cleaning it.
+replaced with sample values. What the event about the limits of a plan
+says about extra usage (`overageStatus`, `overageDisabledReason`) is taken
+out, because it describes the account that made the recording. Apart from
+that, the structure, the field names and the token counts are kept exactly.
+Never save a recording without cleaning it.
