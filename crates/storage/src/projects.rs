@@ -213,8 +213,8 @@ pub(crate) fn remove_project(
     operations: &mut OperationRecorder<'_>,
     id: &str,
 ) -> Result<bool, DatabaseError> {
-    // The database would remove the conversations, tasks, sprints and
-    // members of the project by itself, but without a trace in the log.
+    // The database would remove the conversations, tasks, sprints, views
+    // and members of the project by itself, but without a trace in the log.
     // They are removed here one by one, each with its own entry, like any
     // other deletion. Normally the use case has removed them already and
     // nothing is left to do. The conversations go first, because they refer
@@ -225,6 +225,7 @@ pub(crate) fn remove_project(
     places::delete_places_of_project(transaction, operations, id)?;
     delete_rows_of_project(transaction, operations, "tasks", Entity::Task, id)?;
     delete_rows_of_project(transaction, operations, "sprints", Entity::Sprint, id)?;
+    delete_rows_of_project(transaction, operations, "views", Entity::View, id)?;
     delete_rows_of_project(transaction, operations, "members", Entity::Member, id)?;
     // The statuses are part of the project in the log, so their removal is
     // covered by the deletion of the project.

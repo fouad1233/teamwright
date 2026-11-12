@@ -19,7 +19,7 @@ use teamwright_runtime::ClaudeCode;
 use teamwright_storage::{
     Database, FolderOfComputers, SqliteConversationRepository, SqliteMemberRepository,
     SqlitePlacesRepository, SqlitePlanningRepository, SqliteProjectRepository,
-    SqliteSprintRepository, SqliteSyncLedger, SqliteTaskRepository,
+    SqliteSprintRepository, SqliteSyncLedger, SqliteTaskRepository, SqliteViewRepository,
 };
 
 use crate::dto::{ConversationDto, DataChangedDto, SyncStateDto};
@@ -146,6 +146,7 @@ impl AppState {
         let member_repository = Arc::new(SqliteMemberRepository::new(database.clone()));
         let places_repository = Arc::new(SqlitePlacesRepository::new(database.clone()));
         let sprint_repository = Arc::new(SqliteSprintRepository::new(database.clone()));
+        let view_repository = Arc::new(SqliteViewRepository::new(database.clone()));
         let conversation_repository = Arc::new(SqliteConversationRepository::new(database.clone()));
         let planning_repository = Arc::new(SqlitePlanningRepository::new(database));
         let runtime: Arc<dyn AgentRuntime> = Arc::new(agent_program());
@@ -190,6 +191,7 @@ impl AppState {
                 conversation_repository.clone(),
                 places_repository.clone(),
                 sprint_repository.clone(),
+                view_repository.clone(),
                 clock.clone(),
             ),
             places: PlacesService::new(
@@ -220,6 +222,7 @@ impl AppState {
                 member_repository,
                 task_repository,
                 conversation_repository,
+                view_repository,
                 clock,
             ),
             work,

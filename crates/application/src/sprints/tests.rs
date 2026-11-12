@@ -50,6 +50,7 @@ fn backlog() -> Backlog {
         conversations_store.clone(),
         Arc::new(InMemoryPlacesRepository::default()),
         sprints_store.clone(),
+        Arc::new(crate::in_memory::InMemoryViewRepository::default()),
         clock.clone(),
     );
     let tasks = TaskService::new(

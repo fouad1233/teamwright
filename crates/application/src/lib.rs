@@ -4,8 +4,9 @@
 //! move it across the board, make it wait for another task, plan it into a
 //! sprint, put someone on the team, choose the folders of a project, let an
 //! AI specialist work on a task. Each use case is a method of a service
-//! ([`ProjectService`], [`TaskService`], [`SprintService`], [`TeamService`],
-//! [`PlacesService`], [`WorkService`]) that loads what it needs, lets the
+//! ([`ProjectService`], [`TaskService`], [`SprintService`], [`ViewService`],
+//! [`TeamService`], [`PlacesService`], [`WorkService`]) that loads what it
+//! needs, lets the
 //! domain apply its rules, and stores the result.
 //!
 //! The crate reaches the outside world only through the traits in [`ports`]:
@@ -24,6 +25,7 @@ pub mod sprints;
 pub mod sync;
 pub mod tasks;
 pub mod team;
+pub mod views;
 pub mod work;
 
 pub use agent_runtime::{
@@ -40,7 +42,7 @@ pub use places::{ChosenPlaces, PlacesService, ProjectPlaces, REFERENCES_FOLDER};
 pub use ports::{
     ApprovedPlan, Clock, ConversationRepository, FileSystem, MemberRepository, PlacesRepository,
     PlanningRepository, ProjectFolders, ProjectRepository, SprintRepository, StorageError,
-    TaskRepository, WorkListener,
+    TaskRepository, ViewRepository, WorkListener,
 };
 pub use projects::{NewProject, ProjectService, StatusProperties, WorkflowTemplate};
 pub use sprints::{NewSprint, SprintChanges, SprintDay, SprintReport, SprintService, SprintStart};
@@ -52,6 +54,7 @@ pub use sync::{
 };
 pub use tasks::{NewTask, TaskService};
 pub use team::{NewMember, TeamService};
+pub use views::{NewView, ViewService};
 pub use work::{
     AgentProgram, AgentProgramState, ApprovedMember, ApprovedOwner, ApprovedProposal, ApprovedTask,
     ConversationWithTurns, WorkPorts, WorkService, answers_in_words, brief_for, instructions_for,

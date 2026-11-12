@@ -22,6 +22,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("schema/0010_merged_states.sql"),
     include_str!("schema/0011_notices.sql"),
     include_str!("schema/0012_sync.sql"),
+    include_str!("schema/0013_views.sql"),
 ];
 
 /// Applies the migrations a database has not seen yet. Each one runs in its
@@ -504,6 +505,81 @@ mod tests {
             )
             .unwrap();
         assert_eq!(numbered_as_before, 4);
+    }
+
+    /// The case `demoViews.test.ts` calls "gives the six views to a project
+    /// that was kept before it had views": here a migration gives them.
+    #[test]
+    fn gives_the_six_views_to_a_project_that_was_kept_before_it_had_views() {
+        let mut connection = Connection::open_in_memory().unwrap();
+        for migration in &MIGRATIONS[..12] {
+            connection.execute_batch(migration).unwrap();
+        }
+        connection.pragma_update(None, "user_version", 12).unwrap();
+        let device = "0196f3a2-7c1e-7d53-9b6f-2f1a4c8e9d10";
+        let project = "0196f3a2-8000-7abc-9def-0123456789ab";
+        let earlier = format!("1762851600000-00004-{device}");
+        connection
+            .execute(
+                "INSERT INTO meta (key, value) VALUES ('device_id', ?1)",
+                [device],
+            )
+            .unwrap();
+        connection
+            .execute(
+                "INSERT INTO projects (id, key, name, description, next_task_number, created_at)
+                 VALUES (?1, 'SSN', 'Smart sensor node', '', 1, '2026-11-11T09:00:00.000Z')",
+                [project],
+            )
+            .unwrap();
+        connection
+            .execute(
+                "INSERT INTO operations (
+                     device_id, device_sequence, stamp, entity, entity_id, kind, payload
+                 )
+                 VALUES (?1, 7, ?2, 'project', ?3, 'upsert', '{}')",
+                rusqlite::params![device, earlier, project],
+            )
+            .unwrap();
+
+        migrate(&mut connection).unwrap();
+
+        let mut views = crate::views::views_of_project(&connection, project).unwrap();
+        views.sort_by_key(teamwright_domain::View::position);
+        let project_id: teamwright_domain::ProjectId = project.parse().unwrap();
+        assert_eq!(views, teamwright_domain::View::starting(project_id));
+        assert_eq!(
+            views[0].id().to_string(),
+            "0196f3a2-8000-1abc-9def-0123456789ab"
+        );
+
+        let logged: Vec<(i64, String, String)> = connection
+            .prepare(
+                "SELECT device_sequence, stamp, payload FROM operations
+                 WHERE entity = 'view' ORDER BY device_sequence",
+            )
+            .unwrap()
+            .query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap();
+        let numbers: Vec<i64> = logged.iter().map(|(number, _, _)| *number).collect();
+        assert_eq!(numbers, [8, 9, 10, 11, 12, 13]);
+        assert!(logged.iter().all(|(_, stamp, _)| *stamp > earlier));
+        assert!(logged.windows(2).all(|pair| pair[0].1 < pair[1].1));
+        assert!(logged.iter().all(|(_, stamp, _)| stamp.ends_with(device)));
+        let state: serde_json::Value = serde_json::from_str(&logged[1].2).unwrap();
+        assert_eq!(state["name"], "Backlog");
+        assert_eq!(state["hides_finished"], false);
+        assert_eq!(state["assignee_member_id"], serde_json::Value::Null);
+        let merged: i64 = connection
+            .query_row(
+                "SELECT count(*) FROM merged_states WHERE entity = 'view'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(merged, 6);
     }
 
     #[test]

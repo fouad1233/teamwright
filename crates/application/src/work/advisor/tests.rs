@@ -68,6 +68,7 @@ fn planning() -> Planning {
         conversations_store.clone(),
         places.clone(),
         Arc::new(InMemorySprintRepository::new(tasks_store.clone())),
+        Arc::new(crate::in_memory::InMemoryViewRepository::default()),
         clock.clone(),
     );
     let tasks = TaskService::new(
@@ -83,6 +84,7 @@ fn planning() -> Planning {
         members_store.clone(),
         tasks_store.clone(),
         conversations_store.clone(),
+        Arc::new(crate::in_memory::InMemoryViewRepository::default()),
         clock.clone(),
     );
     let work = WorkService::new(WorkPorts {

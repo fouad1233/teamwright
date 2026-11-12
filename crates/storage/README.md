@@ -1,12 +1,12 @@
 # teamwright-storage
 
-Stores Teamwright's projects, tasks, sprints, teams, the folders of the projects and
-the conversations with specialists in SQLite, and appends every change to an
+Stores Teamwright's projects, tasks, sprints, views, teams, the folders of
+the projects and the conversations with specialists in SQLite, and appends every change to an
 operation log.
 
 It implements the interfaces `ProjectRepository`, `TaskRepository`,
 `MemberRepository`, `ConversationRepository`, `PlanningRepository`,
-`PlacesRepository` and `SprintRepository` that the
+`PlacesRepository`, `SprintRepository` and `ViewRepository` that the
 application crate declares. Nothing outside this crate knows that SQLite is
 involved.
 
@@ -20,6 +20,7 @@ involved.
 | `projects` | `SqliteProjectRepository` |
 | `tasks` | `SqliteTaskRepository` |
 | `sprints` | `SqliteSprintRepository`: the sprints of the projects, each saved or deleted together with the tasks that change with it |
+| `views` | `SqliteViewRepository`: the views of the projects |
 | `members` | `SqliteMemberRepository` |
 | `conversations` | `SqliteConversationRepository`: conversations, their turns, the steps of the turns and the questions they asked the manager |
 | `planning` | The interviews and the proposals of the Advisor, as parts of their turns; `SqlitePlanningRepository`, which stores an approved plan |
@@ -41,7 +42,7 @@ involved.
   `turn_decisions`, `turn_decision_options`, `project_places`,
   `project_reference_folders`, `turn_interviews`, `turn_interview_questions`,
   `turn_interview_options`, `turn_proposals`, `turn_proposal_members`,
-  `turn_proposal_tasks`, `turn_proposal_task_waits`, `sprints`.
+  `turn_proposal_tasks`, `turn_proposal_task_waits`, `sprints`, `views`.
   The schema with its conventions is in
   [`schema/0001_initial.sql`](src/schema/0001_initial.sql); later files in
   that folder add to it.
@@ -128,6 +129,18 @@ involved.
   sprint, all in one transaction, so the database never has to take a task
   out of a sprint by itself. Deleting a project deletes and logs its sprints
   after its tasks.
+- **Views** (version 13) have a row each in `views`: the kind, the name,
+  whose tasks are shown (`assignee_kind`, and `assignee_member_id` for a
+  member), `hides_finished` and the place (`position`). A view is logged as
+  the entity `view` with its whole state. Saving several views, as moving
+  one does, is one transaction. Deleting a project deletes and logs its
+  views. Migration 13 gives every project of an earlier version the six
+  views a new project starts with, and logs them as changes of this
+  computer, after every stamp in the log, so that they reach the other
+  computers. Their identifiers follow from the project and the kind
+  (`View::starting_id`), as those of a new project do: two computers that
+  both had a project before version 13 give it the same six views, which
+  merge into one set.
 - **An approved plan is one transaction.** `SqlitePlanningRepository`
   writes the project (with its next task number), every new member, every
   new task with what it waits for, and the turn with its approved proposal,

@@ -356,7 +356,7 @@ fn parents_of(
     state: &Map<String, Value>,
 ) -> Vec<(Entity, String)> {
     let parent = match entity {
-        Entity::Task | Entity::Member | Entity::Sprint | Entity::Conversation => {
+        Entity::Task | Entity::Member | Entity::Sprint | Entity::View | Entity::Conversation => {
             text_of(state, "project_id").map(|id| (Entity::Project, id.to_owned()))
         }
         Entity::Turn => {

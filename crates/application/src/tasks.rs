@@ -669,6 +669,7 @@ mod tests {
                 conversation_repository.clone(),
                 Arc::new(InMemoryPlacesRepository::default()),
                 Arc::new(InMemorySprintRepository::new(task_repository.clone())),
+                Arc::new(crate::in_memory::InMemoryViewRepository::default()),
                 clock.clone(),
             ),
             tasks: TaskService::new(
@@ -684,6 +685,7 @@ mod tests {
                 member_repository,
                 task_repository,
                 conversation_repository,
+                Arc::new(crate::in_memory::InMemoryViewRepository::default()),
                 clock.clone(),
             ),
             clock,

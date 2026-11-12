@@ -32,7 +32,7 @@ use teamwright_domain::{
 use teamwright_storage::{
     Database, Operation, SqliteConversationRepository, SqliteMemberRepository,
     SqlitePlacesRepository, SqlitePlanningRepository, SqliteProjectRepository,
-    SqliteSprintRepository, SqliteTaskRepository,
+    SqliteSprintRepository, SqliteTaskRepository, SqliteViewRepository,
 };
 
 /// A database with the repositories working on it.
@@ -1902,6 +1902,7 @@ fn the_sprint_use_cases_work_on_the_real_database_and_are_logged() {
     let member_repository = Arc::new(SqliteMemberRepository::new(database.clone()));
     let places_repository = Arc::new(SqlitePlacesRepository::new(database.clone()));
     let sprint_repository = Arc::new(SqliteSprintRepository::new(database.clone()));
+    let view_repository = Arc::new(SqliteViewRepository::new(database.clone()));
     let conversation_repository = Arc::new(SqliteConversationRepository::new(database.clone()));
     let clock = Arc::new(ManualClock::starting_at(moment(9)));
     let projects = ProjectService::new(
@@ -1911,6 +1912,7 @@ fn the_sprint_use_cases_work_on_the_real_database_and_are_logged() {
         conversation_repository.clone(),
         places_repository,
         sprint_repository.clone(),
+        view_repository.clone(),
         clock.clone(),
     );
     let tasks = TaskService::new(
@@ -2023,6 +2025,12 @@ fn the_sprint_use_cases_work_on_the_real_database_and_are_logged() {
             ("task", "delete"),
             ("sprint", "delete"),
             ("sprint", "delete"),
+            ("view", "delete"),
+            ("view", "delete"),
+            ("view", "delete"),
+            ("view", "delete"),
+            ("view", "delete"),
+            ("view", "delete"),
             ("project", "delete"),
         ])
     );
@@ -2037,6 +2045,7 @@ fn the_use_cases_work_on_the_real_database() {
     let member_repository = Arc::new(SqliteMemberRepository::new(database.clone()));
     let places_repository = Arc::new(SqlitePlacesRepository::new(database.clone()));
     let sprint_repository = Arc::new(SqliteSprintRepository::new(database.clone()));
+    let view_repository = Arc::new(SqliteViewRepository::new(database.clone()));
     let conversation_repository = Arc::new(SqliteConversationRepository::new(database));
     let clock = Arc::new(ManualClock::starting_at(moment(9)));
     let projects = ProjectService::new(
@@ -2046,6 +2055,7 @@ fn the_use_cases_work_on_the_real_database() {
         conversation_repository.clone(),
         places_repository.clone(),
         sprint_repository.clone(),
+        view_repository.clone(),
         clock.clone(),
     );
     let tasks = TaskService::new(
@@ -2061,6 +2071,7 @@ fn the_use_cases_work_on_the_real_database() {
         member_repository,
         task_repository,
         conversation_repository,
+        view_repository.clone(),
         clock.clone(),
     );
 
@@ -2135,6 +2146,7 @@ fn the_workflow_and_removal_use_cases_work_on_the_real_database() {
     let member_repository = Arc::new(SqliteMemberRepository::new(database.clone()));
     let places_repository = Arc::new(SqlitePlacesRepository::new(database.clone()));
     let sprint_repository = Arc::new(SqliteSprintRepository::new(database.clone()));
+    let view_repository = Arc::new(SqliteViewRepository::new(database.clone()));
     let conversation_repository = Arc::new(SqliteConversationRepository::new(database.clone()));
     let clock = Arc::new(ManualClock::starting_at(moment(9)));
     let projects = ProjectService::new(
@@ -2144,6 +2156,7 @@ fn the_workflow_and_removal_use_cases_work_on_the_real_database() {
         conversation_repository.clone(),
         places_repository.clone(),
         sprint_repository.clone(),
+        view_repository.clone(),
         clock.clone(),
     );
     let tasks = TaskService::new(
@@ -2159,6 +2172,7 @@ fn the_workflow_and_removal_use_cases_work_on_the_real_database() {
         member_repository,
         task_repository,
         conversation_repository,
+        view_repository.clone(),
         clock.clone(),
     );
     let project = projects
@@ -2265,6 +2279,7 @@ fn the_work_of_a_specialist_is_kept_on_the_real_database() {
     let member_repository = Arc::new(SqliteMemberRepository::new(database.clone()));
     let places_repository = Arc::new(SqlitePlacesRepository::new(database.clone()));
     let sprint_repository = Arc::new(SqliteSprintRepository::new(database.clone()));
+    let view_repository = Arc::new(SqliteViewRepository::new(database.clone()));
     let conversation_repository = Arc::new(SqliteConversationRepository::new(database.clone()));
     let planning_repository = Arc::new(SqlitePlanningRepository::new(database.clone()));
     let clock = Arc::new(ManualClock::starting_at(moment(9)));
@@ -2292,6 +2307,7 @@ fn the_work_of_a_specialist_is_kept_on_the_real_database() {
         conversation_repository.clone(),
         places_repository.clone(),
         sprint_repository.clone(),
+        view_repository.clone(),
         clock.clone(),
     );
     let tasks = TaskService::new(
@@ -2307,6 +2323,7 @@ fn the_work_of_a_specialist_is_kept_on_the_real_database() {
         member_repository.clone(),
         task_repository.clone(),
         conversation_repository.clone(),
+        view_repository.clone(),
         clock.clone(),
     );
     let work = work_service();
@@ -2480,6 +2497,7 @@ fn approving_a_proposal_creates_the_team_and_the_plan_in_one_logged_write() {
     let conversation_repository = Arc::new(SqliteConversationRepository::new(database.clone()));
     let places_repository = Arc::new(SqlitePlacesRepository::new(database.clone()));
     let sprint_repository = Arc::new(SqliteSprintRepository::new(database.clone()));
+    let view_repository = Arc::new(SqliteViewRepository::new(database.clone()));
     let clock = Arc::new(ManualClock::starting_at(moment(9)));
     let runtime = Arc::new(ScriptedRuntime::new());
     let projects = ProjectService::new(
@@ -2489,6 +2507,7 @@ fn approving_a_proposal_creates_the_team_and_the_plan_in_one_logged_write() {
         conversation_repository.clone(),
         places_repository.clone(),
         sprint_repository.clone(),
+        view_repository.clone(),
         clock.clone(),
     );
     let work = WorkService::new(WorkPorts {

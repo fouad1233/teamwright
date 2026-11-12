@@ -18,7 +18,7 @@ use teamwright_application::{
 use teamwright_domain::{Assignee, ComputerId, MemberKind, Priority, Project, Task, Timestamp};
 use teamwright_storage::{
     Database, SqliteConversationRepository, SqliteMemberRepository, SqlitePlacesRepository,
-    SqliteProjectRepository, SqliteSprintRepository, SqliteTaskRepository,
+    SqliteProjectRepository, SqliteSprintRepository, SqliteTaskRepository, SqliteViewRepository,
 };
 
 /// One computer: its database and the use cases on it.
@@ -44,6 +44,7 @@ impl Computer {
         let conversations = Arc::new(SqliteConversationRepository::new(database.clone()));
         let places = Arc::new(SqlitePlacesRepository::new(database.clone()));
         let sprints = Arc::new(SqliteSprintRepository::new(database.clone()));
+        let views = Arc::new(SqliteViewRepository::new(database.clone()));
         let clock = Arc::new(ManualClock::starting_at(moment()));
         Self {
             projects: ProjectService::new(
@@ -53,6 +54,7 @@ impl Computer {
                 conversations.clone(),
                 places.clone(),
                 sprints.clone(),
+                views.clone(),
                 clock.clone(),
             ),
             tasks: TaskService::new(
@@ -64,7 +66,7 @@ impl Computer {
                 clock.clone(),
             ),
             sprints: SprintService::new(projects.clone(), tasks.clone(), sprints, clock.clone()),
-            team: TeamService::new(projects, members, tasks, conversations, clock),
+            team: TeamService::new(projects, members, tasks, conversations, views, clock),
             places: SqlitePlacesRepository::new(database.clone()),
             database,
         }

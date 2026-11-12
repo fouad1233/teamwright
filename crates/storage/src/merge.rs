@@ -124,6 +124,15 @@ const SPRINT_FIELDS: &[Field] = &[
     later("state", &["state", "started_at", "completed_at", "summary"]),
 ];
 
+const VIEW_FIELDS: &[Field] = &[
+    later("name", &["name"]),
+    // Whose tasks are shown: the kind and the member go together, so that
+    // a member is never named without the kind that says so.
+    later("assignee", &["assignee_kind", "assignee_member_id"]),
+    later("hides_finished", &["hides_finished"]),
+    later("position", &["position"]),
+];
+
 const CONVERSATION_FIELDS: &[Field] = &[
     later("member", &["member_id"]),
     later("task", &["task_id"]),
@@ -143,6 +152,7 @@ pub(crate) const fn merging_of(entity: Entity) -> Merging {
         Entity::Task => Merging::ByField(TASK_FIELDS),
         Entity::Member => Merging::ByField(MEMBER_FIELDS),
         Entity::Sprint => Merging::ByField(SPRINT_FIELDS),
+        Entity::View => Merging::ByField(VIEW_FIELDS),
         Entity::Conversation => Merging::ByField(CONVERSATION_FIELDS),
         Entity::Turn
         | Entity::TurnStep

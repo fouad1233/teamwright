@@ -280,6 +280,35 @@ pub enum ApplicationError {
     #[error("the unfinished tasks cannot stay in the sprint that is completed")]
     UnfinishedStayInSprint,
 
+    /// A view was to get a name that another view of its project has,
+    /// whatever the capitals.
+    #[error("the project already has a view called \"{name}\"")]
+    ViewNameTaken {
+        /// The name that was requested, tidied.
+        name: String,
+    },
+
+    /// A second backlog or a second dashboard was to be added to a project.
+    #[error("the project already has a {kind}, \"{name}\", and can have only one")]
+    ViewKindTaken {
+        /// The kind, as text: "backlog" or "dashboard".
+        kind: &'static str,
+        /// The name of the view of that kind the project has.
+        name: String,
+    },
+
+    /// A filter of a view named a member who is not on the team of the
+    /// project of the view.
+    #[error("the filter names a member who is not on the team of the project")]
+    MemberNotOnTeam,
+
+    /// The one view a project has left was to be removed.
+    #[error("\"{name}\" is the last view of the project and cannot be removed")]
+    LastView {
+        /// The name of the view.
+        name: String,
+    },
+
     /// A file to copy was named by a path that has no file name, such as
     /// the root of a drive.
     #[error("a file to copy has no name")]
@@ -332,6 +361,10 @@ impl ApplicationError {
             Self::AnotherSprintActive { .. } => "another_sprint_active",
             Self::SprintEmpty { .. } => "sprint_empty",
             Self::SubtaskPlannedAlone { .. } => "subtask_planned_alone",
+            Self::ViewNameTaken { .. } => "view_name_taken",
+            Self::ViewKindTaken { .. } => "view_kind_taken",
+            Self::MemberNotOnTeam => "member_not_on_team",
+            Self::LastView { .. } => "last_view",
             Self::DependencyCycle { .. } => "dependency_cycle",
             Self::MemberNameTaken { .. } => "member_name_taken",
             Self::AssigneeFromAnotherTeam => "assignee_from_another_team",

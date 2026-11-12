@@ -12,7 +12,7 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use chrono::TimeDelta;
 use teamwright_domain::{
     Conversation, ConversationId, Member, MemberId, Project, ProjectId, Sprint, SprintId, Task,
-    TaskId, Timestamp, Turn, TurnId,
+    TaskId, Timestamp, Turn, TurnId, View, ViewId,
 };
 
 use crate::agent_runtime::{
@@ -23,7 +23,7 @@ use crate::places::ChosenPlaces;
 use crate::ports::{
     ApprovedPlan, Clock, ConversationRepository, FileSystem, MemberRepository, PlacesRepository,
     PlanningRepository, ProjectFolders, ProjectRepository, SprintRepository, StorageError,
-    TaskRepository, WorkListener,
+    TaskRepository, ViewRepository, WorkListener,
 };
 
 /// Locks a mutex, and keeps working even if another thread panicked while it
@@ -150,6 +150,39 @@ impl SprintRepository for InMemorySprintRepository {
     fn delete(&self, id: SprintId, tasks: &[Task]) -> Result<(), StorageError> {
         self.tasks.save_all(tasks)?;
         lock(&self.sprints).remove(&id);
+        Ok(())
+    }
+}
+
+/// Keeps the views of the projects in memory.
+#[derive(Debug, Default)]
+pub struct InMemoryViewRepository {
+    views: Mutex<BTreeMap<ViewId, View>>,
+}
+
+impl ViewRepository for InMemoryViewRepository {
+    fn save_all(&self, views: &[View]) -> Result<(), StorageError> {
+        let mut stored = lock(&self.views);
+        for view in views {
+            stored.insert(view.id(), view.clone());
+        }
+        Ok(())
+    }
+
+    fn find(&self, id: ViewId) -> Result<Option<View>, StorageError> {
+        Ok(lock(&self.views).get(&id).cloned())
+    }
+
+    fn list_for_project(&self, project_id: ProjectId) -> Result<Vec<View>, StorageError> {
+        Ok(lock(&self.views)
+            .values()
+            .filter(|view| view.project_id() == project_id)
+            .cloned()
+            .collect())
+    }
+
+    fn delete(&self, id: ViewId) -> Result<(), StorageError> {
+        lock(&self.views).remove(&id);
         Ok(())
     }
 }

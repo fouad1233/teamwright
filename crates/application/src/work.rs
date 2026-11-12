@@ -1607,6 +1607,7 @@ mod tests {
             ports.conversations.clone(),
             ports.places.clone(),
             Arc::new(InMemorySprintRepository::new(ports.tasks.clone())),
+            Arc::new(crate::in_memory::InMemoryViewRepository::default()),
             ports.clock.clone(),
         );
         let tasks = TaskService::new(
@@ -1622,6 +1623,7 @@ mod tests {
             ports.members.clone(),
             ports.tasks.clone(),
             ports.conversations.clone(),
+            Arc::new(crate::in_memory::InMemoryViewRepository::default()),
             ports.clock.clone(),
         );
         let work = ports.work_service();

@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 
 use teamwright_domain::{
     CalendarDate, Conversation, ConversationId, Member, MemberId, Project, ProjectId, Sprint,
-    SprintId, Task, TaskId, Timestamp, Turn,
+    SprintId, Task, TaskId, Timestamp, Turn, View, ViewId,
 };
 
 use crate::places::ChosenPlaces;
@@ -170,6 +170,39 @@ pub trait SprintRepository: Send + Sync {
     /// Returns an error if the sprint could not be removed or a task could
     /// not be written.
     fn delete(&self, id: SprintId, tasks: &[Task]) -> Result<(), StorageError>;
+}
+
+/// Stores the views of the projects.
+pub trait ViewRepository: Send + Sync {
+    /// Stores views, replacing stored views with the same identifiers.
+    /// Either all of them are stored or none is.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the views could not be written.
+    fn save_all(&self, views: &[View]) -> Result<(), StorageError>;
+
+    /// Finds a view by its identifier.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if stored data could not be read.
+    fn find(&self, id: ViewId) -> Result<Option<View>, StorageError>;
+
+    /// Lists the views of a project in no particular order.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if stored data could not be read.
+    fn list_for_project(&self, project_id: ProjectId) -> Result<Vec<View>, StorageError>;
+
+    /// Removes a view. The identifier of a view that is not stored is
+    /// ignored.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the view could not be removed.
+    fn delete(&self, id: ViewId) -> Result<(), StorageError>;
 }
 
 /// Stores the members of the teams.

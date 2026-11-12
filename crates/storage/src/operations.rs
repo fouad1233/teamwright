@@ -71,11 +71,13 @@ pub(crate) enum Entity {
     ProjectPlaces,
     /// A sprint with its summary.
     Sprint,
+    /// A view of a project with its filter.
+    View,
 }
 
 impl Entity {
     /// Every kind of thing whose changes are logged.
-    pub(crate) const ALL: [Self; 11] = [
+    pub(crate) const ALL: [Self; 12] = [
         Self::Project,
         Self::Task,
         Self::Member,
@@ -87,6 +89,7 @@ impl Entity {
         Self::Proposal,
         Self::ProjectPlaces,
         Self::Sprint,
+        Self::View,
     ];
 
     /// The entity of a name in the log, if this version knows it.
@@ -108,6 +111,7 @@ impl Entity {
             Self::Proposal => "proposal",
             Self::ProjectPlaces => "project_places",
             Self::Sprint => "sprint",
+            Self::View => "view",
         }
     }
 }

@@ -18,7 +18,7 @@ use teamwright_domain::{Priority, Project, Task};
 use teamwright_storage::{
     Database, FolderOfComputers, SqliteConversationRepository, SqliteMemberRepository,
     SqlitePlacesRepository, SqliteProjectRepository, SqliteSprintRepository, SqliteSyncLedger,
-    SqliteTaskRepository,
+    SqliteTaskRepository, SqliteViewRepository,
 };
 use tempfile::TempDir;
 
@@ -71,6 +71,7 @@ impl Computer {
         let members = Arc::new(SqliteMemberRepository::new(database.clone()));
         let conversations = Arc::new(SqliteConversationRepository::new(database.clone()));
         let sprints = Arc::new(SqliteSprintRepository::new(database.clone()));
+        let views = Arc::new(SqliteViewRepository::new(database.clone()));
         let clock = Arc::new(SystemClock);
         let sync = SyncService::new(SyncPorts {
             ledger: Arc::new(SqliteSyncLedger::new(database.clone())),
@@ -88,6 +89,7 @@ impl Computer {
                 conversations.clone(),
                 Arc::new(SqlitePlacesRepository::new(database.clone())),
                 sprints.clone(),
+                views.clone(),
                 clock.clone(),
             ),
             tasks: TaskService::new(projects, tasks, members, conversations, sprints, clock),

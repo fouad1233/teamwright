@@ -4,12 +4,13 @@ use std::sync::Arc;
 
 use teamwright_domain::{
     Assignee, Color, Effort, Member, MemberId, MemberKind, MemberName, MemberProfile, ModelName,
-    Project, ProjectId, Task, Timestamp,
+    Project, ProjectId, Task, Timestamp, View,
 };
 
 use crate::error::ApplicationError;
 use crate::ports::{
     Clock, ConversationRepository, MemberRepository, ProjectRepository, TaskRepository,
+    ViewRepository,
 };
 use crate::work::WorkInProgress;
 
@@ -39,19 +40,23 @@ pub struct TeamService {
     members: Arc<dyn MemberRepository>,
     tasks: Arc<dyn TaskRepository>,
     conversations: Arc<dyn ConversationRepository>,
+    views: Arc<dyn ViewRepository>,
     clock: Arc<dyn Clock>,
 }
 
 impl TeamService {
     /// Creates the service. The conversations are needed because a member
     /// that leaves leaves its conversations behind, and a member that is
-    /// working cannot leave.
+    /// working cannot leave. The views are needed because a view that
+    /// showed only the tasks of a member who leaves shows everybody's
+    /// again.
     #[must_use]
     pub fn new(
         projects: Arc<dyn ProjectRepository>,
         members: Arc<dyn MemberRepository>,
         tasks: Arc<dyn TaskRepository>,
         conversations: Arc<dyn ConversationRepository>,
+        views: Arc<dyn ViewRepository>,
         clock: Arc<dyn Clock>,
     ) -> Self {
         Self {
@@ -59,6 +64,7 @@ impl TeamService {
             members,
             tasks,
             conversations,
+            views,
             clock,
         }
     }
@@ -181,6 +187,7 @@ impl TeamService {
 
     /// Takes a member off the team. The tasks that were given to the member
     /// are given to nobody. Its conversations stay on record, without it.
+    /// A view that showed only its tasks shows everybody's again.
     ///
     /// # Errors
     ///
@@ -218,7 +225,16 @@ impl TeamService {
         // member is still there without tasks, which is harmless. In the
         // other order a failure could leave tasks with an assignee that no
         // longer exists.
+        // A view that showed only the member's tasks shows everybody's
+        // again, and keeps hiding finished tasks if it did.
+        let forgotten: Vec<View> = self
+            .views
+            .list_for_project(member.project_id())?
+            .into_iter()
+            .filter_map(|mut view| view.forget_member(id).then_some(view))
+            .collect();
         self.tasks.save_all(&handed_back)?;
+        self.views.save_all(&forgotten)?;
         self.members.delete(id)?;
         Ok(())
     }
@@ -339,6 +355,7 @@ mod tests {
                 conversations.clone(),
                 Arc::new(InMemoryPlacesRepository::default()),
                 Arc::new(InMemorySprintRepository::new(tasks.clone())),
+                Arc::new(crate::in_memory::InMemoryViewRepository::default()),
                 clock.clone(),
             ),
             team: TeamService::new(
@@ -346,6 +363,7 @@ mod tests {
                 members.clone(),
                 tasks.clone(),
                 conversations.clone(),
+                Arc::new(crate::in_memory::InMemoryViewRepository::default()),
                 clock.clone(),
             ),
             tasks: TaskService::new(

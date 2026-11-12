@@ -480,6 +480,7 @@ mod tests {
             conversations.clone(),
             places.clone(),
             Arc::new(InMemorySprintRepository::new(tasks.clone())),
+            Arc::new(crate::in_memory::InMemoryViewRepository::default()),
             clock.clone(),
         );
         let project = project_service
@@ -512,6 +513,7 @@ mod tests {
                 members.clone(),
                 tasks.clone(),
                 conversations.clone(),
+                Arc::new(crate::in_memory::InMemoryViewRepository::default()),
                 clock.clone(),
             ),
             work: WorkService::new(WorkPorts {

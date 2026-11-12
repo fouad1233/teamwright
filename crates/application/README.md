@@ -10,15 +10,16 @@ window or agent runtime.
 | `projects` | `ProjectService`: start, find, list, rename, describe, archive, restore and delete projects; add, change, move and remove the statuses of their workflows |
 | `tasks` | `TaskService`: open, change, plan into a sprint, give points, move, connect and remove tasks, and tell the history of one from the versions storage has kept |
 | `sprints` | `SprintService`: list, plan, change, delete, start and complete the sprints of a project, and the report for the burndown chart of one (`SprintReport`) |
+| `views` | `ViewService`: list, add, rename, filter, move and remove the views of a project |
 | `team` | `TeamService`: put members on the team of a project, change them, take them off |
 | `places` | `PlacesService`: the folders of a project: choose its work folder, add and take away reference folders, copy reference files into it |
 | `work` | `WorkService`: let AI specialists work: start on a task, ask, reply, answer a specialist's question, list what waits for the manager, stop, follow every event, open a session in the desktop app, recover after a restart; `brief_for` and `instructions_for`. Its part `advisor`: plan a project with the Advisor (`advise`, `answer_interview`, `approve_proposal`); `ApprovedProposal`, `answers_in_words` and `instructions_for_advisor` |
 | `sync` | `SyncService`: keep several computers of one manager in step through a folder the manager owns (`round`, `choose_folder`, `stop`, `rename_this_computer`, `accept`, `ignore`, `notices`, `dismiss`, `new_identity`); the ports `SyncFolder` and `SyncLedger`, and the operations that travel between computers |
-| `ports` | The interfaces the services need: `ProjectRepository`, `TaskRepository`, `MemberRepository`, `ConversationRepository`, `PlanningRepository`, `PlacesRepository`, `SprintRepository`, `ProjectFolders`, `FileSystem`, `WorkListener`, `Clock` (which also tells the day a moment falls on) |
+| `ports` | The interfaces the services need: `ProjectRepository`, `TaskRepository`, `MemberRepository`, `ConversationRepository`, `PlanningRepository`, `PlacesRepository`, `SprintRepository`, `ViewRepository`, `ProjectFolders`, `FileSystem`, `WorkListener`, `Clock` (which also tells the day a moment falls on) |
 | `agent_runtime` | `AgentRuntime`: the interface to the program that runs a team member's session, and the data it speaks |
 | `error` | `ApplicationError`, with a stable `code()` for interfaces |
 | `clock` | `SystemClock`, the real clock |
-| `in_memory` | In-memory repositories (`InMemoryPlanningRepository` stores an approved plan into the others, `InMemorySprintRepository` stores the tasks that change with a sprint into the task repository), fixed project folders, a pretended file system, a listener that records, a scripted agent runtime and a settable clock, for tests and demos |
+| `in_memory` | In-memory repositories (`InMemoryPlanningRepository` stores an approved plan into the others, `InMemorySprintRepository` stores the tasks that change with a sprint into the task repository, `InMemoryViewRepository`), fixed project folders, a pretended file system, a listener that records, a scripted agent runtime and a settable clock, for tests and demos |
 
 ## How a use case is built
 
@@ -49,8 +50,8 @@ project, two members of one team cannot have the same name.
   of a deleted project is free again.
 - Archived projects are listed with the one put away last first. Restoring
   one brings it back with its tasks and its team.
-- Deleting a project deletes its tasks, its sprints, its team and what it
-  knew about its folders; the folders on disk stay. The project itself goes last, so a deletion that fails half-way can simply be repeated.
+- Deleting a project deletes its tasks, its sprints, its views, its team
+  and what it knew about its folders; the folders on disk stay. The project itself goes last, so a deletion that fails half-way can simply be repeated.
 - Changing a status between "done" and not done completes or reopens every
   task in it, subtasks included.
 - A status that still has tasks is removed only when another status is
@@ -119,6 +120,35 @@ name, with the same codes and messages.
   sprint were finished; days that have not come, or came after the sprint
   was completed, have none. Days are counted where the program runs
   (`Clock::day_of`).
+
+## The views of a project
+
+`ViewService` carries out
+[decision 0021](../../docs/decisions/0021-views-the-manager-can-add.md). The
+demo backend of the interface (`demoViews.test.ts`) is the specification;
+`views/tests.rs` mirrors each of its cases under the same name, with the
+same codes and messages. The one about a project kept before it had views
+is a migration of the database, and is tested with the migrations of the
+storage crate.
+
+- `ProjectService::create` gives a new project six views, in the order
+  board, backlog, list, Gantt chart, calendar, dashboard, each named after
+  its kind and showing every task. `ProjectService::delete` removes them.
+- A project has at most one backlog and one dashboard (`view_kind_taken`).
+- A name is tidied and has at most 40 characters (`rule_broken`). Two views
+  of a project do not share a name, whatever the capitals
+  (`view_name_taken`); a view may change the capitals of its own. A view
+  added without a name, or with an empty one, is named after its kind, with
+  the first free number from 2 on if that name is taken.
+- Only a board, a list, a Gantt chart and a calendar can be filtered
+  (`rule_broken`), and a filter can only name a member of the team of the
+  project (`member_not_on_team`).
+- `move_to` puts a place past either end at that end, stores only the views
+  whose place changed, and answers with all the views in their new order.
+- The last view of a project cannot be removed (`last_view`).
+- `TeamService::remove` makes every view that showed only the tasks of the
+  member who leaves show everybody's again, and keeps it hiding finished
+  tasks if it did.
 
 ## The folders of a project
 
