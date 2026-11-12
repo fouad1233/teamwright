@@ -656,6 +656,45 @@ export function figuresOf(
   return result;
 }
 
+/**
+ * The room carried over to a new plan, after the window changed size.
+ * Somebody seated stays seated. Somebody away keeps their place and how
+ * far along their way they are, on the way as it runs in the new room, so
+ * that they walk on instead of jumping back to the bench.
+ */
+export function replanRoom(state: RoomState, before: RoomPlan, after: RoomPlan): RoomState {
+  const seats = new Map(after.seats.map((seat) => [seat.key, seat]));
+  const spots = new Map(after.spots.map((spot) => [spot.id, spot]));
+  const phases: Record<string, Phase> = {};
+  for (const [key, phase] of Object.entries(state.phases)) {
+    if (phase.kind === 'seated') {
+      phases[key] = phase;
+      continue;
+    }
+    const seat = seats.get(key);
+    const spot = spots.get(phase.walk.spot);
+    if (!seat || !spot) {
+      phases[key] = { kind: 'seated', restUntil: state.time };
+      continue;
+    }
+    const walk = walkTo(seat, spot, after);
+    if (phase.kind === 'visiting') {
+      phases[key] = { ...phase, walk };
+      continue;
+    }
+    const share =
+      phase.walk.length === 0
+        ? 1
+        : Math.min(1, ((state.time - phase.startedAt) * speedIn(before)) / phase.walk.length);
+    phases[key] = {
+      kind: phase.kind,
+      walk,
+      startedAt: state.time - (share * walk.length) / speedIn(after),
+    };
+  }
+  return { time: state.time, phases };
+}
+
 /** A small generator of chance that gives the same numbers for the same seed (mulberry32). */
 export function chance(seed: number): () => number {
   let value = seed >>> 0;

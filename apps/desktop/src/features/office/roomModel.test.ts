@@ -10,6 +10,7 @@ import {
   gestureAt,
   mostAway,
   planRoom,
+  replanRoom,
   speedIn,
   pointAlong,
   SCENE_OFFSET,
@@ -289,5 +290,41 @@ describe('gestureAt', () => {
     expect(busy / moments.length).toBeLessThan(0.4);
     const kinds = new Set(moments.map((moment) => moment.gesture));
     expect(kinds).toEqual(new Set([null, 'glance', 'sip', 'page', 'stretch']));
+  });
+});
+
+describe('replanRoom', () => {
+  it('keeps somebody away on their way, as far along it as before', () => {
+    const random = chance(7);
+    const who = people();
+    const before = planRoom(measures());
+    let state = startRoom(who, random);
+    for (let step = 0; step < 15 * 200; step += 1) {
+      state = advanceRoom(state, who, before, 1 / 15, random);
+      if (Object.values(state.phases).some((phase) => phase.kind === 'out')) {
+        break;
+      }
+    }
+    const wider = measures();
+    const after = planRoom({
+      ...wider,
+      benches: wider.benches.map((bench) => ({
+        ...bench,
+        box: { ...bench.box, left: bench.box.left + 30 },
+      })),
+    });
+    const moved = replanRoom(state, before, after);
+    const [key, phase] =
+      Object.entries(state.phases).find(([, entry]) => entry.kind === 'out') ?? [];
+    const carried = moved.phases[key ?? ''];
+    expect(phase?.kind).toBe('out');
+    expect(carried?.kind).toBe('out');
+    if (phase?.kind === 'out' && carried?.kind === 'out') {
+      const share = ((moved.time - phase.startedAt) * speedIn(before)) / phase.walk.length;
+      const carriedShare =
+        ((moved.time - carried.startedAt) * speedIn(after)) / carried.walk.length;
+      expect(carriedShare).toBeCloseTo(share, 5);
+      expect(carried.walk.path[0]?.x).toBe((phase.walk.path[0]?.x ?? 0) + 30);
+    }
   });
 });

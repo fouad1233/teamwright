@@ -18,6 +18,7 @@ import {
   chance,
   figuresOf,
   planRoom,
+  replanRoom,
   startRoom,
   type Figure,
   type Gesture,
@@ -209,13 +210,15 @@ export class RoomPainter {
           commons: relative(commons),
         })
       : null;
-    // Somebody halfway down an aisle that has moved would be left standing
-    // in a wall: when the room changes, everybody is back at the bench.
-    if (!previous || !this.plan || !samePlan(previous, this.plan)) {
+    // When the room changes, somebody away walks on along the way as it
+    // runs in the new room, rather than jump back to the bench.
+    if (!previous || !this.plan) {
       this.state = startRoom(
         this.sitters.map(({ person }) => person),
         this.random,
       );
+    } else if (!samePlan(previous, this.plan)) {
+      this.state = replanRoom(this.state, previous, this.plan);
     }
     // A canvas whose size is set again is empty.
     this.draw(true);
