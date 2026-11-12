@@ -2,10 +2,18 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo } from 'react';
 
 import { useBackend } from '@/shared/api/BackendProvider';
-import type { Conversation, Id, NewDecisionAnswer } from '@/shared/api/types';
+import type {
+  ApprovedProposal,
+  Conversation,
+  Id,
+  InterviewAnswer,
+  NewAdvice,
+  NewDecisionAnswer,
+} from '@/shared/api/types';
 import { describeFailure, useNotifier } from '@/shared/ui/Toast';
 
 import { tasksKey } from '../tasks/taskQueries';
+import { teamKey } from '../team/teamQueries';
 import { hasTurnStartedOrEnded, runningTurn, withConversation } from './workModel';
 
 /** The name under which the state of the program for specialists is cached. */
@@ -101,6 +109,15 @@ export interface WorkCommands {
   ask(memberId: Id, message: string): Promise<Conversation | undefined>;
   /** Answers the question a specialist asked. Resolves to whether the answer was taken. */
   decide(conversationId: Id, answer: NewDecisionAnswer): Promise<boolean>;
+  /** Starts planning the project with the Advisor. Resolves to whether it started. */
+  advise(advice: NewAdvice): Promise<boolean>;
+  /** Answers the questions of the Advisor. Resolves to whether the answers were taken. */
+  answerInterview(conversationId: Id, answers: InterviewAnswer[]): Promise<boolean>;
+  /**
+   * Approves the proposal of the Advisor as the manager changed it.
+   * Resolves to whether it was taken.
+   */
+  approveProposal(conversationId: Id, proposal: ApprovedProposal): Promise<boolean>;
   /** Stops the turn that is running in a conversation. */
   stop(conversationId: Id): Promise<void>;
   /** Opens a conversation in the Claude desktop app. */
@@ -148,6 +165,16 @@ export function useWorkCommands(projectId: Id): WorkCommands {
       ask: (memberId, message) => change(() => backend.ask(memberId, message)),
       decide: async (conversationId, answer) =>
         (await change(() => backend.answerDecision(conversationId, answer))) !== undefined,
+      advise: async (advice) =>
+        (await change(() => backend.advise(projectId, advice))) !== undefined,
+      answerInterview: async (conversationId, answers) =>
+        (await change(() => backend.answerInterview(conversationId, answers))) !== undefined,
+      approveProposal: async (conversationId, proposal) => {
+        const approved = await change(() => backend.approveProposal(conversationId, proposal));
+        // Approving adds members to the team. The tasks were loaded again already.
+        await queryClient.invalidateQueries({ queryKey: teamKey(projectId) });
+        return approved !== undefined;
+      },
       stop: async (conversationId) => {
         await change(() => backend.stopWork(conversationId));
       },

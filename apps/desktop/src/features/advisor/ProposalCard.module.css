@@ -1,0 +1,166 @@
+/* What the Advisor proposes. It waits for the manager, so it carries the
+   rule of brass down its side, like a question does. */
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-3) 0 var(--space-1) var(--space-4);
+  border-left: 2px solid var(--brass);
+}
+
+.proposes {
+  color: var(--brass);
+}
+
+.part {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-top: var(--space-2);
+}
+
+/* The team and the plan are lists between hairlines, like the rows of the
+   task list. */
+.members,
+.tasks {
+  border-top: 1px solid var(--rule);
+}
+
+.member,
+.task {
+  border-bottom: 1px solid var(--rule);
+}
+
+.member {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) 124px 124px auto;
+  align-items: start;
+  column-gap: var(--space-3);
+  padding: var(--space-3) 0;
+}
+
+.who {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.memberName {
+  font-weight: 600;
+}
+
+.responsibility {
+  color: var(--ink-soft);
+  line-height: 1.45;
+}
+
+/* Why the project needs the member: said more quietly than what it does. */
+.reason {
+  color: var(--ink-faint);
+  font-size: var(--text-small);
+  line-height: 1.45;
+}
+
+/* A value in a row is as wide as its column, and its text starts where the
+   column starts. */
+.value {
+  justify-self: start;
+  margin-left: 0;
+}
+
+/* Said in the place of the model and the effort, for a member that is
+   on the team already. */
+.there {
+  grid-column: 3 / -1;
+  padding-top: 5px;
+  color: var(--ink-faint);
+}
+
+.task {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) 176px 84px 128px auto;
+  align-items: center;
+  column-gap: var(--space-3);
+  min-height: 36px;
+}
+
+.place {
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+/* The title of a task opens what the Advisor wrote about it. */
+.title {
+  min-width: 0;
+  padding: var(--space-2) 0;
+  overflow: hidden;
+  font-weight: 550;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.title:not(:disabled):hover {
+  text-decoration: underline;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 3px;
+}
+
+.title[aria-expanded='true'] {
+  white-space: normal;
+}
+
+.size,
+.after {
+  color: var(--ink-soft);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.size {
+  display: flex;
+  gap: var(--space-2);
+  justify-content: flex-end;
+}
+
+.priority {
+  color: var(--ink-faint);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* A task can wait for many others. The list is cut where its column
+   ends, and the whole of it is in the tooltip. */
+.after {
+  overflow: hidden;
+  color: var(--ink-faint);
+  text-overflow: ellipsis;
+}
+
+.description {
+  grid-column: 2 / -1;
+  max-width: 620px;
+  padding-bottom: var(--space-3);
+  color: var(--ink-soft);
+  line-height: 1.5;
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding-top: var(--space-1);
+}
+
+/* What approving will do, said before the button that does it. */
+.effect {
+  flex: 1;
+  min-width: 0;
+  color: var(--ink-soft);
+  line-height: 1.45;
+}

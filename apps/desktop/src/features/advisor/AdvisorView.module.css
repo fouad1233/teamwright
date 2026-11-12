@@ -1,0 +1,148 @@
+/* The Advisor is a page to read down, like the inbox: a column of text,
+   and under it a proposal that may be wider, because it holds a table. */
+.advisor {
+  --column: 680px;
+  --wide: 960px;
+
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  height: 100%;
+  padding: var(--space-5) var(--space-5) var(--space-7);
+  overflow-y: auto;
+}
+
+.column {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  width: 100%;
+  max-width: var(--column);
+}
+
+.wide {
+  width: 100%;
+  max-width: var(--wide);
+}
+
+.who {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--control-height);
+}
+
+.name {
+  font-size: var(--text-strong);
+  font-weight: 600;
+}
+
+.space {
+  flex: 1;
+}
+
+.turns {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* An interview that lies behind: every question with the answer under
+   it, the question in the softer ink. */
+.answered {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding-top: var(--space-1);
+}
+
+.pair {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  line-height: 1.5;
+}
+
+.asked {
+  color: var(--ink-soft);
+}
+
+.given {
+  font-weight: 550;
+}
+
+/* What became of a proposal, in one line. */
+.became {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding-top: var(--space-1);
+  color: var(--ink-soft);
+  line-height: 1.5;
+}
+
+.approved {
+  color: var(--ink);
+}
+
+.link {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 3px;
+}
+
+.link:hover {
+  text-decoration-color: var(--ink);
+}
+
+/* The beginning of a plan: a title, what will happen, and room to write. */
+.start {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  width: 100%;
+  max-width: var(--column);
+  padding-top: var(--space-4);
+}
+
+.title {
+  font-family: var(--font-serif);
+  font-size: var(--text-display);
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  line-height: 1.1;
+}
+
+.lead {
+  max-width: 600px;
+  padding-bottom: var(--space-2);
+  color: var(--ink-soft);
+  font-size: var(--text-strong);
+  line-height: 1.55;
+}
+
+.brief {
+  min-height: 132px;
+}
+
+.profile {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 220px));
+  gap: var(--space-4);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding-top: var(--space-2);
+}
+
+.hint {
+  min-width: 0;
+  color: var(--ink-faint);
+  font-size: var(--text-small);
+  line-height: 1.5;
+}

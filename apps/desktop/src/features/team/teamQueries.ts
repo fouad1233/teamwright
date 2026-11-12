@@ -8,7 +8,7 @@ import { describeFailure, useNotifier } from '@/shared/ui/Toast';
 import { tasksKey } from '../tasks/taskQueries';
 
 /** The name under which the team of a project is cached. */
-function teamKey(projectId: Id) {
+export function teamKey(projectId: Id) {
   return ['team', projectId] as const;
 }
 

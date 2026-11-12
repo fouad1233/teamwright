@@ -1,0 +1,71 @@
+/* The questions of the Advisor. Like a question of a specialist, they wait
+   for the manager, so they carry the rule of brass down their side. */
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-3) 0 var(--space-1) var(--space-4);
+  border-left: 2px solid var(--brass);
+}
+
+.asks {
+  color: var(--brass);
+}
+
+.questions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+/* A question stands next to its number, the way a form numbers its
+   fields. */
+.question {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  column-gap: var(--space-2);
+}
+
+.number {
+  padding-top: 3px;
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.text {
+  font-size: var(--text-strong);
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.reason {
+  padding-bottom: var(--space-1);
+  color: var(--ink-soft);
+  line-height: 1.5;
+}
+
+/* Room for a few words. It grows with what is written into it. */
+.note {
+  min-height: 52px;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-3);
+}
+
+.left {
+  color: var(--ink-faint);
+  font-size: var(--text-small);
+}

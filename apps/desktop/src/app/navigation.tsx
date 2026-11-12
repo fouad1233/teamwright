@@ -3,7 +3,7 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 import type { Id } from '@/shared/api/types';
 
 /** The ways a project can be looked at. */
-export const PROJECT_VIEWS = ['board', 'list', 'gantt', 'calendar', 'team'] as const;
+export const PROJECT_VIEWS = ['board', 'list', 'gantt', 'calendar', 'team', 'advisor'] as const;
 
 export type ProjectView = (typeof PROJECT_VIEWS)[number];
 
@@ -38,6 +38,8 @@ export interface Navigation extends Location {
   openTask: (taskId: Id) => void;
   /** Opens a task of any project, for example from the inbox. */
   openTaskOf: (projectId: Id, taskId: Id) => void;
+  /** Opens the conversation with the Advisor of any project, for example from the inbox. */
+  openAdvisorOf: (projectId: Id) => void;
   closeTask: () => void;
   /** Opens the conversation with a specialist. It takes the place of an open task. */
   openChat: (memberId: Id) => void;
@@ -117,6 +119,9 @@ export function NavigationProvider({ children }: { children: ReactNode }) {
       },
       openTaskOf: (projectId, taskId) => {
         go({ place: 'project', projectId, taskId, chatMemberId: null });
+      },
+      openAdvisorOf: (projectId) => {
+        go({ place: 'project', projectId, view: 'advisor', taskId: null, chatMemberId: null });
       },
       showView: (view) => {
         go({ view });

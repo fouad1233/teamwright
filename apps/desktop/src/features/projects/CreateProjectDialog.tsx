@@ -81,7 +81,10 @@ function CreateProjectForm({ onDone }: { onDone: () => void }) {
         description,
         workflow,
       });
-      navigation.openProject(project.id);
+      // A new project is empty. It opens where it can be planned: with the
+      // Advisor, which starts from what was just said about the project.
+      // The board is one press away for whoever wants to add tasks by hand.
+      navigation.openAdvisorOf(project.id);
       onDone();
     } catch (failure) {
       setRefusal(describeFailure(failure));

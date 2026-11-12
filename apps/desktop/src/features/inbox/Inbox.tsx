@@ -2,8 +2,10 @@ import { useNavigation } from '@/app/navigation';
 import type { Conversation, Project } from '@/shared/api/types';
 import { classNames } from '@/shared/lib/classNames';
 import { formatMoment, taskReference } from '@/shared/lib/format';
+import { Button } from '@/shared/ui/Button';
 import { describeFailure } from '@/shared/ui/Toast';
 
+import { advisorWaitsFor } from '../advisor/advisorModel';
 import { useTasks } from '../tasks/taskQueries';
 import { MemberAvatar } from '../team/Assignee';
 import { useTeam } from '../team/teamQueries';
@@ -20,8 +22,10 @@ interface InboxProps {
 
 /**
  * What waits for the manager, in every project: the questions that
- * specialists asked instead of guessing, the one that has waited longest
- * first. Each can be answered where it stands.
+ * specialists asked instead of guessing, and what the Advisor asks or
+ * proposes, the one that has waited longest first. A question of a
+ * specialist can be answered where it stands. What the Advisor wants leads
+ * to the Advisor, where there is room for it.
  */
 export function Inbox({ projects }: InboxProps) {
   const waiting = useConversationsWaiting();
@@ -47,7 +51,8 @@ export function Inbox({ projects }: InboxProps) {
           <p className={styles.emptyText}>
             A specialist that meets a choice that is yours to make does not guess. It stops and
             asks, and its question appears here: what it needs to know, why it matters, and the
-            options with what each leads to.
+            options with what each leads to. The questions and the proposals of the Advisor wait
+            here too.
           </p>
         </div>
       )}
@@ -59,7 +64,11 @@ export function Inbox({ projects }: InboxProps) {
             return (
               project && (
                 <li key={conversation.id}>
-                  <Question project={project} conversation={conversation} />
+                  {conversation.isWithAdvisor ? (
+                    <FromAdvisor project={project} conversation={conversation} />
+                  ) : (
+                    <Question project={project} conversation={conversation} />
+                  )}
                 </li>
               )
             );
@@ -73,6 +82,41 @@ export function Inbox({ projects }: InboxProps) {
 interface QuestionProps {
   project: Project;
   conversation: Conversation;
+}
+
+/**
+ * What the Advisor of a project waits for: answers to its questions, or a
+ * word about its proposal. Both need more room than the inbox has, so this
+ * says what it is and leads there.
+ */
+function FromAdvisor({ project, conversation }: QuestionProps) {
+  const navigation = useNavigation();
+  const waitsFor = advisorWaitsFor(conversation);
+
+  if (waitsFor === null) {
+    return null;
+  }
+
+  return (
+    <article className={styles.item}>
+      <header className={styles.about}>
+        <span className={styles.project}>{project.name}</span>
+        <span className={styles.taskTitle}>Advisor</span>
+        <span className={classNames(styles.when)}>{formatMoment(askedAt(conversation))}</span>
+      </header>
+      <div className={styles.advisor}>
+        <p className={styles.wants}>The Advisor {waitsFor}.</p>
+        <Button
+          variant="secondary"
+          onClick={() => {
+            navigation.openAdvisorOf(project.id);
+          }}
+        >
+          Open
+        </Button>
+      </div>
+    </article>
+  );
 }
 
 /** One question: where it comes from, who asks, and the question itself with its options. */

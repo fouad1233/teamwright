@@ -122,3 +122,21 @@
   font-size: 11px;
   letter-spacing: 0.02em;
 }
+
+/* What the Advisor wants: one line with the rule of brass, and the way to
+   the Advisor, where there is room to answer it. */
+.advisor {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) 0 var(--space-2) var(--space-4);
+  border-left: 2px solid var(--brass);
+}
+
+.wants {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--text-strong);
+  font-weight: 600;
+  line-height: 1.35;
+}

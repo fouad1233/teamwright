@@ -7,6 +7,7 @@ import { classNames } from '@/shared/lib/classNames';
 import { Button } from '@/shared/ui/Button';
 import { describeFailure } from '@/shared/ui/Toast';
 
+import { AdvisorView } from '../advisor/AdvisorView';
 import { BoardView } from '../board/BoardView';
 import { CalendarView } from '../calendar/CalendarView';
 import { GanttView } from '../gantt/GanttView';
@@ -32,6 +33,7 @@ const VIEWS: { view: ProjectView; label: string }[] = [
   { view: 'gantt', label: 'Gantt' },
   { view: 'calendar', label: 'Calendar' },
   { view: 'team', label: 'Team' },
+  { view: 'advisor', label: 'Advisor' },
 ];
 
 /** The team while it is loading. It is one value, so that nothing is drawn again for it. */
@@ -173,5 +175,7 @@ function ChosenView({ view, project, tasks }: ChosenViewProps) {
       return <CalendarView project={project} tasks={tasks} />;
     case 'team':
       return <TeamView project={project} tasks={tasks} />;
+    case 'advisor':
+      return <AdvisorView project={project} />;
   }
 }
