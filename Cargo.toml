@@ -13,6 +13,7 @@ publish = false
 [workspace.dependencies]
 teamwright-application = { path = "crates/application" }
 teamwright-domain = { path = "crates/domain" }
+teamwright-runtime = { path = "crates/runtime" }
 teamwright-storage = { path = "crates/storage" }
 
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
