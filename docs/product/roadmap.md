@@ -6,7 +6,7 @@ live, then one agent, then the Advisor, then a team.
 
 Status marks: ✅ done · 🚧 in progress · ⬜ not started.
 
-## M0 · Foundations 🚧
+## M0 · Foundations ✅
 
 The ground everything else stands on.
 
@@ -15,7 +15,7 @@ The ground everything else stands on.
 - ✅ Architecture overview and contributing guide
 - ✅ Design philosophy and key visual
 - ✅ Development documented, including Windows without administrator rights
-- ⬜ Continuous integration: format, lint, test, build
+- ✅ Continuous integration: format, lint, test, build, on Linux and Windows
 
 ## M1 · Walking skeleton 🚧
 
@@ -32,6 +32,8 @@ A desktop app that opens and manages projects and tasks without any AI.
 - ✅ A team for every project: AI specialists and people that tasks can be
   given to. They cannot work yet
 - ✅ Screenshots of the real application, taken by a tool
+- ✅ Subtasks shown under their task on the board and in the list, behind a
+  fold
 - ⬜ Editing the statuses of a workflow
 - ⬜ Activity history of a task
 - ⬜ Renaming and archiving a project from the interface

@@ -30,7 +30,7 @@ src/
   features/
     projects/         Sidebar, project header, creating a project, first run
     board/            The board: lanes, cards, drag and drop
-    tasks/            The task panel, the list, badges, and task logic
+    tasks/            The task panel, the list, badges, the fold of subtasks, task logic
     team/             The team: avatars, the Team view, adding and changing a member
   shared/
     api/              The Backend interface and its two implementations
@@ -51,6 +51,11 @@ Rules of the interface:
 - **The team of the open project is known everywhere.** `TeamProvider` puts
   it in a context, so a card, a row or a menu can show who a task is given
   to without the team being handed down to it.
+- **What belongs to the window stays in the window.** Which view is open
+  (`app/navigation.tsx`) and which tasks show their subtasks
+  (`features/tasks/subtaskFolds.ts`) say something about the window and
+  nothing about the project. They are kept in the storage of the web view
+  and never sent to the backend.
 - **Two backends.** `TauriBackend` calls the shell. `DemoBackend` runs in the
   browser's memory with a sample project, so the interface can be developed
   and tested without Rust.
@@ -77,6 +82,10 @@ The interface follows the design philosophy in
   circle. An AI specialist is a block with its initials in its own color,
   like a part of the logo. A person is a circle with initials. Nobody is a
   dashed outline.
+- A subtask is shown under its task, never next to it: as a smaller card on
+  the board and as a row set in on the list, each with the mark of its own
+  status. The task ends in a fold (`SubtaskFold`) that counts its subtasks
+  and shows one block for each in the pigment of its status.
 
 ## Commands
 

@@ -74,6 +74,21 @@ edit that is not saved yet.
 **Delete a task** from the menu with the three dots in the task's panel. Its
 subtasks are deleted with it, and tasks that waited for it stop waiting.
 
+### Subtasks
+
+A task can be divided into subtasks, and a subtask can have subtasks of its
+own. Add one with *Add task* under *Subtasks* in the panel of the task.
+
+On the board and in the list a subtask is shown under its task, not next to
+it. A task with subtasks has a small row that says how many there are, with
+one block for each in the color of its status. Press it to unfold the
+subtasks, and again to fold them away. Teamwright remembers which tasks you
+unfolded.
+
+A subtask has a status of its own, which the mark in front of its title
+shows. It stays under its task whatever that status is. To change it, open
+the subtask.
+
 ### Tasks that wait for other tasks
 
 A task can wait for any number of other tasks of the same project. On the
@@ -131,14 +146,16 @@ of their statuses.
 
 **Board.** One lane for every status. Drag a card to another lane to change
 its status, or up and down to change its place. An overdue date is shown in
-red.
+red. The number next to the name of a status counts the tasks in its lane.
+[Subtasks](#subtasks) are not counted: they travel with their task.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="../screenshots/board-dark.png">
   <img alt="The board of a project, with one lane for each of its five statuses" src="../screenshots/board-light.png">
 </picture>
 
-**List.** One table of all tasks, grouped by status.
+**List.** One table of all tasks, grouped by status, with the subtasks of a
+task set in under it.
 
 **Team.** You and the members of the team, each with its tasks. See
 [the team](#the-team).
