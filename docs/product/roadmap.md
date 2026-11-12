@@ -17,7 +17,7 @@ The ground everything else stands on.
 - ✅ Development documented, including Windows without administrator rights
 - ✅ Continuous integration: format, lint, test, build, on Linux and Windows
 
-## M1 · Walking skeleton 🚧
+## M1 · Walking skeleton ✅
 
 A desktop app that opens and manages projects and tasks without any AI.
 
@@ -30,7 +30,7 @@ A desktop app that opens and manages projects and tasks without any AI.
 - ✅ Demo backend, so the interface also runs in a plain browser
 - ✅ Smoke test that drives the real application
 - ✅ A team for every project: AI specialists and people that tasks can be
-  given to. They cannot work yet
+  given to
 - ✅ Screenshots of the real application, taken by a tool
 - ✅ Subtasks shown under their task on the board and in the list, behind a
   fold
@@ -38,18 +38,29 @@ A desktop app that opens and manages projects and tasks without any AI.
   remove
 - ✅ Renaming, archiving, restoring and deleting a project from the
   interface
-- ⬜ Activity history of a task
+- ✅ History of a task, read from the log of operations
 
-## M2 · One teammate ⬜
+## M2 · One teammate 🚧
 
 A single specialist that really works through Claude Code.
 
-- ⬜ Find the installed Claude Code and guide the user through sign-in
-- ⬜ Start, stop and resume a session; stream its activity live
-- ⬜ Capture token usage per turn and reported plan limits
-- ⬜ Specialist profiles: built-in set and user-defined
+- ✅ Find the installed Claude Code, say whether the user is signed in to
+  it, and say what to do if not
+- ✅ Start, stop and resume a session; show every step as it happens
+- ✅ A specialist carries out a task that was given to it: it gets a brief,
+  works in the folder of the project, reports, and can be answered
+- ✅ Ask a specialist something that is not about a task
+- ✅ Token usage of every turn
+- ✅ A specialist reads and writes files in the folder of its project and
+  can do nothing else
+- 🚧 Open the session of a specialist in the Claude desktop app: built, not
+  yet run against the real app
+- ⬜ Run a Claude Code that npm installed. On Windows that is a script,
+  and a turn on it is refused with the reason
+- ⬜ The limits of the plan that the program reports
+- ⬜ Specialist profiles: model, effort and instructions; a built-in set and
+  user-defined ones
 - ⬜ Discover the user's skills, plugins and MCP connectors
-- ⬜ Chat with a teammate; let it carry out a task that was given to it
 
 ## M3 · The Advisor ⬜
 

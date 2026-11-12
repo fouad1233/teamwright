@@ -1,8 +1,8 @@
 # User manual
 
 This manual describes what Teamwright can do today. It grows with every
-milestone. This version plans and tracks projects and lets you put together
-a team. The members of the team cannot work yet.
+milestone. This version plans and tracks projects, lets you put together a
+team, and lets the AI specialists on it carry out tasks, one at a time.
 
 ## Projects
 
@@ -44,6 +44,11 @@ the project that is open. Teamwright reopens the last project you worked in.
 The statuses are the steps a task goes through, and the lanes of the
 board. A project starts with the statuses of its workflow, and you can
 make them your own under *Statuses* in the menu of the project.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="../screenshots/statuses-dark.png">
+  <img alt="The dialog for the statuses of a project: one row for each, with its color, its name and its meaning" src="../screenshots/statuses-light.png">
+</picture>
 
 Every status has a name, a color, and a meaning. The meaning is one of
 four, and it is what Teamwright goes by, whatever the status is called:
@@ -110,8 +115,10 @@ everything about it:
 | Estimate | The expected working time. Type it as `90m`, `2h` or `1h 30m`. |
 | Start, Due | The planned dates. A task cannot start after it is due. |
 | Description | Details, acceptance criteria, links. |
+| Work | What the AI specialist the task is given to does with it. See [the work of a specialist](#the-work-of-a-specialist). |
 | Waits for | The tasks that must be finished before this one can start. |
 | Subtasks | The parts of this task. |
+| History | What has happened to the task since it was opened, the latest change first: who it was given to, where it moved, which dates it got. |
 
 Changes are saved as you make them. The title, the description and the
 estimate are saved when you leave the field or press Enter. Escape undoes an
@@ -154,9 +161,10 @@ specialist or a person, and a task can be given to either.
   <img alt="The Team view: you as the manager, then the members of the team" src="../screenshots/team-light.png">
 </picture>
 
-**What a member can do today.** A member can be given tasks, and that is
-all. An AI specialist does not carry out its tasks yet; that is the next
-milestone. A person is a name: Teamwright does not notify them.
+**What a member can do today.** An AI specialist carries out the tasks you
+give it and answers your questions; see
+[the work of a specialist](#the-work-of-a-specialist). A person is a name
+that tasks can be given to: Teamwright does not notify them.
 
 **Add a member** with *Add member* at the bottom of the *Team* view.
 
@@ -188,6 +196,76 @@ shown by its initials in its color.
 In the *Team* view, the blocks next to a member are its tasks, in the colors
 of their statuses.
 
+## The work of a specialist
+
+An AI specialist is a session of Claude Code, the program of Anthropic, that
+runs on your computer under your own account. Teamwright starts it, shows
+what it does, and keeps the record.
+
+**What you need.** Claude Code has to be installed on this computer, and you
+have to be signed in to it. The *Team* view says how that stands: the
+version it found and how you are signed in, or what is missing. To sign in,
+open a terminal and run `claude auth login`. Teamwright never asks for your
+password and never reads how you are signed in.
+
+**Start the work.** Open a task that is given to an AI specialist and press
+*Start work*. The specialist gets a brief: the task and its description,
+what it is a part of, its parts, the tasks it builds on and how they stand,
+when it is due, and what you expect back. The task moves to the first status
+in which work is under way.
+
+**Follow it.** The panel of the task shows every step as it happens: what
+the specialist writes, and which files it reads and changes. The card of
+the task carries a brass mark while somebody works on it, and the *Team*
+view says what each specialist is working on. *Stop* ends the work at once.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="../screenshots/specialist-working-dark.png">
+  <img alt="A task that a specialist is working on: the panel says Working and offers Stop, and the card of the task carries a brass mark" src="../screenshots/specialist-working-light.png">
+</picture>
+
+**Read the report.** A specialist ends with a report: what it did, which
+files it created or changed, what it decided on its own, and what is still
+open. The task moves on to the first status in which work is checked. Under
+the report are the model, the tokens the turn used and how long it took.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="../screenshots/specialist-report-dark.png">
+  <img alt="The report of a specialist under the steps it took: what it did, the files it changed, what it decided on its own and what is open" src="../screenshots/specialist-report-light.png">
+</picture>
+
+**Answer.** Write under the report to accept the work, to correct it or to
+ask for more. The specialist goes on in the same session, so it remembers
+what it did, and the task goes back into work until it reports again.
+Teamwright never calls a task done by itself. That is yours to say.
+
+**Ask something.** *Ask something* in the menu of a specialist in the
+*Team* view opens a conversation that is not about a task.
+
+**Where the work is.** A specialist works in the folder of its project,
+`Teamwright\<key of the project>` in your documents. What it produces are
+files in that folder, yours to open with any program.
+
+**What a specialist may do.** It may read, search, create and change files
+in the folder of its project. It cannot run commands, it cannot fetch
+anything from the internet, and it cannot touch a file outside that folder.
+When a task needs one of these, the specialist says so in its report
+instead of working around it.
+[Why it is this strict](../decisions/0011-what-a-specialist-may-do.md).
+
+**One thing at a time.** A specialist works on one thing at a time. While it
+works it cannot be asked something else and cannot be removed from the team,
+and its task and its project cannot be deleted or put away. Stop it first.
+
+**When something goes wrong.** A turn that fails says why in words, for
+example that Claude Code is not signed in. Answer it to try again. If you
+close Teamwright while a specialist works, the specialist is stopped, and
+its turn says so the next time you look.
+
+**What it costs.** A specialist uses your own Claude plan or account,
+exactly as if you had used Claude Code yourself. Nothing goes through
+Teamwright or its authors.
+
 ## Views
 
 **Board.** One lane for every status. Drag a card to another lane to change
@@ -202,6 +280,11 @@ red. The number next to the name of a status counts the tasks in its lane.
 
 **List.** One table of all tasks, grouped by status, with the subtasks of a
 task set in under it.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="../screenshots/list-dark.png">
+  <img alt="The list of a project: its tasks in rows, grouped by status" src="../screenshots/list-light.png">
+</picture>
 
 **Gantt.** The plan against time: one row for every task, in the order of
 the schedule, and a bar from its start to its due date.
@@ -221,6 +304,11 @@ the schedule, and a bar from its start to its due date.
   Escape puts the bar back.
 - Press a bar or the name of a task to open it.
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="../screenshots/gantt-dark.png">
+  <img alt="The Gantt chart of a project: a bar for every task against the days, and lines between tasks that wait for each other" src="../screenshots/gantt-light.png">
+</picture>
+
 **Calendar.** One month at a time. A task lies on the days from its start
 to its due date, and a task with one date lies on that day. The arrows go
 to the month before and after, and *Today* comes back. A week grows with
@@ -228,13 +316,13 @@ what is in it; a day with more than six tasks gets a note such as
 *+2 more*, which opens the list of all its tasks. Tasks without any date
 are not on the calendar: their number is shown at the top right.
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="../screenshots/calendar-dark.png">
+  <img alt="The calendar of a project: a month of weeks with the tasks on their days" src="../screenshots/calendar-light.png">
+</picture>
+
 **Team.** You and the members of the team, each with its tasks. See
 [the team](#the-team).
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="../screenshots/list-dark.png">
-  <img alt="The list of a project: its tasks in rows, grouped by status" src="../screenshots/list-light.png">
-</picture>
 
 ## Keyboard
 
@@ -253,9 +341,15 @@ are not on the calendar: their number is shown at the top right.
 
 ## Where your data is
 
-Everything is stored in one database file on your computer, in the folder
-your operating system gives to the application
-(`%APPDATA%\dev.teamwright.app` on Windows). Nothing is sent anywhere.
+Your projects, tasks, teams and the record of what the specialists did are
+stored in one database file on your computer, in the folder your operating
+system gives to the application (`%APPDATA%\dev.teamwright.app` on Windows).
+What the specialists produce are files in the folders of the projects,
+`Teamwright` in your documents.
+
+Teamwright itself sends nothing anywhere. A specialist that works is Claude
+Code at work: it sends what it reads and writes to Anthropic under your
+account, as it does when you use it yourself.
 
 ## Light and dark
 

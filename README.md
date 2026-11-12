@@ -15,13 +15,16 @@ tasks across a real project board, hand results to each other, and come to you
 with a clear decision request whenever a choice is yours to make.
 
 > **Status: pre-alpha.** The project started on 11 November 2026 and is built
-> in the open, one small commit at a time. What works today is the ground
-> floor: a desktop app that keeps projects and tasks in a local database,
-> shows them on a board, in a list, on a Gantt chart and on a calendar, and
-> lets you put together a team and give tasks to its members. The members cannot work yet: the AI team
-> described below is the next milestone. There is no installer; the app can
-> be [built from source](docs/development/README.md). The
-> [roadmap](docs/product/roadmap.md) says exactly what is done.
+> in the open, one small commit at a time. What works today: a desktop app
+> that keeps projects and tasks in a local database, shows them on a board,
+> in a list, on a Gantt chart and on a calendar, and lets you put together a
+> team. An AI specialist on that team carries out a task through your own
+> Claude Code: it gets a brief, works in the folder of the project, shows
+> every step, reports, and can be answered. What is still missing is the
+> team as a team: the Advisor that proposes it, specialists that hand work
+> to each other, and the inbox for the decisions they bring you. There is no
+> installer; the app can be [built from source](docs/development/README.md).
+> The [roadmap](docs/product/roadmap.md) says exactly what is done.
 
 ## What it looks like today
 
@@ -36,14 +39,24 @@ with a clear decision request whenever a choice is yours to make.
 </picture>
 
 <picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/specialist-report-dark.png">
+  <img alt="A specialist has finished a task: the panel of the task shows the steps it took, its report in four points, and the model, the tokens and the time the work took" src="docs/screenshots/specialist-report-light.png">
+</picture>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/gantt-dark.png">
+  <img alt="The Gantt chart of the sample project: a bar for every task against the days, with lines from each task to the tasks that wait for it" src="docs/screenshots/gantt-light.png">
+</picture>
+
+<picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/team-dark.png">
   <img alt="The team of the sample project: the manager and three AI specialists, each with what it is there for and a tally of its tasks" src="docs/screenshots/team-light.png">
 </picture>
 
-These are pictures of the application as it runs today, on a sample project.
-They are [taken from the real program](docs/screenshots/README.md), not drawn.
-The specialists in them have names and tasks, and that is all they have so
-far: none of them can work yet.
+These are pictures of the application as it runs today. They are
+[taken from the real program](docs/screenshots/README.md), not drawn. The
+specialist in the third picture is a real one: a session of Claude Code that
+wrote the file it reports on.
 
 ## The problem
 
