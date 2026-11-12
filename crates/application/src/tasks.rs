@@ -514,7 +514,12 @@ mod tests {
         let member_repository = Arc::new(InMemoryMemberRepository::default());
         let clock = Arc::new(ManualClock::starting_at(start_of_day()));
         Workspace {
-            projects: ProjectService::new(project_repository.clone(), clock.clone()),
+            projects: ProjectService::new(
+                project_repository.clone(),
+                task_repository.clone(),
+                member_repository.clone(),
+                clock.clone(),
+            ),
             tasks: TaskService::new(
                 project_repository.clone(),
                 task_repository.clone(),

@@ -14,7 +14,7 @@ use teamwright_domain::{
 use crate::codec;
 use crate::database::Database;
 use crate::error::DatabaseError;
-use crate::operations::Entity;
+use crate::operations::{Entity, OperationRecorder};
 
 /// The columns of the `projects` table that every query reads.
 const PROJECT_COLUMNS: &str =
@@ -211,6 +211,60 @@ impl ProjectRepository for SqliteProjectRepository {
                 .collect()
         })
     }
+
+    fn delete(&self, id: ProjectId) -> Result<(), StorageError> {
+        self.database.write(|transaction, operations| {
+            let id = id.to_string();
+            // The database would remove the tasks and members of the project
+            // by itself, but without a trace in the log. They are removed
+            // here one by one, each with its own entry, like any other
+            // deletion. Normally the use case has removed them already and
+            // nothing is left to do.
+            delete_rows_of_project(transaction, operations, "tasks", Entity::Task, &id)?;
+            delete_rows_of_project(transaction, operations, "members", Entity::Member, &id)?;
+            // The statuses are part of the project in the log, so their
+            // removal is covered by the deletion of the project.
+            transaction.execute(
+                "DELETE FROM statuses WHERE project_id = :project_id",
+                named_params! { ":project_id": id },
+            )?;
+            let rows_removed = transaction.execute(
+                "DELETE FROM projects WHERE id = :id",
+                named_params! { ":id": id },
+            )?;
+            if rows_removed > 0 {
+                operations.record_delete(Entity::Project, &id)?;
+            }
+            Ok(())
+        })
+    }
+}
+
+/// Removes the rows of one table that belong to a project, and logs each
+/// removal. `table` is one of the fixed table names above, never input.
+fn delete_rows_of_project(
+    transaction: &Transaction<'_>,
+    operations: &mut OperationRecorder<'_>,
+    table: &str,
+    entity: Entity,
+    project_id: &str,
+) -> Result<(), DatabaseError> {
+    let ids: Vec<String> = transaction
+        .prepare(&format!(
+            "SELECT id FROM {table} WHERE project_id = :project_id"
+        ))?
+        .query_map(named_params! { ":project_id": project_id }, |row| {
+            row.get(0)
+        })?
+        .collect::<Result<_, _>>()?;
+    for id in ids {
+        transaction.execute(
+            &format!("DELETE FROM {table} WHERE id = :id"),
+            named_params! { ":id": id },
+        )?;
+        operations.record_delete(entity, &id)?;
+    }
+    Ok(())
 }
 
 /// Writes the `projects` row.

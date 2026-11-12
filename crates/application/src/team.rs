@@ -242,7 +242,12 @@ mod tests {
         let start_of_day = chrono::Utc.with_ymd_and_hms(2026, 11, 12, 9, 0, 0).unwrap();
         let clock = Arc::new(ManualClock::starting_at(start_of_day));
         Workspace {
-            projects: ProjectService::new(projects.clone(), clock.clone()),
+            projects: ProjectService::new(
+                projects.clone(),
+                tasks.clone(),
+                members.clone(),
+                clock.clone(),
+            ),
             team: TeamService::new(
                 projects.clone(),
                 members.clone(),

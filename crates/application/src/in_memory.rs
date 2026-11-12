@@ -39,6 +39,11 @@ impl ProjectRepository for InMemoryProjectRepository {
         // order lists the oldest project first.
         Ok(lock(&self.projects).values().cloned().collect())
     }
+
+    fn delete(&self, id: ProjectId) -> Result<(), StorageError> {
+        lock(&self.projects).remove(&id);
+        Ok(())
+    }
 }
 
 /// Keeps tasks in memory.

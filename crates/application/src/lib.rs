@@ -29,6 +29,6 @@ pub use agent_runtime::{
 pub use clock::SystemClock;
 pub use error::ApplicationError;
 pub use ports::{Clock, MemberRepository, ProjectRepository, StorageError, TaskRepository};
-pub use projects::{NewProject, ProjectService, WorkflowTemplate};
+pub use projects::{NewProject, ProjectService, StatusProperties, WorkflowTemplate};
 pub use tasks::{NewTask, TaskService};
 pub use team::{NewMember, TeamService};

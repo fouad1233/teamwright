@@ -614,7 +614,12 @@ fn the_use_cases_work_on_the_real_database() {
     let task_repository = Arc::new(SqliteTaskRepository::new(database.clone()));
     let member_repository = Arc::new(SqliteMemberRepository::new(database));
     let clock = Arc::new(ManualClock::starting_at(moment(9)));
-    let projects = ProjectService::new(project_repository.clone(), clock.clone());
+    let projects = ProjectService::new(
+        project_repository.clone(),
+        task_repository.clone(),
+        member_repository.clone(),
+        clock.clone(),
+    );
     let tasks = TaskService::new(
         project_repository.clone(),
         task_repository.clone(),

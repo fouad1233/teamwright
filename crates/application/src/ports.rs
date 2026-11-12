@@ -63,6 +63,19 @@ pub trait ProjectRepository: Send + Sync {
     ///
     /// Returns an error if stored data could not be read.
     fn list(&self) -> Result<Vec<Project>, StorageError>;
+
+    /// Removes a project with its workflow, for good. The identifier of a
+    /// project that is not stored is ignored.
+    ///
+    /// The tasks and the team of the project are expected to be removed
+    /// through their own repositories first. An implementation whose storage
+    /// would otherwise keep them, or drop them without a trace, removes the
+    /// ones that are left together with the project.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the project could not be removed.
+    fn delete(&self, id: ProjectId) -> Result<(), StorageError>;
 }
 
 /// Stores tasks together with their dependencies.

@@ -51,9 +51,31 @@ pub enum ApplicationError {
     #[error("a task can only be given to a member of the team of its own project")]
     AssigneeFromAnotherTeam,
 
+    /// A status was to be removed while tasks are in it and no other status
+    /// was named for them.
+    #[error(
+        "the status \"{name}\" still has {}, which need another status to go to",
+        count_of_tasks(*.count)
+    )]
+    StatusInUse {
+        /// The name of the status.
+        name: String,
+        /// How many tasks are in it, subtasks included.
+        count: usize,
+    },
+
     /// Stored data could not be read or written.
     #[error("the data could not be read or written: {0}")]
     Storage(#[from] StorageError),
+}
+
+/// Writes a number of tasks: "1 task", "3 tasks".
+fn count_of_tasks(count: usize) -> String {
+    if count == 1 {
+        "1 task".to_owned()
+    } else {
+        format!("{count} tasks")
+    }
 }
 
 impl ApplicationError {
@@ -71,6 +93,7 @@ impl ApplicationError {
             Self::DependencyCycle { .. } => "dependency_cycle",
             Self::MemberNameTaken { .. } => "member_name_taken",
             Self::AssigneeFromAnotherTeam => "assignee_from_another_team",
+            Self::StatusInUse { .. } => "status_in_use",
             Self::Storage(_) => "storage_failed",
         }
     }

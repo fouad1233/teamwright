@@ -7,7 +7,7 @@ window or agent runtime.
 
 | Module | Contents |
 |---|---|
-| `projects` | `ProjectService`: start, find, list, rename, describe and archive projects |
+| `projects` | `ProjectService`: start, find, list, rename, describe, archive, restore and delete projects; add, change, move and remove the statuses of their workflows |
 | `tasks` | `TaskService`: open, change, move, connect and remove tasks |
 | `team` | `TeamService`: put members on the team of a project, change them, take them off |
 | `ports` | The interfaces the services need: `ProjectRepository`, `TaskRepository`, `MemberRepository`, `Clock` |
@@ -41,7 +41,17 @@ project, two members of one team cannot have the same name.
 
 ## What the services guarantee
 
-- Project keys are unique, including the keys of archived projects.
+- Project keys are unique, including the keys of archived projects. The key
+  of a deleted project is free again.
+- Archived projects are listed with the one put away last first. Restoring
+  one brings it back with its tasks and its team.
+- Deleting a project deletes its tasks and its team. The project itself goes
+  last, so a deletion that fails half-way can simply be repeated.
+- Changing a status between "done" and not done completes or reopens every
+  task in it, subtasks included.
+- A status that still has tasks is removed only when another status is
+  named for them (`status_in_use` otherwise). They go to the bottom of that
+  status in their order, and are completed or reopened by its category.
 - Task numbers count up per project and are never reused.
 - A new task goes to the bottom of its status.
 - Moving a task changes only that task, except in the rare case where its new
