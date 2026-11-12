@@ -24,6 +24,7 @@ mod codec;
 mod conversations;
 mod database;
 mod error;
+mod folder;
 mod members;
 mod merge;
 mod migrations;
@@ -38,6 +39,7 @@ mod tasks;
 
 pub use conversations::SqliteConversationRepository;
 pub use database::Database;
+pub use folder::FolderOfComputers;
 pub use members::SqliteMemberRepository;
 pub use operations::Operation;
 pub use places::SqlitePlacesRepository;

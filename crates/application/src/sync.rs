@@ -8,7 +8,10 @@
 //! other; it never looks inside the state an operation carries.
 
 use std::fmt;
+use std::path::Path;
 use std::str::FromStr;
+
+use crate::ports::StorageError;
 
 use teamwright_domain::{
     ComputerId, ConversationId, DomainError, ProjectId, TaskId, Timestamp, TurnId,
@@ -148,6 +151,120 @@ pub struct SyncNotice {
     pub task_id: Option<TaskId>,
     /// What happened, in words.
     pub message: String,
+}
+
+/// The version of the format of the files in the sync folder. It changes
+/// only when the meaning of an existing field changes or a field is
+/// removed; adding a field or an entity does not change it.
+pub const SYNC_FORMAT: u32 = 1;
+
+/// What a computer says about itself in the sync folder.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ComputerCard {
+    /// Its identity.
+    pub id: ComputerId,
+    /// The name the manager gave it, such as "Desk".
+    pub name: String,
+    /// The version of Teamwright it runs.
+    pub version: String,
+    /// The format of its files.
+    pub format: u32,
+    /// When it last wrote into the folder.
+    pub written_at: Timestamp,
+}
+
+/// A computer that has a folder of its own in the sync folder.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FoundComputer {
+    /// Its identity, from the name of its folder.
+    pub id: ComputerId,
+    /// What it says about itself, or nothing if its card is missing or
+    /// cannot be read (yet).
+    pub card: Option<ComputerCard>,
+}
+
+/// What a file of operations in the sync folder holds.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FileContent {
+    /// The whole file, with its operations in order.
+    Complete(Vec<ExchangedOperation>),
+    /// The file is not whole yet, or not there any more: a sync program is
+    /// still copying it, or it was cut off. It is looked at again next
+    /// time.
+    NotYet,
+    /// The file was written in a newer format than this version reads.
+    NewerFormat(u32),
+}
+
+/// The folder that computers keep in step through. Each computer writes
+/// only below its own folder, `devices/<identity>/`, and never changes a
+/// file once its name appears.
+pub trait SyncFolder: Send + Sync {
+    /// Writes the card of a computer, replacing the one it had.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the folder cannot be written.
+    fn write_card(&self, root: &Path, card: &ComputerCard) -> Result<(), StorageError>;
+
+    /// Writes operations of a computer into a new file, and returns its
+    /// name. The operations are in order and follow each other.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the folder cannot be written.
+    fn write_file(
+        &self,
+        root: &Path,
+        computer: ComputerId,
+        operations: &[ExchangedOperation],
+    ) -> Result<String, StorageError>;
+
+    /// The computers that have a folder in the sync folder.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the folder cannot be read.
+    fn computers(&self, root: &Path) -> Result<Vec<FoundComputer>, StorageError>;
+
+    /// The names of the files of a computer that hold an operation numbered
+    /// above `after`, in order.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the folder cannot be read.
+    fn files_of(
+        &self,
+        root: &Path,
+        computer: ComputerId,
+        after: u64,
+    ) -> Result<Vec<String>, StorageError>;
+
+    /// Reads one file of a computer.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the folder cannot be read. A file that is not
+    /// whole is not an error but [`FileContent::NotYet`].
+    fn read_file(
+        &self,
+        root: &Path,
+        computer: ComputerId,
+        name: &str,
+    ) -> Result<FileContent, StorageError>;
+
+    /// Joins the small files of a computer into one, when there are many,
+    /// and removes them. Returns the name of the new file, if one was
+    /// written.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the folder cannot be read or written.
+    fn join_small_files(
+        &self,
+        root: &Path,
+        computer: ComputerId,
+    ) -> Result<Option<String>, StorageError>;
 }
 
 #[cfg(test)]

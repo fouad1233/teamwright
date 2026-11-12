@@ -29,6 +29,7 @@ involved.
 | `apply` | Writes the rows of a thing from a logged state, and removes them, without logging the thing itself |
 | `take_in` | Takes in the operations of another computer: merge, deletions, waiting, repairs |
 | `notices` | What syncing tells the manager, kept on this computer |
+| `folder` | `FolderOfComputers`: the files in the sync folder, which implements the port `SyncFolder` |
 | `codec` | The text forms of moments, dates, identifiers and enumerations |
 | `error` | The crate's internal error type and its conversion to `StorageError` |
 
@@ -257,6 +258,41 @@ far the latest stamp is ahead of this computer's clock. The notices
 (`notices` table, version 11) are bookkeeping of syncing and are not logged:
 `Database::notices` lists them, `Database::dismiss_notice` forgets one. The
 history of a task passes over operations that wait.
+
+## The files in the sync folder
+
+`FolderOfComputers` implements the port `SyncFolder` of the application
+crate. It knows nothing of SQLite. A computer writes only below its own
+folder:
+
+```
+<chosen folder>/devices/<identity>/computer.json
+<chosen folder>/devices/<identity>/log/000000000001-000000004211.jsonl
+```
+
+- **The card**, `computer.json`, says who the computer is: its identity,
+  its name, the version of Teamwright and the format of its files, and when
+  it last wrote. It is written under a temporary name and renamed over the
+  old one, so a reader sees the old card or the new one.
+- **A log file** is named by the first and the last number it holds, padded
+  to twelve digits. Its first line is a header (`format`, `computer`,
+  `first`, `last`), every line after it one operation (`sequence`, `stamp`,
+  `entity`, `id`, `kind`, and `state` with `field_stamps` for an upsert or
+  `seen` for a deletion), and its last line a footer (`count`, `bytes`
+  before it). It is written as `.writing-<random>`, flushed to the disk and
+  renamed; it never changes afterwards.
+- **Reading** takes only names of the exact pattern, so a temporary file, a
+  "conflicted copy" a sync program made and a file of another program are
+  passed over. A file whose footer does not match what was read, that does
+  not end in a newline, or that has a line that is not an operation, is
+  `NotYet` and looked at again next time. A header of a newer format is
+  reported as `NewerFormat`.
+- **Joining.** When a computer has more than 64 files smaller than 256 KiB,
+  `join_small_files` writes one file that covers all of its operations and
+  then removes the others. A reader that read some of the small files takes
+  from the joined one only the numbers it has not read.
+
+`tests/folder.rs` runs all of this in a temporary folder of its own.
 
 ## The clock stamp
 
