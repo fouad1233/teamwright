@@ -30,6 +30,7 @@ was considered.
 | [0012](0012-a-specialist-asks-through-a-tool.md) | Let a specialist ask the manager through a tool of its own | Accepted |
 | [0013](0013-the-folders-of-a-project.md) | Give a project a work folder the manager can choose, and folders that are only read | Accepted |
 | [0014](0014-the-advisor-plans-through-two-tools.md) | Let the Advisor interview and propose through two tools | Accepted |
+| [0015](0015-light-where-something-happens.md) | Let light fall only where something happens or waits for the manager | Accepted |
 
 ## Template
 

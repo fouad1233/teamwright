@@ -18,13 +18,22 @@ as a material of its own, planed flat and given the largest share of the
 sheet, so that the few dense passages read as deliberate concentrations of
 labor.
 
-Color comes from the drafting table. The ground is paper or graphite, warm
-rather than neutral, and the drawing is ink. One metal, brass, is used the way
-an instrument maker uses it: sparingly, at the single point where the parts
-are held. Any further color is pigment, slightly earthen, laid down flat like
-a draftsman's pencils and reserved strictly for telling things apart. Nothing
-glows, nothing fades into anything else, and no hue is present that does not
-carry a meaning that could be written in a legend.
+Color comes from the drafting table, worked late. The ground is paper or
+night, warm rather than neutral, and the drawing is ink. One metal, a
+burnished gilt, is used the way an instrument maker uses brass: sparingly, at
+the single point where the parts are held. Any further color is pigment,
+slightly earthen, laid down flat like a draftsman's pencils and reserved
+strictly for telling things apart. No hue is present that does not carry a
+meaning that could be written in a legend, and light is no exception. It
+falls only where something is happening or where the next move is the
+reader's, the way a lamp is lit over the one bench where work goes on, and
+nowhere else. Every light stands beside a mark that says the same thing, so
+the sheet still reads when the lamp is out.
+
+Movement is held to the same economy. A part arrives by slowing into its
+place and leaves by gathering speed; leaving is quicker than arriving.
+Nothing bounces, nothing drifts for its own sake, and only work that is
+really going on moves for longer than a breath.
 
 Scale is a conversation between the very large and the very small. Broad,
 quiet fields and bold assembled masses are annotated by marks at the edge of
