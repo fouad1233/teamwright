@@ -34,6 +34,18 @@ involved.
   ([decision 0007](../../docs/decisions/0007-local-first-storage.md)).
 - **Each database file has a device identity**, created when the file is
   first opened and stored in `meta`.
+- **Statuses are part of their project.** They have rows of their own in
+  `statuses`, but the log keeps them inside the state of the project. Saving
+  a project updates the rows of its statuses in place (name, category, color,
+  position), adds new ones and deletes the ones the workflow no longer has;
+  the logged project then lists the statuses it has now. A status that a
+  task is still in cannot be deleted: the database refuses, and nothing is
+  written.
+- **Deleting a project is logged piece by piece.** In one transaction, every
+  task and every member that still belongs to the project is deleted and
+  logged as a `delete` of its own, then the statuses and the project, which
+  is logged last. The database would otherwise remove those rows by itself,
+  through `ON DELETE CASCADE`, without a trace in the log.
 
 Stored values are checked when they are read. A row that breaks a rule of the
 domain is reported as damaged data and never turned into an invalid object.

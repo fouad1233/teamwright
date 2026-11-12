@@ -11,12 +11,12 @@ use chrono::{TimeDelta, TimeZone, Utc};
 use teamwright_application::in_memory::ManualClock;
 use teamwright_application::{
     MemberRepository, NewMember, NewProject, NewTask, ProjectRepository, ProjectService,
-    TaskRepository, TaskService, TeamService, WorkflowTemplate,
+    StatusProperties, TaskRepository, TaskService, TeamService, WorkflowTemplate,
 };
 use teamwright_domain::{
     Assignee, CalendarDate, Color, Member, MemberId, MemberKind, MemberName, Priority, Project,
-    ProjectKey, ProjectName, Rank, Schedule, Status, StatusCategory, StatusName, Task, TaskDraft,
-    TaskId, TaskTitle, Timestamp, Workflow,
+    ProjectKey, ProjectName, Rank, Schedule, Status, StatusCategory, StatusId, StatusName, Task,
+    TaskDraft, TaskId, TaskTitle, Timestamp, Workflow,
 };
 use teamwright_storage::{
     Database, SqliteMemberRepository, SqliteProjectRepository, SqliteTaskRepository,
@@ -190,6 +190,169 @@ fn projects_are_listed_oldest_first_each_with_its_own_workflow() {
     assert_eq!(listed, [older, newer]);
     assert_eq!(listed[0].workflow().statuses().len(), 4);
     assert_eq!(listed[1].workflow().statuses().len(), 5);
+}
+
+#[test]
+fn changing_and_reordering_statuses_updates_their_rows_in_place() {
+    let store = Store::in_memory();
+    let mut project = store.project("Smart sensor node");
+    let in_test = project
+        .workflow()
+        .first_in(StatusCategory::Review)
+        .unwrap()
+        .id();
+    // A task in the status: if its row were deleted and inserted again, the
+    // database would refuse, because the task refers to it.
+    let mut task = new_task(&project, 1, "Select the sensors");
+    let status = project.workflow().status(in_test).unwrap().clone();
+    task.move_to(&status, Rank::FIRST, moment(10));
+    store.tasks.save(&task).unwrap();
+
+    project
+        .change_status(
+            in_test,
+            StatusName::parse("On the bench").unwrap(),
+            StatusCategory::Active,
+            Color::Teal,
+        )
+        .unwrap();
+    project.move_status(in_test, 0).unwrap();
+    store.projects.save(&project).unwrap();
+
+    let found = store.projects.find(project.id()).unwrap().unwrap();
+    assert_eq!(found, project);
+    assert_eq!(
+        found.workflow().statuses()[0].name().as_str(),
+        "On the bench"
+    );
+    assert_eq!(store.tasks.find(task.id()).unwrap(), Some(task));
+}
+
+#[test]
+fn a_removed_status_loses_its_row_and_the_log_shows_the_workflow_without_it() {
+    let store = Store::in_memory();
+    let mut project = store.project("Smart sensor node");
+    let in_revision = project.workflow().statuses()[2].id();
+
+    project.remove_status(in_revision).unwrap();
+    store.projects.save(&project).unwrap();
+
+    let found = store.projects.find(project.id()).unwrap().unwrap();
+    assert_eq!(found.workflow().statuses().len(), 4);
+    assert!(found.workflow().status(in_revision).is_none());
+    let log = store.database.operations().unwrap();
+    let last = log.last().unwrap();
+    assert_eq!(
+        (last.entity.as_str(), last.kind.as_str()),
+        ("project", "upsert")
+    );
+    let state: serde_json::Value = serde_json::from_str(last.payload.as_deref().unwrap()).unwrap();
+    let logged_ids: Vec<&str> = state["statuses"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|status| status["id"].as_str().unwrap())
+        .collect();
+    assert_eq!(logged_ids.len(), 4);
+    assert!(!logged_ids.contains(&in_revision.to_string().as_str()));
+}
+
+#[test]
+fn a_status_that_a_task_is_still_in_cannot_be_removed_from_storage() {
+    let store = Store::in_memory();
+    let mut project = store.project("Smart sensor node");
+    let task = store.task(&project, 1, "Design the board");
+    let log_before = store.database.operations().unwrap().len();
+    // The task is in the first status. Another "todo" status lets the
+    // domain accept the removal; the database still refuses it.
+    project
+        .add_status(Status::new(
+            StatusName::parse("Backlog").unwrap(),
+            StatusCategory::Todo,
+            Color::Gray,
+        ))
+        .unwrap();
+    project.remove_status(task.status_id()).unwrap();
+
+    assert!(store.projects.save(&project).is_err());
+    assert_eq!(store.database.operations().unwrap().len(), log_before);
+    assert_eq!(store.tasks.find(task.id()).unwrap(), Some(task));
+}
+
+#[test]
+fn deleting_a_project_removes_it_with_everything_that_belongs_to_it_and_logs_each_removal() {
+    let store = Store::in_memory();
+    let project = store.project("Smart sensor node");
+    let other = store.project("Display driver");
+    let board = store.task(&project, 1, "Design the board");
+    let mut firmware = new_task(&project, 2, "Write the firmware");
+    firmware.set_parent(Some(board.id()), moment(10)).unwrap();
+    firmware.block_on(board.id(), moment(10)).unwrap();
+    store.tasks.save(&firmware).unwrap();
+    let engineer = store.member(&project, "Hardware engineer");
+    let kept_task = store.task(&other, 1, "Write the driver");
+    let kept_member = store.member(&other, "Firmware engineer");
+    let log_before = store.database.operations().unwrap().len();
+
+    store.projects.delete(project.id()).unwrap();
+
+    assert_eq!(store.projects.find(project.id()).unwrap(), None);
+    assert_eq!(store.projects.list().unwrap(), std::slice::from_ref(&other));
+    assert!(
+        store
+            .tasks
+            .list_for_project(project.id())
+            .unwrap()
+            .is_empty()
+    );
+    assert!(
+        store
+            .members
+            .list_for_project(project.id())
+            .unwrap()
+            .is_empty()
+    );
+    assert_eq!(
+        store.tasks.list_for_project(other.id()).unwrap(),
+        [kept_task]
+    );
+    assert_eq!(
+        store.members.list_for_project(other.id()).unwrap(),
+        [kept_member]
+    );
+
+    let log = store.database.operations().unwrap();
+    let mut removals: Vec<(String, String)> = log[log_before..]
+        .iter()
+        .map(|op| {
+            assert_eq!(op.kind, "delete");
+            assert_eq!(op.payload, None);
+            (op.entity.clone(), op.entity_id.clone())
+        })
+        .collect();
+    removals.sort();
+    let mut expected = vec![
+        ("member".to_owned(), engineer.id().to_string()),
+        ("project".to_owned(), project.id().to_string()),
+        ("task".to_owned(), board.id().to_string()),
+        ("task".to_owned(), firmware.id().to_string()),
+    ];
+    expected.sort();
+    assert_eq!(removals, expected);
+    // The project is logged last, after everything that belonged to it.
+    assert_eq!(log.last().unwrap().entity, "project");
+}
+
+#[test]
+fn deleting_a_project_that_is_not_stored_logs_nothing() {
+    let store = Store::in_memory();
+
+    store
+        .projects
+        .delete(new_project("Never saved").id())
+        .unwrap();
+
+    assert!(store.database.operations().unwrap().is_empty());
 }
 
 // Tasks
@@ -692,4 +855,133 @@ fn the_use_cases_work_on_the_real_database() {
     assert!(team.list_for_project(project.id()).unwrap().is_empty());
     let nobody = Some(Assignee::Member(engineer.id()));
     assert!(tasks.assign(firmware.id(), nobody).is_err());
+}
+
+#[test]
+fn the_workflow_and_removal_use_cases_work_on_the_real_database() {
+    let database = Arc::new(Database::open_in_memory().unwrap());
+    let project_repository = Arc::new(SqliteProjectRepository::new(database.clone()));
+    let task_repository = Arc::new(SqliteTaskRepository::new(database.clone()));
+    let member_repository = Arc::new(SqliteMemberRepository::new(database.clone()));
+    let clock = Arc::new(ManualClock::starting_at(moment(9)));
+    let projects = ProjectService::new(
+        project_repository.clone(),
+        task_repository.clone(),
+        member_repository.clone(),
+        clock.clone(),
+    );
+    let tasks = TaskService::new(
+        project_repository.clone(),
+        task_repository.clone(),
+        member_repository.clone(),
+        clock.clone(),
+    );
+    let team = TeamService::new(
+        project_repository,
+        member_repository,
+        task_repository,
+        clock.clone(),
+    );
+    let project = projects
+        .create(NewProject {
+            name: "Smart sensor node".to_owned(),
+            workflow: WorkflowTemplate::Engineering,
+            ..NewProject::default()
+        })
+        .unwrap();
+    let in_revision = status_named(&project, "In revision");
+    let in_test = status_named(&project, "In test");
+    let pin_map = tasks
+        .create(NewTask {
+            status_id: Some(in_revision),
+            ..NewTask::titled(project.id(), "Define the pin map")
+        })
+        .unwrap();
+
+    // A new status, changed into a done status, completes the task in it.
+    let project = projects
+        .add_status(
+            project.id(),
+            StatusProperties {
+                name: "Waiting for parts".to_owned(),
+                category: StatusCategory::Active,
+                color: Color::Pink,
+            },
+        )
+        .unwrap();
+    let waiting = status_named(&project, "Waiting for parts");
+    let parts = tasks
+        .create(NewTask {
+            status_id: Some(waiting),
+            ..NewTask::titled(project.id(), "Order the parts")
+        })
+        .unwrap();
+    clock.advance(TimeDelta::hours(1));
+    projects
+        .change_status(
+            project.id(),
+            waiting,
+            StatusProperties {
+                name: "Parts arrived".to_owned(),
+                category: StatusCategory::Done,
+                color: Color::Green,
+            },
+        )
+        .unwrap();
+    assert_eq!(
+        tasks.get(parts.id()).unwrap().completed_at(),
+        Some(moment(10))
+    );
+
+    // Removing a status with a task needs a destination, then moves it.
+    let refused = projects.remove_status(project.id(), in_revision, None);
+    assert_eq!(refused.unwrap_err().code(), "status_in_use");
+    projects
+        .remove_status(project.id(), in_revision, Some(in_test))
+        .unwrap();
+    projects.move_status(project.id(), in_test, 0).unwrap();
+    let stored = projects.get(project.id()).unwrap();
+    assert_eq!(stored.workflow().statuses()[0].id(), in_test);
+    assert!(stored.workflow().status(in_revision).is_none());
+    assert_eq!(tasks.get(pin_map.id()).unwrap().status_id(), in_test);
+
+    // Archived, restored, and finally removed with its team.
+    team.add(NewMember {
+        project_id: project.id(),
+        name: "Hardware engineer".to_owned(),
+        kind: MemberKind::Agent,
+        responsibility: String::new(),
+    })
+    .unwrap();
+    projects.archive(project.id()).unwrap();
+    assert_eq!(projects.list_archived().unwrap().len(), 1);
+    projects.restore(project.id()).unwrap();
+    assert!(projects.list_archived().unwrap().is_empty());
+
+    projects.delete(project.id()).unwrap();
+
+    assert!(projects.list().unwrap().is_empty());
+    assert!(tasks.get(pin_map.id()).is_err());
+    let log = database.operations().unwrap();
+    assert!(
+        log.iter()
+            .any(|op| op.entity == "member" && op.kind == "delete")
+    );
+    let again = projects
+        .create(NewProject {
+            name: "Smart sensor node".to_owned(),
+            ..NewProject::default()
+        })
+        .unwrap();
+    assert_eq!(again.key().as_str(), "SSN");
+}
+
+fn status_named(project: &Project, name: &str) -> StatusId {
+    project
+        .workflow()
+        .statuses()
+        .iter()
+        .find(|status| status.name().as_str() == name)
+        .unwrap()
+        .id()
 }
