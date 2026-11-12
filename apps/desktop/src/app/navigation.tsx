@@ -2,20 +2,21 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 
 import type { Id } from '@/shared/api/types';
 
-/** The ways a project can be looked at. */
-export const PROJECT_VIEWS = [
-  'board',
-  'backlog',
-  'list',
-  'gantt',
-  'calendar',
-  'dashboard',
-  'team',
-  'office',
-  'advisor',
-] as const;
+/**
+ * The places of a project. Unlike its views, which show its tasks and
+ * belong to the manager, they are about the project itself and are always
+ * there.
+ */
+export const PROJECT_PLACES = ['team', 'office', 'advisor'] as const;
 
-export type ProjectView = (typeof PROJECT_VIEWS)[number];
+export type ProjectPlace = (typeof PROJECT_PLACES)[number];
+
+/**
+ * What the open project shows: one of its views, by its identifier, or one
+ * of its places. A view that is nothing, or that the project does not have
+ * (any more), means the first view of the project.
+ */
+export type Showing = { view: Id | null } | { place: ProjectPlace };
 
 /** Where the user is in the application. */
 interface Location {
@@ -27,8 +28,8 @@ interface Location {
   place: 'project' | 'inbox' | 'computers';
   /** The project that is open, or was open before the inbox, if any. */
   projectId: Id | null;
-  /** How the open project is shown. */
-  view: ProjectView;
+  /** What the open project shows. */
+  showing: Showing;
   /** The task whose details are open, if any. */
   taskId: Id | null;
   /** The specialist whose conversation with the manager is open, if any. */
@@ -47,7 +48,12 @@ export interface Navigation extends Location {
   openInbox: () => void;
   /** Opens the computers. The project that was open stays the one to come back to. */
   openComputers: () => void;
-  showView: (view: ProjectView) => void;
+  /** Shows a view of the open project. */
+  showView: (viewId: Id) => void;
+  /** Shows the first view of the open project, whatever it is. */
+  showFirstView: () => void;
+  /** Shows one of the places of the open project: its team, its office or its Advisor. */
+  showPlace: (place: ProjectPlace) => void;
   openTask: (taskId: Id) => void;
   /** Opens a task of any project, for example from the inbox. */
   openTaskOf: (projectId: Id, taskId: Id) => void;
@@ -59,16 +65,31 @@ export interface Navigation extends Location {
   closeChat: () => void;
 }
 
-/** Where the last project and view are remembered between sessions. */
+/** Where the last project and what it showed are remembered between sessions. */
 const STORAGE_KEY = 'teamwright.navigation';
+
+const FIRST_VIEW: Showing = { view: null };
 
 const STARTING_LOCATION: Location = {
   place: 'project',
   projectId: null,
-  view: 'board',
+  showing: FIRST_VIEW,
   taskId: null,
   chatMemberId: null,
 };
+
+/** Reads what a project showed from what was remembered, if it can be read. */
+function restoreShowing(stored: unknown): Showing {
+  if (typeof stored !== 'object' || stored === null) {
+    return FIRST_VIEW;
+  }
+  const { view, place } = stored as { view?: unknown; place?: unknown };
+  const knownPlace = PROJECT_PLACES.find((known) => known === place);
+  if (knownPlace) {
+    return { place: knownPlace };
+  }
+  return { view: typeof view === 'string' ? view : null };
+}
 
 /** Reads where the user was when the application was last closed. */
 function restoreLocation(): Location {
@@ -77,11 +98,11 @@ function restoreLocation(): Location {
     if (typeof stored !== 'object' || stored === null) {
       return STARTING_LOCATION;
     }
-    const { projectId, view } = stored as Partial<Location>;
+    const { projectId, showing } = stored as { projectId?: unknown; showing?: unknown };
     return {
       place: 'project',
       projectId: typeof projectId === 'string' ? projectId : null,
-      view: PROJECT_VIEWS.find((known) => known === view) ?? STARTING_LOCATION.view,
+      showing: restoreShowing(showing),
       taskId: null,
       chatMemberId: null,
     };
@@ -93,12 +114,14 @@ function restoreLocation(): Location {
 }
 
 /**
- * Remembers the project and the view. An open task or conversation is not
- * remembered, and neither is the inbox: the application opens on a project.
+ * Remembers the project and what it shows. An open task or conversation is
+ * not remembered, and neither is the inbox: the application opens on a
+ * project. A view is remembered by its identifier; if it has been removed by
+ * the next session, the project opens on its first view.
  */
 function rememberLocation(location: Location): void {
   try {
-    const remembered = { projectId: location.projectId, view: location.view };
+    const remembered = { projectId: location.projectId, showing: location.showing };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(remembered));
   } catch {
     // Without storage the location is simply not remembered.
@@ -137,10 +160,22 @@ export function NavigationProvider({ children }: { children: ReactNode }) {
         go({ place: 'project', projectId, taskId, chatMemberId: null });
       },
       openAdvisorOf: (projectId) => {
-        go({ place: 'project', projectId, view: 'advisor', taskId: null, chatMemberId: null });
+        go({
+          place: 'project',
+          projectId,
+          showing: { place: 'advisor' },
+          taskId: null,
+          chatMemberId: null,
+        });
       },
-      showView: (view) => {
-        go({ view });
+      showView: (viewId) => {
+        go({ showing: { view: viewId } });
+      },
+      showFirstView: () => {
+        go({ showing: FIRST_VIEW });
+      },
+      showPlace: (place) => {
+        go({ showing: { place } });
       },
       // The task and the conversation share one place at the side of the
       // window, so opening the one closes the other.

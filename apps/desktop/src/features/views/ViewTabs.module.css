@@ -1,0 +1,229 @@
+/*
+ * The row of tabs: the views of the project, the "+" that adds one, a quiet
+ * divider, and the places. The views shrink to what fits; the places never
+ * do.
+ */
+.row {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  gap: var(--space-3);
+  min-width: 0;
+  margin-top: var(--space-4);
+}
+
+.views,
+.measure {
+  display: flex;
+  gap: var(--space-3);
+}
+
+.views {
+  flex: 0 1 auto;
+  align-items: stretch;
+  min-width: 0;
+}
+
+/* A tab with the mark that opens its menu. */
+.slot {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+}
+
+.dragged {
+  z-index: 1;
+  opacity: 0.55;
+}
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  /* The line under the active tab sits on the header's own rule. */
+  margin-bottom: -1px;
+  border-bottom: 2px solid transparent;
+  color: var(--ink-faint);
+  font-weight: 550;
+  white-space: nowrap;
+  transition: color var(--duration-quick) var(--ease-settle);
+}
+
+.tab:hover {
+  color: var(--ink);
+}
+
+.active {
+  border-bottom-color: var(--ink);
+  color: var(--ink);
+}
+
+/* The mark of the kind of a view. A place has none, which is how the eye
+   tells the two apart before it reads. */
+.kind {
+  display: inline-flex;
+  color: var(--ink-faint);
+}
+
+.kind svg {
+  width: 14px;
+  height: 14px;
+  stroke-width: 1.75;
+}
+
+.name {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* A view that leaves tasks out says so on its tab. */
+.filtered {
+  display: inline-flex;
+  color: var(--ink-soft);
+}
+
+.filtered svg {
+  width: 12px;
+  height: 12px;
+  stroke-width: 2;
+}
+
+/* The mark that opens the menu of a view. It keeps its room, so the row does
+   not move, and shows on the open view, under the pointer and while open. */
+.menuButton {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 22px;
+  border-radius: var(--radius-control);
+  color: var(--ink-faint);
+  opacity: 0;
+  transition: opacity var(--duration-quick) var(--ease-settle);
+}
+
+.menuButton svg {
+  width: 12px;
+  height: 12px;
+  stroke-width: 2;
+}
+
+.slot:hover .menuButton,
+.shownSlot .menuButton,
+.menuButton[data-state='open'],
+.menuButton:focus-visible {
+  opacity: 1;
+}
+
+.menuButton:hover,
+.menuButton[data-state='open'] {
+  background: var(--hover);
+  color: var(--ink);
+}
+
+/* The views that do not fit. */
+.more {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-1);
+  height: 34px;
+  color: var(--ink-faint);
+  font-weight: 550;
+  white-space: nowrap;
+}
+
+.more:hover,
+.more[data-state='open'] {
+  color: var(--ink);
+}
+
+.more svg {
+  width: 12px;
+  height: 12px;
+  stroke-width: 2;
+}
+
+.addSlot {
+  display: flex;
+  flex: none;
+  align-items: center;
+}
+
+.divider {
+  flex: none;
+  align-self: center;
+  width: 1px;
+  height: 16px;
+  background: var(--rule-strong);
+}
+
+.places {
+  display: flex;
+  flex: none;
+  gap: var(--space-5);
+}
+
+/* The copy of the tabs that is measured. It takes no room and is not seen. */
+.measure {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.measure > * {
+  flex: none;
+}
+
+.renaming {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  margin-bottom: -1px;
+}
+
+.rename {
+  height: 24px;
+  padding: 0 var(--space-1);
+  border: 1px solid var(--brass);
+  border-radius: var(--radius-control);
+  outline: 2px solid var(--brass-soft);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 550;
+}
+
+/* The heading of a group of choices in a menu. */
+.menuHeading {
+  padding: var(--space-1) var(--space-2) 2px;
+  color: var(--ink-faint);
+}
+
+/* The mark in front of a choice of the filter: a picture of whose tasks. */
+.mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+}
+
+.mark > svg {
+  width: 14px;
+  height: 14px;
+  stroke-width: 1.75;
+}
+
+.add {
+  margin-top: 1px;
+}

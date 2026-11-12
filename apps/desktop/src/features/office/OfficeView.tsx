@@ -134,7 +134,7 @@ export function OfficeView({ project, tasks }: OfficeViewProps) {
         navigation.openChat(target.memberId);
         return;
       case 'advisor':
-        navigation.showView('advisor');
+        navigation.showPlace('advisor');
         return;
       case 'inbox':
         navigation.openInbox();

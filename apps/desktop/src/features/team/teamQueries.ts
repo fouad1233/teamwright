@@ -6,6 +6,7 @@ import type { Effort, Id, Member, NewMember } from '@/shared/api/types';
 import { describeFailure, useNotifier } from '@/shared/ui/Toast';
 
 import { tasksKey } from '../tasks/taskQueries';
+import { viewsKey } from '../views/viewQueries';
 
 /** The name under which the team of a project is cached. */
 export function teamKey(projectId: Id) {
@@ -93,11 +94,13 @@ export function useTeamCommands(projectId: Id): TeamCommands {
           notifier.showError(describeFailure(failure));
           wasRemoved = false;
         }
-        // The tasks of the member were given to nobody, so the tasks are
-        // loaded again together with the team.
+        // The tasks of the member were given to nobody, and a view that
+        // showed only them shows everybody's again, so the tasks and the
+        // views are loaded again together with the team.
         await Promise.all([
           queryClient.invalidateQueries({ queryKey }),
           queryClient.invalidateQueries({ queryKey: tasksKey(projectId) }),
+          queryClient.invalidateQueries({ queryKey: viewsKey(projectId) }),
         ]);
         return wasRemoved;
       },

@@ -20,7 +20,8 @@ interface SprintPartProps {
   /** The sprints that are over, the latest first. */
   completed: readonly Sprint[];
   today: CalendarDate;
-  onOpenBacklog: () => void;
+  /** Opens the backlog view of the project. Left out when it has none: there is then no way there. */
+  onOpenBacklog?: () => void;
   onOpenTask: (taskId: Id) => void;
 }
 
@@ -50,10 +51,12 @@ export function SprintPart({
     <DashboardSection
       title="The sprint"
       aside={
-        <button type="button" className={styles.onwards} onClick={onOpenBacklog}>
-          Open the backlog
-          <ArrowRight aria-hidden />
-        </button>
+        onOpenBacklog && (
+          <button type="button" className={styles.onwards} onClick={onOpenBacklog}>
+            Open the backlog
+            <ArrowRight aria-hidden />
+          </button>
+        )
       }
     >
       {active ? (

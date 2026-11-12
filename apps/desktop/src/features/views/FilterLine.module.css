@@ -1,0 +1,31 @@
+.line {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-2);
+  height: 32px;
+  padding: 0 var(--space-5);
+  border-bottom: 1px solid var(--rule);
+  color: var(--ink-soft);
+  font-size: var(--text-small);
+}
+
+.mark {
+  width: 12px;
+  height: 12px;
+  stroke-width: 2;
+  color: var(--ink-faint);
+}
+
+.clear {
+  margin-left: var(--space-2);
+  color: var(--ink-faint);
+  text-decoration: underline;
+  text-decoration-color: var(--rule-strong);
+  text-underline-offset: 3px;
+}
+
+.clear:hover {
+  color: var(--ink);
+  text-decoration-color: currentcolor;
+}

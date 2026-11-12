@@ -46,32 +46,21 @@
   flex: 1;
 }
 
-.tabs {
-  display: flex;
-  gap: var(--space-5);
-  margin-top: var(--space-4);
-}
-
-.tab {
-  height: 34px;
-  /* The line under the active tab sits on the header's own rule. */
-  margin-bottom: -1px;
-  border-bottom: 2px solid transparent;
-  color: var(--ink-faint);
-  font-weight: 550;
-  transition: color 100ms ease;
-}
-
-.tab:hover {
-  color: var(--ink);
-}
-
-.activeTab {
-  border-bottom-color: var(--ink);
-  color: var(--ink);
-}
-
 .content {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+/* A view, under the line that says what its filter leaves out. The view
+   takes the rest of the height, as it would alone. */
+.view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.viewBody {
   position: relative;
   flex: 1;
   min-height: 0;

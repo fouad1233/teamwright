@@ -7,6 +7,7 @@ import { today as todayWhereTheUserIs } from '@/shared/lib/format';
 import { reportVersionOf } from '../sprints/sprintModel';
 import { useSprintReport, useSprints } from '../sprints/sprintQueries';
 import { useTeamMembers } from '../team/TeamContext';
+import { useViews } from '../views/viewQueries';
 import { useConversationsOfProject } from '../work/WorkContext';
 import { DashboardSection } from './DashboardSection';
 import styles from './DashboardView.module.css';
@@ -81,6 +82,8 @@ function DashboardPage({ project, tasks, sprints, report }: DashboardPageProps) 
   const navigation = useNavigation();
   const members = useTeamMembers();
   const conversations = useConversationsOfProject();
+  // The backlog is a view the manager may have removed; then there is no way to it.
+  const backlog = useViews(project.id).data?.find((view) => view.kind === 'backlog');
   // Today is read once when the view opens, like the rest of what it shows.
   const [today] = useState(() => todayWhereTheUserIs());
 
@@ -185,9 +188,13 @@ function DashboardPage({ project, tasks, sprints, report }: DashboardPageProps) 
             report={activeReport}
             completed={completed}
             today={today}
-            onOpenBacklog={() => {
-              navigation.showView('backlog');
-            }}
+            onOpenBacklog={
+              backlog
+                ? () => {
+                    navigation.showView(backlog.id);
+                  }
+                : undefined
+            }
             onOpenTask={navigation.openTask}
           />
         )}

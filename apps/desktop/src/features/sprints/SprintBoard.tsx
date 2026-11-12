@@ -23,6 +23,14 @@ import { useSprintCommands, useSprints } from './sprintQueries';
 interface SprintBoardProps {
   project: Project;
   tasks: Task[];
+  /**
+   * Which tasks get a card, for a board with a filter of its own. It
+   * applies together with the sprint that is shown. The board still knows
+   * every task, so that a card dropped among the shown ones lands where it
+   * was dropped and a card knows what it waits for. Left out, every task
+   * is shown.
+   */
+  shows?: (task: Task) => boolean;
 }
 
 /**
@@ -31,7 +39,7 @@ interface SprintBoardProps {
  * the header chooses a sprint that is over, and the board then shows the
  * tasks it finished. Without any sprint it is the board of all tasks.
  */
-export function SprintBoard({ project, tasks }: SprintBoardProps) {
+export function SprintBoard({ project, tasks, shows }: SprintBoardProps) {
   const sprints = useSprints(project.id);
   const commands = useSprintCommands(project.id);
   const [scope, setScope] = useState<BoardScope>({ kind: 'current' });
@@ -39,7 +47,7 @@ export function SprintBoard({ project, tasks }: SprintBoardProps) {
   const previous = previousSprintOf(scope, completed);
 
   if (!active && completed.length === 0) {
-    return <BoardView project={project} tasks={tasks} />;
+    return <BoardView project={project} tasks={tasks} shows={shows} />;
   }
 
   // A completed sprint takes no tasks, so a task made while one is shown
@@ -113,7 +121,11 @@ export function SprintBoard({ project, tasks }: SprintBoardProps) {
         <BoardView
           project={project}
           tasks={tasks}
-          shows={sprintShown ? (task) => task.sprintId === sprintShown.id : undefined}
+          shows={
+            sprintShown
+              ? (task) => task.sprintId === sprintShown.id && (shows?.(task) ?? true)
+              : shows
+          }
           onCreated={
             isRunningShown && active
               ? (task) => {

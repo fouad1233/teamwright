@@ -219,10 +219,10 @@ function Outcome({ turn, isLatest }: OutcomeProps) {
           type="button"
           className={styles.link}
           onClick={() => {
-            navigation.showView('board');
+            navigation.showFirstView();
           }}
         >
-          Open the board
+          Show the tasks
         </button>
       </p>
     );
