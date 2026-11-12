@@ -44,6 +44,13 @@ A later turn of the same session is a new process with `--resume <id>`. It
 works in the folder the request names, which need not be the one the session
 started in.
 
+A Claude Code that is a script cannot run a turn. Installed through npm, it
+is `claude.cmd` on Windows, and Windows hands a script its arguments through
+the command prompt, which cannot take instructions of several lines. Such an
+installation is still found and asked for its version and its sign-in, and a
+turn on it is refused with words that say so and what to do: install Claude
+Code with its own installer, which puts a `claude.exe` there.
+
 Every option was checked against `claude --help` of Claude Code 2.1.322.
 `--verbose` is required: without it Claude Code refuses `stream-json` output
 in print mode. `--bare` is never used, because it ignores the subscription

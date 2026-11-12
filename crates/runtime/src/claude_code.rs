@@ -121,6 +121,7 @@ impl AgentRuntime for ClaudeCode {
         let arguments = turn_arguments(&request)?;
         let working_folder = full_folder(&request.working_folder)?;
         let program = self.program()?;
+        refuse_a_script(&program)?;
         let turn = start_turn(
             command(
                 &program,
@@ -168,6 +169,35 @@ impl AgentRuntime for ClaudeCode {
             _ => Ok(()),
         }
     }
+}
+
+/// Refuses to start a turn on a Claude Code that is a script.
+///
+/// Installed through npm, Claude Code on Windows is a script, `claude.cmd`.
+/// Windows hands a script its arguments through the command prompt, and the
+/// command prompt cannot take the instructions of a specialist as they are:
+/// they have several lines. The start would fail with a message about batch
+/// files. This says instead what is the matter and what to do about it.
+///
+/// The questions for the version and the sign-in have plain arguments and
+/// work with a script, so such an installation is still found and named.
+fn refuse_a_script(program: &Path) -> Result<(), AgentRuntimeError> {
+    let is_script = cfg!(windows)
+        && program
+            .extension()
+            .and_then(|extension| extension.to_str())
+            .is_some_and(|extension| {
+                extension.eq_ignore_ascii_case("cmd") || extension.eq_ignore_ascii_case("bat")
+            });
+    if is_script {
+        return Err(AgentRuntimeError::CouldNotRun {
+            message: "it is installed as a script, the way npm installs it, and a script \
+                      cannot be given the instructions of a specialist. Install Claude Code \
+                      with its own installer"
+                .to_owned(),
+        });
+    }
+    Ok(())
 }
 
 /// The full, long form of a folder that exists.
@@ -238,5 +268,39 @@ mod tests {
         let folder = tempfile::tempdir().unwrap();
         let error = full_folder(&folder.path().join("missing")).unwrap_err();
         assert_eq!(error.code(), "agent_invalid_request");
+    }
+
+    #[test]
+    fn a_program_that_is_not_a_script_is_not_refused() {
+        assert!(refuse_a_script(Path::new("claude.exe")).is_ok());
+        assert!(refuse_a_script(Path::new("claude")).is_ok());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_turn_is_not_started_on_a_claude_code_that_is_a_script() {
+        use teamwright_application::{PermissionProfile, SessionChoice};
+
+        let folder = tempfile::tempdir().unwrap();
+        let script = folder.path().join("claude.CMD");
+        std::fs::write(&script, "@echo off\r\n").unwrap();
+        let request = TurnRequest {
+            working_folder: folder.path().to_owned(),
+            prompt: "Hello".to_owned(),
+            session: SessionChoice::New,
+            model: None,
+            effort: None,
+            extra_instructions: Some("Two\nlines.".to_owned()),
+            permissions: PermissionProfile::specialist(),
+        };
+
+        let refusal = ClaudeCode::new()
+            .with_program(script)
+            .start_turn(request, Box::new(|_| {}))
+            .err()
+            .unwrap();
+
+        assert_eq!(refusal.code(), "agent_could_not_run");
+        assert!(refusal.to_string().contains("installed as a script"));
     }
 }
