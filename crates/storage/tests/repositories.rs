@@ -8,18 +8,23 @@
 use std::sync::Arc;
 
 use chrono::{TimeDelta, TimeZone, Utc};
-use teamwright_application::in_memory::ManualClock;
+use teamwright_application::in_memory::{
+    FixedProjectFolders, ManualClock, RecordingWorkListener, ScriptedRuntime,
+};
 use teamwright_application::{
-    MemberRepository, NewMember, NewProject, NewTask, ProjectRepository, ProjectService,
-    StatusProperties, TaskRepository, TaskService, TeamService, WorkflowTemplate,
+    AgentEvent, ConversationRepository, MemberRepository, ModelUsage, NewMember, NewProject,
+    NewTask, ProjectRepository, ProjectService, SessionId, StatusProperties, TaskRepository,
+    TaskService, TeamService, TurnOutcome, WorkPorts, WorkService, WorkflowTemplate,
 };
 use teamwright_domain::{
-    Assignee, CalendarDate, Color, Member, MemberId, MemberKind, MemberName, Priority, Project,
-    ProjectKey, ProjectName, Rank, Schedule, Status, StatusCategory, StatusId, StatusName, Task,
-    TaskDraft, TaskId, TaskTitle, Timestamp, Workflow,
+    Assignee, CalendarDate, Color, Conversation, ConversationId, Member, MemberId, MemberKind,
+    MemberName, Priority, Project, ProjectKey, ProjectName, Rank, Schedule, Status, StatusCategory,
+    StatusId, StatusName, StepContent, Task, TaskDraft, TaskId, TaskTitle, Timestamp, TokenCounts,
+    ToolOutcome, Turn, TurnOrigin, TurnState, Workflow,
 };
 use teamwright_storage::{
-    Database, SqliteMemberRepository, SqliteProjectRepository, SqliteTaskRepository,
+    Database, Operation, SqliteConversationRepository, SqliteMemberRepository,
+    SqliteProjectRepository, SqliteTaskRepository,
 };
 
 /// A database with the repositories working on it.
@@ -28,6 +33,7 @@ struct Store {
     projects: SqliteProjectRepository,
     tasks: SqliteTaskRepository,
     members: SqliteMemberRepository,
+    conversations: SqliteConversationRepository,
 }
 
 impl Store {
@@ -37,6 +43,7 @@ impl Store {
             projects: SqliteProjectRepository::new(database.clone()),
             tasks: SqliteTaskRepository::new(database.clone()),
             members: SqliteMemberRepository::new(database.clone()),
+            conversations: SqliteConversationRepository::new(database.clone()),
             database,
         }
     }
@@ -661,6 +668,344 @@ fn changes_to_a_member_are_logged_with_the_complete_new_state() {
     assert_eq!(log[2].payload, None);
 }
 
+// Conversations
+
+/// Stores a project with a specialist and a task given to it, and a
+/// conversation about the task.
+fn stored_conversation(store: &Store) -> (Project, Member, Task, Conversation) {
+    let project = store.project("Smart sensor node");
+    let member = store.member(&project, "Hardware engineer");
+    let task = store.task(&project, 1, "Draw the schematic");
+    let conversation = Conversation::start(project.id(), member.id(), Some(task.id()), moment(9));
+    store
+        .conversations
+        .save_conversation(&conversation)
+        .unwrap();
+    (project, member, task, conversation)
+}
+
+fn running_turn(conversation: &Conversation, request: &str, at: Timestamp) -> Turn {
+    Turn::start(conversation.id(), request, TurnOrigin::Brief, at).unwrap()
+}
+
+fn tokens() -> TokenCounts {
+    TokenCounts {
+        input: 42,
+        output: 880,
+        cache_read: 21_500,
+        cache_written: 6400,
+    }
+}
+
+/// The entity and kind of the operations logged after the first `skip`.
+fn logged_after(store: &Store, skip: usize) -> Vec<(String, String)> {
+    store
+        .database
+        .operations()
+        .unwrap()
+        .into_iter()
+        .skip(skip)
+        .map(|op: Operation| (op.entity, op.kind))
+        .collect()
+}
+
+fn pairs(expected: &[(&str, &str)]) -> Vec<(String, String)> {
+    expected
+        .iter()
+        .map(|(entity, kind)| ((*entity).to_owned(), (*kind).to_owned()))
+        .collect()
+}
+
+#[test]
+fn a_saved_conversation_and_its_turns_are_found_again_unchanged() {
+    let store = Store::in_memory();
+    let (project, _, _, mut conversation) = stored_conversation(&store);
+    conversation.remember_session("0196f3a2-7c1e-7d53-9b6f-2f1a4c8e9d10".to_owned());
+    store
+        .conversations
+        .save_conversation(&conversation)
+        .unwrap();
+
+    let mut first = running_turn(&conversation, "Draw the schematic", moment(9));
+    first.record_model("claude-opus-model".to_owned()).unwrap();
+    first
+        .notice("A plugin could not be loaded.".to_owned(), moment(9))
+        .unwrap();
+    first
+        .say("I will read the notes.".to_owned(), moment(9))
+        .unwrap();
+    first
+        .use_tool(
+            "read".to_owned(),
+            "Read".to_owned(),
+            "notes.md".to_owned(),
+            moment(9),
+        )
+        .unwrap();
+    first
+        .use_tool(
+            "write".to_owned(),
+            "Write".to_owned(),
+            String::new(),
+            moment(9),
+        )
+        .unwrap();
+    first.finish_tool("read", false).unwrap();
+    first.finish_tool("write", true).unwrap();
+    first.record_denial("Bash".to_owned(), moment(9)).unwrap();
+    first.finish("The report.", tokens(), moment(10)).unwrap();
+    let mut second = Turn::start(
+        conversation.id(),
+        "Use the smaller regulator.",
+        TurnOrigin::Message,
+        moment(11),
+    )
+    .unwrap();
+    second.say("Working on it.".to_owned(), moment(11)).unwrap();
+    // Saved in the other order, to show that turns are listed by age.
+    store.conversations.save_turn(&second).unwrap();
+    store.conversations.save_turn(&first).unwrap();
+
+    assert_eq!(
+        store.conversations.find(conversation.id()).unwrap(),
+        Some(conversation.clone())
+    );
+    assert_eq!(
+        store.conversations.turns_of(conversation.id()).unwrap(),
+        [first, second.clone()]
+    );
+    assert_eq!(
+        store.conversations.list_for_project(project.id()).unwrap(),
+        [conversation]
+    );
+    assert_eq!(store.conversations.running_turns().unwrap(), [second]);
+}
+
+#[test]
+fn a_conversation_that_was_never_saved_is_not_found() {
+    let store = Store::in_memory();
+
+    assert_eq!(
+        store
+            .conversations
+            .find(ConversationId::generate())
+            .unwrap(),
+        None
+    );
+    assert!(
+        store
+            .conversations
+            .turns_of(ConversationId::generate())
+            .unwrap()
+            .is_empty()
+    );
+}
+
+#[test]
+fn conversations_are_listed_for_their_own_project_oldest_first() {
+    let store = Store::in_memory();
+    let (project, member, _, about_the_task) = stored_conversation(&store);
+    let question = Conversation::start(project.id(), member.id(), None, moment(8));
+    store.conversations.save_conversation(&question).unwrap();
+    let other = store.project("Thermostat");
+
+    assert_eq!(
+        store.conversations.list_for_project(project.id()).unwrap(),
+        [question, about_the_task]
+    );
+    assert!(
+        store
+            .conversations
+            .list_for_project(other.id())
+            .unwrap()
+            .is_empty()
+    );
+}
+
+#[test]
+fn saving_a_turn_again_writes_and_logs_only_what_changed() {
+    let store = Store::in_memory();
+    let (_, _, _, conversation) = stored_conversation(&store);
+    let mut turn = running_turn(&conversation, "Draw the schematic", moment(9));
+    store.conversations.save_turn(&turn).unwrap();
+    let start = store.database.operations().unwrap().len();
+
+    turn.say("I will read the notes.".to_owned(), moment(9))
+        .unwrap();
+    turn.use_tool(
+        "read".to_owned(),
+        "Read".to_owned(),
+        "notes.md".to_owned(),
+        moment(9),
+    )
+    .unwrap();
+    store.conversations.save_turn(&turn).unwrap();
+    let after_two_steps = logged_after(&store, start);
+
+    turn.finish_tool("read", false).unwrap();
+    store.conversations.save_turn(&turn).unwrap();
+    let after_the_tool = logged_after(&store, start + 2);
+
+    store.conversations.save_turn(&turn).unwrap();
+    let after_nothing = logged_after(&store, start + 3);
+
+    turn.say("The report.".to_owned(), moment(10)).unwrap();
+    store.conversations.save_turn(&turn).unwrap();
+    turn.finish("The report.", tokens(), moment(10)).unwrap();
+    store.conversations.save_turn(&turn).unwrap();
+    let after_the_end = logged_after(&store, start + 3);
+
+    assert_eq!(
+        after_two_steps,
+        pairs(&[("turn_step", "upsert"), ("turn_step", "upsert")])
+    );
+    assert_eq!(after_the_tool, pairs(&[("turn_step", "upsert")]));
+    assert!(after_nothing.is_empty());
+    assert_eq!(
+        after_the_end,
+        pairs(&[
+            ("turn_step", "upsert"),
+            ("turn", "upsert"),
+            ("turn_step", "delete"),
+        ])
+    );
+    let log = store.database.operations().unwrap();
+    let tool_state: serde_json::Value =
+        serde_json::from_str(log[start + 2].payload.as_deref().unwrap()).unwrap();
+    assert_eq!(log[start + 2].entity_id, format!("{}/1", turn.id()));
+    assert_eq!(tool_state["outcome"], "done");
+    assert_eq!(
+        store.conversations.turns_of(conversation.id()).unwrap(),
+        [turn]
+    );
+}
+
+#[test]
+fn a_finished_turn_keeps_its_tokens_and_a_tool_its_outcome() {
+    let store = Store::in_memory();
+    let (_, _, _, conversation) = stored_conversation(&store);
+    let mut turn = running_turn(&conversation, "Draw the schematic", moment(9));
+    turn.use_tool(
+        "write".to_owned(),
+        "Write".to_owned(),
+        String::new(),
+        moment(9),
+    )
+    .unwrap();
+    turn.finish_tool("write", true).unwrap();
+    turn.fail("The file is locked.".to_owned(), Some(tokens()), moment(10))
+        .unwrap();
+
+    store.conversations.save_turn(&turn).unwrap();
+
+    let found = store
+        .conversations
+        .turns_of(conversation.id())
+        .unwrap()
+        .pop()
+        .unwrap();
+    assert_eq!(found.state(), TurnState::Failed);
+    assert_eq!(found.tokens(), Some(tokens()));
+    assert!(matches!(
+        &found.steps()[0].content,
+        StepContent::Tool {
+            outcome: ToolOutcome::Failed,
+            ..
+        }
+    ));
+    assert!(store.conversations.running_turns().unwrap().is_empty());
+}
+
+#[test]
+fn a_conversation_without_its_member_is_kept_and_logged() {
+    let store = Store::in_memory();
+    let (_, member, _, mut conversation) = stored_conversation(&store);
+
+    conversation.forget_member();
+    store
+        .conversations
+        .save_conversation(&conversation)
+        .unwrap();
+    store.members.delete(member.id()).unwrap();
+
+    let found = store
+        .conversations
+        .find(conversation.id())
+        .unwrap()
+        .unwrap();
+    assert_eq!(found.member_id(), None);
+    let log = store.database.operations().unwrap();
+    let conversation_state: serde_json::Value = log
+        .iter()
+        .rev()
+        .find(|op| op.entity == "conversation")
+        .and_then(|op| op.payload.as_deref())
+        .map(|payload| serde_json::from_str(payload).unwrap())
+        .unwrap();
+    assert_eq!(conversation_state["member_id"], serde_json::Value::Null);
+}
+
+#[test]
+fn deleting_conversations_removes_their_turns_and_logs_each_removal() {
+    let store = Store::in_memory();
+    let (project, member, _, conversation) = stored_conversation(&store);
+    let mut turn = running_turn(&conversation, "Draw the schematic", moment(9));
+    turn.say("Hello.".to_owned(), moment(9)).unwrap();
+    store.conversations.save_turn(&turn).unwrap();
+    let kept = Conversation::start(project.id(), member.id(), None, moment(10));
+    store.conversations.save_conversation(&kept).unwrap();
+    let start = store.database.operations().unwrap().len();
+
+    store
+        .conversations
+        .delete(&[conversation.id(), ConversationId::generate()])
+        .unwrap();
+
+    assert_eq!(store.conversations.find(conversation.id()).unwrap(), None);
+    assert!(
+        store
+            .conversations
+            .turns_of(conversation.id())
+            .unwrap()
+            .is_empty()
+    );
+    assert_eq!(
+        store.conversations.list_for_project(project.id()).unwrap(),
+        [kept]
+    );
+    assert_eq!(
+        logged_after(&store, start),
+        pairs(&[("turn", "delete"), ("conversation", "delete")])
+    );
+}
+
+#[test]
+fn deleting_a_project_removes_its_conversations_with_a_trace_in_the_log() {
+    let store = Store::in_memory();
+    let (project, _, _, conversation) = stored_conversation(&store);
+    store
+        .conversations
+        .save_turn(&running_turn(
+            &conversation,
+            "Draw the schematic",
+            moment(9),
+        ))
+        .unwrap();
+
+    store.projects.delete(project.id()).unwrap();
+
+    assert_eq!(store.conversations.find(conversation.id()).unwrap(), None);
+    assert!(store.conversations.running_turns().unwrap().is_empty());
+    let log = store.database.operations().unwrap();
+    for entity in ["turn", "conversation", "task", "member", "project"] {
+        assert!(
+            log.iter()
+                .any(|op| op.entity == entity && op.kind == "delete"),
+            "the removal of the {entity} is not logged"
+        );
+    }
+}
+
 // The operation log
 
 #[test]
@@ -775,24 +1120,28 @@ fn the_use_cases_work_on_the_real_database() {
     let database = Arc::new(Database::open_in_memory().unwrap());
     let project_repository = Arc::new(SqliteProjectRepository::new(database.clone()));
     let task_repository = Arc::new(SqliteTaskRepository::new(database.clone()));
-    let member_repository = Arc::new(SqliteMemberRepository::new(database));
+    let member_repository = Arc::new(SqliteMemberRepository::new(database.clone()));
+    let conversation_repository = Arc::new(SqliteConversationRepository::new(database));
     let clock = Arc::new(ManualClock::starting_at(moment(9)));
     let projects = ProjectService::new(
         project_repository.clone(),
         task_repository.clone(),
         member_repository.clone(),
+        conversation_repository.clone(),
         clock.clone(),
     );
     let tasks = TaskService::new(
         project_repository.clone(),
         task_repository.clone(),
         member_repository.clone(),
+        conversation_repository.clone(),
         clock.clone(),
     );
     let team = TeamService::new(
         project_repository,
         member_repository,
         task_repository,
+        conversation_repository,
         clock.clone(),
     );
 
@@ -863,23 +1212,27 @@ fn the_workflow_and_removal_use_cases_work_on_the_real_database() {
     let project_repository = Arc::new(SqliteProjectRepository::new(database.clone()));
     let task_repository = Arc::new(SqliteTaskRepository::new(database.clone()));
     let member_repository = Arc::new(SqliteMemberRepository::new(database.clone()));
+    let conversation_repository = Arc::new(SqliteConversationRepository::new(database.clone()));
     let clock = Arc::new(ManualClock::starting_at(moment(9)));
     let projects = ProjectService::new(
         project_repository.clone(),
         task_repository.clone(),
         member_repository.clone(),
+        conversation_repository.clone(),
         clock.clone(),
     );
     let tasks = TaskService::new(
         project_repository.clone(),
         task_repository.clone(),
         member_repository.clone(),
+        conversation_repository.clone(),
         clock.clone(),
     );
     let team = TeamService::new(
         project_repository,
         member_repository,
         task_repository,
+        conversation_repository,
         clock.clone(),
     );
     let project = projects
@@ -974,6 +1327,165 @@ fn the_workflow_and_removal_use_cases_work_on_the_real_database() {
         })
         .unwrap();
     assert_eq!(again.key().as_str(), "SSN");
+}
+
+#[test]
+fn the_work_of_a_specialist_is_kept_on_the_real_database() {
+    let database = Arc::new(Database::open_in_memory().unwrap());
+    let project_repository = Arc::new(SqliteProjectRepository::new(database.clone()));
+    let task_repository = Arc::new(SqliteTaskRepository::new(database.clone()));
+    let member_repository = Arc::new(SqliteMemberRepository::new(database.clone()));
+    let conversation_repository = Arc::new(SqliteConversationRepository::new(database.clone()));
+    let clock = Arc::new(ManualClock::starting_at(moment(9)));
+    let runtime = Arc::new(ScriptedRuntime::new());
+    let work_service = || {
+        WorkService::new(WorkPorts {
+            projects: project_repository.clone(),
+            tasks: task_repository.clone(),
+            members: member_repository.clone(),
+            conversations: conversation_repository.clone(),
+            folders: Arc::new(FixedProjectFolders::inside("projects")),
+            runtime: runtime.clone(),
+            listener: Arc::new(RecordingWorkListener::default()),
+            clock: clock.clone(),
+        })
+    };
+    let projects = ProjectService::new(
+        project_repository.clone(),
+        task_repository.clone(),
+        member_repository.clone(),
+        conversation_repository.clone(),
+        clock.clone(),
+    );
+    let tasks = TaskService::new(
+        project_repository.clone(),
+        task_repository.clone(),
+        member_repository.clone(),
+        conversation_repository.clone(),
+        clock.clone(),
+    );
+    let team = TeamService::new(
+        project_repository.clone(),
+        member_repository.clone(),
+        task_repository.clone(),
+        conversation_repository.clone(),
+        clock.clone(),
+    );
+    let work = work_service();
+    let project = projects
+        .create(NewProject {
+            name: "Smart sensor node".to_owned(),
+            ..NewProject::default()
+        })
+        .unwrap();
+    let engineer = team
+        .add(NewMember {
+            project_id: project.id(),
+            name: "Hardware engineer".to_owned(),
+            kind: MemberKind::Agent,
+            responsibility: String::new(),
+        })
+        .unwrap();
+    let schematic = tasks
+        .create(NewTask {
+            assignee: Some(Assignee::Member(engineer.id())),
+            ..NewTask::titled(project.id(), "Draw the schematic")
+        })
+        .unwrap();
+
+    // A turn works and reports.
+    let started = work.start_work(schematic.id()).unwrap();
+    runtime.deliver(
+        0,
+        AgentEvent::ToolUse {
+            id: "read".to_owned(),
+            tool: "Read".to_owned(),
+            summary: "notes.md".to_owned(),
+        },
+    );
+    runtime.deliver(
+        0,
+        AgentEvent::ToolResult {
+            tool_use_id: "read".to_owned(),
+            tool: None,
+            failed: false,
+        },
+    );
+    runtime.deliver(
+        0,
+        AgentEvent::Text {
+            text: "The report.".to_owned(),
+        },
+    );
+    runtime.deliver(
+        0,
+        AgentEvent::TurnEnded(TurnOutcome {
+            session_id: Some(SessionId::parse("abc-123").unwrap()),
+            failure: None,
+            final_text: "The report.".to_owned(),
+            usage: vec![ModelUsage {
+                model: "claude-opus-model".to_owned(),
+                tokens: teamwright_application::TokenCounts {
+                    input: 1,
+                    output: 2,
+                    cache_read: 3,
+                    cache_written: 4,
+                },
+            }],
+            estimated_cost_usd: None,
+            duration: None,
+            model_calls: None,
+            permission_denials: Vec::new(),
+        }),
+    );
+
+    let kept = work.list_for_project(project.id()).unwrap();
+    assert_eq!(kept.len(), 1);
+    let turn = &kept[0].turns[0];
+    assert_eq!(turn.state(), TurnState::Finished);
+    assert_eq!(turn.answer(), "The report.");
+    assert_eq!(turn.steps().len(), 1);
+    let in_review = project
+        .workflow()
+        .first_in(StatusCategory::Review)
+        .unwrap()
+        .id();
+    assert_eq!(tasks.get(schematic.id()).unwrap().status_id(), in_review);
+
+    // A second turn is cut off by closing the program.
+    work.reply(started.conversation.id(), "Use the smaller regulator.")
+        .unwrap();
+    assert_eq!(
+        team.remove(engineer.id()).unwrap_err().code(),
+        "member_busy"
+    );
+    work_service().recover().unwrap();
+    let turns = conversation_repository
+        .turns_of(started.conversation.id())
+        .unwrap();
+    assert_eq!(turns[1].state(), TurnState::Failed);
+
+    // The specialist leaves, the task goes, and the log shows each step.
+    team.remove(engineer.id()).unwrap();
+    assert_eq!(
+        conversation_repository
+            .find(started.conversation.id())
+            .unwrap()
+            .unwrap()
+            .member_id(),
+        None
+    );
+    tasks.delete(schematic.id()).unwrap();
+    assert!(work.list_for_project(project.id()).unwrap().is_empty());
+    let log = database.operations().unwrap();
+    assert!(
+        log.iter()
+            .any(|op| op.entity == "conversation" && op.kind == "delete")
+    );
+    assert!(
+        log.iter()
+            .any(|op| op.entity == "turn" && op.kind == "delete")
+    );
 }
 
 fn status_named(project: &Project, name: &str) -> StatusId {

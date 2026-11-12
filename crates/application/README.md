@@ -10,11 +10,12 @@ window or agent runtime.
 | `projects` | `ProjectService`: start, find, list, rename, describe, archive, restore and delete projects; add, change, move and remove the statuses of their workflows |
 | `tasks` | `TaskService`: open, change, move, connect and remove tasks |
 | `team` | `TeamService`: put members on the team of a project, change them, take them off |
-| `ports` | The interfaces the services need: `ProjectRepository`, `TaskRepository`, `MemberRepository`, `Clock` |
+| `work` | `WorkService`: let AI specialists work: start on a task, ask, reply, stop, follow every event, open a session in the desktop app, recover after a restart; `brief_for` and `instructions_for` |
+| `ports` | The interfaces the services need: `ProjectRepository`, `TaskRepository`, `MemberRepository`, `ConversationRepository`, `ProjectFolders`, `WorkListener`, `Clock` |
 | `agent_runtime` | `AgentRuntime`: the interface to the program that runs a team member's session, and the data it speaks |
 | `error` | `ApplicationError`, with a stable `code()` for interfaces |
 | `clock` | `SystemClock`, the real clock |
-| `in_memory` | In-memory repositories and a settable clock, for tests and demos |
+| `in_memory` | In-memory repositories, fixed project folders, a listener that records, a scripted agent runtime and a settable clock, for tests and demos |
 
 ## How a use case is built
 
@@ -67,6 +68,49 @@ project, two members of one team cannot have the same name.
 - Taking a member off a team gives the member's tasks to nobody.
 - A task can be given to the manager or to a member of the team of its own
   project, and to nobody else.
+- Work in progress is protected. A member with a running turn cannot leave
+  the team (`member_busy`). A task, or the parent of a task, that a running
+  turn is about cannot be deleted, and a project in which a turn runs can be
+  neither archived nor deleted (`work_in_progress`).
+- Deleting a task deletes the conversations about it and its subtasks.
+  Deleting a project deletes its conversations. A member that leaves leaves
+  its conversations behind, without a member.
+
+## The work of the specialists
+
+`WorkService` lets the AI specialists of a team work. A conversation is one
+session of the agent program with one specialist, about a task or about a
+question; every request to the specialist is a turn of it.
+
+- `start_work` needs a task given to a member of the kind agent
+  (`no_specialist`), on which work has not started before
+  (`work_already_started`). It opens a conversation and starts its first turn
+  with the brief of the task (`brief_for`).
+- `reply` starts a new turn in the same session with the manager's words,
+  trimmed; `ask` opens a conversation without a task.
+- A specialist works on one thing at a time (`member_busy`). Whether it is
+  busy is read from storage: a turn in the state running.
+- A turn runs with `PermissionProfile::specialist()`, in the folder of the
+  project (`ProjectFolders`), with instructions that say who the specialist
+  is and how the team works (`instructions_for`). The first turn starts a new
+  session; later turns resume it by the identifier the program reported.
+- Every event of the runtime is recorded in the turn, the turn is stored,
+  and the `WorkListener` is told with the whole conversation. Plan usage is
+  not shown yet.
+- When a turn starts on a task in a todo or review status, the task moves to
+  the bottom of the first active status. When a turn finishes without
+  failure, a task in an active status moves to the bottom of the first
+  review status, if the workflow has one. Nothing here moves a task to done,
+  and a failed or stopped turn leaves the task where it is.
+- `stop` records the running turn as stopped by the manager and then stops
+  the program. Stopping a conversation in which nothing runs changes nothing.
+- `recover` ends, as failed, the turns that storage still calls running when
+  the program starts: closing Teamwright cut them off.
+
+The runtime calls the listener of a turn on a thread of its own. The service
+holds one lock while a use case starts or stops a turn and while an event is
+recorded, so each sees the stored turns whole. The `WorkListener` is called
+under that lock: it must return quickly and must not call the service.
 
 ## The agent runtime
 

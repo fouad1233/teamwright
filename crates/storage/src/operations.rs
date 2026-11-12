@@ -73,6 +73,12 @@ pub(crate) enum Entity {
     Task,
     /// A member of a team.
     Member,
+    /// A conversation with a specialist, without its turns.
+    Conversation,
+    /// A turn of a conversation, without its steps.
+    Turn,
+    /// One step of a turn. Its identifier is the turn's and its position.
+    TurnStep,
 }
 
 impl Entity {
@@ -82,6 +88,9 @@ impl Entity {
             Self::Project => "project",
             Self::Task => "task",
             Self::Member => "member",
+            Self::Conversation => "conversation",
+            Self::Turn => "turn",
+            Self::TurnStep => "turn_step",
         }
     }
 }

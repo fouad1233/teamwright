@@ -1,10 +1,11 @@
 # teamwright-storage
 
-Stores Teamwright's projects, tasks and teams in SQLite, and appends every
+Stores Teamwright's projects, tasks, teams and the conversations with
+specialists in SQLite, and appends every
 change to an operation log.
 
-It implements the interfaces `ProjectRepository`, `TaskRepository` and
-`MemberRepository` that the application crate declares. Nothing outside this crate knows that SQLite is
+It implements the interfaces `ProjectRepository`, `TaskRepository`,
+`MemberRepository` and `ConversationRepository` that the application crate declares. Nothing outside this crate knows that SQLite is
 involved.
 
 ## What is in it
@@ -17,6 +18,7 @@ involved.
 | `projects` | `SqliteProjectRepository` |
 | `tasks` | `SqliteTaskRepository` |
 | `members` | `SqliteMemberRepository` |
+| `conversations` | `SqliteConversationRepository`: conversations, their turns and the steps of the turns |
 | `operations` | The operation log, the hybrid logical clock, `DeviceId` |
 | `codec` | The text forms of moments, dates, identifiers and enumerations |
 | `error` | The crate's internal error type and its conversion to `StorageError` |
@@ -24,7 +26,8 @@ involved.
 ## How data is kept
 
 - **Current state** is in ordinary tables: `projects`, `statuses`, `tasks`,
-  `task_dependencies`, `members`. The schema with its conventions is in
+  `task_dependencies`, `members`, `conversations`, `turns`, `turn_steps`.
+  The schema with its conventions is in
   [`schema/0001_initial.sql`](src/schema/0001_initial.sql); later files in
   that folder add to it.
 - **Every write also appends to `operations`**, in the same transaction. An
@@ -45,7 +48,22 @@ involved.
   task and every member that still belongs to the project is deleted and
   logged as a `delete` of its own, then the statuses and the project, which
   is logged last. The database would otherwise remove those rows by itself,
-  through `ON DELETE CASCADE`, without a trace in the log.
+  through `ON DELETE CASCADE`, without a trace in the log. The conversations
+  of the project go first, the same way.
+- **A turn is saved often and written sparingly.** The work of a specialist
+  saves its turn after every event of the agent program. The row of the turn
+  is written and logged (entity `turn`) only when it changed. Its steps have
+  a row each in `turn_steps`, keyed by turn and position, and are logged as
+  the entity `turn_step` with the identifier `<turn id>/<position>`; only a
+  step that is new or changed (a tool use whose outcome became known) is
+  written and logged, and a step the turn no longer has is deleted and
+  logged as such. A logged turn does not contain its steps.
+- **Deleting a conversation is logged turn by turn.** Each turn is deleted
+  and logged, which stands for its steps, and then the conversation.
+  Deleting a task or a member in the database would remove or detach the
+  conversations through `ON DELETE CASCADE` and `ON DELETE SET NULL`
+  without a trace; the use cases delete or detach them through the
+  repository first.
 
 Stored values are checked when they are read. A row that breaks a rule of the
 domain is reported as damaged data and never turned into an invalid object.

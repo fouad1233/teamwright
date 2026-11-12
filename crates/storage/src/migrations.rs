@@ -12,6 +12,7 @@ use crate::error::DatabaseError;
 const MIGRATIONS: &[&str] = &[
     include_str!("schema/0001_initial.sql"),
     include_str!("schema/0002_team_members.sql"),
+    include_str!("schema/0003_conversations.sql"),
 ];
 
 /// Applies the migrations a database has not seen yet. Each one runs in its
@@ -69,6 +70,7 @@ mod tests {
         );
         let tables = table_names(&connection);
         for expected in [
+            "conversations",
             "members",
             "meta",
             "operations",
@@ -76,6 +78,8 @@ mod tests {
             "statuses",
             "task_dependencies",
             "tasks",
+            "turn_steps",
+            "turns",
         ] {
             assert!(
                 tables.iter().any(|table| table == expected),
@@ -104,6 +108,7 @@ mod tests {
             i64::try_from(MIGRATIONS.len()).unwrap()
         );
         assert!(table_names(&connection).contains(&"members".to_owned()));
+        assert!(table_names(&connection).contains(&"conversations".to_owned()));
         let kept: String = connection
             .query_row("SELECT name FROM projects WHERE id = 'p1'", [], |row| {
                 row.get(0)

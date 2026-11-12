@@ -2,9 +2,10 @@
 //!
 //! This crate says what the program can do: start a project, open a task,
 //! move it across the board, make it wait for another task, put someone on
-//! the team. Each use case is a method of a service ([`ProjectService`],
-//! [`TaskService`], [`TeamService`]) that loads what it needs, lets the
-//! domain apply its rules, and stores the result.
+//! the team, let an AI specialist work on a task. Each use case is a method
+//! of a service ([`ProjectService`], [`TaskService`], [`TeamService`],
+//! [`WorkService`]) that loads what it needs, lets the domain apply its
+//! rules, and stores the result.
 //!
 //! The crate reaches the outside world only through the traits in [`ports`]:
 //! it does not know which database stores a task or where the time comes
@@ -19,6 +20,7 @@ pub mod ports;
 pub mod projects;
 pub mod tasks;
 pub mod team;
+pub mod work;
 
 pub use agent_runtime::{
     AgentEvent, AgentRuntime, AgentRuntimeError, Effort, Installation, McpServer, ModelUsage,
@@ -28,7 +30,14 @@ pub use agent_runtime::{
 };
 pub use clock::SystemClock;
 pub use error::ApplicationError;
-pub use ports::{Clock, MemberRepository, ProjectRepository, StorageError, TaskRepository};
+pub use ports::{
+    Clock, ConversationRepository, MemberRepository, ProjectFolders, ProjectRepository,
+    StorageError, TaskRepository, WorkListener,
+};
 pub use projects::{NewProject, ProjectService, StatusProperties, WorkflowTemplate};
 pub use tasks::{NewTask, TaskService};
 pub use team::{NewMember, TeamService};
+pub use work::{
+    AgentProgram, AgentProgramState, ConversationWithTurns, WorkPorts, WorkService, brief_for,
+    instructions_for,
+};

@@ -2,6 +2,7 @@
 
 use teamwright_domain::DomainError;
 
+use crate::agent_runtime::AgentRuntimeError;
 use crate::ports::StorageError;
 
 /// Why a use case could not be carried out.
@@ -64,6 +65,59 @@ pub enum ApplicationError {
         count: usize,
     },
 
+    /// Work was to start on a task that is not given to an AI specialist.
+    #[error("the task is not given to an AI specialist")]
+    TaskNotGivenToSpecialist,
+
+    /// A conversation was to go on whose specialist has left the team.
+    #[error("the specialist of this conversation has left the team")]
+    SpecialistLeft,
+
+    /// A member was asked something who is not an AI specialist.
+    #[error("{name} is not an AI specialist")]
+    NotASpecialist {
+        /// The name of the member.
+        name: String,
+    },
+
+    /// Work was to start on a task a second time.
+    #[error("work on {task} has already started")]
+    WorkAlreadyStarted {
+        /// The task, as the manager knows it (`IOT-4`).
+        task: String,
+    },
+
+    /// A specialist was given something while it still works on something
+    /// else, or was to leave the team while it works.
+    #[error("{name} is still working on {work}")]
+    MemberBusy {
+        /// The name of the specialist.
+        name: String,
+        /// What it works on: a task as the manager knows it, or "a
+        /// question".
+        work: String,
+    },
+
+    /// Something was to be removed or put away that a specialist is
+    /// working on.
+    #[error("{who} is still working on {work}; stop the work first")]
+    WorkInProgress {
+        /// The name of the specialist, or "A specialist" if it has left.
+        who: String,
+        /// What it works on: a task as the manager knows it, or "a
+        /// question".
+        work: String,
+    },
+
+    /// A conversation was to be opened in the agent program before the
+    /// program had started its session.
+    #[error("the specialist has not started its session yet")]
+    SessionNotStarted,
+
+    /// The agent program could not be used.
+    #[error(transparent)]
+    AgentProgram(#[from] AgentRuntimeError),
+
     /// Stored data could not be read or written.
     #[error("the data could not be read or written: {0}")]
     Storage(#[from] StorageError),
@@ -94,6 +148,14 @@ impl ApplicationError {
             Self::MemberNameTaken { .. } => "member_name_taken",
             Self::AssigneeFromAnotherTeam => "assignee_from_another_team",
             Self::StatusInUse { .. } => "status_in_use",
+            Self::TaskNotGivenToSpecialist | Self::SpecialistLeft | Self::NotASpecialist { .. } => {
+                "no_specialist"
+            }
+            Self::WorkAlreadyStarted { .. } => "work_already_started",
+            Self::MemberBusy { .. } => "member_busy",
+            Self::WorkInProgress { .. } => "work_in_progress",
+            Self::SessionNotStarted => "session_not_started",
+            Self::AgentProgram(error) => error.code(),
             Self::Storage(_) => "storage_failed",
         }
     }

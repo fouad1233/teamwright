@@ -5,8 +5,12 @@
 //! code hands the implementations to the services.
 
 use std::error::Error;
+use std::path::PathBuf;
 
-use teamwright_domain::{Member, MemberId, Project, ProjectId, Task, TaskId, Timestamp};
+use teamwright_domain::{
+    Conversation, ConversationId, Member, MemberId, Project, ProjectId, Task, TaskId, Timestamp,
+    Turn,
+};
 
 /// A failure to read or write stored data.
 #[derive(Debug, thiserror::Error)]
@@ -147,6 +151,83 @@ pub trait MemberRepository: Send + Sync {
     ///
     /// Returns an error if the member could not be removed.
     fn delete(&self, id: MemberId) -> Result<(), StorageError>;
+}
+
+/// Stores the conversations with specialists together with their turns.
+pub trait ConversationRepository: Send + Sync {
+    /// Stores a conversation, replacing a stored conversation with the same
+    /// identifier. Its turns are stored on their own.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the conversation could not be written.
+    fn save_conversation(&self, conversation: &Conversation) -> Result<(), StorageError>;
+
+    /// Stores a turn with its steps, replacing a stored turn with the same
+    /// identifier. Its conversation is stored already.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the turn could not be written.
+    fn save_turn(&self, turn: &Turn) -> Result<(), StorageError>;
+
+    /// Finds a conversation by its identifier.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if stored data could not be read.
+    fn find(&self, id: ConversationId) -> Result<Option<Conversation>, StorageError>;
+
+    /// Lists the turns of a conversation, the oldest first.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if stored data could not be read.
+    fn turns_of(&self, id: ConversationId) -> Result<Vec<Turn>, StorageError>;
+
+    /// Lists the conversations of a project, the oldest first.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if stored data could not be read.
+    fn list_for_project(&self, project_id: ProjectId) -> Result<Vec<Conversation>, StorageError>;
+
+    /// Lists the turns of every project that are still running.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if stored data could not be read.
+    fn running_turns(&self) -> Result<Vec<Turn>, StorageError>;
+
+    /// Removes conversations together with their turns. Identifiers of
+    /// conversations that are not stored are ignored. Either all of the
+    /// stored ones are removed or none is.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the conversations could not be removed.
+    fn delete(&self, ids: &[ConversationId]) -> Result<(), StorageError>;
+}
+
+/// Knows the folder each project's specialists work in.
+pub trait ProjectFolders: Send + Sync {
+    /// The folder of a project. It is created if it is missing.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the folder does not exist and cannot be created.
+    fn folder_of(&self, project: &Project) -> Result<PathBuf, StorageError>;
+}
+
+/// Is told when a conversation changes, for example to show the change at
+/// once.
+///
+/// It is called while the work of the specialists is held still, so it must
+/// return quickly and must not call back into the work of the specialists.
+pub trait WorkListener: Send + Sync {
+    /// A conversation has changed. The turns are all of its turns, the
+    /// oldest first.
+    fn conversation_changed(&self, conversation: &Conversation, turns: &[Turn]);
 }
 
 /// Tells the time.

@@ -8,7 +8,8 @@ use std::{env, fs};
 use tauri::{AppHandle, Manager};
 use teamwright_application::{ProjectService, StorageError, SystemClock, TaskService, TeamService};
 use teamwright_storage::{
-    Database, SqliteMemberRepository, SqliteProjectRepository, SqliteTaskRepository,
+    Database, SqliteConversationRepository, SqliteMemberRepository, SqliteProjectRepository,
+    SqliteTaskRepository,
 };
 
 /// The name of the database file inside the application's data directory.
@@ -59,7 +60,8 @@ impl AppState {
 
         let project_repository = Arc::new(SqliteProjectRepository::new(database.clone()));
         let task_repository = Arc::new(SqliteTaskRepository::new(database.clone()));
-        let member_repository = Arc::new(SqliteMemberRepository::new(database));
+        let member_repository = Arc::new(SqliteMemberRepository::new(database.clone()));
+        let conversation_repository = Arc::new(SqliteConversationRepository::new(database));
         let clock = Arc::new(SystemClock);
 
         Ok(Self {
@@ -67,18 +69,21 @@ impl AppState {
                 project_repository.clone(),
                 task_repository.clone(),
                 member_repository.clone(),
+                conversation_repository.clone(),
                 clock.clone(),
             ),
             tasks: TaskService::new(
                 project_repository.clone(),
                 task_repository.clone(),
                 member_repository.clone(),
+                conversation_repository.clone(),
                 clock.clone(),
             ),
             team: TeamService::new(
                 project_repository,
                 member_repository,
                 task_repository,
+                conversation_repository,
                 clock,
             ),
         })

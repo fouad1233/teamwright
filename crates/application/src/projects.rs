@@ -9,7 +9,10 @@ use teamwright_domain::{
 };
 
 use crate::error::ApplicationError;
-use crate::ports::{Clock, MemberRepository, ProjectRepository, TaskRepository};
+use crate::ports::{
+    Clock, ConversationRepository, MemberRepository, ProjectRepository, TaskRepository,
+};
+use crate::work::WorkInProgress;
 
 /// The workflows a new project can start with.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -64,6 +67,7 @@ pub struct ProjectService {
     projects: Arc<dyn ProjectRepository>,
     tasks: Arc<dyn TaskRepository>,
     members: Arc<dyn MemberRepository>,
+    conversations: Arc<dyn ConversationRepository>,
     clock: Arc<dyn Clock>,
 }
 
@@ -72,20 +76,23 @@ impl ProjectService {
     /// unique (`IOT2` … `IOT9999`).
     const LAST_KEY_SUFFIX: u32 = 9999;
 
-    /// Creates the service. The tasks and the members are needed because
-    /// removing a project removes them too, and changing the workflow can
-    /// move or complete tasks.
+    /// Creates the service. The tasks, the members and the conversations
+    /// are needed because removing a project removes them too, changing the
+    /// workflow can move or complete tasks, and a project in which a
+    /// specialist works is neither put away nor removed.
     #[must_use]
     pub fn new(
         projects: Arc<dyn ProjectRepository>,
         tasks: Arc<dyn TaskRepository>,
         members: Arc<dyn MemberRepository>,
+        conversations: Arc<dyn ConversationRepository>,
         clock: Arc<dyn Clock>,
     ) -> Self {
         Self {
             projects,
             tasks,
             members,
+            conversations,
             clock,
         }
     }
@@ -186,8 +193,11 @@ impl ProjectService {
     ///
     /// # Errors
     ///
-    /// Returns an error if there is no such project or if storage fails.
+    /// Returns an error if there is no such project, if a specialist is
+    /// working in it, or if storage fails.
     pub fn archive(&self, id: ProjectId) -> Result<Project, ApplicationError> {
+        let project = self.get(id)?;
+        self.refuse_while_worked_on(&project)?;
         let now = self.clock.now();
         self.change(id, |project| {
             project.archive(now);
@@ -225,14 +235,22 @@ impl ProjectService {
         })
     }
 
-    /// Removes a project for good, with its tasks and its team. Its key is
-    /// free for a new project afterwards.
+    /// Removes a project for good, with its tasks, its team and the
+    /// conversations with its specialists. Its key is free for a new project
+    /// afterwards.
     ///
     /// # Errors
     ///
-    /// Returns an error if there is no such project or if storage fails.
+    /// Returns an error if there is no such project, if a specialist is
+    /// working in it, or if storage fails.
     pub fn delete(&self, id: ProjectId) -> Result<(), ApplicationError> {
         let project = self.get(id)?;
+        let conversations = self.refuse_while_worked_on(&project)?;
+        let conversation_ids: Vec<_> = conversations
+            .iter()
+            .map(|conversation| conversation.id())
+            .collect();
+        self.conversations.delete(&conversation_ids)?;
         let task_ids: Vec<_> = self
             .tasks
             .list_for_project(project.id())?
@@ -380,6 +398,23 @@ impl ProjectService {
         Ok(project)
     }
 
+    /// Refuses to go on while a specialist works in a project. Returns the
+    /// conversations of the project otherwise.
+    fn refuse_while_worked_on(
+        &self,
+        project: &Project,
+    ) -> Result<Vec<teamwright_domain::Conversation>, ApplicationError> {
+        let conversations = self.conversations.list_for_project(project.id())?;
+        WorkInProgress {
+            projects: self.projects.as_ref(),
+            tasks: self.tasks.as_ref(),
+            members: self.members.as_ref(),
+            conversations: self.conversations.as_ref(),
+        }
+        .refuse_while_worked_on(&conversations)?;
+        Ok(conversations)
+    }
+
     /// The tasks of a project that are in one status, subtasks included, in
     /// the order a manager arranged them: by rank, and by number where ranks
     /// are equal.
@@ -448,7 +483,8 @@ mod tests {
 
     use super::*;
     use crate::in_memory::{
-        InMemoryMemberRepository, InMemoryProjectRepository, InMemoryTaskRepository, ManualClock,
+        InMemoryConversationRepository, InMemoryMemberRepository, InMemoryProjectRepository,
+        InMemoryTaskRepository, ManualClock,
     };
     use crate::tasks::{NewTask, TaskService};
     use crate::team::{NewMember, TeamService};
@@ -470,21 +506,24 @@ mod tests {
         let projects = Arc::new(InMemoryProjectRepository::default());
         let tasks = Arc::new(InMemoryTaskRepository::default());
         let members = Arc::new(InMemoryMemberRepository::default());
+        let conversations = Arc::new(InMemoryConversationRepository::default());
         let clock = Arc::new(ManualClock::starting_at(start_of_day()));
         Workspace {
             projects: ProjectService::new(
                 projects.clone(),
                 tasks.clone(),
                 members.clone(),
+                conversations.clone(),
                 clock.clone(),
             ),
             tasks: TaskService::new(
                 projects.clone(),
                 tasks.clone(),
                 members.clone(),
+                conversations.clone(),
                 clock.clone(),
             ),
-            team: TeamService::new(projects, members, tasks, clock.clone()),
+            team: TeamService::new(projects, members, tasks, conversations, clock.clone()),
             clock,
         }
     }

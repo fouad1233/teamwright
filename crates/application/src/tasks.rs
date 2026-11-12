@@ -9,7 +9,10 @@ use teamwright_domain::{
 };
 
 use crate::error::ApplicationError;
-use crate::ports::{Clock, MemberRepository, ProjectRepository, TaskRepository};
+use crate::ports::{
+    Clock, ConversationRepository, MemberRepository, ProjectRepository, TaskRepository,
+};
+use crate::work::WorkInProgress;
 
 /// What is needed to open a task.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -62,22 +65,27 @@ pub struct TaskService {
     projects: Arc<dyn ProjectRepository>,
     tasks: Arc<dyn TaskRepository>,
     members: Arc<dyn MemberRepository>,
+    conversations: Arc<dyn ConversationRepository>,
     clock: Arc<dyn Clock>,
 }
 
 impl TaskService {
-    /// Creates the service.
+    /// Creates the service. The conversations are needed because the record
+    /// of the work on a task goes with the task, and a task a specialist is
+    /// working on is not removed.
     #[must_use]
     pub fn new(
         projects: Arc<dyn ProjectRepository>,
         tasks: Arc<dyn TaskRepository>,
         members: Arc<dyn MemberRepository>,
+        conversations: Arc<dyn ConversationRepository>,
         clock: Arc<dyn Clock>,
     ) -> Self {
         Self {
             projects,
             tasks,
             members,
+            conversations,
             clock,
         }
     }
@@ -350,16 +358,36 @@ impl TaskService {
     }
 
     /// Removes a task together with its subtasks. Tasks that waited for a
-    /// removed task stop waiting for it.
+    /// removed task stop waiting for it. The conversations about the removed
+    /// tasks go with them.
     ///
     /// # Errors
     ///
-    /// Returns an error if there is no such task or if storage fails.
+    /// Returns an error if there is no such task, if a specialist is working
+    /// on it or on one of its subtasks, or if storage fails.
     pub fn delete(&self, id: TaskId) -> Result<(), ApplicationError> {
         let task = self.require_task(id)?;
         let tasks_of_project = self.tasks.list_for_project(task.project_id())?;
         let removed = subtree_of(id, &tasks_of_project);
         let now = self.clock.now();
+
+        let about_removed: Vec<_> = self
+            .conversations
+            .list_for_project(task.project_id())?
+            .into_iter()
+            .filter(|conversation| {
+                conversation
+                    .task_id()
+                    .is_some_and(|task_id| removed.contains(&task_id))
+            })
+            .collect();
+        WorkInProgress {
+            projects: self.projects.as_ref(),
+            tasks: self.tasks.as_ref(),
+            members: self.members.as_ref(),
+            conversations: self.conversations.as_ref(),
+        }
+        .refuse_while_worked_on(&about_removed)?;
 
         let released: Vec<Task> = tasks_of_project
             .into_iter()
@@ -377,6 +405,15 @@ impl TaskService {
             })
             .collect();
 
+        // The conversations go first. If removing the tasks then fails, the
+        // tasks are still there without their record, which is harmless; a
+        // conversation about a task that no longer exists could not be
+        // shown.
+        let conversation_ids: Vec<_> = about_removed
+            .iter()
+            .map(|conversation| conversation.id())
+            .collect();
+        self.conversations.delete(&conversation_ids)?;
         self.tasks.save_all(&released)?;
         self.tasks
             .delete(&removed.into_iter().collect::<Vec<_>>())?;
@@ -486,7 +523,8 @@ mod tests {
 
     use super::*;
     use crate::in_memory::{
-        InMemoryMemberRepository, InMemoryProjectRepository, InMemoryTaskRepository, ManualClock,
+        InMemoryConversationRepository, InMemoryMemberRepository, InMemoryProjectRepository,
+        InMemoryTaskRepository, ManualClock,
     };
     use crate::projects::{NewProject, ProjectService};
     use crate::team::{NewMember, TeamService};
@@ -512,24 +550,28 @@ mod tests {
         let project_repository = Arc::new(InMemoryProjectRepository::default());
         let task_repository = Arc::new(InMemoryTaskRepository::default());
         let member_repository = Arc::new(InMemoryMemberRepository::default());
+        let conversation_repository = Arc::new(InMemoryConversationRepository::default());
         let clock = Arc::new(ManualClock::starting_at(start_of_day()));
         Workspace {
             projects: ProjectService::new(
                 project_repository.clone(),
                 task_repository.clone(),
                 member_repository.clone(),
+                conversation_repository.clone(),
                 clock.clone(),
             ),
             tasks: TaskService::new(
                 project_repository.clone(),
                 task_repository.clone(),
                 member_repository.clone(),
+                conversation_repository.clone(),
                 clock.clone(),
             ),
             team: TeamService::new(
                 project_repository,
                 member_repository,
                 task_repository,
+                conversation_repository,
                 clock.clone(),
             ),
             clock,

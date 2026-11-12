@@ -7,7 +7,10 @@ use teamwright_domain::{
 };
 
 use crate::error::ApplicationError;
-use crate::ports::{Clock, MemberRepository, ProjectRepository, TaskRepository};
+use crate::ports::{
+    Clock, ConversationRepository, MemberRepository, ProjectRepository, TaskRepository,
+};
+use crate::work::WorkInProgress;
 
 /// What is needed to put someone on a team.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -28,22 +31,27 @@ pub struct TeamService {
     projects: Arc<dyn ProjectRepository>,
     members: Arc<dyn MemberRepository>,
     tasks: Arc<dyn TaskRepository>,
+    conversations: Arc<dyn ConversationRepository>,
     clock: Arc<dyn Clock>,
 }
 
 impl TeamService {
-    /// Creates the service.
+    /// Creates the service. The conversations are needed because a member
+    /// that leaves leaves its conversations behind, and a member that is
+    /// working cannot leave.
     #[must_use]
     pub fn new(
         projects: Arc<dyn ProjectRepository>,
         members: Arc<dyn MemberRepository>,
         tasks: Arc<dyn TaskRepository>,
+        conversations: Arc<dyn ConversationRepository>,
         clock: Arc<dyn Clock>,
     ) -> Self {
         Self {
             projects,
             members,
             tasks,
+            conversations,
             clock,
         }
     }
@@ -131,14 +139,29 @@ impl TeamService {
     }
 
     /// Takes a member off the team. The tasks that were given to the member
-    /// are given to nobody.
+    /// are given to nobody. Its conversations stay on record, without it.
     ///
     /// # Errors
     ///
-    /// Returns an error if there is no such member or if storage fails.
+    /// Returns an error if there is no such member, if it is working on
+    /// something, or if storage fails.
     pub fn remove(&self, id: MemberId) -> Result<(), ApplicationError> {
         let member = self.require_member(id)?;
+        WorkInProgress {
+            projects: self.projects.as_ref(),
+            tasks: self.tasks.as_ref(),
+            members: self.members.as_ref(),
+            conversations: self.conversations.as_ref(),
+        }
+        .refuse_while_busy(&member)?;
         let now = self.clock.now();
+
+        for mut conversation in self.conversations.list_for_project(member.project_id())? {
+            if conversation.member_id() == Some(id) {
+                conversation.forget_member();
+                self.conversations.save_conversation(&conversation)?;
+            }
+        }
         let handed_back: Vec<Task> = self
             .tasks
             .list_for_project(member.project_id())?
@@ -221,7 +244,8 @@ mod tests {
 
     use super::*;
     use crate::in_memory::{
-        InMemoryMemberRepository, InMemoryProjectRepository, InMemoryTaskRepository, ManualClock,
+        InMemoryConversationRepository, InMemoryMemberRepository, InMemoryProjectRepository,
+        InMemoryTaskRepository, ManualClock,
     };
     use crate::projects::{NewProject, ProjectService};
     use crate::tasks::{NewTask, TaskService};
@@ -239,6 +263,7 @@ mod tests {
         let projects = Arc::new(InMemoryProjectRepository::default());
         let members = Arc::new(InMemoryMemberRepository::default());
         let tasks = Arc::new(InMemoryTaskRepository::default());
+        let conversations = Arc::new(InMemoryConversationRepository::default());
         let start_of_day = chrono::Utc.with_ymd_and_hms(2026, 11, 12, 9, 0, 0).unwrap();
         let clock = Arc::new(ManualClock::starting_at(start_of_day));
         Workspace {
@@ -246,15 +271,17 @@ mod tests {
                 projects.clone(),
                 tasks.clone(),
                 members.clone(),
+                conversations.clone(),
                 clock.clone(),
             ),
             team: TeamService::new(
                 projects.clone(),
                 members.clone(),
                 tasks.clone(),
+                conversations.clone(),
                 clock.clone(),
             ),
-            tasks: TaskService::new(projects, tasks, members, clock.clone()),
+            tasks: TaskService::new(projects, tasks, members, conversations, clock.clone()),
             clock,
         }
     }
