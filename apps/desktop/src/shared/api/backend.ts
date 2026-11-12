@@ -1,6 +1,8 @@
 import type {
+  AgentProgram,
   Assignee,
   CalendarDate,
+  Conversation,
   Id,
   Member,
   NewMember,
@@ -85,6 +87,36 @@ export interface Backend {
   setMemberResponsibility(memberId: Id, responsibility: string): Promise<Member>;
   /** Takes a member off the team. The member's tasks are given to nobody. */
   removeMember(memberId: Id): Promise<void>;
+
+  /** Says whether the program that runs the AI specialists is installed and signed in. */
+  agentProgram(): Promise<AgentProgram>;
+  /** Lists the conversations of a project with their turns, the oldest first. */
+  listConversations(projectId: Id): Promise<Conversation[]>;
+  /**
+   * Lets the AI specialist a task is given to start on it. The specialist
+   * gets a brief that the program writes from the task, and the task moves
+   * to the first status in which work is under way. When the specialist has
+   * finished, the task moves on to the first status for work that waits to
+   * be checked, if the workflow has one.
+   */
+  startWork(taskId: Id): Promise<Conversation>;
+  /**
+   * Sends the specialist of a conversation a message of the manager's. It
+   * is a new turn of the same session, so the specialist knows what went
+   * before.
+   */
+  reply(conversationId: Id, message: string): Promise<Conversation>;
+  /** Asks an AI specialist something that is not about a task. It starts a new conversation. */
+  ask(memberId: Id, message: string): Promise<Conversation>;
+  /** Stops the turn that is running in a conversation. */
+  stopWork(conversationId: Id): Promise<Conversation>;
+  /** Opens a conversation in the Claude desktop app, to look at all of it there. */
+  openInClaude(conversationId: Id): Promise<void>;
+  /**
+   * Calls the listener whenever a conversation changes: a turn starts,
+   * takes a step, or ends. Returns the function that stops the calls.
+   */
+  onConversationChanged(listener: (conversation: Conversation) => void): () => void;
 }
 
 /**

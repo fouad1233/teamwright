@@ -2,9 +2,11 @@ import { evenlySpacedRanks, rankBetween, rankFitsBetween } from '@/shared/lib/ra
 
 import { BackendError, type Backend } from '../backend';
 import type {
+  AgentProgram,
   Assignee,
   CalendarDate,
   Color,
+  Conversation,
   Id,
   Member,
   Moment,
@@ -17,13 +19,27 @@ import type {
   StatusCategory,
   StatusProperties,
   Task,
+  Turn,
   WorkflowTemplate,
 } from '../types';
+import { briefFor } from './brief';
+import {
+  SIMULATED_MODEL,
+  scriptForMessage,
+  scriptForTask,
+  type Act,
+  type Script,
+} from './simulatedSpecialist';
 
 /** Where the demo backend gets the time and new identifiers from. */
 export interface DemoEnvironment {
   now(): Date;
   newId(): Id;
+  /**
+   * Does something after a pause, given in milliseconds. The specialists of
+   * the demo act through it. Left out, a timer of the browser is used.
+   */
+  later?: (work: () => void, milliseconds: number) => void;
 }
 
 /** The projects, tasks and team members a demo backend starts with. */
@@ -96,7 +112,11 @@ export class DemoBackend implements Backend {
   private readonly projects = new Map<Id, Project>();
   private readonly tasks = new Map<Id, Task>();
   private readonly members = new Map<Id, Member>();
+  private readonly conversations = new Map<Id, Conversation>();
   private readonly nextTaskNumbers = new Map<Id, number>();
+  /** The turns whose script is still being played. A turn that is stopped leaves this set. */
+  private readonly playing = new Set<Id>();
+  private readonly conversationListeners = new Set<(conversation: Conversation) => void>();
 
   constructor(workspace?: DemoWorkspace, environment: DemoEnvironment = browserEnvironment) {
     this.environment = environment;
@@ -158,6 +178,7 @@ export class DemoBackend implements Backend {
   archiveProject(projectId: Id): Promise<Project> {
     return respond(() => {
       const project = this.requireProject(projectId);
+      this.refuseWhileWorkedOn(this.conversationsOf(project.id));
       project.archivedAt ??= this.nowAsText();
       return project;
     });
@@ -182,11 +203,15 @@ export class DemoBackend implements Backend {
   deleteProject(projectId: Id): Promise<void> {
     return respond(() => {
       const project = this.requireProject(projectId);
+      this.refuseWhileWorkedOn(this.conversationsOf(project.id));
       for (const task of this.tasksOfProject(project.id)) {
         this.tasks.delete(task.id);
       }
       for (const member of this.teamOf(project.id)) {
         this.members.delete(member.id);
+      }
+      for (const conversation of this.conversationsOf(project.id)) {
+        this.forget(conversation);
       }
       this.nextTaskNumbers.delete(project.id);
       this.projects.delete(project.id);
@@ -475,6 +500,15 @@ export class DemoBackend implements Backend {
       const task = this.requireTask(taskId);
       const removed = this.subtreeOf(task);
       const now = this.nowAsText();
+      // The record of the work on a task goes with the task. A task that
+      // somebody is working on stays until the work has been stopped.
+      const aboutRemoved = this.conversationsOf(task.projectId).filter(
+        (conversation) => conversation.taskId !== null && removed.has(conversation.taskId),
+      );
+      this.refuseWhileWorkedOn(aboutRemoved);
+      for (const conversation of aboutRemoved) {
+        this.forget(conversation);
+      }
       for (const other of this.tasksOfProject(task.projectId)) {
         if (removed.has(other.id)) {
           this.tasks.delete(other.id);
@@ -541,7 +575,14 @@ export class DemoBackend implements Backend {
   removeMember(memberId: Id): Promise<void> {
     return respond(() => {
       const member = this.requireMember(memberId);
+      this.refuseWhileBusy(member);
       const now = this.nowAsText();
+      // What the member did stays on record, without the member.
+      for (const conversation of this.conversationsOf(member.projectId)) {
+        if (conversation.memberId === member.id) {
+          conversation.memberId = null;
+        }
+      }
       for (const task of this.tasksOfProject(member.projectId)) {
         if (task.assignee?.kind === 'member' && task.assignee.memberId === member.id) {
           task.assignee = null;
@@ -550,6 +591,331 @@ export class DemoBackend implements Backend {
       }
       this.members.delete(member.id);
     });
+  }
+
+  agentProgram(): Promise<AgentProgram> {
+    // The demo has no program to run specialists on. It plays their work.
+    return respond(() => ({
+      state: 'ready' as const,
+      version: null,
+      signInMethod: null,
+      subscription: null,
+      problem: null,
+    }));
+  }
+
+  listConversations(projectId: Id): Promise<Conversation[]> {
+    return respond(() => {
+      this.requireProject(projectId);
+      return this.conversationsOf(projectId);
+    });
+  }
+
+  startWork(taskId: Id): Promise<Conversation> {
+    return respond(() => {
+      const task = this.requireTask(taskId);
+      const project = this.requireProject(task.projectId);
+      const member =
+        task.assignee?.kind === 'member' ? this.members.get(task.assignee.memberId) : undefined;
+      if (member?.kind !== 'agent') {
+        throw new BackendError('no_specialist', 'the task is not given to an AI specialist');
+      }
+      if (this.conversationsOf(project.id).some((other) => other.taskId === task.id)) {
+        throw new BackendError(
+          'work_already_started',
+          `work on ${referenceOf(project, task)} has already started`,
+        );
+      }
+      this.refuseWhileBusy(member);
+
+      const conversation: Conversation = {
+        id: this.environment.newId(),
+        projectId: project.id,
+        memberId: member.id,
+        taskId: task.id,
+        startedAt: this.nowAsText(),
+        turns: [],
+      };
+      this.conversations.set(conversation.id, conversation);
+      this.beginTurn(
+        conversation,
+        briefFor(project, task, this.tasksOfProject(project.id)),
+        'brief',
+        scriptForTask(task),
+      );
+      return conversation;
+    });
+  }
+
+  reply(conversationId: Id, message: string): Promise<Conversation> {
+    return respond(() => {
+      const conversation = this.requireConversation(conversationId);
+      const member =
+        conversation.memberId === null ? undefined : this.members.get(conversation.memberId);
+      if (!member) {
+        throw new BackendError(
+          'no_specialist',
+          'the specialist of this conversation has left the team',
+        );
+      }
+      const text = tidyMessage(message);
+      this.refuseWhileBusy(member);
+      this.beginTurn(conversation, text, 'message', scriptForMessage(member));
+      return conversation;
+    });
+  }
+
+  ask(memberId: Id, message: string): Promise<Conversation> {
+    return respond(() => {
+      const member = this.requireMember(memberId);
+      if (member.kind !== 'agent') {
+        throw new BackendError('no_specialist', `${member.name} is not an AI specialist`);
+      }
+      const text = tidyMessage(message);
+      this.refuseWhileBusy(member);
+      const conversation: Conversation = {
+        id: this.environment.newId(),
+        projectId: member.projectId,
+        memberId: member.id,
+        taskId: null,
+        startedAt: this.nowAsText(),
+        turns: [],
+      };
+      this.conversations.set(conversation.id, conversation);
+      this.beginTurn(conversation, text, 'message', scriptForMessage(member));
+      return conversation;
+    });
+  }
+
+  stopWork(conversationId: Id): Promise<Conversation> {
+    return respond(() => {
+      const conversation = this.requireConversation(conversationId);
+      const turn = conversation.turns.find((candidate) => candidate.state === 'running');
+      if (turn) {
+        this.playing.delete(turn.id);
+        turn.state = 'stopped';
+        turn.endedAt = this.nowAsText();
+        turn.failure = 'Stopped by the manager.';
+        this.tellListeners(conversation);
+      }
+      return conversation;
+    });
+  }
+
+  openInClaude(conversationId: Id): Promise<void> {
+    return respond(() => {
+      this.requireConversation(conversationId);
+      throw new BackendError(
+        'not_in_the_demo',
+        'the demo has no Claude desktop app to open the conversation in',
+      );
+    });
+  }
+
+  onConversationChanged(listener: (conversation: Conversation) => void): () => void {
+    this.conversationListeners.add(listener);
+    return () => {
+      this.conversationListeners.delete(listener);
+    };
+  }
+
+  /** The conversations of a project, the oldest first. */
+  private conversationsOf(projectId: Id): Conversation[] {
+    return [...this.conversations.values()]
+      .filter((conversation) => conversation.projectId === projectId)
+      .sort((first, second) => first.startedAt.localeCompare(second.startedAt));
+  }
+
+  private requireConversation(conversationId: Id): Conversation {
+    const conversation = this.conversations.get(conversationId);
+    if (!conversation) {
+      throw new BackendError(
+        'not_found',
+        `there is no conversation with the identifier ${conversationId}`,
+      );
+    }
+    return conversation;
+  }
+
+  /** Removes a conversation and stops whatever is still being played in it. */
+  private forget(conversation: Conversation): void {
+    for (const turn of conversation.turns) {
+      this.playing.delete(turn.id);
+    }
+    this.conversations.delete(conversation.id);
+  }
+
+  /**
+   * Refuses to go on while a turn is running in one of some conversations:
+   * what a specialist is working on is not taken away from under it.
+   */
+  private refuseWhileWorkedOn(conversations: readonly Conversation[]): void {
+    const busy = conversations.find((conversation) =>
+      conversation.turns.some((turn) => turn.state === 'running'),
+    );
+    if (!busy) {
+      return;
+    }
+    const member = busy.memberId === null ? undefined : this.members.get(busy.memberId);
+    const task = busy.taskId === null ? undefined : this.tasks.get(busy.taskId);
+    const project = this.projects.get(busy.projectId);
+    const who = member?.name ?? 'A specialist';
+    const what = task && project ? referenceOf(project, task) : 'a question';
+    throw new BackendError(
+      'work_in_progress',
+      `${who} is still working on ${what}; stop the work first`,
+    );
+  }
+
+  /** A specialist works on one thing at a time. */
+  private refuseWhileBusy(member: Member): void {
+    const busyWith = this.conversationsOf(member.projectId).find(
+      (conversation) =>
+        conversation.memberId === member.id &&
+        conversation.turns.some((turn) => turn.state === 'running'),
+    );
+    if (!busyWith) {
+      return;
+    }
+    const task = busyWith.taskId === null ? undefined : this.tasks.get(busyWith.taskId);
+    const project = this.projects.get(member.projectId);
+    const what = task && project ? referenceOf(project, task) : 'a question';
+    throw new BackendError('member_busy', `${member.name} is still working on ${what}`);
+  }
+
+  /**
+   * Starts a turn of a conversation and plays its script. A task that work
+   * starts on, or goes on with, moves to the first status in which work is
+   * under way.
+   */
+  private beginTurn(
+    conversation: Conversation,
+    request: string,
+    origin: Turn['origin'],
+    script: Script,
+  ): void {
+    const turn: Turn = {
+      id: this.environment.newId(),
+      request,
+      origin,
+      state: 'running',
+      startedAt: this.nowAsText(),
+      endedAt: null,
+      steps: [],
+      answer: '',
+      failure: null,
+      model: SIMULATED_MODEL,
+      tokens: null,
+    };
+    conversation.turns.push(turn);
+
+    const task = conversation.taskId === null ? undefined : this.tasks.get(conversation.taskId);
+    if (task && ['todo', 'review'].includes(this.categoryOf(task))) {
+      this.moveToFirst(task, 'active');
+    }
+
+    this.playing.add(turn.id);
+    const later = this.environment.later ?? ((work, pause) => void setTimeout(work, pause));
+    let pause = 0;
+    for (const { after, act } of script.acts) {
+      pause += after;
+      later(() => {
+        this.perform(conversation.id, turn.id, act);
+      }, pause);
+    }
+    later(() => {
+      this.endTurn(conversation.id, turn.id, script);
+    }, pause + script.endsAfter);
+  }
+
+  /** The turn that is being played, or nothing if it was stopped or removed meanwhile. */
+  private turnBeingPlayed(conversationId: Id, turnId: Id): [Conversation, Turn] | undefined {
+    const conversation = this.conversations.get(conversationId);
+    const turn = conversation?.turns.find((candidate) => candidate.id === turnId);
+    return conversation && turn && this.playing.has(turnId) ? [conversation, turn] : undefined;
+  }
+
+  /** Lets a simulated specialist take one step. */
+  private perform(conversationId: Id, turnId: Id, act: Act): void {
+    const found = this.turnBeingPlayed(conversationId, turnId);
+    if (!found) {
+      return;
+    }
+    const [conversation, turn] = found;
+    const at = this.nowAsText();
+    if (act.kind === 'say') {
+      turn.steps.push({ kind: 'text', at, text: act.text });
+    } else if (act.kind === 'note') {
+      turn.steps.push({ kind: 'notice', at, message: act.message });
+    } else if (act.kind === 'use') {
+      turn.steps.push({
+        kind: 'tool',
+        at,
+        id: act.id,
+        tool: act.tool,
+        summary: act.summary,
+        outcome: 'running',
+      });
+    } else {
+      for (const step of turn.steps) {
+        if (step.kind === 'tool' && step.id === act.id) {
+          step.outcome = 'done';
+        }
+      }
+    }
+    this.tellListeners(conversation);
+  }
+
+  /**
+   * Ends a simulated turn with its report. A task whose work is under way
+   * moves on to the first status for work that waits to be checked.
+   */
+  private endTurn(conversationId: Id, turnId: Id, script: Script): void {
+    const found = this.turnBeingPlayed(conversationId, turnId);
+    if (!found) {
+      return;
+    }
+    const [conversation, turn] = found;
+    this.playing.delete(turnId);
+    turn.state = 'finished';
+    turn.endedAt = this.nowAsText();
+    turn.answer = script.answer;
+    turn.tokens = script.tokens;
+
+    const task = conversation.taskId === null ? undefined : this.tasks.get(conversation.taskId);
+    if (task && this.categoryOf(task) === 'active') {
+      this.moveToFirst(task, 'review');
+    }
+    this.tellListeners(conversation);
+  }
+
+  private tellListeners(conversation: Conversation): void {
+    for (const listener of this.conversationListeners) {
+      listener(structuredClone(conversation));
+    }
+  }
+
+  /** What the status a task is in means for its progress. */
+  private categoryOf(task: Task): StatusCategory {
+    const project = this.requireProject(task.projectId);
+    return requireStatus(project, task.statusId).category;
+  }
+
+  /**
+   * Moves a task to the bottom of the first status of a category. A workflow
+   * that has no such status leaves the task where it is.
+   */
+  private moveToFirst(task: Task, category: StatusCategory): void {
+    const project = this.requireProject(task.projectId);
+    const status = project.statuses.find((candidate) => candidate.category === category);
+    if (!status || status.id === task.statusId) {
+      return;
+    }
+    const now = this.nowAsText();
+    task.rank = rankBetween(this.tasksOfStatus(project.id, status.id).at(-1)?.rank, undefined);
+    task.statusId = status.id;
+    task.completedAt = status.category === 'done' ? (task.completedAt ?? now) : null;
+    task.updatedAt = now;
   }
 
   private allProjects(): Project[] {
@@ -813,6 +1179,20 @@ function placeForNewStatus(statuses: readonly Status[], category: StatusCategory
     }
   });
   return place;
+}
+
+/** The name a manager knows a task by, such as `IOT-12`. */
+function referenceOf(project: Project, task: Task): string {
+  return `${project.key}-${task.number.toString()}`;
+}
+
+/** Trims a message of the manager's and refuses an empty one. */
+function tidyMessage(raw: string): string {
+  const message = raw.trim();
+  if (message === '') {
+    throw new BackendError('rule_broken', 'the message must not be empty');
+  }
+  return message;
 }
 
 /** Writes a number of tasks: "1 task", "3 tasks". */

@@ -1,9 +1,12 @@
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 
 import { BackendError, type Backend } from './backend';
 import type {
+  AgentProgram,
   Assignee,
   CalendarDate,
+  Conversation,
   Id,
   Member,
   NewMember,
@@ -139,7 +142,50 @@ export class TauriBackend implements Backend {
   removeMember(memberId: Id): Promise<void> {
     return call('remove_member', { memberId });
   }
+
+  agentProgram(): Promise<AgentProgram> {
+    return call('agent_program');
+  }
+
+  listConversations(projectId: Id): Promise<Conversation[]> {
+    return call('list_conversations', { projectId });
+  }
+
+  startWork(taskId: Id): Promise<Conversation> {
+    return call('start_work', { taskId });
+  }
+
+  reply(conversationId: Id, message: string): Promise<Conversation> {
+    return call('reply', { conversationId, message });
+  }
+
+  ask(memberId: Id, message: string): Promise<Conversation> {
+    return call('ask', { memberId, message });
+  }
+
+  stopWork(conversationId: Id): Promise<Conversation> {
+    return call('stop_work', { conversationId });
+  }
+
+  openInClaude(conversationId: Id): Promise<void> {
+    return call('open_in_claude', { conversationId });
+  }
+
+  onConversationChanged(listener: (conversation: Conversation) => void): () => void {
+    // The shell sends this event with the whole conversation every time one changes.
+    const listening = listen<Conversation>(CONVERSATION_CHANGED, (event) => {
+      listener(event.payload);
+    });
+    return () => {
+      void listening.then((stopListening) => {
+        stopListening();
+      });
+    };
+  }
 }
+
+/** The name of the event the shell sends when a conversation has changed. */
+const CONVERSATION_CHANGED = 'conversation-changed';
 
 /** Calls a command of the shell and turns its failure into a `BackendError`. */
 async function call<Result>(command: string, args?: Record<string, unknown>): Promise<Result> {
