@@ -269,6 +269,45 @@ const SAMPLE_TASKS = [
 /** The task that is opened for the picture of a task. Its subtasks are shown unfolded. */
 const SHOWN_TASK = 'Draw the schematic';
 
+/**
+ * The story points of the sample tasks, by their numbers. A task that is
+ * not listed has none, as a task has until somebody sizes it.
+ */
+const SAMPLE_POINTS = [
+  [1, 2],
+  [2, 3],
+  [3, 5],
+  [4, 8],
+  [5, 2],
+  [6, 8],
+  [7, 3],
+  [8, 5],
+  [9, 2],
+  [10, 5],
+  [11, 1],
+];
+
+/**
+ * The sprints of the sample project, in the order they are planned: one
+ * that is over, one that runs, and one that is to come. The tasks are named
+ * by their numbers. Every other task stays in the backlog.
+ */
+const SAMPLE_SPRINTS = {
+  over: {
+    tasks: [1, 2, 3],
+    goal: 'Know what to build, and with which parts',
+    startsInDays: -11,
+    endsInDays: -5,
+  },
+  running: {
+    tasks: [4, 5, 11],
+    goal: 'A schematic that can be routed',
+    startsInDays: -4,
+    endsInDays: 9,
+  },
+  toCome: { tasks: [6, 7, 8], goal: 'Firmware that talks to the sensors' },
+};
+
 /** The calendar date that lies `days` after today, in the form year-month-day. */
 function dateInDays(days) {
   if (days === undefined) {
@@ -359,8 +398,54 @@ async function createSampleProject(window) {
     });
   }
 
+  await planSampleSprints(window, project.id, taskIds);
+
   const shownTask = SAMPLE_TASKS.find((sample) => sample.title === SHOWN_TASK);
   return { project, shownTaskId: taskIds.get(shownTask.number) };
+}
+
+/**
+ * Plans the sample project in sprints, the way a manager would have: the
+ * first sprint was started and completed, and what it did not finish went
+ * on into the second, which runs. A third is planned.
+ */
+async function planSampleSprints(window, projectId, taskIds) {
+  for (const [number, points] of SAMPLE_POINTS) {
+    await run(window, 'set_task_points', { taskId: taskIds.get(number), points });
+  }
+  /** Plans a sprint with the tasks of a sample sprint in it. */
+  const plan = async (sample) => {
+    const sprint = await run(window, 'create_sprint', { input: { projectId } });
+    for (const number of sample.tasks) {
+      await run(window, 'plan_task', { taskId: taskIds.get(number), sprintId: sprint.id });
+    }
+    return sprint;
+  };
+  /** Starts a sprint with the goal and the dates of a sample sprint. */
+  const start = (sprint, sample) =>
+    run(window, 'start_sprint', {
+      sprintId: sprint.id,
+      input: {
+        name: sprint.name,
+        goal: sample.goal,
+        startOn: dateInDays(sample.startsInDays),
+        endOn: dateInDays(sample.endsInDays),
+      },
+    });
+
+  const over = await plan(SAMPLE_SPRINTS.over);
+  await start(over, SAMPLE_SPRINTS.over);
+  const running = await plan(SAMPLE_SPRINTS.running);
+  await run(window, 'complete_sprint', {
+    sprintId: over.id,
+    input: { moveUnfinishedTo: running.id },
+  });
+  await start(running, SAMPLE_SPRINTS.running);
+  const toCome = await plan(SAMPLE_SPRINTS.toCome);
+  await run(window, 'change_sprint', {
+    sprintId: toCome.id,
+    changes: { name: toCome.name, goal: SAMPLE_SPRINTS.toCome.goal, startOn: null, endOn: null },
+  });
 }
 
 /**
@@ -419,21 +504,29 @@ function card(title) {
 }
 
 /**
- * Takes the pictures of the sample project in one theme: the board, a task,
- * the list, the Gantt chart, the calendar, the team, the office, and the
- * statuses.
+ * Takes the pictures of the sample project in one theme: the board of the
+ * sprint and of all tasks, a task, the backlog, the list, the Gantt chart,
+ * the calendar, the team, the office, and the statuses.
  */
 async function takeProjectPictures(window, theme) {
   await window.showInTheme(theme);
 
+  // While a sprint runs, the board opens on the tasks of that sprint.
   await window.click(tab('Board'));
   await window.waitForText(SHOWN_TASK);
+  await takePicture(window, `sprint-board-${theme}`);
+  await window.evaluate(press('All tasks'));
+  await window.waitForText(SAMPLE_TASKS[0].title);
   await takePicture(window, `board-${theme}`);
 
   await window.click(card(SHOWN_TASK));
   await window.waitForText('WAITS FOR');
   await takePicture(window, `task-${theme}`);
   await window.pressEscape();
+
+  await window.click(tab('Backlog'));
+  await window.waitForText('COMPLETED SPRINTS');
+  await takePicture(window, `backlog-${theme}`);
 
   await window.click(tab('List'));
   await window.waitForText('ASSIGNEE');

@@ -482,6 +482,11 @@ it runs, how many days are left. Under it are its tasks: the reference,
 the title, who it is given to, its points and its status. Subtasks are
 not listed: they go where their task goes.
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="../screenshots/backlog-dark.png">
+  <img alt="The Backlog view: the sprint that runs with its burndown, a planned sprint, the backlog, and a completed sprint at the foot" src="../screenshots/backlog-light.png">
+</picture>
+
 - **New sprint**, at the backlog, plans a sprint. Its name may be left
   empty: it is then called *Sprint 4*, after the number of sprints the
   project has had. The goal and the dates can wait until it starts.
@@ -534,11 +539,21 @@ member of the team has a bench on the floor. Each place has a reference on
 the edge of the drawing, such as *B2*, and the arrangement follows from the
 size of the team and of the window: you do not arrange it.
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="../screenshots/office-dark.png">
+  <img alt="The office of a project with three specialists: you and the Advisor at the front, a bench for every member, and no lamp lit because nobody works" src="../screenshots/office-light.png">
+</picture>
+
 A lamp hangs over every bench. It is lit only where a specialist or the
 Advisor is working. A bench that waits for you is held by four gold
 corners, like a waiting card on the board. The words on the bench always
 say the same as the light, so the office reads in a picture and with
 motion turned down too.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="../screenshots/specialist-office-dark.png">
+  <img alt="The office while a specialist works: the lamp over its bench is lit, and the bench shows the task and how long the work has gone on" src="../screenshots/specialist-office-light.png">
+</picture>
 
 | What the bench says | What it shows |
 |---|---|
