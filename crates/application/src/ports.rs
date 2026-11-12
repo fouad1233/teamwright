@@ -5,12 +5,14 @@
 //! code hands the implementations to the services.
 
 use std::error::Error;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use teamwright_domain::{
     Conversation, ConversationId, Member, MemberId, Project, ProjectId, Task, TaskId, Timestamp,
     Turn,
 };
+
+use crate::places::ChosenPlaces;
 
 /// A failure to read or write stored data.
 #[derive(Debug, thiserror::Error)]
@@ -218,14 +220,78 @@ pub trait ConversationRepository: Send + Sync {
     fn delete(&self, ids: &[ConversationId]) -> Result<(), StorageError>;
 }
 
-/// Knows the folder each project's specialists work in.
+/// Knows the folder Teamwright gives each project. The specialists work
+/// there unless the manager chooses another work folder.
 pub trait ProjectFolders: Send + Sync {
-    /// The folder of a project. It is created if it is missing.
+    /// The folder Teamwright gives a project. It is created if it is
+    /// missing.
     ///
     /// # Errors
     ///
     /// Returns an error if the folder does not exist and cannot be created.
     fn folder_of(&self, project: &Project) -> Result<PathBuf, StorageError>;
+}
+
+/// Stores the folders the manager has chosen for each project.
+///
+/// These are facts about one computer: a folder on this computer means
+/// nothing on another one.
+pub trait PlacesRepository: Send + Sync {
+    /// The folders chosen for a project. A project for which nothing was
+    /// chosen has no work folder and no reference folders.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if stored data could not be read.
+    fn find(&self, project_id: ProjectId) -> Result<ChosenPlaces, StorageError>;
+
+    /// Stores the folders chosen for a project, replacing what was stored
+    /// for it before.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the folders could not be written.
+    fn save(&self, project_id: ProjectId, places: &ChosenPlaces) -> Result<(), StorageError>;
+
+    /// Forgets the folders chosen for a project. The folders themselves are
+    /// not touched. A project for which nothing is stored is ignored.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the stored folders could not be removed.
+    fn delete(&self, project_id: ProjectId) -> Result<(), StorageError>;
+}
+
+/// The files and folders of the computer, as far as the folders of a project
+/// need them.
+pub trait FileSystem: Send + Sync {
+    /// Whether a folder exists at the path.
+    fn is_folder(&self, path: &Path) -> bool;
+
+    /// The full form of an existing folder, in which two paths of the same
+    /// folder are equal, so that two folders can be compared.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the folder does not exist or cannot be reached.
+    fn resolve(&self, path: &Path) -> Result<PathBuf, StorageError>;
+
+    /// The names of the files and folders in a folder, in no particular
+    /// order. A folder that does not exist has none.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the folder exists and cannot be read.
+    fn file_names_in(&self, folder: &Path) -> Result<Vec<String>, StorageError>;
+
+    /// Copies a file. The folders above `to` are created if they are
+    /// missing.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error that names the file if it cannot be read, or if the
+    /// copy cannot be written.
+    fn copy_file(&self, from: &Path, to: &Path) -> Result<(), StorageError>;
 }
 
 /// Is told when a conversation changes, for example to show the change at

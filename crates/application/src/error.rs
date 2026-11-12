@@ -127,6 +127,55 @@ pub enum ApplicationError {
     #[error("the specialist has not started its session yet")]
     SessionNotStarted,
 
+    /// A folder was to be used without a name.
+    #[error("the folder must be named")]
+    FolderNotNamed,
+
+    /// A folder was named that does not exist.
+    #[error("the folder {folder} does not exist")]
+    FolderNotFound {
+        /// The folder, as it was given.
+        folder: String,
+    },
+
+    /// The work folder and a reference folder were to be the same folder.
+    #[error("the work folder and a reference folder cannot be the same folder: {work_folder}")]
+    WorkFolderIsReference {
+        /// The work folder, as it was given.
+        work_folder: String,
+    },
+
+    /// A reference folder was to lie inside the work folder, where the
+    /// specialists read everything already.
+    #[error(
+        "{reference_folder} lies inside the work folder {work_folder}, where the specialists \
+         read everything already"
+    )]
+    ReferenceInsideWorkFolder {
+        /// The reference folder, as it was given.
+        reference_folder: String,
+        /// The work folder, as it was given.
+        work_folder: String,
+    },
+
+    /// The work folder was to lie inside a reference folder, where the
+    /// specialists may not write.
+    #[error(
+        "the work folder {work_folder} lies inside the reference folder {reference_folder}, \
+         where the specialists may not write"
+    )]
+    WorkFolderInsideReference {
+        /// The work folder, as it was given.
+        work_folder: String,
+        /// The reference folder, as it was given.
+        reference_folder: String,
+    },
+
+    /// A file to copy was named by a path that has no file name, such as
+    /// the root of a drive.
+    #[error("a file to copy has no name")]
+    FileWithoutName,
+
     /// The agent program could not be used.
     #[error(transparent)]
     AgentProgram(#[from] AgentRuntimeError),
@@ -153,7 +202,17 @@ impl ApplicationError {
     #[must_use]
     pub const fn code(&self) -> &'static str {
         match self {
-            Self::Rule(_) => "rule_broken",
+            // The rules about folders concern several things at once, the
+            // stored folders and the computer, so they are checked here and
+            // not in the domain. To the interface they are rules like any
+            // other.
+            Self::Rule(_)
+            | Self::FolderNotNamed
+            | Self::WorkFolderIsReference { .. }
+            | Self::ReferenceInsideWorkFolder { .. }
+            | Self::WorkFolderInsideReference { .. }
+            | Self::FileWithoutName => "rule_broken",
+            Self::FolderNotFound { .. } => "folder_not_found",
             Self::NotFound { .. } => "not_found",
             Self::ProjectKeyTaken { .. } => "project_key_taken",
             Self::DifferentProjects => "different_projects",

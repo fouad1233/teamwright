@@ -10,12 +10,13 @@ window or agent runtime.
 | `projects` | `ProjectService`: start, find, list, rename, describe, archive, restore and delete projects; add, change, move and remove the statuses of their workflows |
 | `tasks` | `TaskService`: open, change, move, connect and remove tasks, and tell the history of one from the versions storage has kept |
 | `team` | `TeamService`: put members on the team of a project, change them, take them off |
+| `places` | `PlacesService`: the folders of a project: choose its work folder, add and take away reference folders, copy reference files into it |
 | `work` | `WorkService`: let AI specialists work: start on a task, ask, reply, answer a specialist's question, list what waits for the manager, stop, follow every event, open a session in the desktop app, recover after a restart; `brief_for` and `instructions_for` |
-| `ports` | The interfaces the services need: `ProjectRepository`, `TaskRepository`, `MemberRepository`, `ConversationRepository`, `ProjectFolders`, `WorkListener`, `Clock` |
+| `ports` | The interfaces the services need: `ProjectRepository`, `TaskRepository`, `MemberRepository`, `ConversationRepository`, `PlacesRepository`, `ProjectFolders`, `FileSystem`, `WorkListener`, `Clock` |
 | `agent_runtime` | `AgentRuntime`: the interface to the program that runs a team member's session, and the data it speaks |
 | `error` | `ApplicationError`, with a stable `code()` for interfaces |
 | `clock` | `SystemClock`, the real clock |
-| `in_memory` | In-memory repositories, fixed project folders, a listener that records, a scripted agent runtime and a settable clock, for tests and demos |
+| `in_memory` | In-memory repositories, fixed project folders, a pretended file system, a listener that records, a scripted agent runtime and a settable clock, for tests and demos |
 
 ## How a use case is built
 
@@ -79,6 +80,37 @@ project, two members of one team cannot have the same name.
 - Deleting a task deletes the conversations about it and its subtasks.
   Deleting a project deletes its conversations. A member that leaves leaves
   its conversations behind, without a member.
+
+## The folders of a project
+
+`PlacesService` carries out
+[decision 0013](../../docs/decisions/0013-the-folders-of-a-project.md). A
+project has a work folder, in which its specialists read and write, and
+reference folders, which they may only read. `ProjectPlaces` is what the
+manager sees; `ChosenPlaces` is what `PlacesRepository` stores.
+
+- The work folder is the one the manager chose, or else the one Teamwright
+  gives the project (`ProjectFolders`). `work_folder_of` says which.
+- `set_work_folder` takes a folder, or `None` to go back to the one
+  Teamwright gives. It is refused while a specialist works in the project
+  (`work_in_progress`).
+- A folder must be named (`rule_broken`) and must exist
+  (`folder_not_found`). The path is kept as the manager gave it, trimmed.
+- Two folders are compared by their full forms (`FileSystem::resolve`),
+  part by part, so that `/work` does not contain `/workshop`. A reference
+  folder cannot be the work folder, lie inside it, or contain it
+  (`rule_broken`). A folder that no longer exists is compared as it was
+  named.
+- Adding a reference folder twice keeps it once. Taking away one the project
+  does not have changes nothing. Neither touches the folder itself.
+- `add_reference_files` copies files into the folder `references` inside the
+  work folder and answers with the names they got. A name that is taken
+  there, by a file on disk or an earlier file of the same call, gets a
+  number in front of its ending, as in `datasheet (2).pdf`; capitals do not
+  make a name different. A path without a file name is refused before
+  anything is copied (`rule_broken`); a file that cannot be read fails as
+  storage (`storage_failed`) with its path in the message.
+- Teamwright never removes a file or folder of the manager.
 
 ## The work of the specialists
 

@@ -19,9 +19,10 @@ use crate::agent_runtime::{
     AgentEvent, AgentRuntime, AgentRuntimeError, Installation, ProgramVersion, RunningTurn,
     SessionId, SignIn, TurnOutcome, TurnRequest,
 };
+use crate::places::ChosenPlaces;
 use crate::ports::{
-    Clock, ConversationRepository, MemberRepository, ProjectFolders, ProjectRepository,
-    StorageError, TaskRepository, WorkListener,
+    Clock, ConversationRepository, FileSystem, MemberRepository, PlacesRepository, ProjectFolders,
+    ProjectRepository, StorageError, TaskRepository, WorkListener,
 };
 
 /// Locks a mutex, and keeps working even if another thread panicked while it
@@ -227,6 +228,140 @@ impl FixedProjectFolders {
 impl ProjectFolders for FixedProjectFolders {
     fn folder_of(&self, project: &Project) -> Result<PathBuf, StorageError> {
         Ok(self.root.join(project.key().as_str()))
+    }
+}
+
+/// Keeps the folders chosen for each project in memory.
+#[derive(Debug, Default)]
+pub struct InMemoryPlacesRepository {
+    places: Mutex<BTreeMap<ProjectId, ChosenPlaces>>,
+}
+
+impl PlacesRepository for InMemoryPlacesRepository {
+    fn find(&self, project_id: ProjectId) -> Result<ChosenPlaces, StorageError> {
+        Ok(lock(&self.places)
+            .get(&project_id)
+            .cloned()
+            .unwrap_or_default())
+    }
+
+    fn save(&self, project_id: ProjectId, places: &ChosenPlaces) -> Result<(), StorageError> {
+        lock(&self.places).insert(project_id, places.clone());
+        Ok(())
+    }
+
+    fn delete(&self, project_id: ProjectId) -> Result<(), StorageError> {
+        lock(&self.places).remove(&project_id);
+        Ok(())
+    }
+}
+
+/// A file system that exists only in what a test says exists: a set of
+/// folders and a set of files. Nothing is read from or written to disk.
+///
+/// It pretends to be a file system that does not tell capitals apart and
+/// accepts both kinds of slash, as the one of Windows does: two paths name
+/// the same folder or file when they are equal in that sense.
+#[derive(Debug, Default)]
+pub struct PretendFileSystem {
+    entries: Mutex<PretendEntries>,
+}
+
+/// The folders and files that exist, as they were given.
+#[derive(Debug, Default)]
+struct PretendEntries {
+    folders: Vec<PathBuf>,
+    files: Vec<PathBuf>,
+}
+
+impl PretendFileSystem {
+    /// A file system in which the given folders exist, and no files.
+    #[must_use]
+    pub fn with_folders<I, P>(folders: I) -> Self
+    where
+        I: IntoIterator<Item = P>,
+        P: Into<PathBuf>,
+    {
+        let file_system = Self::default();
+        for folder in folders {
+            file_system.add_folder(folder);
+        }
+        file_system
+    }
+
+    /// Makes a folder exist.
+    pub fn add_folder(&self, folder: impl Into<PathBuf>) {
+        lock(&self.entries).folders.push(folder.into());
+    }
+
+    /// Makes a file exist.
+    pub fn add_file(&self, file: impl Into<PathBuf>) {
+        lock(&self.entries).files.push(file.into());
+    }
+
+    /// Every file that exists, those given by the test first, then the
+    /// copies in the order they were made.
+    #[must_use]
+    pub fn files(&self) -> Vec<PathBuf> {
+        lock(&self.entries).files.clone()
+    }
+
+    /// A path in the form in which two paths are compared.
+    fn comparable(path: &Path) -> String {
+        path.to_string_lossy()
+            .replace('\\', "/")
+            .trim_end_matches('/')
+            .to_lowercase()
+    }
+
+    /// Whether two paths name the same folder or file.
+    fn is_same(first: &Path, second: &Path) -> bool {
+        Self::comparable(first) == Self::comparable(second)
+    }
+}
+
+impl FileSystem for PretendFileSystem {
+    fn is_folder(&self, path: &Path) -> bool {
+        lock(&self.entries)
+            .folders
+            .iter()
+            .any(|folder| Self::is_same(folder, path))
+    }
+
+    fn resolve(&self, path: &Path) -> Result<PathBuf, StorageError> {
+        lock(&self.entries)
+            .folders
+            .iter()
+            .find(|folder| Self::is_same(folder, path))
+            .cloned()
+            .ok_or_else(|| {
+                StorageError::new(format!("the folder {} does not exist", path.display()))
+            })
+    }
+
+    fn file_names_in(&self, folder: &Path) -> Result<Vec<String>, StorageError> {
+        Ok(lock(&self.entries)
+            .files
+            .iter()
+            .filter(|file| {
+                file.parent()
+                    .is_some_and(|parent| Self::is_same(parent, folder))
+            })
+            .filter_map(|file| file.file_name())
+            .map(|name| name.to_string_lossy().into_owned())
+            .collect())
+    }
+
+    fn copy_file(&self, from: &Path, to: &Path) -> Result<(), StorageError> {
+        let mut entries = lock(&self.entries);
+        if !entries.files.iter().any(|file| Self::is_same(file, from)) {
+            return Err(StorageError::new(format!(
+                "the file {} could not be read",
+                from.display()
+            )));
+        }
+        entries.files.push(to.to_path_buf());
+        Ok(())
     }
 }
 
