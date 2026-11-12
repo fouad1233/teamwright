@@ -173,6 +173,11 @@ that tasks can be given to: Teamwright does not notify them.
   usually its discipline, as in "Hardware engineer". No two members of a
   team can have the same name.
 - **Responsible for.** A sentence about what the member is on the team for.
+- **Model** and **Effort.** For an AI specialist: the model it runs on, and
+  how hard that model thinks. Both can be left to Claude Code. A lighter
+  model and less effort use less of your plan and are enough for plain
+  work. You can change them at any time; they hold from the next piece of
+  work on. The *Team* view says how each specialist runs.
 
 Teamwright gives every member a color that sets it apart from the others.
 
@@ -248,9 +253,11 @@ files in that folder, yours to open with any program.
 
 **What a specialist may do.** It may read, search, create and change files
 in the folder of its project. It cannot run commands, it cannot fetch
-anything from the internet, and it cannot touch a file outside that folder.
-When a task needs one of these, the specialist says so in its report
-instead of working around it.
+anything from the internet, and it can neither read nor change a file
+outside that folder. It also does not see what you have set up in your own
+Claude Code: your connectors, plugins and settings stay yours. When a task
+needs one of these, the specialist says so in its report instead of
+working around it.
 [Why it is this strict](../decisions/0011-what-a-specialist-may-do.md).
 
 **One thing at a time.** A specialist works on one thing at a time. While it

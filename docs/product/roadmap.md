@@ -58,8 +58,8 @@ A single specialist that really works through Claude Code.
 - ⬜ Run a Claude Code that npm installed. On Windows that is a script,
   and a turn on it is refused with the reason
 - ⬜ The limits of the plan that the program reports
-- ⬜ Specialist profiles: model, effort and instructions; a built-in set and
-  user-defined ones
+- ✅ The model and the effort of a specialist
+- ⬜ Instructions of a specialist's own, and a set of ready-made specialists
 - ⬜ Discover the user's skills, plugins and MCP connectors
 
 ## M3 · The Advisor ⬜
