@@ -4,6 +4,9 @@ import type { Task } from '@/shared/api/types';
 
 import {
   indexById,
+  indexSubtasks,
+  mainTasksOfStatus,
+  outlineRows,
   subtasksOf,
   tasksOfStatus,
   unfinishedBlockers,
@@ -54,6 +57,18 @@ describe('tasksOfStatus', () => {
     const tasks = [task({ id: 'second', number: 2 }), task({ id: 'first', number: 1 })];
 
     expect(ids(tasksOfStatus(tasks, 'todo'))).toEqual(['first', 'second']);
+  });
+});
+
+describe('mainTasksOfStatus', () => {
+  it('leaves out the tasks that are part of another task', () => {
+    const tasks = [
+      task({ id: 'parent', rank: 10 }),
+      task({ id: 'part', rank: 20, parentId: 'parent' }),
+      task({ id: 'other', rank: 30 }),
+    ];
+
+    expect(ids(mainTasksOfStatus(tasks, 'todo'))).toEqual(['parent', 'other']);
   });
 });
 
@@ -119,6 +134,32 @@ describe('withMovedTask', () => {
 
     expect(ids(tasksOfStatus(moved, 'done'))).toEqual(['a']);
   });
+
+  it('does not count subtasks when it places a task among the tasks of a status', () => {
+    const withPart = [...tasks, task({ id: 'part', rank: 512, parentId: 'a' })];
+
+    const moved = withMovedTask(withPart, 'x', 'todo', 1);
+
+    expect(ids(mainTasksOfStatus(moved, 'todo'))).toEqual(['a', 'x', 'b', 'c']);
+  });
+
+  it('places a subtask among the other subtasks of its parent', () => {
+    const parts = [
+      task({ id: 'parent' }),
+      task({ id: 'first', rank: 10, parentId: 'parent' }),
+      task({ id: 'second', rank: 20, parentId: 'parent' }),
+      task({ id: 'third', rank: 30, parentId: 'parent' }),
+    ];
+
+    const moved = withMovedTask(parts, 'third', 'todo', 0);
+    const ofParent = tasksOfStatus(moved, 'todo').filter((part) => part.parentId === 'parent');
+
+    expect(ids(ofParent)).toEqual(['third', 'first', 'second']);
+  });
+
+  it('changes nothing for a task that is not in the list', () => {
+    expect(withMovedTask(tasks, 'missing', 'todo', 0)).toEqual(tasks);
+  });
 });
 
 describe('unfinishedBlockers', () => {
@@ -143,5 +184,64 @@ describe('subtasksOf', () => {
     ];
 
     expect(ids(subtasksOf(tasks, 'parent'))).toEqual(['earlier', 'later']);
+  });
+});
+
+describe('indexSubtasks', () => {
+  it('lists the direct subtasks of every parent by number', () => {
+    const tasks = [
+      task({ id: 'parent', number: 1 }),
+      task({ id: 'later', number: 3, parentId: 'parent' }),
+      task({ id: 'earlier', number: 2, parentId: 'parent' }),
+      task({ id: 'grandchild', number: 4, parentId: 'earlier' }),
+      task({ id: 'alone', number: 5 }),
+    ];
+
+    const subtasksByParent = indexSubtasks(tasks);
+
+    expect(ids(subtasksByParent.get('parent') ?? [])).toEqual(['earlier', 'later']);
+    expect(ids(subtasksByParent.get('earlier') ?? [])).toEqual(['grandchild']);
+    expect(subtasksByParent.has('alone')).toBe(false);
+  });
+});
+
+describe('outlineRows', () => {
+  const parent = task({ id: 'parent', number: 1 });
+  const part = task({ id: 'part', number: 2, parentId: 'parent' });
+  const partOfPart = task({ id: 'part of part', number: 3, parentId: 'part' });
+  const alone = task({ id: 'alone', number: 4 });
+  const subtasksByParent = indexSubtasks([parent, part, partOfPart, alone]);
+
+  function outline(open: string[]): string[] {
+    return outlineRows([parent, alone], subtasksByParent, (taskId) => open.includes(taskId)).map(
+      (row) => `${'  '.repeat(row.depth)}${row.task.id}${row.isOpen ? ' (open)' : ''}`,
+    );
+  }
+
+  it('shows only the tasks themselves while they are closed', () => {
+    expect(outline([])).toEqual(['parent', 'alone']);
+  });
+
+  it('puts the subtasks of an open task right after it, one step in', () => {
+    expect(outline(['parent'])).toEqual(['parent (open)', '  part', 'alone']);
+  });
+
+  it('follows open tasks to any depth', () => {
+    expect(outline(['parent', 'part'])).toEqual([
+      'parent (open)',
+      '  part (open)',
+      '    part of part',
+      'alone',
+    ]);
+  });
+
+  it('does not call a task open that has no subtasks', () => {
+    expect(outline(['alone'])).toEqual(['parent', 'alone']);
+  });
+
+  it('tells every row how many subtasks its task has', () => {
+    const rows = outlineRows([parent, alone], subtasksByParent, () => false);
+
+    expect(rows.map((row) => row.subtasks.length)).toEqual([1, 0]);
   });
 });

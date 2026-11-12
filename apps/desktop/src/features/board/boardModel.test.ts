@@ -23,14 +23,27 @@ const board = arrangement({ todo: ['a', 'b', 'c'], doing: ['x', 'y'], done: [] }
 describe('arrangementOf', () => {
   it('lists the tasks of each status by rank and keeps empty statuses', () => {
     const tasks = [
-      { id: 'second', statusId: 'todo', rank: 20, number: 2 },
-      { id: 'first', statusId: 'todo', rank: 10, number: 1 },
-      { id: 'working', statusId: 'doing', rank: 0, number: 3 },
+      { id: 'second', statusId: 'todo', rank: 20, number: 2, parentId: null },
+      { id: 'first', statusId: 'todo', rank: 10, number: 1, parentId: null },
+      { id: 'working', statusId: 'doing', rank: 0, number: 3, parentId: null },
     ] as Task[];
 
     expect(columns(arrangementOf(statuses, tasks))).toEqual({
       todo: ['first', 'second'],
       doing: ['working'],
+      done: [],
+    });
+  });
+
+  it('gives a subtask no place of its own, whatever its status', () => {
+    const tasks = [
+      { id: 'parent', statusId: 'todo', rank: 10, number: 1, parentId: null },
+      { id: 'part', statusId: 'doing', rank: 0, number: 2, parentId: 'parent' },
+    ] as Task[];
+
+    expect(columns(arrangementOf(statuses, tasks))).toEqual({
+      todo: ['parent'],
+      doing: [],
       done: [],
     });
   });

@@ -1,10 +1,11 @@
 import type { Id, Status, Task } from '@/shared/api/types';
 
-import { tasksOfStatus } from '../tasks/taskModel';
+import { mainTasksOfStatus } from '../tasks/taskModel';
 
 /**
  * How the cards of a board are arranged: for each status, the identifiers of
- * its tasks from top to bottom.
+ * its tasks from top to bottom. A subtask has no place of its own in an
+ * arrangement, because the board shows it under its parent.
  *
  * While a card is dragged the board keeps its own arrangement, so cards can
  * make room for it. These functions change an arrangement without touching
@@ -21,7 +22,10 @@ export interface CardPosition {
 /** The arrangement the tasks have according to their statuses and ranks. */
 export function arrangementOf(statuses: readonly Status[], tasks: readonly Task[]): Arrangement {
   return new Map(
-    statuses.map((status) => [status.id, tasksOfStatus(tasks, status.id).map((task) => task.id)]),
+    statuses.map((status) => [
+      status.id,
+      mainTasksOfStatus(tasks, status.id).map((task) => task.id),
+    ]),
   );
 }
 

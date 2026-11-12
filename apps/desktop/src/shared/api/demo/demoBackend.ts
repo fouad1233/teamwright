@@ -263,8 +263,10 @@ export class DemoBackend implements Backend {
       const status = requireStatus(project, statusId);
       const now = this.nowAsText();
 
+      // A position counts the tasks that are listed next to this one: the
+      // ones with the same parent. Subtasks are shown under their parent.
       const others = this.tasksOfStatus(project.id, statusId).filter(
-        (other) => other.id !== taskId,
+        (other) => other.id !== taskId && other.parentId === task.parentId,
       );
       const position = Math.min(Math.max(index, 0), others.length);
       const before = others[position - 1]?.rank;
@@ -278,10 +280,10 @@ export class DemoBackend implements Backend {
 
       if (!rankFitsBetween(rank, before, after)) {
         // The neighbours are too close together for another rank between
-        // them. Space the whole status out again, with the task in place.
-        const wholeStatus = [...others.slice(0, position), task, ...others.slice(position)];
-        const ranks = evenlySpacedRanks(wholeStatus.length);
-        wholeStatus.forEach((member, memberPosition) => {
+        // them. Space the whole list out again, with the task in place.
+        const wholeList = [...others.slice(0, position), task, ...others.slice(position)];
+        const ranks = evenlySpacedRanks(wholeList.length);
+        wholeList.forEach((member, memberPosition) => {
           member.rank = ranks[memberPosition] ?? member.rank;
           member.updatedAt = now;
         });

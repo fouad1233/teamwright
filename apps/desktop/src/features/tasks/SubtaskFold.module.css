@@ -1,0 +1,40 @@
+/* A count, set like every other count of the interface, behind an arrow that
+   turns down when the subtasks are shown. */
+.fold {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  text-align: left;
+  white-space: nowrap;
+  transition:
+    color 100ms ease,
+    background-color 100ms ease;
+}
+
+.fold:hover {
+  background: var(--hover);
+  color: var(--ink-soft);
+}
+
+.chevron {
+  width: 12px;
+  height: 12px;
+  stroke-width: 2;
+  transition: transform 120ms ease;
+}
+
+.fold[aria-expanded='true'] .chevron {
+  transform: rotate(90deg);
+}
+
+/* Where the control is wider than its words, the blocks go to its far end. */
+.blocks {
+  display: inline-flex;
+  margin-left: auto;
+}

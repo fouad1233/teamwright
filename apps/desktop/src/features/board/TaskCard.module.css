@@ -1,40 +1,65 @@
 .item {
   border-radius: var(--radius-card);
-  cursor: grab;
-  touch-action: none;
 }
 
-/* The place a dragged card came from stays visible as an empty outline. */
-.lifted .card {
-  border-style: dashed;
-  border-color: var(--rule-strong);
-  background: transparent;
-}
-
-.lifted .card > * {
-  visibility: hidden;
-}
-
+/* A card is one piece with up to two parts: the face, which opens the task,
+   and under a hairline the row that folds its subtasks. */
 .card {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: var(--space-3);
   border: 1px solid var(--rule);
   border-radius: var(--radius-card);
   background: var(--surface);
   transition: border-color 100ms ease;
 }
 
-.item:hover .card {
+.card:hover {
   border-color: var(--rule-strong);
 }
 
+.face {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: var(--space-3);
+  border-radius: var(--radius-card);
+  cursor: pointer;
+}
+
+/* The face of a card in a column is also what it is dragged by. */
+.item > .card > .face {
+  cursor: grab;
+  touch-action: none;
+}
+
+/* The place a dragged card came from stays visible as an empty outline. Its
+   subtasks keep their room, so the column does not jump. */
+.lifted > .card {
+  border-style: dashed;
+  border-color: var(--rule-strong);
+  background: transparent;
+}
+
+.lifted > .card > *,
+.lifted > .subtasks {
+  visibility: hidden;
+}
+
 .title {
+  display: flex;
+  gap: var(--space-2);
   color: var(--ink);
   font-weight: 500;
   line-height: 1.4;
   overflow-wrap: anywhere;
+}
+
+/* The mark sits on the first line of the title, however long the title is. */
+.status {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  height: 1.4em;
 }
 
 /* The facts of a task, set small on one line like the notes on a drawing. */
@@ -79,4 +104,34 @@
 .assignee {
   display: inline-flex;
   margin-left: auto;
+}
+
+/* The control that folds the subtasks is the last row of the card, under a
+   hairline and as wide as the card. */
+.fold {
+  height: 28px;
+  padding: 0 var(--space-3) 0 10px;
+  border-top: 1px solid var(--rule);
+  border-radius: 0 0 var(--radius-card) var(--radius-card);
+}
+
+.fold:focus-visible {
+  outline-offset: -2px;
+}
+
+/* Subtasks are set in under their parent. The rule down their left side
+   ties them to it, the way a bracket groups the parts of an assembly. */
+.subtasks {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 6px 0 0 var(--space-3);
+  padding-left: var(--space-3);
+  border-left: 1px solid var(--rule-strong);
+}
+
+/* A part is a little smaller than the whole it belongs to. */
+.part > .face {
+  gap: var(--space-2);
+  padding: 10px var(--space-3);
 }

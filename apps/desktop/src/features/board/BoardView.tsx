@@ -16,12 +16,13 @@ import { useMemo, useState } from 'react';
 import { useNavigation } from '@/app/navigation';
 import type { Id, Project, Task } from '@/shared/api/types';
 
-import { indexById, unfinishedBlockers } from '../tasks/taskModel';
+import { useSubtaskFolds } from '../tasks/subtaskFolds';
+import { indexById, indexSubtasks, unfinishedBlockers } from '../tasks/taskModel';
 import { useTaskCommands } from '../tasks/taskQueries';
 import { BoardLane } from './BoardLane';
 import { arrangementOf, locate, moveCard, statusUnder, type Arrangement } from './boardModel';
 import styles from './BoardView.module.css';
-import { TaskCard } from './TaskCard';
+import { TaskCard, type BoardContents } from './TaskCard';
 
 /** How far the pointer must move before a press becomes a drag, in pixels. */
 const DRAG_START_DISTANCE = 6;
@@ -47,14 +48,27 @@ interface BoardViewProps {
   tasks: Task[];
 }
 
-/** The tasks of a project as cards in one column per status. */
+/**
+ * The tasks of a project as cards in one column per status. A subtask has no
+ * card of its own in a column: it is shown under its parent, which has a row
+ * that folds its subtasks away.
+ */
 export function BoardView({ project, tasks }: BoardViewProps) {
   const commands = useTaskCommands(project.id);
   const navigation = useNavigation();
+  const folds = useSubtaskFolds(project.id);
   const [drag, setDrag] = useState<Drag | null>(null);
   const [drop, setDrop] = useState<Drop | null>(null);
 
   const tasksById = useMemo(() => indexById(tasks), [tasks]);
+  const subtasksByParent = useMemo(() => indexSubtasks(tasks), [tasks]);
+  const board: BoardContents = {
+    project,
+    tasksById,
+    subtasksByParent,
+    folds,
+    onOpenTask: navigation.openTask,
+  };
   const stored = useMemo(() => arrangementOf(project.statuses, tasks), [project.statuses, tasks]);
   const settling = drop?.tasksAtDrop === tasks ? drop.arrangement : null;
   const arrangement = drag?.arrangement ?? settling ?? stored;
@@ -128,13 +142,11 @@ export function BoardView({ project, tasks }: BoardViewProps) {
         {project.statuses.map((status) => (
           <BoardLane
             key={status.id}
-            project={project}
+            board={board}
             status={status}
             tasks={(arrangement.get(status.id) ?? []).flatMap(
               (taskId) => tasksById.get(taskId) ?? [],
             )}
-            tasksById={tasksById}
-            onOpenTask={navigation.openTask}
             onCreateTask={async (title) => {
               const created = await commands.create({ title, statusId: status.id });
               return created !== undefined;
@@ -150,6 +162,8 @@ export function BoardView({ project, tasks }: BoardViewProps) {
               project={project}
               task={draggedTask}
               unfinishedBlockerCount={unfinishedBlockers(draggedTask, tasksById).length}
+              subtasks={subtasksByParent.get(draggedTask.id)}
+              areSubtasksShown={folds.isOpen(draggedTask.id)}
             />
           </div>
         )}
