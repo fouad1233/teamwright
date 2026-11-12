@@ -77,11 +77,13 @@ This is the one test that is not free. It forms a team of one AI specialist
 in the built application and lets it do a real, small piece of work with the
 Claude Code that is installed on this computer, signed in as whoever is
 signed in there: write a file, change it after an answer, answer a question,
-ask the manager to decide and go on with the answer, try to reach outside
-its folder, and be stopped half-way. It checks the steps, the report, the
-file on disk, where the task moves, that the question shows in the inbox,
-that nothing outside the folder was read or written, and that the record
-survives a restart. It prints what every turn used.
+ask the manager to decide and go on with the answer, read a folder and a
+file that the manager gave its project, try to reach outside its folders,
+and be stopped half-way. It checks the steps, the report, the file on
+disk, where the task moves, that the question shows in the inbox, that the
+folder it was given could be read and not changed, that nothing outside
+its folders was read or written, and that the record survives a restart.
+It prints what every turn used.
 
 Because it uses a part of that account's plan, it is not part of any
 automatic check. Run it by hand after a change to the work of the
@@ -92,8 +94,14 @@ The tests of the runtime crate that need the real program are ignored by
 default for the same reason:
 
 ```bash
-cargo test -p teamwright-runtime -- --ignored
+cargo test -p teamwright-runtime --test real_program -- --ignored --nocapture --test-threads 1
 ```
+
+One of them proves what a session can reach: its own folder, a folder it was
+given to read and not to change, and nothing else. Run it after a change to
+what a specialist may do. The specialist of the test above knows its folders
+and does not try to leave them, so that test shows that nothing leaked, and
+this one shows that the program would have refused.
 
 ## Pictures for the documentation
 
