@@ -398,6 +398,20 @@ try {
     (await window.command('list_conversations', { projectId: project.id })).ok?.length === 0 &&
       afterRefusal?.find((stored) => stored.id === firmware.id)?.statusId === statusBefore,
   );
+
+  // Questions to the manager. Without a real specialist nobody asks, so
+  // nothing waits and there is nothing to answer.
+  const questions = await window.command('list_conversations_waiting');
+  check('nothing waits for the manager', questions.ok?.length === 0, JSON.stringify(questions));
+  const answerToNothing = await window.command('answer_decision', {
+    conversationId: project.id,
+    answer: { option: 0, note: '' },
+  });
+  check(
+    'an answer in a conversation that does not exist is refused',
+    answerToNothing.refused?.code === 'not_found',
+    JSON.stringify(answerToNothing),
+  );
   window.close();
 
   // Second run: what was stored is still there.
