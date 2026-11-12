@@ -12,15 +12,16 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError, Weak};
 
 use teamwright_domain::{
-    Assignee, Conversation, ConversationId, DecisionOption, DecisionRequest, DomainError, Member,
-    MemberId, MemberKind, Project, ProjectId, Rank, StatusCategory, Task, TaskId, Timestamp, Turn,
-    TurnId, TurnOrigin, TurnState,
+    Assignee, Conversation, ConversationId, DecisionOption, DecisionRequest, DomainError,
+    Interview, InterviewQuestion, Member, MemberId, MemberKind, MemberName, ModelName, Project,
+    ProjectId, Proposal, ProposedMember, ProposedOwner, ProposedTask, Rank, StatusCategory, Task,
+    TaskId, TaskTitle, Timestamp, Turn, TurnId, TurnOrigin, TurnState,
 };
 
 use crate::agent_runtime::{
-    self, AgentEvent, AgentRuntime, AgentRuntimeError, ManagerQuestion, PermissionProfile,
-    ProgramVersion, RunningTurn, SessionChoice, SessionId, SignIn, TurnFailure, TurnOutcome,
-    TurnRequest,
+    self, AgentEvent, AgentRuntime, AgentRuntimeError, ManagerInterview, ManagerQuestion,
+    PermissionProfile, PlanProposal, PlannedOwner, ProgramVersion, RunningTurn, SessionChoice,
+    SessionId, SignIn, TeamTool, TurnFailure, TurnOutcome, TurnRequest,
 };
 use crate::error::ApplicationError;
 use crate::places::{PlacesService, REFERENCES_FOLDER};
@@ -610,7 +611,7 @@ impl WorkService {
             effort: member.effort(),
             extra_instructions: Some(instructions_for(member, project, &readable_folders)),
             permissions: PermissionProfile::specialist(),
-            may_ask_manager: true,
+            team_tools: vec![TeamTool::AskManager],
             readable_folders,
         };
         let handle = ports
@@ -790,6 +791,12 @@ impl Inner {
             AgentEvent::ManagerAsked(question) => {
                 decision_from(question).and_then(|decision| turn.ask(decision))
             }
+            AgentEvent::InterviewAsked(asked) => {
+                interview_from(asked).and_then(|interview| turn.ask_interview(interview))
+            }
+            AgentEvent::PlanProposed(proposed) => {
+                proposal_from(proposed).and_then(|proposal| turn.propose(proposal))
+            }
             AgentEvent::TurnEnded(outcome) => end_turn(turn, &outcome, now),
         };
         if recorded.is_err() {
@@ -802,7 +809,10 @@ impl Inner {
         // Work that ends in a question is not ready to be checked: the task
         // stays in work until the manager has decided and the specialist
         // has gone on.
-        let ready_to_check = turn.state() == TurnState::Finished && turn.decision().is_none();
+        let ready_to_check = turn.state() == TurnState::Finished
+            && turn.decision().is_none()
+            && turn.interview().is_none()
+            && turn.proposal().is_none();
         ports.conversations.save_turn(turn)?;
         if let Some(task_id) = conversation.task_id().filter(|_| ready_to_check) {
             self.move_task(task_id, &[StatusCategory::Active], StatusCategory::Review)?;
@@ -928,6 +938,65 @@ fn decision_from(question: ManagerQuestion) -> Result<DecisionRequest, DomainErr
             .collect(),
         question.recommended,
     )
+}
+
+/// The interview the Advisor asked, as the domain keeps it.
+fn interview_from(asked: ManagerInterview) -> Result<Interview, DomainError> {
+    Interview::new(
+        asked
+            .questions
+            .into_iter()
+            .map(|question| InterviewQuestion {
+                question: question.question,
+                reason: question.reason,
+                options: question
+                    .options
+                    .into_iter()
+                    .map(|option| DecisionOption {
+                        label: option.label,
+                        consequence: option.consequence,
+                    })
+                    .collect(),
+                recommended: question.recommended,
+            })
+            .collect(),
+    )
+}
+
+/// The plan the Advisor proposed, as the domain keeps it. Names and titles
+/// follow the rules of members and tasks.
+fn proposal_from(proposed: PlanProposal) -> Result<Proposal, DomainError> {
+    let members = proposed
+        .members
+        .into_iter()
+        .map(|member| {
+            Ok(ProposedMember {
+                name: MemberName::parse(&member.name)?,
+                responsibility: member.responsibility,
+                reason: member.reason,
+                model: member.model.as_deref().map(ModelName::parse).transpose()?,
+                effort: member.effort,
+            })
+        })
+        .collect::<Result<Vec<_>, DomainError>>()?;
+    let tasks = proposed
+        .tasks
+        .into_iter()
+        .map(|task| {
+            Ok(ProposedTask {
+                title: TaskTitle::parse(&task.title)?,
+                description: task.description,
+                owner: Some(match task.owner {
+                    PlannedOwner::Manager => ProposedOwner::Manager,
+                    PlannedOwner::Member(name) => ProposedOwner::Member(MemberName::parse(&name)?),
+                }),
+                estimate_minutes: task.estimate_minutes,
+                priority: task.priority,
+                waits_for: task.waits_for,
+            })
+        })
+        .collect::<Result<Vec<_>, DomainError>>()?;
+    Proposal::new(&proposed.summary, members, tasks)
 }
 
 /// Ends a turn the way the program says it ended.
@@ -1680,7 +1749,7 @@ mod tests {
         );
         assert_eq!(request.session, SessionChoice::New);
         assert_eq!(request.permissions, PermissionProfile::specialist());
-        assert!(request.may_ask_manager);
+        assert_eq!(request.team_tools, [TeamTool::AskManager]);
         assert!(request.readable_folders.is_empty());
         assert_eq!(request.model, None);
         assert_eq!(request.effort, None);

@@ -5,13 +5,14 @@ use std::time::Duration;
 
 use teamwright_application::{
     AgentEvent, AgentRuntime, AgentRuntimeError, Installation, ProgramVersion, RunningTurn,
-    SessionId, SignIn, TurnRequest,
+    SessionId, SignIn, TeamTool, TurnRequest,
 };
 
 use crate::arguments::{
     FIRST_VERSION_WITH_DESKTOP, desktop_arguments, sign_in_arguments, turn_arguments,
     version_arguments,
 };
+use crate::decode::Decoder;
 use crate::environment::Environment;
 use crate::locate::Locator;
 use crate::process::{command, run_briefly, start_turn};
@@ -68,8 +69,9 @@ impl ClaudeCode {
     }
 
     /// Says how the team bus is started: the program that serves it and
-    /// its arguments. A turn that may ask the manager is then given the
-    /// bus and its tool. Without it, such a turn runs without the tool.
+    /// its arguments, to which the tools of a turn are added. A turn with
+    /// team tools is then given the bus. Without it, such a turn runs
+    /// without them.
     #[must_use]
     pub fn with_team_bus(mut self, program: impl Into<PathBuf>, arguments: Vec<String>) -> Self {
         self.team_bus = Some(TeamBus {
@@ -80,9 +82,11 @@ impl ClaudeCode {
     }
 
     /// The team bus a turn is given: the one this runtime knows, if the
-    /// turn may ask the manager.
+    /// turn has team tools.
     fn team_bus_for(&self, request: &TurnRequest) -> Option<&TeamBus> {
-        self.team_bus.as_ref().filter(|_| request.may_ask_manager)
+        self.team_bus
+            .as_ref()
+            .filter(|_| !request.team_tools.is_empty())
     }
 
     fn program(&self) -> Result<PathBuf, AgentRuntimeError> {
@@ -148,6 +152,16 @@ impl AgentRuntime for ClaudeCode {
         let working_folder = full_folder(&request.working_folder)?;
         let program = self.program()?;
         refuse_a_script(&program)?;
+        // The decoder checks a proposal against the team the bus was told
+        // of, as the bus does.
+        let team = request
+            .team_tools
+            .iter()
+            .find_map(|tool| match tool {
+                TeamTool::ProposePlan { team } => Some(team.clone()),
+                TeamTool::AskManager | TeamTool::Interview => None,
+            })
+            .unwrap_or_default();
         let turn = start_turn(
             command(
                 &program,
@@ -156,6 +170,7 @@ impl AgentRuntime for ClaudeCode {
                 &self.environment,
             ),
             request.prompt,
+            Decoder::for_team(team),
             listener,
         )?;
         Ok(Box::new(turn))
@@ -314,7 +329,7 @@ mod tests {
     }
 
     #[test]
-    fn a_turn_gets_the_team_bus_only_if_it_may_ask_and_the_bus_is_known() {
+    fn a_turn_gets_the_team_bus_only_if_it_has_team_tools_and_the_bus_is_known() {
         use teamwright_application::{PermissionProfile, SessionChoice};
 
         let mut request = TurnRequest {
@@ -325,7 +340,7 @@ mod tests {
             effort: None,
             extra_instructions: None,
             permissions: PermissionProfile::specialist(),
-            may_ask_manager: true,
+            team_tools: vec![TeamTool::AskManager],
             readable_folders: Vec::new(),
         };
         let without_bus = ClaudeCode::new();
@@ -339,7 +354,7 @@ mod tests {
                 arguments: vec!["--team-bus".to_owned()],
             })
         );
-        request.may_ask_manager = false;
+        request.team_tools = Vec::new();
         assert!(with_bus.team_bus_for(&request).is_none());
     }
 
@@ -356,7 +371,7 @@ mod tests {
             effort: None,
             extra_instructions: None,
             permissions: PermissionProfile::specialist(),
-            may_ask_manager: false,
+            team_tools: Vec::new(),
             readable_folders: vec![folder.path().join("missing")],
         };
 
@@ -391,7 +406,7 @@ mod tests {
             effort: None,
             extra_instructions: Some("Two\nlines.".to_owned()),
             permissions: PermissionProfile::specialist(),
-            may_ask_manager: true,
+            team_tools: vec![TeamTool::AskManager],
             readable_folders: Vec::new(),
         };
 

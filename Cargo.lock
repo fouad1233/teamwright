@@ -3588,6 +3588,7 @@ dependencies = [
  "serde",
  "serde_json",
  "teamwright-application",
+ "teamwright-domain",
  "tempfile",
  "uuid",
 ]

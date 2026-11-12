@@ -250,7 +250,7 @@ fn request(folder: PathBuf, prompt: &str) -> TurnRequest {
         effort: None,
         extra_instructions: None,
         permissions: PermissionProfile::specialist(),
-        may_ask_manager: false,
+        team_tools: Vec::new(),
         readable_folders: Vec::new(),
     }
 }

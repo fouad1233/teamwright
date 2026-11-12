@@ -298,6 +298,10 @@ pub enum SessionChoice {
 /// request carries it.
 pub use teamwright_domain::Effort;
 
+/// How urgent a task is. It belongs to the domain; it is named here too
+/// because a proposed plan carries it.
+pub use teamwright_domain::Priority;
+
 /// How the agent program decides about tool use that no rule allows or
 /// denies.
 ///
@@ -388,6 +392,47 @@ impl PermissionProfile {
             only_given_tool_servers: true,
         }
     }
+
+    /// The profile of the Advisor.
+    ///
+    /// The Advisor reads and searches, and nothing else: of the built-in
+    /// tools it has only `Read`, `Glob` and `Grep`, so planning never
+    /// changes a file. Like a specialist, it is confined to its working
+    /// folder, sees only the tool servers it is given, and is denied
+    /// without waiting what no rule allows. The mode is that of a
+    /// specialist, which is known to work; with no tool to write, it has
+    /// nothing to accept.
+    #[must_use]
+    pub fn advisor() -> Self {
+        Self {
+            built_in_tools: Some(["Read", "Glob", "Grep"].map(String::from).to_vec()),
+            allowed_tools: ["Read", "Glob", "Grep"].map(String::from).to_vec(),
+            disallowed_tools: ["Bash", "PowerShell"].map(String::from).to_vec(),
+            mode: PermissionMode::AcceptEdits,
+            deny_instead_of_asking: true,
+            confined_to_working_folder: true,
+            only_given_tool_servers: true,
+        }
+    }
+}
+
+/// A tool of the team bus that a session can be given for a turn.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum TeamTool {
+    /// `ask_manager`: a specialist asks the manager to decide. A question
+    /// is reported as [`AgentEvent::ManagerAsked`].
+    AskManager,
+    /// `interview`: the Advisor asks the manager what it needs to know. It
+    /// is reported as [`AgentEvent::InterviewAsked`].
+    Interview,
+    /// `propose_plan`: the Advisor proposes members and tasks. It is
+    /// reported as [`AgentEvent::PlanProposed`].
+    ProposePlan {
+        /// The names of the members the project has already. A proposed
+        /// task may be given to one of them as well as to a proposed
+        /// member.
+        team: Vec<String>,
+    },
 }
 
 /// What is needed to run one turn of a session.
@@ -408,10 +453,10 @@ pub struct TurnRequest {
     pub extra_instructions: Option<String>,
     /// What the session may do.
     pub permissions: PermissionProfile,
-    /// Whether the session is given the tool to ask the manager to decide.
-    /// A question it asks is reported as [`AgentEvent::ManagerAsked`]. A
-    /// runtime that has no such tool runs the turn without it.
-    pub may_ask_manager: bool,
+    /// The tools of the team bus the session is given. What it does with
+    /// them is reported as events of their own. A runtime that has no team
+    /// bus runs the turn without them.
+    pub team_tools: Vec<TeamTool>,
     /// Folders outside the working folder that the session may read from
     /// and must not write to.
     pub readable_folders: Vec<PathBuf>,
@@ -452,6 +497,14 @@ pub enum AgentEvent {
     /// its turn; the answer is the request of the next turn. A use of the
     /// tool that asks is reported only this way, not as a tool use.
     ManagerAsked(ManagerQuestion),
+    /// The Advisor asked the manager the questions of an interview, and is
+    /// told to end its turn; the answers are the request of the next turn.
+    /// A use of the tool is reported only this way, not as a tool use.
+    InterviewAsked(ManagerInterview),
+    /// The Advisor proposed members and tasks, and is told to end its
+    /// turn. A use of the tool is reported only this way, not as a tool
+    /// use.
+    PlanProposed(PlanProposal),
     /// A request to the model failed and is tried again.
     Retrying {
         /// Which attempt this is, if reported.
@@ -497,6 +550,79 @@ pub struct QuestionOption {
     pub label: String,
     /// What choosing it leads to. May be empty.
     pub consequence: String,
+}
+
+/// The questions the Advisor asks the manager before it proposes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ManagerInterview {
+    /// One to five questions.
+    pub questions: Vec<InterviewQuestionAsked>,
+}
+
+/// One question of an interview.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InterviewQuestionAsked {
+    /// The question, not empty.
+    pub question: String,
+    /// Why it is asked. May be empty.
+    pub reason: String,
+    /// Two to four options, or none for a question answered in words.
+    pub options: Vec<QuestionOption>,
+    /// The option the Advisor recommends, by its place, counted from 0.
+    pub recommended: Option<usize>,
+}
+
+/// The team and the plan the Advisor proposes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PlanProposal {
+    /// The project in the Advisor's words.
+    pub summary: String,
+    /// The members to add.
+    pub members: Vec<PlannedMember>,
+    /// The tasks to create.
+    pub tasks: Vec<PlannedTask>,
+}
+
+/// A member the Advisor proposes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PlannedMember {
+    /// What the member is to be called.
+    pub name: String,
+    /// What it is responsible for.
+    pub responsibility: String,
+    /// Why the project needs it.
+    pub reason: String,
+    /// The model, by one word, or the default of the program.
+    pub model: Option<String>,
+    /// The effort, or the default of the program.
+    pub effort: Option<Effort>,
+}
+
+/// A task the Advisor proposes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PlannedTask {
+    /// What is to be done.
+    pub title: String,
+    /// What the result is, and how to tell that it is done.
+    pub description: String,
+    /// Who does it.
+    pub owner: PlannedOwner,
+    /// The size, in minutes of a skilled person's work, if said.
+    pub estimate_minutes: Option<u32>,
+    /// How urgent it is.
+    pub priority: Priority,
+    /// The tasks of the same plan that must be finished first, by their
+    /// places, counted from 0.
+    pub waits_for: Vec<usize>,
+}
+
+/// Who a proposed task is given to.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PlannedOwner {
+    /// The manager.
+    Manager,
+    /// A member by name: a proposed member, or one the project has.
+    Member(String),
 }
 
 /// What a session has at its start.
@@ -714,6 +840,19 @@ mod tests {
                 .iter()
                 .any(|tool| tool == "Bash" || tool == "WebFetch")
         );
+    }
+
+    #[test]
+    fn the_advisor_may_only_read() {
+        let profile = PermissionProfile::advisor();
+        assert_eq!(
+            profile.built_in_tools.as_deref(),
+            Some(["Read", "Glob", "Grep"].map(String::from).as_slice())
+        );
+        assert!(profile.deny_instead_of_asking);
+        assert!(profile.confined_to_working_folder);
+        assert!(profile.only_given_tool_servers);
+        assert!(profile.disallowed_tools.iter().any(|tool| tool == "Bash"));
     }
 
     #[test]

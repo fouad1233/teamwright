@@ -103,12 +103,21 @@ fn main() -> ExitCode {
 }
 
 /// Serves the team bus on standard input and output, for the one turn of a
-/// specialist that Claude Code started this program for. No window is
+/// specialist or of the Advisor that Claude Code started this program for.
+/// The arguments after `--team-bus` name the tools it offers. No window is
 /// opened and the database is not touched.
 fn serve_the_team_bus() -> ExitCode {
+    let arguments: Vec<String> = env::args().skip(2).collect();
+    let tools = match teamwright_runtime::team_bus::tools_from_arguments(&arguments) {
+        Ok(tools) => tools,
+        Err(problem) => {
+            eprintln!("The team bus cannot start: {problem}");
+            return ExitCode::FAILURE;
+        }
+    };
     let input = io::stdin().lock();
     let output = io::stdout().lock();
-    match teamwright_runtime::team_bus::serve(input, output) {
+    match teamwright_runtime::team_bus::serve(input, output, tools) {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
             eprintln!("The team bus stopped: {error}");

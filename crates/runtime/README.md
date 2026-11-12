@@ -19,7 +19,7 @@ format of its output.
 | `process` | Starting the program, feeding it the prompt, reading it, stopping it |
 | `decode` | Turns the JSON lines of headless mode into `AgentEvent`s and a `TurnOutcome` |
 | `sign_in` | Reads the answer of `claude auth status --json` |
-| `team_bus` | The tool server through which a specialist asks the manager to decide |
+| `team_bus` | The tool server through which a specialist asks the manager to decide, and the Advisor interviews and proposes |
 
 ## How a turn runs
 
@@ -33,15 +33,22 @@ claude -p --output-format stream-json --verbose
        --restricted --strict-mcp-config
        [--mcp-config <the team bus as JSON>] [--add-dir <folder> …]
        --tools Read Glob Grep Edit Write NotebookEdit Skill ToolSearch
-       --allowedTools Read Glob Grep [mcp__teamwright__ask_manager]
+       --allowedTools Read Glob Grep [mcp__teamwright__<tool> …]
        --disallowedTools Bash PowerShell [Edit(<folder>/**) …]
 ```
 
-A turn that may ask the manager (`may_ask_manager`) is given the team bus
-when the runtime knows how to start it (`ClaudeCode::with_team_bus`): the
+The built-in tools and the rules come from the `PermissionProfile` of the
+turn; the Advisor's (`PermissionProfile::advisor()`) has only `Read`,
+`Glob` and `Grep`.
+
+A turn with team tools (`team_tools`) is given the team bus when the
+runtime knows how to start it (`ClaudeCode::with_team_bus`): the
 configuration `{"mcpServers":{"teamwright":{"command":…,"args":[…]}}}` as
-one argument, and the tool's full name among the allowed tools. Without a
-bus the turn runs without the tool. A folder the session may only read
+one argument, whose arguments are the configured ones followed by the
+names of the tools and `--member <name>` for each member the project has
+(`team_bus::bus_arguments`), and the full name of each tool,
+`mcp__teamwright__<name>`, among the allowed tools. Without a bus the turn
+runs without them. A folder the session may only read
 (`readable_folders`) is resolved to its full form like the working folder,
 added with `--add-dir`, and denied for writing with the rule
 `Edit(<folder with forward slashes>/**)`.
@@ -73,17 +80,40 @@ help of that version and is not used.
 ## The team bus
 
 `team_bus::serve` is a tool server (MCP, one JSON-RPC 2.0 message per line
-on standard input and output) named `teamwright`, with one tool,
-`ask_manager`. A session calls it when a choice changes what is built, what
-it costs or when it is ready. The arguments are a `question`, a `reason`,
-two to four `options` with a `label` and a `consequence`, and the option it
-`recommended`, counted from 1 because that is how a model counts.
+on standard input and output) named `teamwright`. It offers the tools it is
+started with (`team_bus::tools_from_arguments` reads them from its
+arguments):
 
-The server does no more than check the question and tell the session to end
-its turn. One function, `team_bus::question_from`, checks the arguments for
-the server and for the decoder. A refusal says in plain words what to change,
-because the model reads it and tries again. Only the first good question of
-a turn is taken.
+- `ask_manager`: a specialist calls it when a choice changes what is built,
+  what it costs or when it is ready. The arguments are a `question`, a
+  `reason`, two to four `options` with a `label` and a `consequence`, and
+  the option it `recommended`.
+- `interview`: the Advisor asks one to five `questions`, each with a
+  `reason`, and two to four `options` with one `recommended`, or none for a
+  question answered in words.
+- `propose_plan`: the Advisor proposes a `summary`, at most eight `members`
+  (a name, a responsibility, a reason, a `model` of one word and an
+  `effort` of `low`, `medium`, `high`, `xhigh` or `max`), and one to forty
+  `tasks` (a title, a description, an `owner`, `estimate_hours`, a
+  `priority`, normal unless said, and the tasks it `waits_for`). An owner
+  is `manager`, a proposed member, or a member the project has, whatever
+  the capitals. A task waits only for other tasks of the list, and not in a
+  circle.
+
+A model counts from 1, so `recommended` and `waits_for` do; what comes out
+counts from 0. An estimate in hours becomes minutes. Texts are trimmed, and
+names and titles follow the rules of members and tasks. The names, the
+descriptions and the schemas are those of the stand-in that was tried
+against Claude Code before the tools were built
+([decision 0014](../../docs/decisions/0014-the-advisor-plans-through-two-tools.md)).
+
+The server does no more than check a call and tell the session to end its
+turn. One function for each tool, `team_bus::question_from`,
+`interview_from` and `proposal_from`, checks the arguments for the server
+and for the decoder. A refusal says in plain words what to change, because
+the model reads it and tries again. A turn carries at most one question,
+interview or proposal: after one is taken, the server refuses every further
+call of the three.
 
 The server answers `initialize`, `tools/list`, `tools/call` and `ping`. Any
 other request is answered with the JSON-RPC error `-32601`; notifications
@@ -91,11 +121,13 @@ and lines that are not JSON get no answer. Claude Code 2.1.322 first sends a
 request `server/discover`, which is fine to refuse that way.
 
 In the output of the turn the call appears as a use of the tool
-`mcp__teamwright__ask_manager`. The decoder turns the first one that passes
-the check into `AgentEvent::ManagerAsked` and nothing else: no tool use, and
-the result of the call is swallowed. A call that does not pass is an
-ordinary tool use with a failed result. The model then writes one last
-sentence, and the turn ends with an ordinary `result` event.
+`mcp__teamwright__<name>`. The decoder, made for the team of the turn,
+turns the first one that passes the check into `AgentEvent::ManagerAsked`,
+`InterviewAsked` or `PlanProposed` and nothing else: no tool use, and the
+result of the call is swallowed. A call that does not pass, and any after
+the first, is an ordinary tool use with a failed result. The model then
+writes one last sentence, and the turn ends with an ordinary `result`
+event.
 
 ## Rules for code in this crate
 
@@ -218,6 +250,8 @@ repository:
 | `resumed_with_denials.jsonl` | Resumed that session; a shell command and a write outside the folder were refused |
 | `not_signed_in.jsonl` | Ran without a sign-in |
 | `manager_asked.jsonl` | Was given a tool server named `teamwright` that answers as `team_bus` does, and asked the manager how a sensor node is powered |
+| `interview_asked.jsonl` | The Advisor, with a stand-in for the bus that had `interview` and `propose_plan`, looked into the folder and asked five questions about a device that measures the air |
+| `plan_proposed.jsonl` | The same session, resumed with the answers, proposed three members and sixteen tasks |
 
 The repository is public, so a recording is cleaned before it is saved:
 paths, identifiers of messages and requests, signatures of thinking, plan

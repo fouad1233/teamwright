@@ -8,6 +8,7 @@ publish.workspace = true
 
 [dependencies]
 teamwright-application.workspace = true
+teamwright-domain.workspace = true
 
 chrono.workspace = true
 serde.workspace = true

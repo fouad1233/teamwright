@@ -13,11 +13,14 @@ use std::time::Duration;
 use chrono::{TimeZone, Utc};
 use serde_json::{Map, Value};
 use teamwright_application::{
-    AgentEvent, ManagerQuestion, McpServer, ModelUsage, PermissionDenial, PlanUsage, PlanWindow,
-    PlanWindowKind, SessionId, SessionStarted, TokenCounts, TurnFailure, TurnOutcome,
+    AgentEvent, McpServer, ModelUsage, PermissionDenial, PlanUsage, PlanWindow, PlanWindowKind,
+    SessionId, SessionStarted, TokenCounts, TurnFailure, TurnOutcome,
 };
 
-use crate::team_bus::{ASK_MANAGER_IN_SESSION, question_from};
+use crate::team_bus::{
+    ASK_MANAGER_IN_SESSION, INTERVIEW_IN_SESSION, PROPOSE_PLAN_IN_SESSION, interview_from,
+    proposal_from, question_from,
+};
 
 /// The longest summary of a tool's input, in characters.
 const SUMMARY_LENGTH: usize = 120;
@@ -46,19 +49,35 @@ pub struct Decoder {
     session_id: Option<SessionId>,
     working_folder: Option<String>,
     tool_names: HashMap<String, String>,
-    /// The use of the tool that asked the manager, once a question was
-    /// taken. Its result is not reported.
-    question_use: Option<String>,
+    /// The names of the members the project has, to which a proposed task
+    /// may be given.
+    team: Vec<String>,
+    /// The use of the tool that asked the manager or proposed, once a
+    /// question, an interview or a proposal was taken. A turn carries at
+    /// most one. The result of the use is not reported.
+    taken_use: Option<String>,
     last_text: String,
     failure_kind: Option<String>,
     result: Option<Map<String, Value>>,
 }
 
 impl Decoder {
-    /// A decoder for a new turn.
+    /// A decoder for a new turn of a project without a team. The tests
+    /// use it; a turn is always decoded for its team.
+    #[cfg(test)]
     #[must_use]
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// A decoder for a new turn of a project whose team has members of
+    /// these names. A proposal may give a task to one of them.
+    #[must_use]
+    pub fn for_team(team: Vec<String>) -> Self {
+        Self {
+            team,
+            ..Self::default()
+        }
     }
 
     /// Reads one line of output and returns the events it holds, often none.
@@ -268,9 +287,9 @@ impl Decoder {
                     let (Some(id), Some(tool)) = (text(block, "id"), text(block, "name")) else {
                         continue;
                     };
-                    if let Some(question) = self.question_in(tool, block.get("input")) {
-                        self.question_use = Some(id.to_owned());
-                        events.push(AgentEvent::ManagerAsked(question));
+                    if let Some(taken) = self.taken_in(tool, block.get("input")) {
+                        self.taken_use = Some(id.to_owned());
+                        events.push(taken);
                         continue;
                     }
                     self.tool_names.insert(id.to_owned(), tool.to_owned());
@@ -286,14 +305,23 @@ impl Decoder {
         events
     }
 
-    /// The question a use of a tool asks the manager: the first good
-    /// question of the turn. A question that does not pass the check, and
-    /// a second one, are ordinary uses of a tool, which the server refuses.
-    fn question_in(&self, tool: &str, input: Option<&Value>) -> Option<ManagerQuestion> {
-        if tool != ASK_MANAGER_IN_SESSION || self.question_use.is_some() {
+    /// What a use of a tool of the team bus asks the manager or proposes:
+    /// the first good question, interview or proposal of the turn. One
+    /// that does not pass the check, and any after the first, are ordinary
+    /// uses of a tool, which the server refuses.
+    fn taken_in(&self, tool: &str, input: Option<&Value>) -> Option<AgentEvent> {
+        if self.taken_use.is_some() {
             return None;
         }
-        question_from(input?).ok()
+        let input = input?;
+        match tool {
+            ASK_MANAGER_IN_SESSION => question_from(input).ok().map(AgentEvent::ManagerAsked),
+            INTERVIEW_IN_SESSION => interview_from(input).ok().map(AgentEvent::InterviewAsked),
+            PROPOSE_PLAN_IN_SESSION => proposal_from(input, &self.team)
+                .ok()
+                .map(AgentEvent::PlanProposed),
+            _ => None,
+        }
     }
 
     fn decode_user(&self, event: &Map<String, Value>) -> Vec<AgentEvent> {
@@ -301,8 +329,8 @@ impl Decoder {
             .filter(|block| text(block, "type") == Some("tool_result"))
             .filter_map(|block| {
                 let tool_use_id = text(block, "tool_use_id")?;
-                if self.question_use.as_deref() == Some(tool_use_id) {
-                    // The question was reported; what the server answered
+                if self.taken_use.as_deref() == Some(tool_use_id) {
+                    // What was taken was reported; what the server answered
                     // is only for the session.
                     return None;
                 }
@@ -454,6 +482,8 @@ fn shorten(text: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    use teamwright_application::{ManagerInterview, ManagerQuestion, PlanProposal, PlannedOwner};
+
     use super::*;
 
     const TEXT_REPLY: &str = include_str!("../tests/recordings/text_reply.jsonl");
@@ -462,6 +492,8 @@ mod tests {
         include_str!("../tests/recordings/resumed_with_denials.jsonl");
     const NOT_SIGNED_IN_RECORDING: &str = include_str!("../tests/recordings/not_signed_in.jsonl");
     const MANAGER_ASKED: &str = include_str!("../tests/recordings/manager_asked.jsonl");
+    const INTERVIEW_ASKED: &str = include_str!("../tests/recordings/interview_asked.jsonl");
+    const PLAN_PROPOSED: &str = include_str!("../tests/recordings/plan_proposed.jsonl");
 
     fn exited() -> ProcessEnd {
         ProcessEnd::Exited {
@@ -697,6 +729,137 @@ mod tests {
                 .starts_with("I'm waiting for the manager's decision")
         );
         assert_eq!(outcome.total_tokens(), tokens(4, 761, 7198, 7945));
+    }
+
+    #[test]
+    fn an_interview_is_reported_as_such_and_not_as_a_tool_use() {
+        let (events, decoder) = replay(INTERVIEW_ASKED);
+
+        let AgentEvent::SessionStarted(started) = &events[0] else {
+            panic!("the first event is {:?}", events[0]);
+        };
+        assert!(started.tools.contains(&INTERVIEW_IN_SESSION.to_owned()));
+        assert!(started.tools.contains(&PROPOSE_PLAN_IN_SESSION.to_owned()));
+        let interviews: Vec<&ManagerInterview> = events
+            .iter()
+            .filter_map(|event| match event {
+                AgentEvent::InterviewAsked(interview) => Some(interview),
+                _ => None,
+            })
+            .collect();
+        let [interview] = interviews.as_slice() else {
+            panic!("{events:?}");
+        };
+        assert_eq!(interview.questions.len(), 5);
+        let first = &interview.questions[0];
+        assert!(!first.question.is_empty());
+        assert!(!first.reason.is_empty());
+        assert!((2..=4).contains(&first.options.len()));
+        // Every recommendation counts from 0 and names an option.
+        assert!(interview.questions.iter().all(|question| {
+            question
+                .recommended
+                .is_none_or(|place| place < question.options.len())
+        }));
+        assert!(!events.iter().any(|event| matches!(
+            event,
+            AgentEvent::ToolUse { tool, .. } if tool.starts_with("mcp__teamwright__")
+        )));
+        assert!(
+            !events
+                .iter()
+                .any(|event| matches!(event, AgentEvent::ToolResult { tool: None, .. }))
+        );
+
+        let outcome = decoder.finish(exited());
+        assert!(!outcome.failed());
+        assert!(!outcome.final_text.is_empty());
+    }
+
+    #[test]
+    fn a_proposal_is_reported_as_such_with_its_team_and_its_plan() {
+        let (events, decoder) = replay(PLAN_PROPOSED);
+
+        let proposals: Vec<&PlanProposal> = events
+            .iter()
+            .filter_map(|event| match event {
+                AgentEvent::PlanProposed(proposal) => Some(proposal),
+                _ => None,
+            })
+            .collect();
+        let [proposal] = proposals.as_slice() else {
+            panic!("{events:?}");
+        };
+        assert!(!proposal.summary.is_empty());
+        assert_eq!(proposal.members.len(), 3);
+        assert_eq!(proposal.tasks.len(), 16);
+        // The work that needs hands is the manager's.
+        assert!(
+            proposal
+                .tasks
+                .iter()
+                .any(|task| task.owner == PlannedOwner::Manager)
+        );
+        // Every task waits only for tasks before it in this plan, counted
+        // from 0.
+        assert!(proposal.tasks.iter().enumerate().all(|(place, task)| {
+            task.waits_for
+                .iter()
+                .all(|earlier| *earlier < proposal.tasks.len() && *earlier != place)
+        }));
+        assert!(
+            proposal
+                .tasks
+                .iter()
+                .all(|task| task.estimate_minutes.is_some())
+        );
+        assert!(!events.iter().any(|event| matches!(
+            event,
+            AgentEvent::ToolUse { tool, .. } if tool.starts_with("mcp__teamwright__")
+        )));
+
+        let outcome = decoder.finish(exited());
+        assert!(!outcome.failed());
+        assert!(!outcome.final_text.is_empty());
+    }
+
+    #[test]
+    fn a_proposal_may_give_a_task_to_a_member_of_the_team() {
+        let line = r#"{"type":"assistant","message":{"content":[{"type":"tool_use",
+            "id":"toolu_sample1","name":"mcp__teamwright__propose_plan","input":{
+            "summary":"More work.","members":[],
+            "tasks":[{"title":"Check the board","owner":"Hardware engineer"}]}}]}}"#;
+
+        let without_team = Decoder::new().decode_line(line);
+        let with_team = Decoder::for_team(vec!["Hardware engineer".to_owned()]).decode_line(line);
+
+        assert!(matches!(
+            without_team.as_slice(),
+            [AgentEvent::ToolUse { .. }]
+        ));
+        assert!(matches!(
+            with_team.as_slice(),
+            [AgentEvent::PlanProposed(_)]
+        ));
+    }
+
+    #[test]
+    fn only_the_first_of_a_question_an_interview_and_a_proposal_is_reported() {
+        let mut decoder = Decoder::new();
+        let interview = decoder.decode_line(
+            r#"{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_sample1",
+                "name":"mcp__teamwright__interview","input":{"questions":[{"question":"Which?"}]}}]}}"#,
+        );
+        let question = decoder.decode_line(
+            r#"{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_sample2",
+                "name":"mcp__teamwright__ask_manager","input":{"question":"Which?",
+                "options":[{"label":"A"},{"label":"B"}]}}]}}"#,
+        );
+        assert!(matches!(
+            interview.as_slice(),
+            [AgentEvent::InterviewAsked(_)]
+        ));
+        assert!(matches!(question.as_slice(), [AgentEvent::ToolUse { .. }]));
     }
 
     #[test]

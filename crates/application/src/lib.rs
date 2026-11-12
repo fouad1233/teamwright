@@ -25,10 +25,12 @@ pub mod team;
 pub mod work;
 
 pub use agent_runtime::{
-    AgentEvent, AgentRuntime, AgentRuntimeError, Effort, Installation, ManagerQuestion, McpServer,
-    ModelUsage, PermissionDenial, PermissionMode, PermissionProfile, PlanUsage, PlanWindow,
-    PlanWindowKind, ProgramVersion, QuestionOption, RunningTurn, SessionChoice, SessionId,
-    SessionStarted, SignIn, TokenCounts, TurnFailure, TurnOutcome, TurnRequest,
+    AgentEvent, AgentRuntime, AgentRuntimeError, Effort, Installation, InterviewQuestionAsked,
+    ManagerInterview, ManagerQuestion, McpServer, ModelUsage, PermissionDenial, PermissionMode,
+    PermissionProfile, PlanProposal, PlanUsage, PlanWindow, PlanWindowKind, PlannedMember,
+    PlannedOwner, PlannedTask, ProgramVersion, QuestionOption, RunningTurn, SessionChoice,
+    SessionId, SessionStarted, SignIn, TeamTool, TokenCounts, TurnFailure, TurnOutcome,
+    TurnRequest,
 };
 pub use clock::SystemClock;
 pub use error::ApplicationError;

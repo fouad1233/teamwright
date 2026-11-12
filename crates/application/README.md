@@ -147,7 +147,8 @@ question; every request to the specialist is a turn of it.
   failure, a task in an active status moves to the bottom of the first
   review status, if the workflow has one. Nothing here moves a task to done,
   and a failed or stopped turn leaves the task where it is.
-- Every turn may ask the manager to decide (`may_ask_manager`). The
+- Every turn of a specialist may ask the manager to decide (`team_tools:
+  [TeamTool::AskManager]`). The
   question it asks is recorded on the turn, and a turn that finishes with a
   question leaves its task where it is: it is not ready to be checked.
 - A question is open while it is the question of the latest turn of its
@@ -188,11 +189,14 @@ The application only knows the trait `AgentRuntime`, implemented by the
   stopped,
 - open a session in the Claude desktop app (`open_in_desktop_app`).
 
-A turn request may give the session the tool to ask the manager to decide
-(`may_ask_manager`); a question it asks arrives as
-`AgentEvent::ManagerAsked`, with the recommended option counted from 0. It
-may also name folders the session may read but not write
-(`readable_folders`).
+A turn request names the tools of the team bus the session is given
+(`team_tools`, each a `TeamTool`): `AskManager` to ask the manager to
+decide, `Interview` and `ProposePlan { team }` for the Advisor, where `team`
+holds the names of the members the project has. What a session does with
+them arrives as `AgentEvent::ManagerAsked` (`ManagerQuestion`),
+`InterviewAsked` (`ManagerInterview`) or `PlanProposed` (`PlanProposal`),
+with every place counted from 0, and never as a tool use. A request may
+also name folders the session may read but not write (`readable_folders`).
 
 A turn request carries its permissions as data, a `PermissionProfile`.
 `PermissionProfile::specialist()` is the profile of a specialist: read,

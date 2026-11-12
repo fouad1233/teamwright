@@ -136,7 +136,8 @@ pub fn run_briefly(
 }
 
 /// Starts the process of a turn, gives it the prompt and follows it on a
-/// thread of its own.
+/// thread of its own. The decoder reads its output; it is made for the
+/// turn, because what it accepts depends on the tools the turn was given.
 ///
 /// # Errors
 ///
@@ -145,6 +146,7 @@ pub fn run_briefly(
 pub fn start_turn(
     mut command: Command,
     prompt: String,
+    mut decoder: Decoder,
     mut listener: Box<dyn FnMut(AgentEvent) + Send>,
 ) -> Result<TurnProcess, AgentRuntimeError> {
     command
@@ -174,7 +176,6 @@ pub fn start_turn(
         let child = Arc::clone(&child);
         let stopped = Arc::clone(&stopped);
         thread::spawn(move || {
-            let mut decoder = Decoder::new();
             if let Some(stdout) = stdout {
                 let mut reader = BufReader::new(stdout);
                 let mut bytes = Vec::new();

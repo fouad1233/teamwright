@@ -12,7 +12,7 @@ use teamwright_application::{
     TurnRequest,
 };
 
-use crate::team_bus::{ASK_MANAGER_IN_SESSION, TeamBus};
+use crate::team_bus::{TeamBus, name_in_session};
 
 /// The first version that can open a session in the Claude desktop app.
 pub const FIRST_VERSION_WITH_DESKTOP: ProgramVersion = ProgramVersion::new(2, 1, 285);
@@ -39,8 +39,9 @@ pub fn desktop_arguments(session: &SessionId) -> Vec<OsString> {
 /// The arguments that run one turn of a session in headless mode.
 ///
 /// `readable_folders` are the request's readable folders in their full
-/// form. `team_bus` is how the tool server to ask the manager is started,
-/// if the turn is to have it.
+/// form. `team_bus` is how the tool server is started, if the turn is to
+/// have it; it then offers the team tools of the request, and the session
+/// may use each of them.
 ///
 /// # Errors
 ///
@@ -105,8 +106,12 @@ pub fn turn_arguments(
     if let Some(team_bus) = team_bus {
         // The configuration is one argument, JSON, as the program reads a
         // configuration given in place of a file.
-        push_pair(&mut arguments, "--mcp-config", &team_bus.configuration());
-        allowed_tools.push(ASK_MANAGER_IN_SESSION.to_owned());
+        push_pair(
+            &mut arguments,
+            "--mcp-config",
+            &team_bus.configuration(&request.team_tools),
+        );
+        allowed_tools.extend(request.team_tools.iter().map(name_in_session));
     }
     for folder in readable_folders {
         let folder = folder.to_string_lossy();
@@ -195,7 +200,7 @@ const fn permission_mode_name(mode: PermissionMode) -> &'static str {
 mod tests {
     use std::path::PathBuf;
 
-    use teamwright_application::PermissionProfile;
+    use teamwright_application::{PermissionProfile, TeamTool};
 
     use super::*;
 
@@ -208,7 +213,7 @@ mod tests {
             effort: None,
             extra_instructions: None,
             permissions: PermissionProfile::specialist(),
-            may_ask_manager: true,
+            team_tools: vec![TeamTool::AskManager],
             readable_folders: Vec::new(),
         }
     }
@@ -236,7 +241,7 @@ mod tests {
                 "mcpServers": {
                     "teamwright": {
                         "command": r"C:\Program Files\Teamwright\teamwright.exe",
-                        "args": ["--team-bus"]
+                        "args": ["--team-bus", "ask_manager"]
                     }
                 }
             })
@@ -258,6 +263,63 @@ mod tests {
             .position(|argument| argument == "--mcp-config")
             .unwrap();
         assert!(configuration_at < allowed_at);
+    }
+
+    #[test]
+    fn the_advisor_is_given_its_two_tools_with_the_team_and_may_only_read() {
+        let mut advisor = request();
+        advisor.permissions = PermissionProfile::advisor();
+        advisor.team_tools = vec![
+            TeamTool::Interview,
+            TeamTool::ProposePlan {
+                team: vec!["Hardware engineer".to_owned()],
+            },
+        ];
+
+        let arguments = text(&turn_arguments(&advisor, &[], Some(&bus())).unwrap());
+
+        let configuration = arguments
+            .windows(2)
+            .find(|pair| pair[0] == "--mcp-config")
+            .map(|pair| pair[1].clone())
+            .unwrap();
+        let configuration: serde_json::Value = serde_json::from_str(&configuration).unwrap();
+        assert_eq!(
+            configuration["mcpServers"]["teamwright"]["args"],
+            serde_json::json!([
+                "--team-bus",
+                "interview",
+                "propose_plan",
+                "--member",
+                "Hardware engineer"
+            ])
+        );
+        let tools_at = arguments
+            .iter()
+            .position(|argument| argument == "--tools")
+            .unwrap();
+        let allowed_at = arguments
+            .iter()
+            .position(|argument| argument == "--allowedTools")
+            .unwrap();
+        let denied_at = arguments
+            .iter()
+            .position(|argument| argument == "--disallowedTools")
+            .unwrap();
+        assert_eq!(
+            arguments[tools_at + 1..allowed_at],
+            ["Read", "Glob", "Grep"]
+        );
+        assert_eq!(
+            arguments[allowed_at + 1..denied_at],
+            [
+                "Read",
+                "Glob",
+                "Grep",
+                "mcp__teamwright__interview",
+                "mcp__teamwright__propose_plan"
+            ]
+        );
     }
 
     #[test]
