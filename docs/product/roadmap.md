@@ -115,7 +115,8 @@ Several specialists working together with the manager in the loop.
   People in the room: a pixel character for every kind of role and a
   default, who works, waits with a hand raised, and walks the aisles to a
   shared place when free; a portrait at the bench and in the Team view.
-  Seen in a browser on demo data only, not yet in the built program
+  Seen in the built program with a real specialist at work at its bench;
+  walking and waiting were seen in a browser on demo data only
   ([decision 0019](../decisions/0019-people-in-the-office.md))
 - 🚧 Dashboards: usage per teammate, plan limits, workload by status. A
   Dashboard view of a project: where it stands in sentences worked out by

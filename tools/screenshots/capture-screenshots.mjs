@@ -506,7 +506,7 @@ function card(title) {
 /**
  * Takes the pictures of the sample project in one theme: the board of the
  * sprint and of all tasks, a task, the backlog, the list, the Gantt chart,
- * the calendar, the team, the office, and the statuses.
+ * the calendar, the dashboard, the team, the office, and the statuses.
  */
 async function takeProjectPictures(window, theme) {
   await window.showInTheme(theme);
@@ -539,6 +539,10 @@ async function takeProjectPictures(window, theme) {
   await window.click(tab('Calendar'));
   await window.waitForText('MON');
   await takePicture(window, `calendar-${theme}`);
+
+  await window.click(tab('Dashboard'));
+  await window.waitForText('WHERE THE PROJECT STANDS');
+  await takePicture(window, `dashboard-${theme}`);
 
   await window.click(tab('Team'));
   await window.waitForText('MEMBER');

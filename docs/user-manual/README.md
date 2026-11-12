@@ -648,6 +648,11 @@ in the pose of what the bench says.
 The *Dashboard* tab says how the project is going, on one page that reads
 from top to bottom. There is nothing to set up.
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="../screenshots/dashboard-dark.png">
+  <img alt="The dashboard of a project: a few sentences on where it stands, the manager's note, six numbers, and the work by status and by member" src="../screenshots/dashboard-light.png">
+</picture>
+
 **Where the project stands.** A few short sentences at the top, such as
 *5 of 21 tasks are finished, and 4 are in work. 1 task is late. Sprint 2
 has 9 days left and 16 of 22 points to go. 1 thing waits for you.* They are

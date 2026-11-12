@@ -15,6 +15,7 @@ show them. Every picture exists twice: `-dark.png` for the dark theme and
 | `list` | The list of the sample project |
 | `gantt` | The Gantt chart of the sample project |
 | `calendar` | The calendar of the sample project |
+| `dashboard` | The dashboard of the sample project |
 | `team` | The team of the sample project |
 | `office` | The office of the sample project, in which nobody works |
 | `statuses` | The dialog in which the statuses of a project are edited |
