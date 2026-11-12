@@ -1,11 +1,14 @@
 import type {
   AgentProgram,
+  ApprovedProposal,
   Assignee,
   CalendarDate,
   Conversation,
   Id,
+  InterviewAnswer,
   Member,
   MemberProfile,
+  NewAdvice,
   NewDecisionAnswer,
   NewMember,
   NewProject,
@@ -152,7 +155,8 @@ export interface Backend {
   /**
    * Sends the specialist of a conversation a message of the manager's. It
    * is a new turn of the same session, so the specialist knows what went
-   * before.
+   * before. In a conversation with the Advisor it is how the manager asks
+   * for a change to a proposal, or for another round of planning.
    */
   reply(conversationId: Id, message: string): Promise<Conversation>;
   /** Asks an AI specialist something that is not about a task. It starts a new conversation. */
@@ -165,9 +169,34 @@ export interface Backend {
    */
   answerDecision(conversationId: Id, answer: NewDecisionAnswer): Promise<Conversation>;
   /**
-   * Lists the conversations in which a specialist waits for a decision of
-   * the manager, in every project that is not put away. The one that has
-   * waited longest comes first.
+   * Starts planning a project with the Advisor: a new conversation that
+   * begins with what the manager wants. The Advisor can read the folders of
+   * the project and change nothing. It asks what it needs to know and then
+   * proposes whom to add to the team and which tasks to create. One
+   * conversation with the Advisor runs in a project at a time.
+   */
+  advise(projectId: Id, advice: NewAdvice): Promise<Conversation>;
+  /**
+   * Answers the questions the Advisor asked in a conversation, one answer
+   * for each question, in their order. The Advisor goes on in the same
+   * session with the answers. While its questions are open, this is the
+   * only way to go on with the conversation.
+   */
+  answerInterview(conversationId: Id, answers: InterviewAnswer[]): Promise<Conversation>;
+  /**
+   * Approves the proposal the Advisor made in the latest turn of a
+   * conversation, as the manager changed it. The members are added to the
+   * team and the tasks are created, all of them or nothing. A proposed
+   * member whose name the team already has is not added again, and a task
+   * given to that name goes to the member the team has. The tasks start in
+   * the first status of the workflow, and no work starts by itself.
+   */
+  approveProposal(conversationId: Id, proposal: ApprovedProposal): Promise<Conversation>;
+  /**
+   * Lists the conversations that wait for the manager, in every project
+   * that is not put away: a specialist waits for a decision, or the Advisor
+   * waits for the answers to its questions or for a word about its
+   * proposal. The one that has waited longest comes first.
    */
   listConversationsWaiting(): Promise<Conversation[]>;
   /** Stops the turn that is running in a conversation. */

@@ -38,6 +38,8 @@ function turn(overrides: Partial<Turn> & Pick<Turn, 'id'>): Turn {
     model: 'simulated',
     tokens: { input: 10, output: 100, cacheRead: 1000, cacheWritten: 5 },
     decision: null,
+    interview: null,
+    proposal: null,
     ...overrides,
   };
 }
@@ -45,6 +47,7 @@ function turn(overrides: Partial<Turn> & Pick<Turn, 'id'>): Turn {
 function conversation(overrides: Partial<Conversation> & Pick<Conversation, 'id'>): Conversation {
   return {
     projectId: 'project',
+    isWithAdvisor: false,
     memberId: 'member',
     taskId: null,
     startedAt: '2026-11-11T09:00:00.000Z',

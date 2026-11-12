@@ -3,6 +3,7 @@ import { evenlySpacedRanks, rankBetween, rankFitsBetween } from '@/shared/lib/ra
 import { BackendError, type Backend } from '../backend';
 import type {
   AgentProgram,
+  ApprovedProposal,
   Assignee,
   CalendarDate,
   Color,
@@ -10,10 +11,12 @@ import type {
   DecisionRequest,
   Effort,
   Id,
+  InterviewAnswer,
   Member,
   MemberKind,
   MemberProfile,
   Moment,
+  NewAdvice,
   NewDecisionAnswer,
   NewMember,
   NewProject,
@@ -21,6 +24,8 @@ import type {
   Priority,
   Project,
   ProjectPlaces,
+  ProposedMember,
+  ProposedTask,
   Status,
   StatusCategory,
   StatusProperties,
@@ -31,6 +36,8 @@ import type {
 } from '../types';
 import { briefFor } from './brief';
 import { freeName, isInside, isSameFolder, nameOf } from './places';
+import { answersInWords, openInterviewOf, openProposalOf, waitInCircle } from './planning';
+import { scriptForAnswers, scriptForBrief, scriptForChange } from './simulatedAdvisor';
 import { historyOf } from './taskHistory';
 import {
   SIMULATED_MODEL,
@@ -816,6 +823,7 @@ export class DemoBackend implements Backend {
       const conversation: Conversation = {
         id: this.environment.newId(),
         projectId: project.id,
+        isWithAdvisor: false,
         memberId: member.id,
         taskId: task.id,
         startedAt: this.nowAsText(),
@@ -835,6 +843,9 @@ export class DemoBackend implements Backend {
   reply(conversationId: Id, message: string): Promise<Conversation> {
     return this.answer(() => {
       const conversation = this.requireConversation(conversationId);
+      if (conversation.isWithAdvisor) {
+        return this.replyToAdvisor(conversation, message);
+      }
       const member =
         conversation.memberId === null ? undefined : this.members.get(conversation.memberId);
       if (!member) {
@@ -901,9 +912,206 @@ export class DemoBackend implements Backend {
       this.allProjects()
         .filter((project) => project.archivedAt === null)
         .flatMap((project) => this.conversationsOf(project.id))
-        .filter((conversation) => openDecisionOf(conversation) !== undefined)
+        .filter(
+          (conversation) =>
+            openDecisionOf(conversation) !== undefined ||
+            openInterviewOf(conversation) !== undefined ||
+            openProposalOf(conversation) !== undefined,
+        )
         .sort((first, second) => askedAt(first).localeCompare(askedAt(second))),
     );
+  }
+
+  advise(projectId: Id, advice: NewAdvice): Promise<Conversation> {
+    return this.answer(() => {
+      const project = this.requireProject(projectId);
+      const brief = tidyMessage(advice.brief);
+      // The demo plays the Advisor, so the profile changes nothing here.
+      // It is checked all the same, as the real application checks it.
+      tidyProfile('agent', ADVISOR_NAME, {
+        model: advice.model ?? null,
+        effort: advice.effort ?? null,
+      });
+      this.refuseWhileAdvisorWorks(project.id);
+      const conversation: Conversation = {
+        id: this.environment.newId(),
+        projectId: project.id,
+        isWithAdvisor: true,
+        memberId: null,
+        taskId: null,
+        startedAt: this.nowAsText(),
+        turns: [],
+      };
+      this.conversations.set(conversation.id, conversation);
+      this.beginTurn(conversation, brief, 'message', scriptForBrief());
+      return conversation;
+    });
+  }
+
+  answerInterview(conversationId: Id, answers: InterviewAnswer[]): Promise<Conversation> {
+    return this.answer(() => {
+      const conversation = this.requireConversation(conversationId);
+      const interview = openInterviewOf(conversation);
+      if (!interview) {
+        throw new BackendError('no_interview_open', 'no questions are open in this conversation');
+      }
+      if (answers.length !== interview.questions.length) {
+        throw new BackendError('rule_broken', 'every question needs an answer');
+      }
+      const tidy = answers.map((answer, place) => {
+        const number = (place + 1).toString();
+        const note = answer.note.trim();
+        const options = interview.questions[place]?.options ?? [];
+        if (answer.option !== null && !options[answer.option]) {
+          throw new BackendError('rule_broken', `question ${number} has no such option`);
+        }
+        if (answer.option === null && note === '') {
+          throw new BackendError(
+            'rule_broken',
+            `the answer to question ${number} names one of the options or says something in words`,
+          );
+        }
+        return { option: answer.option, note };
+      });
+      this.refuseWhileAdvisorWorks(conversation.projectId);
+
+      interview.answers = tidy;
+      interview.answeredAt = this.nowAsText();
+      this.beginTurn(
+        conversation,
+        answersInWords(interview.questions, tidy),
+        'interview',
+        scriptForAnswers(),
+      );
+      return conversation;
+    });
+  }
+
+  approveProposal(conversationId: Id, approved: ApprovedProposal): Promise<Conversation> {
+    return this.answer(() => {
+      const conversation = this.requireConversation(conversationId);
+      const proposal = openProposalOf(conversation);
+      if (!proposal) {
+        throw new BackendError('no_proposal_open', 'no proposal is open in this conversation');
+      }
+      const project = this.requireProject(conversation.projectId);
+      const team = this.teamOf(project.id);
+      const members = tidyProposedMembers(approved.members);
+      const tasks = tidyProposedTasks(approved.tasks, [
+        ...team.map((member) => member.name),
+        ...members.map((member) => member.name),
+      ]);
+      if (members.length === 0 && tasks.length === 0) {
+        throw new BackendError('rule_broken', 'the proposal has no members and no tasks');
+      }
+
+      // Everything was checked. From here on nothing is refused, so the
+      // members and the tasks are created together or not at all.
+      const now = this.nowAsText();
+      const byName = new Map(team.map((member) => [member.name.toLowerCase(), member]));
+      for (const proposed of members) {
+        if (byName.has(proposed.name.toLowerCase())) {
+          // The team has this member already. It is not added again.
+          continue;
+        }
+        const member: Member = {
+          id: this.environment.newId(),
+          projectId: project.id,
+          name: proposed.name,
+          kind: 'agent',
+          responsibility: proposed.responsibility,
+          model: proposed.model,
+          effort: proposed.effort,
+          color: colorForNewcomer([...byName.values()].map((other) => other.color)),
+          joinedAt: now,
+          updatedAt: now,
+        };
+        this.members.set(member.id, member);
+        byName.set(member.name.toLowerCase(), member);
+      }
+
+      const status = initialStatus(project);
+      const created: Task[] = [];
+      for (const proposed of tasks) {
+        const owner = proposed.owner;
+        const member = owner?.kind === 'member' ? byName.get(owner.name.toLowerCase()) : undefined;
+        const lastInStatus = this.tasksOfStatus(project.id, status.id).at(-1);
+        const number = this.nextTaskNumbers.get(project.id) ?? 1;
+        this.nextTaskNumbers.set(project.id, number + 1);
+        const task: Task = {
+          id: this.environment.newId(),
+          projectId: project.id,
+          number,
+          title: proposed.title,
+          description: proposed.description,
+          statusId: status.id,
+          priority: proposed.priority,
+          assignee:
+            owner?.kind === 'manager'
+              ? { kind: 'manager' }
+              : member
+                ? { kind: 'member', memberId: member.id }
+                : null,
+          parentId: null,
+          blockedBy: [],
+          estimateMinutes: proposed.estimateMinutes,
+          startOn: null,
+          dueOn: null,
+          rank: rankBetween(lastInStatus?.rank, undefined),
+          createdAt: now,
+          updatedAt: now,
+          completedAt: status.category === 'done' ? now : null,
+        };
+        this.tasks.set(task.id, task);
+        created.push(task);
+      }
+      for (const [place, proposed] of tasks.entries()) {
+        const task = created[place];
+        if (task) {
+          task.blockedBy = proposed.waitsFor.flatMap((earlier) => created[earlier]?.id ?? []);
+        }
+      }
+
+      // The record keeps what was approved, which may be less than what
+      // was proposed.
+      proposal.members = members;
+      proposal.tasks = tasks;
+      proposal.approvedAt = now;
+      this.noteVersions();
+      this.tellListeners(conversation);
+      return conversation;
+    });
+  }
+
+  /**
+   * Sends the Advisor a message of the manager's: a wish for a change to
+   * its proposal, or the start of another round.
+   */
+  private replyToAdvisor(conversation: Conversation, message: string): Conversation {
+    const text = tidyMessage(message);
+    if (openInterviewOf(conversation)) {
+      throw new BackendError(
+        'interview_open',
+        'the Advisor waits for your answers: answer its questions first',
+      );
+    }
+    this.refuseWhileAdvisorWorks(conversation.projectId);
+    const previous = [...conversation.turns]
+      .reverse()
+      .find((turn) => turn.proposal !== null)?.proposal;
+    this.beginTurn(conversation, text, 'message', scriptForChange(previous ?? undefined));
+    return conversation;
+  }
+
+  /** One conversation with the Advisor runs in a project at a time. */
+  private refuseWhileAdvisorWorks(projectId: Id): void {
+    const working = this.conversationsOf(projectId).some(
+      (conversation) =>
+        conversation.isWithAdvisor && conversation.turns.some((turn) => turn.state === 'running'),
+    );
+    if (working) {
+      throw new BackendError('advisor_busy', 'the Advisor is still working on this project');
+    }
   }
 
   ask(memberId: Id, message: string): Promise<Conversation> {
@@ -917,6 +1125,7 @@ export class DemoBackend implements Backend {
       const conversation: Conversation = {
         id: this.environment.newId(),
         projectId: member.projectId,
+        isWithAdvisor: false,
         memberId: member.id,
         taskId: null,
         startedAt: this.nowAsText(),
@@ -1000,8 +1209,12 @@ export class DemoBackend implements Backend {
     const member = busy.memberId === null ? undefined : this.members.get(busy.memberId);
     const task = busy.taskId === null ? undefined : this.tasks.get(busy.taskId);
     const project = this.projects.get(busy.projectId);
-    const who = member?.name ?? 'A specialist';
-    const what = task && project ? referenceOf(project, task) : 'a question';
+    const who = busy.isWithAdvisor ? ADVISOR_NAME : (member?.name ?? 'A specialist');
+    const what = busy.isWithAdvisor
+      ? 'a plan'
+      : task && project
+        ? referenceOf(project, task)
+        : 'a question';
     throw new BackendError(
       'work_in_progress',
       `${who} is still working on ${what}; stop the work first`,
@@ -1048,6 +1261,8 @@ export class DemoBackend implements Backend {
       model: SIMULATED_MODEL,
       tokens: null,
       decision: null,
+      interview: null,
+      proposal: null,
     };
     conversation.turns.push(turn);
 
@@ -1124,6 +1339,12 @@ export class DemoBackend implements Backend {
     turn.answer = script.answer;
     turn.tokens = script.tokens;
     turn.decision = script.asks ? { ...structuredClone(script.asks), answer: null } : null;
+    turn.interview = script.interviews
+      ? { questions: structuredClone(script.interviews), answers: null, answeredAt: null }
+      : null;
+    turn.proposal = script.proposes
+      ? { ...structuredClone(script.proposes), approvedAt: null }
+      : null;
 
     // Work that ends in a question is not ready to be checked: the task
     // stays in work until the manager has decided and the specialist has
@@ -1529,6 +1750,81 @@ function answerInWords(option: string | undefined, note: string): string {
     return note;
   }
   return note === '' ? `Decision: ${option}` : `Decision: ${option}\n\n${note}`;
+}
+
+/** What the Advisor is called where a member would be named. */
+const ADVISOR_NAME = 'The Advisor';
+
+/**
+ * Checks the members of a proposal that the manager approves, and returns
+ * them tidied. No two of them may have the same name.
+ */
+function tidyProposedMembers(members: readonly ProposedMember[]): ProposedMember[] {
+  const names = new Set<string>();
+  return members.map((member) => {
+    const name = tidyName(member.name, 'name of the team member', MEMBER_NAME_MAX_LENGTH);
+    if (names.has(name.toLowerCase())) {
+      throw new BackendError('rule_broken', `two members of the proposal are called "${name}"`);
+    }
+    names.add(name.toLowerCase());
+    return {
+      name,
+      responsibility: member.responsibility.trim(),
+      reason: member.reason.trim(),
+      ...tidyProfile('agent', name, { model: member.model, effort: member.effort }),
+    };
+  });
+}
+
+/**
+ * Checks the tasks of a proposal that the manager approves, and returns
+ * them tidied. A task that is given to a member names one of `known`: the
+ * members of the team and of the proposal. A task waits only for other
+ * tasks of the proposal, and the tasks do not wait in a circle.
+ */
+function tidyProposedTasks(
+  tasks: readonly ProposedTask[],
+  known: readonly string[],
+): ProposedTask[] {
+  const knownNames = new Set(known.map((name) => name.toLowerCase()));
+  const tidy = tasks.map((task, place) => {
+    const title = tidyName(task.title, 'task title', TASK_TITLE_MAX_LENGTH);
+    const owner = task.owner;
+    if (owner?.kind === 'member' && !knownNames.has(owner.name.trim().toLowerCase())) {
+      throw new BackendError(
+        'rule_broken',
+        `"${title}" is given to "${owner.name.trim()}", who is neither on the team nor in the proposal`,
+      );
+    }
+    const waitsFor = [...new Set(task.waitsFor)];
+    if (
+      waitsFor.some(
+        (earlier) =>
+          !Number.isInteger(earlier) || earlier < 0 || earlier >= tasks.length || earlier === place,
+      )
+    ) {
+      throw new BackendError(
+        'rule_broken',
+        `"${title}" waits for a task that is not another task of the proposal`,
+      );
+    }
+    return {
+      title,
+      description: task.description.trim(),
+      owner:
+        owner?.kind === 'member' ? { kind: 'member' as const, name: owner.name.trim() } : owner,
+      estimateMinutes: task.estimateMinutes,
+      priority: task.priority,
+      waitsFor,
+    };
+  });
+  if (waitInCircle(tidy)) {
+    throw new BackendError(
+      'rule_broken',
+      'the tasks of the proposal wait for each other in a circle',
+    );
+  }
+  return tidy;
 }
 
 /**

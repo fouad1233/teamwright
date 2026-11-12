@@ -259,17 +259,121 @@ export interface NewDecisionAnswer {
   note: string;
 }
 
-/** One request to a specialist, and what came of it. */
+/**
+ * One question of an interview: something the Advisor needs to know before
+ * it can propose a team and a plan.
+ */
+export interface InterviewQuestion {
+  question: string;
+  /** Why the Advisor asks: what the answer changes. May be empty. */
+  reason: string;
+  /** Two to four options, or none for a question that is answered in words. */
+  options: DecisionOption[];
+  /** The option the Advisor recommends, by its place from 0, if it recommends one. */
+  recommended: number | null;
+}
+
+/** The manager's answer to one question of an interview. */
+export interface InterviewAnswer {
+  /** The option the manager chose, by its place from 0, or nothing. */
+  option: number | null;
+  /**
+   * What the manager added to the option, or the whole answer if no option
+   * was chosen. Empty if an option was chosen and nothing was added.
+   */
+  note: string;
+}
+
+/**
+ * The questions the Advisor asks the manager before it proposes. It asks
+ * them all at once and ends its turn. The answers start the next turn of
+ * the same conversation.
+ */
+export interface Interview {
+  /** One to five questions. */
+  questions: InterviewQuestion[];
+  /** One answer for each question, in the same order. Nothing while the interview is open. */
+  answers: InterviewAnswer[] | null;
+  /** When the manager answered. Nothing while the interview is open. */
+  answeredAt: Moment | null;
+}
+
+/** An AI specialist the Advisor proposes to add to the team. */
+export interface ProposedMember {
+  name: string;
+  /** What the member is responsible for. */
+  responsibility: string;
+  /** Why the project needs this member. */
+  reason: string;
+  /** The model the member is to run on, or nothing for the default of the program. */
+  model: string | null;
+  /** How much the member is to think before it acts, or nothing for the default. */
+  effort: Effort | null;
+}
+
+/**
+ * Who a proposed task is given to: the manager, or a member by name. The
+ * name is that of a proposed member, or of a member the project already
+ * has.
+ */
+export type ProposedOwner = { kind: 'manager' } | { kind: 'member'; name: string };
+
+/** A task the Advisor proposes to create. */
+export interface ProposedTask {
+  title: string;
+  /** What the result is, and how to tell that it is done. May be empty. */
+  description: string;
+  /** Who does it, or nothing if nobody is named. */
+  owner: ProposedOwner | null;
+  /**
+   * The size of the task: the minutes a skilled person would need for it,
+   * if the Advisor said. It is an estimate of size, not of how long a
+   * specialist takes.
+   */
+  estimateMinutes: number | null;
+  priority: Priority;
+  /** The tasks of the same proposal that must be finished first, by their places from 0. */
+  waitsFor: number[];
+}
+
+/**
+ * What the Advisor proposes: who to add to the team, and which tasks to
+ * create. Nothing of it exists before the manager approves it.
+ */
+export interface Proposal {
+  /** The project in the Advisor's words, for the manager to check. */
+  summary: string;
+  members: ProposedMember[];
+  tasks: ProposedTask[];
+  /**
+   * When the manager approved it. Nothing while it is not approved. Once it
+   * is, the members and the tasks are what the manager approved, which may
+   * be less than the Advisor proposed.
+   */
+  approvedAt: Moment | null;
+}
+
+/**
+ * A proposal as the manager approves it: the members and the tasks that
+ * are left after the manager's changes.
+ */
+export interface ApprovedProposal {
+  members: ProposedMember[];
+  tasks: ProposedTask[];
+}
+
+/** One request to a specialist or to the Advisor, and what came of it. */
 export interface Turn {
   id: Id;
   /** What the specialist was asked to do. */
   request: string;
   /**
    * `brief` when the program wrote the request from a task, `message` when
-   * the manager wrote it in their own words, and `decision` when it is the
-   * manager's answer to a decision request.
+   * the manager wrote it in their own words, `decision` when it is the
+   * manager's answer to a decision request, and `interview` when it is the
+   * manager's answers to an interview.
    */
-  origin: 'brief' | 'message' | 'decision';
+  origin: 'brief' | 'message' | 'decision' | 'interview';
   state: TurnState;
   startedAt: Moment;
   endedAt: Moment | null;
@@ -285,17 +389,30 @@ export interface Turn {
   tokens: TokenCounts | null;
   /** What the specialist asked the manager to decide in this turn, if anything. */
   decision: DecisionRequest | null;
+  /** What the Advisor asked the manager in this turn, if anything. */
+  interview: Interview | null;
+  /** What the Advisor proposed in this turn, if anything. */
+  proposal: Proposal | null;
 }
 
 /**
  * A thread of work with one AI specialist: about a task, or a question the
- * manager asked. It is one session of the program that runs the specialist,
- * so the specialist remembers the earlier turns.
+ * manager asked. Or a thread with the Advisor, in which a project is
+ * planned. It is one session of the program that runs them, so the earlier
+ * turns are remembered.
  */
 export interface Conversation {
   id: Id;
   projectId: Id;
-  /** The specialist, or nothing if it has left the team since. */
+  /**
+   * Whether the conversation is with the Advisor. The Advisor is not a
+   * member of the team, so such a conversation has no member and no task.
+   */
+  isWithAdvisor: boolean;
+  /**
+   * The specialist, or nothing if it has left the team since, or if the
+   * conversation is with the Advisor.
+   */
   memberId: Id | null;
   /** The task the conversation is about, if it is about one. */
   taskId: Id | null;
@@ -346,6 +463,19 @@ export interface NewMember {
   /** The model of an AI specialist. Left out, it is the default of the program. */
   model?: string | null;
   /** The effort of an AI specialist. Left out, it is the default of the program. */
+  effort?: Effort | null;
+}
+
+/** What a conversation with the Advisor starts with. */
+export interface NewAdvice {
+  /** What the manager wants, in their own words. */
+  brief: string;
+  /**
+   * The model the Advisor runs on in this conversation. Left out, it is the
+   * default of the program.
+   */
+  model?: string | null;
+  /** The effort of the Advisor in this conversation. Left out, it is the default. */
   effort?: Effort | null;
 }
 

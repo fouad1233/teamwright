@@ -1,4 +1,11 @@
-import type { DecisionRequest, Member, Task, TokenCounts } from '../types';
+import type {
+  DecisionRequest,
+  InterviewQuestion,
+  Member,
+  Proposal,
+  Task,
+  TokenCounts,
+} from '../types';
 
 /**
  * What a specialist does in the demo.
@@ -34,12 +41,17 @@ export interface Script {
   tokens: TokenCounts;
   /** What the specialist asks the manager to decide, if it ends the turn with a question. */
   asks?: Omit<DecisionRequest, 'answer'>;
+  /** The questions the Advisor asks, if it ends the turn with an interview. */
+  interviews?: InterviewQuestion[];
+  /** What the Advisor proposes, if it ends the turn with a proposal. */
+  proposes?: Omit<Proposal, 'approvedAt'>;
 }
 
 /** The name the demo gives the model of a simulated turn. */
 export const SIMULATED_MODEL = 'simulated';
 
-const WHAT_THIS_IS =
+/** What the first step of every simulated turn says. */
+export const WHAT_THIS_IS =
   'This is the demo. The work is simulated: nothing is sent to a model and no file is written.';
 
 /**

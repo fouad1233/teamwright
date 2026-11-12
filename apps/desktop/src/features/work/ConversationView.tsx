@@ -124,6 +124,7 @@ const ORIGIN_LABELS: Record<Turn['origin'], string> = {
   brief: 'Brief',
   message: 'You',
   decision: 'Your decision',
+  interview: 'Your answers',
 };
 
 /** One request to a specialist: what was asked, what happened, and what came back. */

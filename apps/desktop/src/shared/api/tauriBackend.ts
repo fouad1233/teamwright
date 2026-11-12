@@ -5,12 +5,15 @@ import { open } from '@tauri-apps/plugin-dialog';
 import { BackendError, type Backend } from './backend';
 import type {
   AgentProgram,
+  ApprovedProposal,
   Assignee,
   CalendarDate,
   Conversation,
   Id,
+  InterviewAnswer,
   Member,
   MemberProfile,
+  NewAdvice,
   NewDecisionAnswer,
   NewMember,
   NewProject,
@@ -213,6 +216,18 @@ export class TauriBackend implements Backend {
 
   answerDecision(conversationId: Id, answer: NewDecisionAnswer): Promise<Conversation> {
     return call('answer_decision', { conversationId, answer });
+  }
+
+  advise(projectId: Id, advice: NewAdvice): Promise<Conversation> {
+    return call('advise', { projectId, advice });
+  }
+
+  answerInterview(conversationId: Id, answers: InterviewAnswer[]): Promise<Conversation> {
+    return call('answer_interview', { conversationId, answers });
+  }
+
+  approveProposal(conversationId: Id, proposal: ApprovedProposal): Promise<Conversation> {
+    return call('approve_proposal', { conversationId, proposal });
   }
 
   listConversationsWaiting(): Promise<Conversation[]> {
