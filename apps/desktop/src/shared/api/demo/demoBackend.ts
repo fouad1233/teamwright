@@ -19,10 +19,12 @@ import type {
   StatusCategory,
   StatusProperties,
   Task,
+  TaskChange,
   Turn,
   WorkflowTemplate,
 } from '../types';
 import { briefFor } from './brief';
+import { historyOf } from './taskHistory';
 import {
   SIMULATED_MODEL,
   scriptForMessage,
@@ -113,6 +115,11 @@ export class DemoBackend implements Backend {
   private readonly tasks = new Map<Id, Task>();
   private readonly members = new Map<Id, Member>();
   private readonly conversations = new Map<Id, Conversation>();
+  /**
+   * Every version a task has had, the oldest first. The real application
+   * has its log of operations for this; the demo keeps the versions.
+   */
+  private readonly versions = new Map<Id, Task[]>();
   private readonly nextTaskNumbers = new Map<Id, number>();
   /** The turns whose script is still being played. A turn that is stopped leaves this set. */
   private readonly playing = new Set<Id>();
@@ -125,6 +132,7 @@ export class DemoBackend implements Backend {
     }
     for (const task of workspace?.tasks ?? []) {
       this.tasks.set(task.id, structuredClone(task));
+      this.versions.set(task.id, [structuredClone(task)]);
       const next = Math.max(this.nextTaskNumbers.get(task.projectId) ?? 1, task.number + 1);
       this.nextTaskNumbers.set(task.projectId, next);
     }
@@ -134,11 +142,11 @@ export class DemoBackend implements Backend {
   }
 
   listProjects(): Promise<Project[]> {
-    return respond(() => this.allProjects().filter((project) => project.archivedAt === null));
+    return this.answer(() => this.allProjects().filter((project) => project.archivedAt === null));
   }
 
   createProject(newProject: NewProject): Promise<Project> {
-    return respond(() => {
+    return this.answer(() => {
       const name = tidyName(newProject.name, 'project name', PROJECT_NAME_MAX_LENGTH);
       const requestedKey = newProject.key?.trim();
       const key = requestedKey ? this.claimKey(requestedKey) : this.unusedKeyFor(name);
@@ -160,7 +168,7 @@ export class DemoBackend implements Backend {
   }
 
   renameProject(projectId: Id, name: string): Promise<Project> {
-    return respond(() => {
+    return this.answer(() => {
       const project = this.requireProject(projectId);
       project.name = tidyName(name, 'project name', PROJECT_NAME_MAX_LENGTH);
       return project;
@@ -168,7 +176,7 @@ export class DemoBackend implements Backend {
   }
 
   describeProject(projectId: Id, description: string): Promise<Project> {
-    return respond(() => {
+    return this.answer(() => {
       const project = this.requireProject(projectId);
       project.description = description.trim();
       return project;
@@ -176,7 +184,7 @@ export class DemoBackend implements Backend {
   }
 
   archiveProject(projectId: Id): Promise<Project> {
-    return respond(() => {
+    return this.answer(() => {
       const project = this.requireProject(projectId);
       this.refuseWhileWorkedOn(this.conversationsOf(project.id));
       project.archivedAt ??= this.nowAsText();
@@ -185,7 +193,7 @@ export class DemoBackend implements Backend {
   }
 
   listArchivedProjects(): Promise<Project[]> {
-    return respond(() =>
+    return this.answer(() =>
       this.allProjects()
         .filter((project) => project.archivedAt !== null)
         .sort((first, second) => (second.archivedAt ?? '').localeCompare(first.archivedAt ?? '')),
@@ -193,7 +201,7 @@ export class DemoBackend implements Backend {
   }
 
   restoreProject(projectId: Id): Promise<Project> {
-    return respond(() => {
+    return this.answer(() => {
       const project = this.requireProject(projectId);
       project.archivedAt = null;
       return project;
@@ -201,7 +209,7 @@ export class DemoBackend implements Backend {
   }
 
   deleteProject(projectId: Id): Promise<void> {
-    return respond(() => {
+    return this.answer(() => {
       const project = this.requireProject(projectId);
       this.refuseWhileWorkedOn(this.conversationsOf(project.id));
       for (const task of this.tasksOfProject(project.id)) {
@@ -219,7 +227,7 @@ export class DemoBackend implements Backend {
   }
 
   addStatus(projectId: Id, properties: StatusProperties): Promise<Project> {
-    return respond(() => {
+    return this.answer(() => {
       const project = this.requireProject(projectId);
       const name = tidyName(properties.name, 'status name', STATUS_NAME_MAX_LENGTH);
       refuseStatusNameInUse(project.statuses, name);
@@ -235,7 +243,7 @@ export class DemoBackend implements Backend {
   }
 
   changeStatus(projectId: Id, statusId: Id, properties: StatusProperties): Promise<Project> {
-    return respond(() => {
+    return this.answer(() => {
       const project = this.requireProject(projectId);
       const status = requireStatus(project, statusId);
       const name = tidyName(properties.name, 'status name', STATUS_NAME_MAX_LENGTH);
@@ -268,7 +276,7 @@ export class DemoBackend implements Backend {
   }
 
   moveStatus(projectId: Id, statusId: Id, index: number): Promise<Project> {
-    return respond(() => {
+    return this.answer(() => {
       const project = this.requireProject(projectId);
       const status = requireStatus(project, statusId);
       const others = project.statuses.filter((other) => other.id !== statusId);
@@ -279,7 +287,7 @@ export class DemoBackend implements Backend {
   }
 
   removeStatus(projectId: Id, statusId: Id, moveTasksTo?: Id): Promise<Project> {
-    return respond(() => {
+    return this.answer(() => {
       const project = this.requireProject(projectId);
       const status = requireStatus(project, statusId);
       const remaining = project.statuses.filter((other) => other.id !== statusId);
@@ -312,14 +320,14 @@ export class DemoBackend implements Backend {
   }
 
   listTasks(projectId: Id): Promise<Task[]> {
-    return respond(() => {
+    return this.answer(() => {
       this.requireProject(projectId);
       return this.tasksOfProject(projectId).sort(asArranged);
     });
   }
 
   createTask(newTask: NewTask): Promise<Task> {
-    return respond(() => {
+    return this.answer(() => {
       const project = this.requireProject(newTask.projectId);
       const title = tidyName(newTask.title, 'task title', TASK_TITLE_MAX_LENGTH);
       requireStartNotAfterDue(newTask.startOn ?? null, newTask.dueOn ?? null);
@@ -366,7 +374,7 @@ export class DemoBackend implements Backend {
   }
 
   renameTask(taskId: Id, title: string): Promise<Task> {
-    return respond(() => {
+    return this.answer(() => {
       const tidyTitle = tidyName(title, 'task title', TASK_TITLE_MAX_LENGTH);
       return this.change(taskId, (task) => {
         task.title = tidyTitle;
@@ -375,7 +383,7 @@ export class DemoBackend implements Backend {
   }
 
   describeTask(taskId: Id, description: string): Promise<Task> {
-    return respond(() =>
+    return this.answer(() =>
       this.change(taskId, (task) => {
         task.description = description;
       }),
@@ -383,7 +391,7 @@ export class DemoBackend implements Backend {
   }
 
   prioritizeTask(taskId: Id, priority: Priority): Promise<Task> {
-    return respond(() =>
+    return this.answer(() =>
       this.change(taskId, (task) => {
         task.priority = priority;
       }),
@@ -391,7 +399,7 @@ export class DemoBackend implements Backend {
   }
 
   assignTask(taskId: Id, assignee: Assignee | null): Promise<Task> {
-    return respond(() =>
+    return this.answer(() =>
       this.change(taskId, (task) => {
         this.checkAssignee(assignee, task.projectId);
         task.assignee = assignee;
@@ -400,7 +408,7 @@ export class DemoBackend implements Backend {
   }
 
   estimateTask(taskId: Id, minutes: number | null): Promise<Task> {
-    return respond(() =>
+    return this.answer(() =>
       this.change(taskId, (task) => {
         task.estimateMinutes = minutes;
       }),
@@ -412,7 +420,7 @@ export class DemoBackend implements Backend {
     startOn: CalendarDate | null,
     dueOn: CalendarDate | null,
   ): Promise<Task> {
-    return respond(() => {
+    return this.answer(() => {
       requireStartNotAfterDue(startOn, dueOn);
       return this.change(taskId, (task) => {
         task.startOn = startOn;
@@ -422,7 +430,7 @@ export class DemoBackend implements Backend {
   }
 
   moveTask(taskId: Id, statusId: Id, index: number): Promise<Task> {
-    return respond(() => {
+    return this.answer(() => {
       const task = this.requireTask(taskId);
       const project = this.requireProject(task.projectId);
       const status = requireStatus(project, statusId);
@@ -458,7 +466,7 @@ export class DemoBackend implements Backend {
   }
 
   addTaskDependency(taskId: Id, blockerId: Id): Promise<Task> {
-    return respond(() => {
+    return this.answer(() => {
       const task = this.requireTask(taskId);
       const blocker = this.requireTask(blockerId);
       if (task.projectId !== blocker.projectId) {
@@ -488,7 +496,7 @@ export class DemoBackend implements Backend {
   }
 
   removeTaskDependency(taskId: Id, blockerId: Id): Promise<Task> {
-    return respond(() =>
+    return this.answer(() =>
       this.change(taskId, (task) => {
         task.blockedBy = task.blockedBy.filter((id) => id !== blockerId);
       }),
@@ -496,7 +504,7 @@ export class DemoBackend implements Backend {
   }
 
   deleteTask(taskId: Id): Promise<void> {
-    return respond(() => {
+    return this.answer(() => {
       const task = this.requireTask(taskId);
       const removed = this.subtreeOf(task);
       const now = this.nowAsText();
@@ -521,14 +529,14 @@ export class DemoBackend implements Backend {
   }
 
   listMembers(projectId: Id): Promise<Member[]> {
-    return respond(() => {
+    return this.answer(() => {
       this.requireProject(projectId);
       return this.teamOf(projectId);
     });
   }
 
   addMember(newMember: NewMember): Promise<Member> {
-    return respond(() => {
+    return this.answer(() => {
       const project = this.requireProject(newMember.projectId);
       const name = tidyName(newMember.name, 'name of the team member', MEMBER_NAME_MAX_LENGTH);
       const team = this.teamOf(project.id);
@@ -550,7 +558,7 @@ export class DemoBackend implements Backend {
   }
 
   renameMember(memberId: Id, name: string): Promise<Member> {
-    return respond(() => {
+    return this.answer(() => {
       const member = this.requireMember(memberId);
       const tidy = tidyName(name, 'name of the team member', MEMBER_NAME_MAX_LENGTH);
       refuseNameInUse(
@@ -564,7 +572,7 @@ export class DemoBackend implements Backend {
   }
 
   setMemberResponsibility(memberId: Id, responsibility: string): Promise<Member> {
-    return respond(() => {
+    return this.answer(() => {
       const member = this.requireMember(memberId);
       member.responsibility = responsibility.trim();
       member.updatedAt = this.nowAsText();
@@ -573,7 +581,7 @@ export class DemoBackend implements Backend {
   }
 
   removeMember(memberId: Id): Promise<void> {
-    return respond(() => {
+    return this.answer(() => {
       const member = this.requireMember(memberId);
       this.refuseWhileBusy(member);
       const now = this.nowAsText();
@@ -595,7 +603,7 @@ export class DemoBackend implements Backend {
 
   agentProgram(): Promise<AgentProgram> {
     // The demo has no program to run specialists on. It plays their work.
-    return respond(() => ({
+    return this.answer(() => ({
       state: 'ready' as const,
       version: null,
       signInMethod: null,
@@ -605,14 +613,14 @@ export class DemoBackend implements Backend {
   }
 
   listConversations(projectId: Id): Promise<Conversation[]> {
-    return respond(() => {
+    return this.answer(() => {
       this.requireProject(projectId);
       return this.conversationsOf(projectId);
     });
   }
 
   startWork(taskId: Id): Promise<Conversation> {
-    return respond(() => {
+    return this.answer(() => {
       const task = this.requireTask(taskId);
       const project = this.requireProject(task.projectId);
       const member =
@@ -648,7 +656,7 @@ export class DemoBackend implements Backend {
   }
 
   reply(conversationId: Id, message: string): Promise<Conversation> {
-    return respond(() => {
+    return this.answer(() => {
       const conversation = this.requireConversation(conversationId);
       const member =
         conversation.memberId === null ? undefined : this.members.get(conversation.memberId);
@@ -666,7 +674,7 @@ export class DemoBackend implements Backend {
   }
 
   ask(memberId: Id, message: string): Promise<Conversation> {
-    return respond(() => {
+    return this.answer(() => {
       const member = this.requireMember(memberId);
       if (member.kind !== 'agent') {
         throw new BackendError('no_specialist', `${member.name} is not an AI specialist`);
@@ -688,7 +696,7 @@ export class DemoBackend implements Backend {
   }
 
   stopWork(conversationId: Id): Promise<Conversation> {
-    return respond(() => {
+    return this.answer(() => {
       const conversation = this.requireConversation(conversationId);
       const turn = conversation.turns.find((candidate) => candidate.state === 'running');
       if (turn) {
@@ -703,7 +711,7 @@ export class DemoBackend implements Backend {
   }
 
   openInClaude(conversationId: Id): Promise<void> {
-    return respond(() => {
+    return this.answer(() => {
       this.requireConversation(conversationId);
       throw new BackendError(
         'not_in_the_demo',
@@ -886,6 +894,7 @@ export class DemoBackend implements Backend {
     if (task && this.categoryOf(task) === 'active') {
       this.moveToFirst(task, 'review');
     }
+    this.noteVersions();
     this.tellListeners(conversation);
   }
 
@@ -916,6 +925,47 @@ export class DemoBackend implements Backend {
     task.statusId = status.id;
     task.completedAt = status.category === 'done' ? (task.completedAt ?? now) : null;
     task.updatedAt = now;
+  }
+
+  listTaskHistory(taskId: Id): Promise<TaskChange[]> {
+    return this.answer(() => {
+      this.requireTask(taskId);
+      return historyOf(this.versions.get(taskId) ?? []);
+    });
+  }
+
+  /**
+   * Answers a request the way `respond` does, and notes afterwards which
+   * tasks the request has changed.
+   */
+  private answer<Result>(work: () => Result): Promise<Result> {
+    return respond(() => {
+      try {
+        return work();
+      } finally {
+        this.noteVersions();
+      }
+    });
+  }
+
+  /**
+   * Notes the versions of the tasks that have changed since they were last
+   * noted, and forgets the versions of tasks that are gone. It runs after
+   * everything that can change a task.
+   */
+  private noteVersions(): void {
+    for (const task of this.tasks.values()) {
+      const noted = this.versions.get(task.id) ?? [];
+      const last = noted.at(-1);
+      if (!last || JSON.stringify(last) !== JSON.stringify(task)) {
+        this.versions.set(task.id, [...noted, structuredClone(task)]);
+      }
+    }
+    for (const taskId of this.versions.keys()) {
+      if (!this.tasks.has(taskId)) {
+        this.versions.delete(taskId);
+      }
+    }
   }
 
   private allProjects(): Project[] {

@@ -16,6 +16,7 @@ import type {
   Project,
   StatusProperties,
   Task,
+  TaskChange,
 } from './types';
 
 /**
@@ -121,6 +122,10 @@ export class TauriBackend implements Backend {
 
   deleteTask(taskId: Id): Promise<void> {
     return call('delete_task', { taskId });
+  }
+
+  listTaskHistory(taskId: Id): Promise<TaskChange[]> {
+    return call('list_task_history', { taskId });
   }
 
   listMembers(projectId: Id): Promise<Member[]> {

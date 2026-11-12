@@ -210,6 +210,32 @@ export interface Conversation {
   turns: Turn[];
 }
 
+/** The dates of a task: when it starts and when it is due. Either may be missing. */
+export interface TaskDates {
+  startOn: CalendarDate | null;
+  dueOn: CalendarDate | null;
+}
+
+/**
+ * One change in the life of a task, for its history. A move up or down
+ * within a status is not a change of the task and is not listed.
+ */
+export type TaskChange = { at: Moment } & (
+  | { kind: 'created' }
+  | { kind: 'renamed'; from: string; to: string }
+  | { kind: 'described' }
+  /** The task went to another status. A status may have been removed since. */
+  | { kind: 'moved'; fromStatusId: Id; toStatusId: Id }
+  | { kind: 'assigned'; from: Assignee | null; to: Assignee | null }
+  | { kind: 'prioritized'; from: Priority; to: Priority }
+  /** The estimate changed. The numbers are minutes. */
+  | { kind: 'estimated'; from: number | null; to: number | null }
+  | { kind: 'rescheduled'; from: TaskDates; to: TaskDates }
+  /** The task began to wait for another task, which may have been removed since. */
+  | { kind: 'now_waits_for'; taskId: Id }
+  | { kind: 'no_longer_waits_for'; taskId: Id }
+);
+
 export interface NewProject {
   name: string;
   /** If it is left out, the backend derives a key from the name. */

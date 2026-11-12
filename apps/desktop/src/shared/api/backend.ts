@@ -12,6 +12,7 @@ import type {
   Project,
   StatusProperties,
   Task,
+  TaskChange,
 } from './types';
 
 /**
@@ -78,6 +79,8 @@ export interface Backend {
   removeTaskDependency(taskId: Id, blockerId: Id): Promise<Task>;
   /** Removes a task together with its subtasks. */
   deleteTask(taskId: Id): Promise<void>;
+  /** Lists what has happened to a task since it was opened, the oldest change first. */
+  listTaskHistory(taskId: Id): Promise<TaskChange[]>;
 
   /** Lists the team of a project. The member who joined first comes first. */
   listMembers(projectId: Id): Promise<Member[]>;
