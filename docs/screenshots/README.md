@@ -11,6 +11,7 @@ show them. Every picture exists twice: `-dark.png` for the dark theme and
 | `board` | The board of the sample project |
 | `task` | A task opened from the board |
 | `list` | The list of the sample project |
+| `team` | The team of the sample project |
 
 Nobody edits these files by hand.
 [A tool](../../tools/screenshots/capture-screenshots.mjs) starts the built

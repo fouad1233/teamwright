@@ -4,8 +4,9 @@
  *
  * It starts the built application on an empty temporary data folder, takes a
  * picture of the first screen, creates a sample project through the commands
- * of the shell, and takes pictures of the board, of one task and of the list.
- * Every picture is taken twice: in the dark theme and in the light theme.
+ * of the shell, and takes pictures of the board, of one task, of the list and
+ * of the team. Every picture is taken twice: in the dark theme and in the
+ * light theme.
  *
  * Usage:
  *   node tools/screenshots/capture-screenshots.mjs <path-to-teamwright-desktop.exe> [output-folder]
@@ -61,10 +62,32 @@ const SAMPLE_PROJECT = {
 };
 
 /**
+ * The team of the sample project, in the order its members join: the three
+ * disciplines a small connected device needs.
+ */
+const SAMPLE_TEAM = [
+  {
+    key: 'hardware',
+    name: 'Hardware engineer',
+    responsibility: 'The parts, the schematic and the board.',
+  },
+  {
+    key: 'firmware',
+    name: 'Firmware engineer',
+    responsibility: 'Everything that runs on the device.',
+  },
+  {
+    key: 'mechanical',
+    name: 'Mechanical engineer',
+    responsibility: 'The enclosure, and how the board sits in it.',
+  },
+];
+
+/**
  * The tasks of the sample project. `waitsFor` holds the numbers of the tasks
  * a task waits for. Days are counted from today; negative numbers lie in the
- * past. Tasks marked `forManager` are given to the manager, all others are
- * unassigned until a team exists.
+ * past. `owner` is 'manager' or the key of a member of the team; a task
+ * without an owner is given to nobody.
  */
 const SAMPLE_TASKS = [
   {
@@ -73,7 +96,7 @@ const SAMPLE_TASKS = [
     status: 'Done',
     description:
       'Temperature, humidity and oxygen. A small screen. Wi-Fi. Low cost and a compact board.',
-    forManager: true,
+    owner: 'manager',
     estimateHours: 2,
     startsInDays: -9,
     dueInDays: -8,
@@ -82,6 +105,7 @@ const SAMPLE_TASKS = [
     number: 2,
     title: 'Choose the microcontroller',
     status: 'Done',
+    owner: 'hardware',
     priority: 'high',
     waitsFor: [1],
     estimateHours: 3,
@@ -92,6 +116,7 @@ const SAMPLE_TASKS = [
     number: 3,
     title: 'Select the sensors and the display',
     status: 'In test',
+    owner: 'hardware',
     waitsFor: [1],
     estimateHours: 4,
     startsInDays: -6,
@@ -101,6 +126,7 @@ const SAMPLE_TASKS = [
     number: 4,
     title: 'Draw the schematic',
     status: 'In progress',
+    owner: 'hardware',
     description:
       'Power, microcontroller, sensors on I2C, display on SPI. Keep the board under 40 by 60 mm.',
     priority: 'high',
@@ -113,6 +139,7 @@ const SAMPLE_TASKS = [
     number: 5,
     title: 'Define the pin map',
     status: 'In revision',
+    owner: 'hardware',
     description: 'The firmware cannot start before the pins are fixed.',
     waitsFor: [2],
     estimateHours: 2,
@@ -123,6 +150,7 @@ const SAMPLE_TASKS = [
     number: 6,
     title: 'Route the board',
     status: 'To do',
+    owner: 'hardware',
     waitsFor: [4],
     estimateHours: 10,
     startsInDays: 2,
@@ -132,6 +160,7 @@ const SAMPLE_TASKS = [
     number: 7,
     title: 'Write the Wi-Fi setup',
     status: 'To do',
+    owner: 'firmware',
     waitsFor: [5],
     estimateHours: 6,
     startsInDays: 1,
@@ -141,6 +170,7 @@ const SAMPLE_TASKS = [
     number: 8,
     title: 'Write the sensor drivers',
     status: 'To do',
+    owner: 'firmware',
     waitsFor: [5],
     estimateHours: 8,
     startsInDays: 1,
@@ -150,6 +180,7 @@ const SAMPLE_TASKS = [
     number: 9,
     title: 'Design the screens of the display',
     status: 'To do',
+    owner: 'firmware',
     priority: 'low',
     estimateHours: 5,
     dueInDays: 9,
@@ -158,6 +189,7 @@ const SAMPLE_TASKS = [
     number: 10,
     title: 'Design the enclosure',
     status: 'To do',
+    owner: 'mechanical',
     waitsFor: [6],
     estimateHours: 8,
     startsInDays: 6,
@@ -168,7 +200,7 @@ const SAMPLE_TASKS = [
     title: 'Order the parts for three prototypes',
     status: 'To do',
     priority: 'urgent',
-    forManager: true,
+    owner: 'manager',
     waitsFor: [4],
     estimateHours: 1,
     dueInDays: 3,
@@ -208,9 +240,31 @@ async function run(window, name, args) {
   return answer.ok;
 }
 
-/** Creates the sample project: its tasks, what they wait for, and where they stand. */
+/** Creates the sample project: its team, its tasks, what they wait for, and where they stand. */
 async function createSampleProject(window) {
   const project = await run(window, 'create_project', { input: SAMPLE_PROJECT });
+
+  const memberIds = new Map();
+  for (const sample of SAMPLE_TEAM) {
+    const member = await run(window, 'add_member', {
+      input: {
+        projectId: project.id,
+        name: sample.name,
+        kind: 'agent',
+        responsibility: sample.responsibility,
+      },
+    });
+    memberIds.set(sample.key, member.id);
+  }
+  /** Who a sample task is given to, in the form the commands expect. */
+  const assigneeOf = (sample) => {
+    if (sample.owner === undefined) {
+      return null;
+    }
+    return sample.owner === 'manager'
+      ? { kind: 'manager' }
+      : { kind: 'member', memberId: memberIds.get(sample.owner) };
+  };
 
   const taskIds = new Map();
   for (const sample of SAMPLE_TASKS) {
@@ -220,7 +274,7 @@ async function createSampleProject(window) {
         title: sample.title,
         description: sample.description ?? '',
         priority: sample.priority ?? 'normal',
-        assignee: sample.forManager ? { kind: 'manager' } : null,
+        assignee: assigneeOf(sample),
         estimateMinutes: sample.estimateHours * 60,
         startOn: dateInDays(sample.startsInDays),
         dueOn: dateInDays(sample.dueInDays),
@@ -271,7 +325,7 @@ function card(title) {
     .find((entry) => entry.innerText.includes(${JSON.stringify(title)}))`;
 }
 
-/** Takes the pictures of the sample project in one theme: the board, a task, the list. */
+/** Takes the pictures of the sample project in one theme: the board, a task, the list, the team. */
 async function takeProjectPictures(window, theme) {
   await window.showInTheme(theme);
 
@@ -287,6 +341,10 @@ async function takeProjectPictures(window, theme) {
   await window.click(tab('List'));
   await window.waitForText('ASSIGNEE');
   await takePicture(window, `list-${theme}`);
+
+  await window.click(tab('Team'));
+  await window.waitForText('MEMBER');
+  await takePicture(window, `team-${theme}`);
 }
 
 const dataDirectory = mkdtempSync(join(tmpdir(), 'teamwright-screenshots-'));
