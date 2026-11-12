@@ -117,8 +117,8 @@ Several specialists working together with the manager in the loop.
   rules, the manager's note, the numbers, work by status and by member,
   this week, the sprint and the tokens used
   ([decision 0020](../decisions/0020-a-dashboard-worked-out-not-written.md)).
-  Seen on demo data in the browser only, not in the built program. Plan
-  limits are not shown, because they are not known, and there is no
+  Seen in the built program on stored data, with nobody at work there.
+  Plan limits are not shown, because they are not known, and there is no
   latest activity yet
 - ⬜ Project report at completion
 
@@ -134,8 +134,10 @@ Several specialists working together with the manager in the loop.
   burndown does not yet follow tasks that join or leave a sprint while it
   runs. Velocity as a forecast is not planned yet
 - ✅ A completed sprint opens in the Backlog view, with its burndown and
-  its tasks, and the board can show a previous sprint. Which tasks moved
-  on when a sprint was completed is not recorded
+  its tasks, and the board can show a previous sprint; both seen in the
+  built program. Which tasks moved on when a sprint was completed is not
+  recorded, and on the board the tasks of a previous sprint all stand in
+  the last lanes, after empty ones
 - ⬜ Work-in-progress limits, custom fields, tags, checklists
 - ⬜ Templates: Scrum, Kanban, hardware product
 
