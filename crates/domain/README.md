@@ -14,6 +14,7 @@ no input or output.
 | `workflow` | `Workflow`, `Status`, `StatusCategory` |
 | `project` | `Project`, `ProjectKey` |
 | `task` | `Task`, `TaskDraft`, `Priority`, `Assignee`, `Schedule`, `Rank` |
+| `task_history` | `TaskChange`, `history_of`: what changed from one version of a task to the next |
 | `dependencies` | `DependencyGraph`: which task waits for which |
 | `member` | `Member`, `MemberKind`: an AI agent or a person on the team of a project |
 | `conversation` | `Conversation`, `Turn`, `Step`, `TokenCounts`: the work of an AI specialist, one request at a time |
@@ -37,6 +38,9 @@ no input or output.
 - A schedule does not start after it is due.
 - A task cannot wait for itself or be its own parent, and a new dependency
   must not close a loop.
+- The history of a task is not recorded as such. It is read off the versions
+  the task has had: that it was opened, and then what differs from one
+  version to the next. A move up or down within a status is not a change.
 - A newcomer to a team gets a color that no other member has, as long as
   there is one left. Gray, amber and red are never handed out.
 - A turn of a conversation has a request that is not empty. It takes steps
