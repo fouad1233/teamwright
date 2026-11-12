@@ -8,6 +8,8 @@
 use std::str::FromStr;
 
 use chrono::{DateTime, SecondsFormat, Utc};
+use serde::de::DeserializeOwned;
+use serde_json::{Map, Value};
 use teamwright_domain::{CalendarDate, DomainError, Timestamp};
 
 use crate::error::DatabaseError;
@@ -46,6 +48,21 @@ where
 {
     text.parse()
         .map_err(|reason| DatabaseError::damaged("the value", text, reason))
+}
+
+/// Reads the record of a thing from a state the log keeps. A state with a
+/// key the record does not know is read without it; a state without a key
+/// the record needs is damaged.
+pub(crate) fn record_from_state<T>(
+    kind: &str,
+    state: &Map<String, Value>,
+) -> Result<T, DatabaseError>
+where
+    T: DeserializeOwned,
+{
+    serde_json::from_value(Value::Object(state.clone())).map_err(|reason| {
+        DatabaseError::Damaged(format!("a state of a {kind} cannot be read: {reason}"))
+    })
 }
 
 /// Turns a rule broken by stored data into a storage error that says which

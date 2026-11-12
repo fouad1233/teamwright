@@ -4,7 +4,8 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use rusqlite::{Connection, OptionalExtension, Row, Transaction, named_params};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
+use serde_json::{Map, Value};
 use teamwright_application::{ProjectRepository, StorageError};
 use teamwright_domain::{
     DomainError, Project, ProjectId, ProjectKey, ProjectName, ProjectSnapshot, Status, StatusName,
@@ -50,7 +51,7 @@ const UPSERT_STATUS: &str = "
         color = excluded.color";
 
 /// A status as the database and the operation log keep it.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 struct StatusRecord {
     id: String,
     name: String,
@@ -84,7 +85,7 @@ impl StatusRecord {
 
 /// A project as the database and the operation log keep it: plain text and
 /// numbers, with its statuses in board order.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 struct ProjectRecord {
     id: String,
     key: String,
@@ -184,21 +185,8 @@ impl ProjectRepository for SqliteProjectRepository {
     }
 
     fn find(&self, id: ProjectId) -> Result<Option<Project>, StorageError> {
-        self.database.read(|connection| {
-            let query = format!("SELECT {PROJECT_COLUMNS} FROM projects WHERE id = :id");
-            let found = connection
-                .query_row(
-                    &query,
-                    named_params! { ":id": id.to_string() },
-                    ProjectRecord::from_row,
-                )
-                .optional()?;
-            let Some(mut record) = found else {
-                return Ok(None);
-            };
-            record.statuses = statuses_of(connection, &record.id)?;
-            record.into_project().map(Some)
-        })
+        self.database
+            .read(|connection| find_project(connection, &id.to_string()))
     }
 
     fn list(&self) -> Result<Vec<Project>, StorageError> {
@@ -223,36 +211,77 @@ impl ProjectRepository for SqliteProjectRepository {
     fn delete(&self, id: ProjectId) -> Result<(), StorageError> {
         self.database.write(|transaction, operations| {
             let id = id.to_string();
-            // The database would remove the conversations, tasks, sprints
-            // and members of the project by itself, but without a trace in
-            // the log. They are removed here one by one, each with its own
-            // entry, like any other deletion. Normally the use case has
-            // removed them already and nothing is left to do. The
-            // conversations go first, because they refer to the tasks and
-            // the members, and the sprints after the tasks that are in them.
-            // The folders chosen for the project are forgotten the same way;
-            // the folders on disk are never touched.
-            conversations::delete_conversations_of_project(transaction, operations, &id)?;
-            places::delete_places_of_project(transaction, operations, &id)?;
-            delete_rows_of_project(transaction, operations, "tasks", Entity::Task, &id)?;
-            delete_rows_of_project(transaction, operations, "sprints", Entity::Sprint, &id)?;
-            delete_rows_of_project(transaction, operations, "members", Entity::Member, &id)?;
-            // The statuses are part of the project in the log, so their
-            // removal is covered by the deletion of the project.
-            transaction.execute(
-                "DELETE FROM statuses WHERE project_id = :project_id",
-                named_params! { ":project_id": id },
-            )?;
-            let rows_removed = transaction.execute(
-                "DELETE FROM projects WHERE id = :id",
-                named_params! { ":id": id },
-            )?;
-            if rows_removed > 0 {
+            if remove_project(transaction, operations, &id)? {
                 operations.record_delete(Entity::Project, &id)?;
             }
             Ok(())
         })
     }
+}
+
+/// Removes a project with everything that still belongs to it, and says
+/// whether there was one. The removal of each thing that belongs to it is
+/// logged; the removal of the project itself is left to the caller, which
+/// logs it, or takes it in from another computer that logged it.
+pub(crate) fn remove_project(
+    transaction: &Transaction<'_>,
+    operations: &mut OperationRecorder<'_>,
+    id: &str,
+) -> Result<bool, DatabaseError> {
+    // The database would remove the conversations, tasks, sprints and
+    // members of the project by itself, but without a trace in the log.
+    // They are removed here one by one, each with its own entry, like any
+    // other deletion. Normally the use case has removed them already and
+    // nothing is left to do. The conversations go first, because they refer
+    // to the tasks and the members, and the sprints after the tasks that are
+    // in them. The folders chosen for the project are forgotten the same
+    // way; the folders on disk are never touched.
+    conversations::delete_conversations_of_project(transaction, operations, id)?;
+    places::delete_places_of_project(transaction, operations, id)?;
+    delete_rows_of_project(transaction, operations, "tasks", Entity::Task, id)?;
+    delete_rows_of_project(transaction, operations, "sprints", Entity::Sprint, id)?;
+    delete_rows_of_project(transaction, operations, "members", Entity::Member, id)?;
+    // The statuses are part of the project in the log, so their removal is
+    // covered by the deletion of the project.
+    transaction.execute(
+        "DELETE FROM statuses WHERE project_id = :project_id",
+        named_params! { ":project_id": id },
+    )?;
+    let rows_removed = transaction.execute(
+        "DELETE FROM projects WHERE id = :id",
+        named_params! { ":id": id },
+    )?;
+    Ok(rows_removed > 0)
+}
+
+/// Writes the rows of a project and its statuses from a state the log
+/// keeps, without logging anything. The state is first checked against the
+/// rules of the domain: a state that breaks one is refused, and nothing is
+/// written.
+pub(crate) fn write_state(
+    transaction: &Transaction<'_>,
+    state: &Map<String, Value>,
+) -> Result<(), DatabaseError> {
+    let record: ProjectRecord = codec::record_from_state("project", state)?;
+    let record = ProjectRecord::of(&record.into_project()?);
+    upsert_project(transaction, &record)?;
+    replace_statuses(transaction, &record)
+}
+
+/// Reads a project inside a transaction, if it is stored.
+pub(crate) fn find_project(
+    connection: &Connection,
+    id: &str,
+) -> Result<Option<Project>, DatabaseError> {
+    let query = format!("SELECT {PROJECT_COLUMNS} FROM projects WHERE id = :id");
+    let found = connection
+        .query_row(&query, named_params! { ":id": id }, ProjectRecord::from_row)
+        .optional()?;
+    let Some(mut record) = found else {
+        return Ok(None);
+    };
+    record.statuses = statuses_of(connection, &record.id)?;
+    record.into_project().map(Some)
 }
 
 /// Removes the rows of one table that belong to a project, and logs each

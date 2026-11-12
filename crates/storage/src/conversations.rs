@@ -13,7 +13,8 @@ use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
 use rusqlite::{Connection, OptionalExtension, Row, Transaction, named_params};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
+use serde_json::{Map, Value};
 use teamwright_application::{ConversationRepository, StorageError};
 use teamwright_domain::{
     Conversation, ConversationId, ConversationSnapshot, DecisionAnswer, DecisionOption,
@@ -128,7 +129,7 @@ const UPSERT_DECISION_OPTION: &str = "
         consequence = excluded.consequence";
 
 /// A conversation as the database and the operation log keep it.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 struct ConversationRecord {
     id: String,
     project_id: String,
@@ -144,6 +145,7 @@ struct ConversationRecord {
     /// The computer the conversation was started on. A row without one is
     /// damaged: the migration that added it gave every conversation its
     /// computer.
+    #[serde(default)]
     home_computer: Option<String>,
 }
 
@@ -233,7 +235,7 @@ impl ConversationRecord {
 }
 
 /// A turn without its steps, as the database and the operation log keep it.
-#[derive(Debug, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 struct TurnRecord {
     id: String,
     conversation_id: String,
@@ -358,7 +360,7 @@ impl TurnRecord {
 
 /// A step of a turn as the database and the operation log keep it. The
 /// columns a kind does not use are empty.
-#[derive(Debug, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 struct StepRecord {
     turn_id: String,
     position: i64,
@@ -468,7 +470,7 @@ impl StepRecord {
 
 /// The question a turn asked the manager, with its options and its answer,
 /// as the database and the operation log keep it.
-#[derive(Debug, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 struct DecisionRecord {
     turn_id: String,
     question: String,
@@ -481,7 +483,7 @@ struct DecisionRecord {
 }
 
 /// One option of a question, in its place.
-#[derive(Debug, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 struct DecisionOptionRecord {
     label: String,
     consequence: String,
@@ -560,24 +562,8 @@ impl SqliteConversationRepository {
 
 impl ConversationRepository for SqliteConversationRepository {
     fn save_conversation(&self, conversation: &Conversation) -> Result<(), StorageError> {
-        let record = ConversationRecord::of(conversation);
         self.database.write(|transaction, operations| {
-            transaction.execute(
-                UPSERT_CONVERSATION,
-                named_params! {
-                    ":id": record.id,
-                    ":project_id": record.project_id,
-                    ":member_id": record.member_id,
-                    ":task_id": record.task_id,
-                    ":started_at": record.started_at,
-                    ":session_id": record.session_id,
-                    ":with_advisor": record.with_advisor,
-                    ":advisor_model": record.advisor_model,
-                    ":advisor_effort": record.advisor_effort,
-                    ":home_computer": record.home_computer,
-                },
-            )?;
-            operations.record_upsert(Entity::Conversation, &record.id, &record)
+            store_conversation(transaction, operations, conversation)
         })
     }
 
@@ -674,6 +660,147 @@ impl ConversationRepository for SqliteConversationRepository {
     }
 }
 
+/// Writes a conversation without its turns and logs the change.
+pub(crate) fn store_conversation(
+    transaction: &Transaction<'_>,
+    operations: &mut OperationRecorder<'_>,
+    conversation: &Conversation,
+) -> Result<(), DatabaseError> {
+    let record = ConversationRecord::of(conversation);
+    write_conversation(transaction, &record)?;
+    operations.record_upsert(Entity::Conversation, &record.id, &record)
+}
+
+/// Writes the row of a conversation.
+fn write_conversation(
+    transaction: &Transaction<'_>,
+    record: &ConversationRecord,
+) -> Result<(), DatabaseError> {
+    transaction.execute(
+        UPSERT_CONVERSATION,
+        named_params! {
+            ":id": record.id,
+            ":project_id": record.project_id,
+            ":member_id": record.member_id,
+            ":task_id": record.task_id,
+            ":started_at": record.started_at,
+            ":session_id": record.session_id,
+            ":with_advisor": record.with_advisor,
+            ":advisor_model": record.advisor_model,
+            ":advisor_effort": record.advisor_effort,
+            ":home_computer": record.home_computer,
+        },
+    )?;
+    Ok(())
+}
+
+/// Writes the row of a conversation from a state the log keeps, without
+/// logging anything. The state is first checked against the rules: a state
+/// that breaks one is refused, and nothing is written.
+pub(crate) fn write_conversation_state(
+    transaction: &Transaction<'_>,
+    state: &Map<String, Value>,
+) -> Result<(), DatabaseError> {
+    let record: ConversationRecord = codec::record_from_state("conversation", state)?;
+    write_conversation(
+        transaction,
+        &ConversationRecord::of(&record.into_conversation()?),
+    )
+}
+
+/// Writes the row of a turn, without its steps, from a state the log keeps,
+/// without logging anything. The state is checked first.
+pub(crate) fn write_turn_state(
+    transaction: &Transaction<'_>,
+    state: &Map<String, Value>,
+) -> Result<(), DatabaseError> {
+    let record: TurnRecord = codec::record_from_state("turn", state)?;
+    record.clone().into_turn(Vec::new(), None, None, None)?;
+    write_turn(transaction, &record)
+}
+
+/// Writes the row of a step of a turn from a state the log keeps, without
+/// logging anything. The state is checked first.
+pub(crate) fn write_step_state(
+    transaction: &Transaction<'_>,
+    state: &Map<String, Value>,
+) -> Result<(), DatabaseError> {
+    let record: StepRecord = codec::record_from_state("step of a turn", state)?;
+    record.clone().into_step()?;
+    write_step(transaction, &record)
+}
+
+/// Writes the question of a turn from a state the log keeps, without
+/// logging anything. The state is checked first.
+pub(crate) fn write_decision_state(
+    transaction: &Transaction<'_>,
+    state: &Map<String, Value>,
+) -> Result<(), DatabaseError> {
+    let record: DecisionRecord = codec::record_from_state("question of a turn", state)?;
+    record.clone().into_decision()?;
+    write_decision(transaction, &record)
+}
+
+/// Removes a conversation with its turns, and says whether there was one.
+/// The removal of each turn that is left is logged; the removal of the
+/// conversation itself is left to the caller.
+pub(crate) fn remove_conversation(
+    transaction: &Transaction<'_>,
+    operations: &mut OperationRecorder<'_>,
+    id: &str,
+) -> Result<bool, DatabaseError> {
+    let turn_ids: Vec<String> = transaction
+        .prepare("SELECT id FROM turns WHERE conversation_id = :id ORDER BY started_at, id")?
+        .query_map(named_params! { ":id": id }, |row| row.get(0))?
+        .collect::<Result<_, _>>()?;
+    for turn_id in turn_ids {
+        remove_turn(transaction, &turn_id)?;
+        operations.record_delete(Entity::Turn, &turn_id)?;
+    }
+    let rows_removed = transaction.execute(
+        "DELETE FROM conversations WHERE id = :id",
+        named_params! { ":id": id },
+    )?;
+    Ok(rows_removed > 0)
+}
+
+/// Removes a turn with its steps, its question, its interview and its
+/// proposal, without logging anything, and says whether there was one.
+pub(crate) fn remove_turn(transaction: &Transaction<'_>, id: &str) -> Result<bool, DatabaseError> {
+    transaction.execute(
+        "DELETE FROM turn_steps WHERE turn_id = :turn_id",
+        named_params! { ":turn_id": id },
+    )?;
+    let rows_removed = transaction.execute(
+        "DELETE FROM turns WHERE id = :turn_id",
+        named_params! { ":turn_id": id },
+    )?;
+    Ok(rows_removed > 0)
+}
+
+/// Removes a step of a turn by its identifier in the log, without logging
+/// anything.
+pub(crate) fn remove_step(
+    transaction: &Transaction<'_>,
+    log_id: &str,
+) -> Result<(), DatabaseError> {
+    let Some((turn_id, position)) = log_id.rsplit_once('/') else {
+        return Err(DatabaseError::damaged(
+            "the identifier of a step",
+            log_id,
+            "it has no position",
+        ));
+    };
+    let position: i64 = position
+        .parse()
+        .map_err(|reason| DatabaseError::damaged("the identifier of a step", log_id, reason))?;
+    transaction.execute(
+        "DELETE FROM turn_steps WHERE turn_id = :turn_id AND position = :position",
+        named_params! { ":turn_id": turn_id, ":position": position },
+    )?;
+    Ok(())
+}
+
 /// Writes a turn: its row, its steps, its question, its interview and its
 /// proposal, each only if it changed, and logs what was written.
 pub(crate) fn store_turn(
@@ -756,31 +883,12 @@ pub(crate) fn delete_conversations_of_project(
 /// Removes one conversation with its turns and their steps. The removal of
 /// each turn is logged, and stands for the removal of its steps; then the
 /// removal of the conversation is logged.
-fn delete_conversation(
+pub(crate) fn delete_conversation(
     transaction: &Transaction<'_>,
     operations: &mut OperationRecorder<'_>,
     id: &str,
 ) -> Result<(), DatabaseError> {
-    let turn_ids: Vec<String> = transaction
-        .prepare("SELECT id FROM turns WHERE conversation_id = :id ORDER BY started_at, id")?
-        .query_map(named_params! { ":id": id }, |row| row.get(0))?
-        .collect::<Result<_, _>>()?;
-    for turn_id in turn_ids {
-        transaction.execute(
-            "DELETE FROM turn_steps WHERE turn_id = :turn_id",
-            named_params! { ":turn_id": turn_id },
-        )?;
-        transaction.execute(
-            "DELETE FROM turns WHERE id = :turn_id",
-            named_params! { ":turn_id": turn_id },
-        )?;
-        operations.record_delete(Entity::Turn, &turn_id)?;
-    }
-    let rows_removed = transaction.execute(
-        "DELETE FROM conversations WHERE id = :id",
-        named_params! { ":id": id },
-    )?;
-    if rows_removed > 0 {
+    if remove_conversation(transaction, operations, id)? {
         operations.record_delete(Entity::Conversation, id)?;
     }
     Ok(())

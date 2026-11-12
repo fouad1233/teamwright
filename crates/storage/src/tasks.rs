@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use rusqlite::{Connection, OptionalExtension, Row, Transaction, named_params};
 use serde::{Deserialize, Serialize};
+use serde_json::{Map, Value};
 use teamwright_application::{StorageError, TaskRepository};
 use teamwright_domain::{
     Assignee, DomainError, ProjectId, Rank, Schedule, StoryPoints, Task, TaskId, TaskSnapshot,
@@ -61,7 +62,7 @@ const UPSERT_TASK: &str = "
 
 /// A task as the database and the operation log keep it: plain text and
 /// numbers.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 struct TaskRecord {
     id: String,
     project_id: String,
@@ -253,55 +254,20 @@ impl TaskRepository for SqliteTaskRepository {
     }
 
     fn find(&self, id: TaskId) -> Result<Option<Task>, StorageError> {
-        self.database.read(|connection| {
-            let query = format!("SELECT {TASK_COLUMNS} FROM tasks WHERE id = :id");
-            let found = connection
-                .query_row(
-                    &query,
-                    named_params! { ":id": id.to_string() },
-                    TaskRecord::from_row,
-                )
-                .optional()?;
-            let Some(mut record) = found else {
-                return Ok(None);
-            };
-            record.blocked_by = blockers_of(connection, &record.id)?;
-            record.into_task().map(Some)
-        })
+        self.database
+            .read(|connection| find_task(connection, &id.to_string()))
     }
 
     fn list_for_project(&self, project_id: ProjectId) -> Result<Vec<Task>, StorageError> {
-        self.database.read(|connection| {
-            let project_id = project_id.to_string();
-            let mut blockers_by_task = blockers_in_project(connection, &project_id)?;
-            let query = format!("SELECT {TASK_COLUMNS} FROM tasks WHERE project_id = :project_id");
-            let mut statement = connection.prepare(&query)?;
-            let records = statement
-                .query_map(
-                    named_params! { ":project_id": project_id },
-                    TaskRecord::from_row,
-                )?
-                .collect::<Result<Vec<_>, _>>()?;
-
-            records
-                .into_iter()
-                .map(|mut record| {
-                    record.blocked_by = blockers_by_task.remove(&record.id).unwrap_or_default();
-                    record.into_task()
-                })
-                .collect()
-        })
+        self.database
+            .read(|connection| tasks_of_project(connection, &project_id.to_string()))
     }
 
     fn delete(&self, ids: &[TaskId]) -> Result<(), StorageError> {
         self.database.write(|transaction, operations| {
             for id in ids {
                 let id = id.to_string();
-                let rows_removed = transaction.execute(
-                    "DELETE FROM tasks WHERE id = :id",
-                    named_params! { ":id": id },
-                )?;
-                if rows_removed > 0 {
+                if remove_task(transaction, &id)? {
                     operations.record_delete(Entity::Task, &id)?;
                 }
             }
@@ -344,6 +310,70 @@ fn store(
     operations: &mut OperationRecorder<'_>,
     record: &TaskRecord,
 ) -> Result<(), DatabaseError> {
+    write_rows(transaction, record)?;
+    operations.record_upsert(Entity::Task, &record.id, record)
+}
+
+/// Writes the rows of a task from a state the log keeps, without logging
+/// anything. The state is first checked against the rules of the domain: a
+/// state that breaks one is refused, and nothing is written.
+pub(crate) fn write_state(
+    transaction: &Transaction<'_>,
+    state: &Map<String, Value>,
+) -> Result<(), DatabaseError> {
+    let record: TaskRecord = codec::record_from_state("task", state)?;
+    write_rows(transaction, &TaskRecord::of(&record.into_task()?))
+}
+
+/// Removes the row of a task, without logging it, and says whether there
+/// was one. What it waits for goes with it.
+pub(crate) fn remove_task(transaction: &Transaction<'_>, id: &str) -> Result<bool, DatabaseError> {
+    let rows_removed = transaction.execute(
+        "DELETE FROM tasks WHERE id = :id",
+        named_params! { ":id": id },
+    )?;
+    Ok(rows_removed > 0)
+}
+
+/// Reads a task inside a transaction, if it is stored.
+pub(crate) fn find_task(connection: &Connection, id: &str) -> Result<Option<Task>, DatabaseError> {
+    let query = format!("SELECT {TASK_COLUMNS} FROM tasks WHERE id = :id");
+    let found = connection
+        .query_row(&query, named_params! { ":id": id }, TaskRecord::from_row)
+        .optional()?;
+    let Some(mut record) = found else {
+        return Ok(None);
+    };
+    record.blocked_by = blockers_of(connection, &record.id)?;
+    record.into_task().map(Some)
+}
+
+/// Reads the tasks of a project inside a transaction, in no particular
+/// order.
+pub(crate) fn tasks_of_project(
+    connection: &Connection,
+    project_id: &str,
+) -> Result<Vec<Task>, DatabaseError> {
+    let mut blockers_by_task = blockers_in_project(connection, project_id)?;
+    let query = format!("SELECT {TASK_COLUMNS} FROM tasks WHERE project_id = :project_id");
+    let mut statement = connection.prepare(&query)?;
+    let records = statement
+        .query_map(
+            named_params! { ":project_id": project_id },
+            TaskRecord::from_row,
+        )?
+        .collect::<Result<Vec<_>, _>>()?;
+    records
+        .into_iter()
+        .map(|mut record| {
+            record.blocked_by = blockers_by_task.remove(&record.id).unwrap_or_default();
+            record.into_task()
+        })
+        .collect()
+}
+
+/// Writes the rows of one task with its dependencies.
+fn write_rows(transaction: &Transaction<'_>, record: &TaskRecord) -> Result<(), DatabaseError> {
     transaction.execute(
         UPSERT_TASK,
         named_params! {
@@ -379,8 +409,7 @@ fn store(
             named_params! { ":task_id": record.id, ":blocker_id": blocker_id },
         )?;
     }
-
-    operations.record_upsert(Entity::Task, &record.id, record)
+    Ok(())
 }
 
 /// Reads the identifiers of the tasks one task waits for.

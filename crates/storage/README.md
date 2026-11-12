@@ -26,6 +26,7 @@ involved.
 | `places` | `SqlitePlacesRepository`: the work folder and the reference folders chosen for each project |
 | `operations` | The operation log, the hybrid logical clock, and the recorder that keeps the stamps of the fields |
 | `merge` | How each kind of thing merges field by field, and `MergedState`, a row of `merged_states` |
+| `apply` | Writes the rows of a thing from a logged state, and removes them, without logging the thing itself |
 | `codec` | The text forms of moments, dates, identifiers and enumerations |
 | `error` | The crate's internal error type and its conversion to `StorageError` |
 
@@ -182,6 +183,18 @@ For that, every stored thing keeps the stamp of each of its fields (version
 
 The table `merged_states` is bookkeeping of the log and is not logged
 itself.
+
+**Writing rows from a stored state.** Every record type can be read back
+from the JSON the log keeps, and every repository's store function is split
+in two: the half that writes the rows of a record, and the half that logs.
+`apply::write_state` calls the first half for any entity, after rebuilding
+the domain value through its checking constructor, so a damaged state is
+refused and nothing is written. `apply::remove` removes the rows of a thing
+without logging its removal; what still belongs to it and has an entry of
+its own in the log (the tasks of a project, the turns of a conversation) is
+removed with a logged deletion of this computer. This is how an operation
+taken in from another computer, which is in the log already, reaches the
+tables.
 
 ## The clock stamp
 

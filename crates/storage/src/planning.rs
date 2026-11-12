@@ -12,7 +12,8 @@
 use std::sync::Arc;
 
 use rusqlite::{Connection, OptionalExtension, Transaction, named_params};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
+use serde_json::{Map, Value};
 use teamwright_application::{ApprovedPlan, PlanningRepository, StorageError};
 use teamwright_domain::{
     DecisionOption, DomainError, Interview, InterviewAnswer, InterviewQuestion, InterviewSnapshot,
@@ -67,7 +68,7 @@ const OWNER_MANAGER: &str = "manager";
 const OWNER_MEMBER: &str = "member";
 
 /// The interview of a turn, as the database and the operation log keep it.
-#[derive(Debug, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct InterviewRecord {
     turn_id: String,
     questions: Vec<QuestionRecord>,
@@ -75,7 +76,7 @@ pub(crate) struct InterviewRecord {
 }
 
 /// One question of an interview, with its answer once there is one.
-#[derive(Debug, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 struct QuestionRecord {
     question: String,
     reason: String,
@@ -86,7 +87,7 @@ struct QuestionRecord {
 }
 
 /// One option of a question.
-#[derive(Debug, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 struct OptionRecord {
     label: String,
     consequence: String,
@@ -178,7 +179,7 @@ impl InterviewRecord {
 }
 
 /// The proposal of a turn, as the database and the operation log keep it.
-#[derive(Debug, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct ProposalRecord {
     turn_id: String,
     summary: String,
@@ -188,7 +189,7 @@ pub(crate) struct ProposalRecord {
 }
 
 /// One member of a proposal.
-#[derive(Debug, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 struct ProposedMemberRecord {
     name: String,
     responsibility: String,
@@ -198,7 +199,7 @@ struct ProposedMemberRecord {
 }
 
 /// One task of a proposal.
-#[derive(Debug, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 struct ProposedTaskRecord {
     title: String,
     description: String,
@@ -355,6 +356,28 @@ pub(crate) fn store_planning_of(
         operations.record_upsert(Entity::Proposal, &proposal.turn_id, &proposal)?;
     }
     Ok(())
+}
+
+/// Writes the interview of a turn from a state the log keeps, without
+/// logging anything. The state is checked first.
+pub(crate) fn write_interview_state(
+    transaction: &Transaction<'_>,
+    state: &Map<String, Value>,
+) -> Result<(), DatabaseError> {
+    let record: InterviewRecord = codec::record_from_state("interview", state)?;
+    record.clone().into_interview()?;
+    write_interview(transaction, &record)
+}
+
+/// Writes the proposal of a turn from a state the log keeps, without
+/// logging anything. The state is checked first.
+pub(crate) fn write_proposal_state(
+    transaction: &Transaction<'_>,
+    state: &Map<String, Value>,
+) -> Result<(), DatabaseError> {
+    let record: ProposalRecord = codec::record_from_state("proposal", state)?;
+    record.clone().into_proposal()?;
+    write_proposal(transaction, &record)
 }
 
 /// Writes an interview with its questions and their options.

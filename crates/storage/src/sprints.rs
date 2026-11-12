@@ -3,7 +3,8 @@
 use std::sync::Arc;
 
 use rusqlite::{OptionalExtension, Row, Transaction, named_params};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
+use serde_json::{Map, Value};
 use teamwright_application::{SprintRepository, StorageError};
 use teamwright_domain::{
     DomainError, ProjectId, Sprint, SprintDates, SprintId, SprintName, SprintSnapshot,
@@ -47,7 +48,7 @@ const UPSERT_SPRINT: &str = "
 
 /// What a completed sprint achieved, as the database and the operation log
 /// keep it.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 struct SummaryRecord {
     unit: String,
     committed: u32,
@@ -56,7 +57,7 @@ struct SummaryRecord {
 
 /// A sprint as the database and the operation log keep it: plain text and
 /// numbers.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 struct SprintRecord {
     id: String,
     project_id: String,
@@ -71,7 +72,7 @@ struct SprintRecord {
     summary: Option<SummaryRecord>,
     /// Whether a row had only a part of a summary. Only rows can; the log
     /// keeps a summary whole.
-    #[serde(skip)]
+    #[serde(skip, default)]
     summary_is_partial: bool,
 }
 
@@ -255,16 +256,25 @@ impl SprintRepository for SqliteSprintRepository {
                 tasks::store_task(transaction, operations, task)?;
             }
             let id = id.to_string();
-            let rows_removed = transaction.execute(
-                "DELETE FROM sprints WHERE id = :id",
-                named_params! { ":id": id },
-            )?;
-            if rows_removed > 0 {
+            if remove_sprint(transaction, &id)? {
                 operations.record_delete(Entity::Sprint, &id)?;
             }
             Ok(())
         })
     }
+}
+
+/// Removes the row of a sprint, without logging it, and says whether there
+/// was one.
+pub(crate) fn remove_sprint(
+    transaction: &Transaction<'_>,
+    id: &str,
+) -> Result<bool, DatabaseError> {
+    let rows_removed = transaction.execute(
+        "DELETE FROM sprints WHERE id = :id",
+        named_params! { ":id": id },
+    )?;
+    Ok(rows_removed > 0)
 }
 
 /// Writes one sprint and logs the change.
@@ -273,6 +283,23 @@ fn store(
     operations: &mut OperationRecorder<'_>,
     record: &SprintRecord,
 ) -> Result<(), DatabaseError> {
+    write_rows(transaction, record)?;
+    operations.record_upsert(Entity::Sprint, &record.id, record)
+}
+
+/// Writes the row of a sprint from a state the log keeps, without logging
+/// anything. The state is first checked against the rules of the domain: a
+/// state that breaks one is refused, and nothing is written.
+pub(crate) fn write_state(
+    transaction: &Transaction<'_>,
+    state: &Map<String, Value>,
+) -> Result<(), DatabaseError> {
+    let record: SprintRecord = codec::record_from_state("sprint", state)?;
+    write_rows(transaction, &SprintRecord::of(&record.into_sprint()?))
+}
+
+/// Writes the row of a sprint.
+fn write_rows(transaction: &Transaction<'_>, record: &SprintRecord) -> Result<(), DatabaseError> {
     let summary = record.summary.as_ref();
     transaction.execute(
         UPSERT_SPRINT,
@@ -292,5 +319,5 @@ fn store(
             ":summary_completed": summary.map(|summary| summary.completed),
         },
     )?;
-    operations.record_upsert(Entity::Sprint, &record.id, record)
+    Ok(())
 }

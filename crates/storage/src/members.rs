@@ -3,7 +3,8 @@
 use std::sync::Arc;
 
 use rusqlite::{OptionalExtension, Row, Transaction, named_params};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
+use serde_json::{Map, Value};
 use teamwright_application::{MemberRepository, StorageError};
 use teamwright_domain::{
     DomainError, Member, MemberId, MemberName, MemberProfile, MemberSnapshot, ModelName, ProjectId,
@@ -39,7 +40,7 @@ const UPSERT_MEMBER: &str = "
         updated_at = excluded.updated_at";
 
 /// A member as the database and the operation log keep it: plain text.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 struct MemberRecord {
     id: String,
     project_id: String,
@@ -170,16 +171,25 @@ impl MemberRepository for SqliteMemberRepository {
     fn delete(&self, id: MemberId) -> Result<(), StorageError> {
         self.database.write(|transaction, operations| {
             let id = id.to_string();
-            let rows_removed = transaction.execute(
-                "DELETE FROM members WHERE id = :id",
-                named_params! { ":id": id },
-            )?;
-            if rows_removed > 0 {
+            if remove_member(transaction, &id)? {
                 operations.record_delete(Entity::Member, &id)?;
             }
             Ok(())
         })
     }
+}
+
+/// Removes the row of a member, without logging it, and says whether there
+/// was one.
+pub(crate) fn remove_member(
+    transaction: &Transaction<'_>,
+    id: &str,
+) -> Result<bool, DatabaseError> {
+    let rows_removed = transaction.execute(
+        "DELETE FROM members WHERE id = :id",
+        named_params! { ":id": id },
+    )?;
+    Ok(rows_removed > 0)
 }
 
 /// Writes one member and logs the change.
@@ -189,6 +199,23 @@ pub(crate) fn store_member(
     member: &Member,
 ) -> Result<(), DatabaseError> {
     let record = MemberRecord::of(member);
+    write_rows(transaction, &record)?;
+    operations.record_upsert(Entity::Member, &record.id, &record)
+}
+
+/// Writes the row of a member from a state the log keeps, without logging
+/// anything. The state is first checked against the rules of the domain: a
+/// state that breaks one is refused, and nothing is written.
+pub(crate) fn write_state(
+    transaction: &Transaction<'_>,
+    state: &Map<String, Value>,
+) -> Result<(), DatabaseError> {
+    let record: MemberRecord = codec::record_from_state("team member", state)?;
+    write_rows(transaction, &MemberRecord::of(&record.into_member()?))
+}
+
+/// Writes the row of a member.
+fn write_rows(transaction: &Transaction<'_>, record: &MemberRecord) -> Result<(), DatabaseError> {
     transaction.execute(
         UPSERT_MEMBER,
         named_params! {
@@ -204,7 +231,7 @@ pub(crate) fn store_member(
             ":updated_at": record.updated_at,
         },
     )?;
-    operations.record_upsert(Entity::Member, &record.id, &record)
+    Ok(())
 }
 
 #[cfg(test)]

@@ -93,6 +93,12 @@ impl Entity {
         Self::Sprint,
     ];
 
+    /// The entity of a name in the log, if this version knows it.
+    #[cfg(test)]
+    pub(crate) fn from_name(name: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|entity| entity.as_str() == name)
+    }
+
     /// The name of the entity in the log.
     pub(crate) const fn as_str(self) -> &'static str {
         match self {

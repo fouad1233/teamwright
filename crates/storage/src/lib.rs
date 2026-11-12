@@ -19,6 +19,11 @@
 //! # }
 //! ```
 
+#[cfg_attr(
+    not(test),
+    allow(dead_code, reason = "taking in operations of other computers calls it")
+)]
+mod apply;
 mod codec;
 mod conversations;
 mod database;
