@@ -1,3 +1,4 @@
+import { Inbox } from '@/features/inbox/Inbox';
 import { ProjectWorkspace } from '@/features/projects/ProjectWorkspace';
 import { Sidebar } from '@/features/projects/Sidebar';
 import { Welcome } from '@/features/projects/Welcome';
@@ -7,7 +8,7 @@ import { describeFailure } from '@/shared/ui/Toast';
 import styles from './App.module.css';
 import { useNavigation } from './navigation';
 
-/** The window: the sidebar on the left and the open project next to it. */
+/** The window: the sidebar on the left, and next to it the open project or the inbox. */
 export function App() {
   const navigation = useNavigation();
   const projects = useProjects();
@@ -18,7 +19,10 @@ export function App() {
 
   return (
     <div className={styles.app}>
-      <Sidebar projects={projects.data ?? []} activeProjectId={openProject?.id ?? null} />
+      <Sidebar
+        projects={projects.data ?? []}
+        activeProjectId={navigation.place === 'project' ? (openProject?.id ?? null) : null}
+      />
 
       <main className={styles.main}>
         {projects.isPending && <p className={styles.note}>Loading…</p>}
@@ -27,7 +31,9 @@ export function App() {
             The projects could not be loaded. {describeFailure(projects.error)}
           </p>
         )}
+        {projects.data && navigation.place === 'inbox' && <Inbox projects={projects.data} />}
         {projects.data &&
+          navigation.place === 'project' &&
           (openProject ? (
             // The key gives every project a fresh workspace, so nothing of
             // one project lingers on screen when another is opened.

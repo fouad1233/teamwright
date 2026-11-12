@@ -189,6 +189,15 @@
   margin-top: var(--space-1);
 }
 
+/* A question that has been answered: what was asked, and what the
+   manager decided. */
+.decided {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  line-height: 1.5;
+}
+
 .ending {
   color: var(--ink-faint);
   font-size: var(--text-small);

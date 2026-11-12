@@ -2,11 +2,11 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo } from 'react';
 
 import { useBackend } from '@/shared/api/BackendProvider';
-import type { Conversation, Id } from '@/shared/api/types';
+import type { Conversation, Id, NewDecisionAnswer } from '@/shared/api/types';
 import { describeFailure, useNotifier } from '@/shared/ui/Toast';
 
 import { tasksKey } from '../tasks/taskQueries';
-import { hasTurnStartedOrEnded, withConversation } from './workModel';
+import { hasTurnStartedOrEnded, runningTurn, withConversation } from './workModel';
 
 /** The name under which the state of the program for specialists is cached. */
 const PROGRAM_KEY = ['agent-program'] as const;
@@ -17,6 +17,33 @@ const PROGRAM_IS_FRESH_FOR = 60_000;
 /** The name under which the conversations of a project are cached. */
 function conversationsKey(projectId: Id) {
   return ['conversations', projectId] as const;
+}
+
+/** The name under which the conversations that wait for the manager are cached. */
+const WAITING_KEY = ['conversations-waiting'] as const;
+
+/**
+ * The conversations of every project in which a specialist waits for a
+ * decision of the manager, the longest wait first. They are asked for again
+ * when a turn ends, because that is when a question opens, and after every
+ * command that starts a turn, because that is when one closes. The steps of
+ * a turn that is still running change nothing about what waits.
+ */
+export function useConversationsWaiting() {
+  const backend = useBackend();
+  const queryClient = useQueryClient();
+
+  useEffect(
+    () =>
+      backend.onConversationChanged((conversation) => {
+        if (runningTurn(conversation) === undefined) {
+          void queryClient.invalidateQueries({ queryKey: WAITING_KEY });
+        }
+      }),
+    [backend, queryClient],
+  );
+
+  return useQuery({ queryKey: WAITING_KEY, queryFn: () => backend.listConversationsWaiting() });
 }
 
 /** Whether the program that runs the AI specialists is installed and signed in. */
@@ -72,6 +99,8 @@ export interface WorkCommands {
   reply(conversationId: Id, message: string): Promise<boolean>;
   /** Asks a specialist something that is not about a task. Resolves to the new conversation. */
   ask(memberId: Id, message: string): Promise<Conversation | undefined>;
+  /** Answers the question a specialist asked. Resolves to whether the answer was taken. */
+  decide(conversationId: Id, answer: NewDecisionAnswer): Promise<boolean>;
   /** Stops the turn that is running in a conversation. */
   stop(conversationId: Id): Promise<void>;
   /** Opens a conversation in the Claude desktop app. */
@@ -99,7 +128,10 @@ export function useWorkCommands(projectId: Id): WorkCommands {
         queryClient.setQueryData<Conversation[]>(queryKey, (conversations = []) =>
           withConversation(conversations, conversation),
         );
-        await queryClient.invalidateQueries({ queryKey: tasksKey(projectId) });
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: tasksKey(projectId) }),
+          queryClient.invalidateQueries({ queryKey: WAITING_KEY }),
+        ]);
         return conversation;
       } catch (failure) {
         notifier.showError(describeFailure(failure));
@@ -114,6 +146,8 @@ export function useWorkCommands(projectId: Id): WorkCommands {
       reply: async (conversationId, message) =>
         (await change(() => backend.reply(conversationId, message))) !== undefined,
       ask: (memberId, message) => change(() => backend.ask(memberId, message)),
+      decide: async (conversationId, answer) =>
+        (await change(() => backend.answerDecision(conversationId, answer))) !== undefined,
       stop: async (conversationId) => {
         await change(() => backend.stopWork(conversationId));
       },

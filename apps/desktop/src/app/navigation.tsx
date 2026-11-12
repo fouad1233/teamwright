@@ -9,7 +9,12 @@ export type ProjectView = (typeof PROJECT_VIEWS)[number];
 
 /** Where the user is in the application. */
 interface Location {
-  /** The project that is open, if any. */
+  /**
+   * Whether the user looks at a project or at the inbox, which holds what
+   * waits for the manager in every project.
+   */
+  place: 'project' | 'inbox';
+  /** The project that is open, or was open before the inbox, if any. */
   projectId: Id | null;
   /** How the open project is shown. */
   view: ProjectView;
@@ -27,8 +32,12 @@ interface Location {
  */
 export interface Navigation extends Location {
   openProject: (projectId: Id) => void;
+  /** Opens the inbox. The project that was open stays the one to come back to. */
+  openInbox: () => void;
   showView: (view: ProjectView) => void;
   openTask: (taskId: Id) => void;
+  /** Opens a task of any project, for example from the inbox. */
+  openTaskOf: (projectId: Id, taskId: Id) => void;
   closeTask: () => void;
   /** Opens the conversation with a specialist. It takes the place of an open task. */
   openChat: (memberId: Id) => void;
@@ -39,6 +48,7 @@ export interface Navigation extends Location {
 const STORAGE_KEY = 'teamwright.navigation';
 
 const STARTING_LOCATION: Location = {
+  place: 'project',
   projectId: null,
   view: 'board',
   taskId: null,
@@ -54,6 +64,7 @@ function restoreLocation(): Location {
     }
     const { projectId, view } = stored as Partial<Location>;
     return {
+      place: 'project',
       projectId: typeof projectId === 'string' ? projectId : null,
       view: PROJECT_VIEWS.find((known) => known === view) ?? STARTING_LOCATION.view,
       taskId: null,
@@ -66,7 +77,10 @@ function restoreLocation(): Location {
   }
 }
 
-/** Remembers the project and the view. An open task or conversation is not remembered. */
+/**
+ * Remembers the project and the view. An open task or conversation is not
+ * remembered, and neither is the inbox: the application opens on a project.
+ */
 function rememberLocation(location: Location): void {
   try {
     const remembered = { projectId: location.projectId, view: location.view };
@@ -96,7 +110,13 @@ export function NavigationProvider({ children }: { children: ReactNode }) {
     return {
       ...location,
       openProject: (projectId) => {
-        go({ projectId, taskId: null, chatMemberId: null });
+        go({ place: 'project', projectId, taskId: null, chatMemberId: null });
+      },
+      openInbox: () => {
+        go({ place: 'inbox', taskId: null, chatMemberId: null });
+      },
+      openTaskOf: (projectId, taskId) => {
+        go({ place: 'project', projectId, taskId, chatMemberId: null });
       },
       showView: (view) => {
         go({ view });

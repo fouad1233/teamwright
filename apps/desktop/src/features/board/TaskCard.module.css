@@ -118,6 +118,15 @@
   animation: at-work 1.1s ease-in-out infinite alternate;
 }
 
+/* The specialist has stopped and waits for the manager to decide: the
+   same block, hollow and still. It is the manager's move. */
+.waits {
+  width: 7px;
+  height: 7px;
+  border: 1.5px solid var(--brass);
+  border-radius: 1.5px;
+}
+
 @keyframes at-work {
   to {
     opacity: 0.25;

@@ -1,0 +1,124 @@
+/* The inbox is a page to read down: one column, the oldest question on
+   top. */
+.inbox {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  height: 100%;
+  padding: var(--space-5) var(--space-5) var(--space-7);
+  overflow-y: auto;
+}
+
+.header {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-4);
+  max-width: var(--column);
+}
+
+.title {
+  font-size: var(--text-title);
+  font-weight: 650;
+  letter-spacing: -0.012em;
+}
+
+.count {
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+
+.note {
+  color: var(--ink-faint);
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-width: 520px;
+  padding-top: var(--space-4);
+}
+
+.emptyText {
+  color: var(--ink-soft);
+  line-height: 1.55;
+}
+
+.items {
+  --column: 680px;
+
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  max-width: var(--column);
+}
+
+.item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* Where a question comes from: the project, the task, and when it was
+   asked. */
+.about {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--rule);
+}
+
+.project {
+  flex: none;
+  color: var(--ink-soft);
+}
+
+.project::after {
+  margin-left: var(--space-2);
+  color: var(--ink-faint);
+  content: '/';
+}
+
+.task {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+  border-radius: var(--radius-control);
+  text-align: left;
+}
+
+.task:hover .taskTitle {
+  text-decoration: underline;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 3px;
+}
+
+.reference {
+  flex: none;
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.taskTitle {
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 550;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.when {
+  flex: none;
+  margin-left: auto;
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}

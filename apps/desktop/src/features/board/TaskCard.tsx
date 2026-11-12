@@ -12,7 +12,7 @@ import { PriorityFlag, StatusMark } from '../tasks/TaskBadges';
 import type { SubtaskFolds } from '../tasks/subtaskFolds';
 import { statusOf, unfinishedBlockers } from '../tasks/taskModel';
 import { AssigneeAvatar } from '../team/Assignee';
-import { useIsBeingWorkedOn } from '../work/WorkContext';
+import { useIsBeingWorkedOn, useWaitsForManager } from '../work/WorkContext';
 import styles from './TaskCard.module.css';
 
 /** What the cards of a board need to know about the project they belong to. */
@@ -76,6 +76,7 @@ export function TaskCard({
   const overdue = isOverdue(task);
   const hasRaisedPriority = task.priority === 'urgent' || task.priority === 'high';
   const isBeingWorkedOn = useIsBeingWorkedOn(task.id);
+  const waitsForManager = useWaitsForManager(task.id);
 
   return (
     <div className={classNames(styles.card, status && styles.part)}>
@@ -118,6 +119,14 @@ export function TaskCard({
                 role="img"
                 aria-label="A specialist is working on this task"
                 title="A specialist is working on this task"
+              />
+            )}
+            {waitsForManager && (
+              <span
+                className={styles.waits}
+                role="img"
+                aria-label="A specialist waits for your decision"
+                title="A specialist waits for your decision"
               />
             )}
             <AssigneeAvatar assignee={task.assignee} />

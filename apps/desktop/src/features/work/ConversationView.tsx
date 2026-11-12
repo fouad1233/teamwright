@@ -11,7 +11,15 @@ import { Prose } from '@/shared/ui/Prose';
 import { MemberAvatar } from '../team/Assignee';
 import { useTeamMember } from '../team/TeamContext';
 import styles from './ConversationView.module.css';
-import { durationInWords, hasSession, runningTurn, tokensInWords } from './workModel';
+import { DecisionCard } from './DecisionCard';
+import {
+  decisionInWords,
+  durationInWords,
+  hasSession,
+  openDecision,
+  runningTurn,
+  tokensInWords,
+} from './workModel';
 import { useWorkCommands } from './workQueries';
 
 interface ConversationViewProps {
@@ -31,6 +39,7 @@ export function ConversationView({
   const commands = useWorkCommands(project.id);
   const isDemo = useIsDemo();
   const working = runningTurn(conversation);
+  const question = openDecision(conversation);
   const name = member?.name ?? 'A specialist who has left the team';
   // The first line names the specialist and holds what can be done about
   // the conversation as a whole. Where there is nothing of either to show,
@@ -86,31 +95,49 @@ export function ConversationView({
         ))}
       </ol>
 
-      {!working &&
-        (member ? (
-          <ReplyBox
-            label={`Message to ${member.name}`}
-            placeholder={`Answer ${member.name}, or say what to change…`}
-            onSend={(message) => commands.reply(conversation.id, message)}
-          />
-        ) : (
-          <p className={styles.nothing}>The specialist has left the team, so nobody can answer.</p>
-        ))}
+      {!working && !member && (
+        <p className={styles.nothing}>The specialist has left the team, so nobody can answer.</p>
+      )}
+      {/* A question of the specialist takes the place of the line to write
+          in: answering it is the only way to go on. */}
+      {!working && member && question && (
+        <DecisionCard
+          key={conversation.turns.length}
+          decision={question}
+          askedBy={member.name}
+          onDecide={(answer) => commands.decide(conversation.id, answer)}
+        />
+      )}
+      {!working && member && !question && (
+        <ReplyBox
+          label={`Message to ${member.name}`}
+          placeholder={`Answer ${member.name}, or say what to change…`}
+          onSend={(message) => commands.reply(conversation.id, message)}
+        />
+      )}
     </div>
   );
 }
+
+/** Who a request came from, as the line over it says. */
+const ORIGIN_LABELS: Record<Turn['origin'], string> = {
+  brief: 'Brief',
+  message: 'You',
+  decision: 'Your decision',
+};
 
 /** One request to a specialist: what was asked, what happened, and what came back. */
 function TurnView({ turn }: { turn: Turn }) {
   // A brief is long and written by the program, so it is folded away. What
   // the manager wrote is short and is shown.
-  const [isRequestShown, setIsRequestShown] = useState(turn.origin === 'message');
+  const [isRequestShown, setIsRequestShown] = useState(turn.origin !== 'brief');
+  const decided = turn.decision === null ? null : decisionInWords(turn.decision);
 
   return (
     <article className={styles.turn}>
       <header className={styles.asked}>
         <span className="label">
-          {turn.origin === 'brief' ? 'Brief' : 'You'} · {formatMoment(turn.startedAt)}
+          {ORIGIN_LABELS[turn.origin]} · {formatMoment(turn.startedAt)}
         </span>
         {turn.origin === 'brief' && (
           <button
@@ -142,11 +169,21 @@ function TurnView({ turn }: { turn: Turn }) {
         </ol>
       )}
 
-      {turn.answer !== '' && (
+      {/* A turn ends in a report or in a question. What a specialist says
+          next to its question is no report, so it gets no such title. */}
+      {turn.answer !== '' && turn.decision === null && (
         <>
           <h4 className={classNames('label', styles.reportTitle)}>Report</h4>
           <Prose text={turn.answer} />
         </>
+      )}
+      {turn.decision !== null && decided !== null && (
+        <div className={styles.decided}>
+          <h4 className={classNames('label', styles.reportTitle)}>Asked</h4>
+          <p data-selectable>{turn.decision.question}</p>
+          <h4 className={classNames('label', styles.reportTitle)}>Decided</h4>
+          <p data-selectable>{decided}</p>
+        </div>
       )}
 
       {turn.failure !== null && (

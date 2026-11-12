@@ -138,6 +138,24 @@
   content: '';
 }
 
+/* The member has stopped and waits for the manager: a hollow block that
+   stands still. */
+.waiting {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: var(--space-3);
+  color: var(--brass);
+}
+
+.waiting::before {
+  width: 7px;
+  height: 7px;
+  border: 1.5px solid var(--brass);
+  border-radius: 1.5px;
+  content: '';
+}
+
 @keyframes at-work {
   to {
     opacity: 0.25;

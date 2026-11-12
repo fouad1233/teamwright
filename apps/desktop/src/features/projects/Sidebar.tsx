@@ -1,4 +1,4 @@
-import { Plus } from 'lucide-react';
+import { Inbox, Plus } from 'lucide-react';
 import { useState } from 'react';
 
 import { useNavigation } from '@/app/navigation';
@@ -8,6 +8,7 @@ import { classNames } from '@/shared/lib/classNames';
 import { IconButton } from '@/shared/ui/Button';
 import { Logo } from '@/shared/ui/Logo';
 
+import { useConversationsWaiting } from '../work/workQueries';
 import { ArchivedProjectsDialog } from './ArchivedProjectsDialog';
 import { CreateProjectDialog } from './CreateProjectDialog';
 import styles from './Sidebar.module.css';
@@ -19,7 +20,10 @@ interface SidebarProps {
   activeProjectId: Id | null;
 }
 
-/** The column on the left: the name of the application and the list of projects. */
+/**
+ * The column on the left: the name of the application, the way to the
+ * inbox, and the list of projects.
+ */
 export function Sidebar({ projects, activeProjectId }: SidebarProps) {
   const navigation = useNavigation();
   const isDemo = useIsDemo();
@@ -27,6 +31,8 @@ export function Sidebar({ projects, activeProjectId }: SidebarProps) {
   const [isCreatingProject, setIsCreatingProject] = useState(false);
   const [isShowingArchive, setIsShowingArchive] = useState(false);
   const archivedCount = archived.data?.length ?? 0;
+  const waitingCount = useConversationsWaiting().data?.length ?? 0;
+  const isInInbox = navigation.place === 'inbox';
 
   return (
     <aside className={styles.sidebar}>
@@ -34,6 +40,24 @@ export function Sidebar({ projects, activeProjectId }: SidebarProps) {
         <Logo size={20} />
         <span className={styles.wordmark}>Teamwright</span>
       </div>
+
+      <button
+        type="button"
+        className={classNames(styles.inbox, isInInbox && styles.activeInbox)}
+        aria-current={isInInbox ? 'page' : undefined}
+        onClick={navigation.openInbox}
+      >
+        <Inbox />
+        <span className={styles.inboxName}>Inbox</span>
+        {waitingCount > 0 && (
+          <span
+            className={styles.waiting}
+            aria-label={`${waitingCount.toString()} waiting for you`}
+          >
+            {waitingCount}
+          </span>
+        )}
+      </button>
 
       <nav className={styles.section} aria-label="Projects">
         <div className={styles.sectionHeader}>

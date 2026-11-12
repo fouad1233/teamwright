@@ -12,7 +12,7 @@ import { ActionMenu } from '@/shared/ui/Menu';
 import { TaskTally } from '../projects/TaskTally';
 import { ProgramStatus } from '../work/ProgramStatus';
 import { useConversationsOfProject } from '../work/WorkContext';
-import { whatMemberIsWorkingOn } from '../work/workModel';
+import { whatMemberIsWorkingOn, whatMemberWaitsFor } from '../work/workModel';
 import { MANAGER_NAME, ManagerAvatar, MemberAvatar } from './Assignee';
 import { MemberDialog } from './MemberDialog';
 import { useTeamMembers } from './TeamContext';
@@ -31,19 +31,33 @@ interface WorkingOnProps {
   tasks: Task[];
   /** What the member is working on at this moment: a task, a question, or nothing. */
   work: ReturnType<typeof whatMemberIsWorkingOn>;
+  /** The conversation in which the member waits for a decision of the manager. */
+  waiting: ReturnType<typeof whatMemberWaitsFor>;
 }
 
-/** Says, next to the name of a member, what it is working on at this moment. */
-function WorkingOn({ project, tasks, work }: WorkingOnProps) {
-  if (work === undefined) {
-    return null;
+/**
+ * Says, next to the name of a member, what it is working on at this moment,
+ * or that it waits for the manager to decide something.
+ */
+function WorkingOn({ project, tasks, work, waiting }: WorkingOnProps) {
+  const about = (conversation: NonNullable<typeof work>) => {
+    const task =
+      conversation.taskId === null
+        ? undefined
+        : tasks.find((other) => other.id === conversation.taskId);
+    return task ? taskReference(project, task) : 'a question';
+  };
+  if (work !== undefined) {
+    return <span className={classNames('label', styles.working)}>Working on {about(work)}</span>;
   }
-  const task = work.taskId === null ? undefined : tasks.find((other) => other.id === work.taskId);
-  return (
-    <span className={classNames('label', styles.working)}>
-      Working on {task ? taskReference(project, task) : 'a question'}
-    </span>
-  );
+  if (waiting !== undefined) {
+    return (
+      <span className={classNames('label', styles.waiting)}>
+        Waits for your decision on {about(waiting)}
+      </span>
+    );
+  }
+  return null;
 }
 
 /**
@@ -124,6 +138,7 @@ export function TeamView({ project, tasks }: TeamViewProps) {
                         project={project}
                         tasks={tasks}
                         work={whatMemberIsWorkingOn(conversations, member.id)}
+                        waiting={whatMemberWaitsFor(conversations, member.id)}
                       />
                     </span>
                     {member.responsibility !== '' && (
