@@ -37,8 +37,8 @@ pub use error::ApplicationError;
 pub use places::{ChosenPlaces, PlacesService, ProjectPlaces, REFERENCES_FOLDER};
 pub use ports::{
     ApprovedPlan, Clock, ConversationRepository, FileSystem, MemberRepository, PlacesRepository,
-    PlanningRepository, ProjectFolders, ProjectRepository, StorageError, TaskRepository,
-    WorkListener,
+    PlanningRepository, ProjectFolders, ProjectRepository, SprintRepository, StorageError,
+    TaskRepository, WorkListener,
 };
 pub use projects::{NewProject, ProjectService, StatusProperties, WorkflowTemplate};
 pub use tasks::{NewTask, TaskService};

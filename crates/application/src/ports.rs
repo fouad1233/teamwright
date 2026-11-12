@@ -8,8 +8,8 @@ use std::error::Error;
 use std::path::{Path, PathBuf};
 
 use teamwright_domain::{
-    Conversation, ConversationId, Member, MemberId, Project, ProjectId, Task, TaskId, Timestamp,
-    Turn,
+    CalendarDate, Conversation, ConversationId, Member, MemberId, Project, ProjectId, Sprint,
+    SprintId, Task, TaskId, Timestamp, Turn,
 };
 
 use crate::places::ChosenPlaces;
@@ -130,6 +130,46 @@ pub trait TaskRepository: Send + Sync {
     ///
     /// Returns an error if stored data could not be read.
     fn versions_of(&self, id: TaskId) -> Result<Vec<Task>, StorageError>;
+}
+
+/// Stores the sprints of the projects.
+///
+/// Planning, completing and removing a sprint moves tasks with it, so a
+/// sprint is stored together with the tasks that changed with it, in one
+/// write.
+pub trait SprintRepository: Send + Sync {
+    /// Stores a sprint, replacing a stored sprint with the same identifier,
+    /// and the tasks that changed with it. Either all of it is stored or
+    /// nothing is.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the sprint or a task could not be written.
+    fn save(&self, sprint: &Sprint, tasks: &[Task]) -> Result<(), StorageError>;
+
+    /// Finds a sprint by its identifier.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if stored data could not be read.
+    fn find(&self, id: SprintId) -> Result<Option<Sprint>, StorageError>;
+
+    /// Lists the sprints of a project in no particular order.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if stored data could not be read.
+    fn list_for_project(&self, project_id: ProjectId) -> Result<Vec<Sprint>, StorageError>;
+
+    /// Removes a sprint, and stores the tasks that left it. The identifier
+    /// of a sprint that is not stored is ignored. Either all of it is done
+    /// or nothing is.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the sprint could not be removed or a task could
+    /// not be written.
+    fn delete(&self, id: SprintId, tasks: &[Task]) -> Result<(), StorageError>;
 }
 
 /// Stores the members of the teams.
@@ -336,4 +376,13 @@ pub trait WorkListener: Send + Sync {
 pub trait Clock: Send + Sync {
     /// The current moment.
     fn now(&self) -> Timestamp;
+
+    /// The day on the calendar a moment falls on where the program runs.
+    /// A sprint counts its days this way.
+    ///
+    /// Without a time zone of its own a clock counts days in Coordinated
+    /// Universal Time.
+    fn day_of(&self, moment: Timestamp) -> CalendarDate {
+        moment.date_naive()
+    }
 }

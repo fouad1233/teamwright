@@ -223,17 +223,19 @@ impl ProjectRepository for SqliteProjectRepository {
     fn delete(&self, id: ProjectId) -> Result<(), StorageError> {
         self.database.write(|transaction, operations| {
             let id = id.to_string();
-            // The database would remove the conversations, tasks and members
-            // of the project by itself, but without a trace in the log. They
-            // are removed here one by one, each with its own entry, like any
-            // other deletion. Normally the use case has removed them already
-            // and nothing is left to do. The conversations go first, because
-            // they refer to the tasks and the members. The folders chosen for
-            // the project are forgotten the same way; the folders on disk are
-            // never touched.
+            // The database would remove the conversations, tasks, sprints
+            // and members of the project by itself, but without a trace in
+            // the log. They are removed here one by one, each with its own
+            // entry, like any other deletion. Normally the use case has
+            // removed them already and nothing is left to do. The
+            // conversations go first, because they refer to the tasks and
+            // the members, and the sprints after the tasks that are in them.
+            // The folders chosen for the project are forgotten the same way;
+            // the folders on disk are never touched.
             conversations::delete_conversations_of_project(transaction, operations, &id)?;
             places::delete_places_of_project(transaction, operations, &id)?;
             delete_rows_of_project(transaction, operations, "tasks", Entity::Task, &id)?;
+            delete_rows_of_project(transaction, operations, "sprints", Entity::Sprint, &id)?;
             delete_rows_of_project(transaction, operations, "members", Entity::Member, &id)?;
             // The statuses are part of the project in the log, so their
             // removal is covered by the deletion of the project.

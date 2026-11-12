@@ -16,21 +16,23 @@ use teamwright_application::{
     AgentEvent, ApprovedMember, ApprovedOwner, ApprovedProposal, ApprovedTask, ChosenPlaces,
     ConversationRepository, ManagerQuestion, MemberRepository, ModelUsage, NewMember, NewProject,
     NewTask, PlacesRepository, PlanProposal, PlannedMember, PlannedOwner, PlannedTask,
-    ProjectRepository, ProjectService, QuestionOption, SessionId, StatusProperties, TaskRepository,
-    TaskService, TeamService, TurnOutcome, WorkPorts, WorkService, WorkflowTemplate,
+    ProjectRepository, ProjectService, QuestionOption, SessionId, SprintRepository,
+    StatusProperties, TaskRepository, TaskService, TeamService, TurnOutcome, WorkPorts,
+    WorkService, WorkflowTemplate,
 };
 use teamwright_domain::{
     Assignee, CalendarDate, Color, Conversation, ConversationId, DecisionOption, DecisionRequest,
     Effort, Interview, InterviewAnswer, InterviewQuestion, Member, MemberId, MemberKind,
     MemberName, MemberProfile, ModelName, Priority, Project, ProjectKey, ProjectName, Proposal,
-    ProposedMember, ProposedOwner, ProposedTask, Rank, Schedule, Status, StatusCategory, StatusId,
-    StatusName, StepContent, StoryPoints, Task, TaskDraft, TaskId, TaskTitle, Timestamp,
-    TokenCounts, ToolOutcome, Turn, TurnOrigin, TurnState, Workflow,
+    ProposedMember, ProposedOwner, ProposedTask, Rank, Schedule, Sprint, SprintDates, SprintId,
+    SprintName, SprintSummary, SprintUnit, Status, StatusCategory, StatusId, StatusName,
+    StepContent, StoryPoints, Task, TaskDraft, TaskId, TaskTitle, Timestamp, TokenCounts,
+    ToolOutcome, Turn, TurnOrigin, TurnState, Workflow,
 };
 use teamwright_storage::{
     Database, Operation, SqliteConversationRepository, SqliteMemberRepository,
     SqlitePlacesRepository, SqlitePlanningRepository, SqliteProjectRepository,
-    SqliteTaskRepository,
+    SqliteSprintRepository, SqliteTaskRepository,
 };
 
 /// A database with the repositories working on it.
@@ -41,6 +43,7 @@ struct Store {
     members: SqliteMemberRepository,
     conversations: SqliteConversationRepository,
     places: SqlitePlacesRepository,
+    sprints: SqliteSprintRepository,
 }
 
 impl Store {
@@ -52,6 +55,7 @@ impl Store {
             members: SqliteMemberRepository::new(database.clone()),
             conversations: SqliteConversationRepository::new(database.clone()),
             places: SqlitePlacesRepository::new(database.clone()),
+            sprints: SqliteSprintRepository::new(database.clone()),
             database,
         }
     }
@@ -72,6 +76,13 @@ impl Store {
         let task = new_task(project, number, title);
         self.tasks.save(&task).unwrap();
         task
+    }
+
+    /// Stores a planned sprint without dates in the project and returns it.
+    fn sprint(&self, project: &Project, name: &str) -> Sprint {
+        let sprint = new_sprint(project, name);
+        self.sprints.save(&sprint, &[]).unwrap();
+        sprint
     }
 
     /// Stores an agent on the team of the project and returns it.
@@ -109,6 +120,16 @@ fn new_member(project: &Project, name: &str) -> Member {
         MemberKind::Agent,
         "The schematic, the parts and the board.".to_owned(),
         Color::Teal,
+        moment(9),
+    )
+}
+
+fn new_sprint(project: &Project, name: &str) -> Sprint {
+    Sprint::plan(
+        project.id(),
+        SprintName::parse(name).unwrap(),
+        "",
+        SprintDates::default(),
         moment(9),
     )
 }
@@ -1541,6 +1562,193 @@ fn deleting_a_project_forgets_its_folders_with_a_trace_in_the_log() {
     assert_eq!(
         store.places.find(project.id()).unwrap(),
         ChosenPlaces::default()
+    );
+}
+
+// Sprints
+
+#[test]
+fn a_sprint_is_found_again_unchanged_while_it_is_planned_active_and_completed() {
+    let store = Store::in_memory();
+    let project = store.project("Smart sensor node");
+    let mut sprint = Sprint::plan(
+        project.id(),
+        SprintName::parse("Board bring-up").unwrap(),
+        "Power on",
+        SprintDates::new(Some(day(16)), None).unwrap(),
+        moment(9),
+    );
+    store.sprints.save(&sprint, &[]).unwrap();
+    assert_eq!(
+        store.sprints.find(sprint.id()).unwrap(),
+        Some(sprint.clone())
+    );
+
+    sprint
+        .start("Board bring-up", "Power on", day(16), day(29), moment(10))
+        .unwrap();
+    store.sprints.save(&sprint, &[]).unwrap();
+    assert_eq!(
+        store.sprints.find(sprint.id()).unwrap(),
+        Some(sprint.clone())
+    );
+
+    let summary = SprintSummary {
+        unit: SprintUnit::Points,
+        committed: 8,
+        completed: 3,
+    };
+    sprint.complete(summary, moment(11)).unwrap();
+    store.sprints.save(&sprint, &[]).unwrap();
+    assert_eq!(store.sprints.find(sprint.id()).unwrap(), Some(sprint));
+}
+
+#[test]
+fn sprints_are_listed_for_their_own_project_only() {
+    let store = Store::in_memory();
+    let project = store.project("Smart sensor node");
+    let other = store.project("Weather station");
+    let first = store.sprint(&project, "Sprint 1");
+    let second = store.sprint(&project, "Sprint 2");
+    store.sprint(&other, "Sprint 1");
+
+    let mut listed = store.sprints.list_for_project(project.id()).unwrap();
+    listed.sort_by_key(Sprint::id);
+
+    assert_eq!(listed, [first, second]);
+    assert_eq!(store.sprints.find(SprintId::generate()).unwrap(), None);
+}
+
+#[test]
+fn a_task_in_a_sprint_with_points_is_found_again_unchanged() {
+    let store = Store::in_memory();
+    let project = store.project("Smart sensor node");
+    let sprint = store.sprint(&project, "Sprint 1");
+    let mut task = new_task(&project, 1, "Design the board");
+    task.plan_into(Some(sprint.id()), moment(10));
+    task.set_points(Some(StoryPoints::new(5).unwrap()), moment(10));
+    store.tasks.save(&task).unwrap();
+
+    let found = store.tasks.find(task.id()).unwrap();
+
+    assert_eq!(found, Some(task.clone()));
+    assert_eq!(store.tasks.versions_of(task.id()).unwrap(), [task]);
+}
+
+#[test]
+fn a_sprint_is_saved_together_with_the_tasks_that_change_with_it_and_logged_whole() {
+    let store = Store::in_memory();
+    let project = store.project("Smart sensor node");
+    let mut sprint = store.sprint(&project, "Sprint 1");
+    let mut board = store.task(&project, 1, "Design the board");
+    board.plan_into(Some(sprint.id()), moment(10));
+    store.tasks.save(&board).unwrap();
+    sprint
+        .start("Sprint 1", "", day(10), day(23), moment(10))
+        .unwrap();
+    let start = store.database.operations().unwrap().len();
+
+    let summary = SprintSummary {
+        unit: SprintUnit::Tasks,
+        committed: 1,
+        completed: 0,
+    };
+    sprint.complete(summary, moment(11)).unwrap();
+    board.plan_into(None, moment(11));
+    store
+        .sprints
+        .save(&sprint, std::slice::from_ref(&board))
+        .unwrap();
+
+    assert_eq!(store.tasks.find(board.id()).unwrap(), Some(board.clone()));
+    assert_eq!(
+        logged_after(&store, start),
+        pairs(&[("sprint", "upsert"), ("task", "upsert")])
+    );
+    let log = store.database.operations().unwrap();
+    assert_eq!(log[start].entity_id, sprint.id().to_string());
+    let state: serde_json::Value =
+        serde_json::from_str(log[start].payload.as_deref().unwrap()).unwrap();
+    assert_eq!(state["project_id"], project.id().to_string());
+    assert_eq!(state["name"], "Sprint 1");
+    assert_eq!(state["state"], "completed");
+    assert_eq!(state["start_on"], "2026-11-10");
+    assert_eq!(state["end_on"], "2026-11-23");
+    assert_eq!(state["completed_at"], "2026-11-11T11:00:00.000Z");
+    assert_eq!(state["summary"]["unit"], "tasks");
+    assert_eq!(state["summary"]["committed"], 1);
+    let task_state: serde_json::Value =
+        serde_json::from_str(log[start + 1].payload.as_deref().unwrap()).unwrap();
+    assert_eq!(task_state["sprint_id"], serde_json::Value::Null);
+}
+
+#[test]
+fn a_task_in_a_sprint_is_logged_with_its_sprint_and_its_points() {
+    let store = Store::in_memory();
+    let project = store.project("Smart sensor node");
+    let sprint = store.sprint(&project, "Sprint 1");
+    let mut task = store.task(&project, 1, "Design the board");
+    let start = store.database.operations().unwrap().len();
+
+    task.plan_into(Some(sprint.id()), moment(10));
+    task.set_points(Some(StoryPoints::new(8).unwrap()), moment(10));
+    store.tasks.save(&task).unwrap();
+
+    let log = store.database.operations().unwrap();
+    let state: serde_json::Value =
+        serde_json::from_str(log[start].payload.as_deref().unwrap()).unwrap();
+    assert_eq!(state["sprint_id"], sprint.id().to_string());
+    assert_eq!(state["points"], 8);
+}
+
+#[test]
+fn deleting_a_sprint_stores_the_tasks_that_leave_it_first_and_logs_the_removal() {
+    let store = Store::in_memory();
+    let project = store.project("Smart sensor node");
+    let sprint = store.sprint(&project, "Sprint 1");
+    let mut board = new_task(&project, 1, "Design the board");
+    board.plan_into(Some(sprint.id()), moment(9));
+    store.tasks.save(&board).unwrap();
+    let start = store.database.operations().unwrap().len();
+
+    board.plan_into(None, moment(10));
+    store
+        .sprints
+        .delete(sprint.id(), std::slice::from_ref(&board))
+        .unwrap();
+    store.sprints.delete(sprint.id(), &[]).unwrap();
+
+    assert_eq!(store.sprints.find(sprint.id()).unwrap(), None);
+    assert_eq!(store.tasks.find(board.id()).unwrap(), Some(board));
+    assert_eq!(
+        logged_after(&store, start),
+        pairs(&[("task", "upsert"), ("sprint", "delete")])
+    );
+}
+
+#[test]
+fn deleting_a_project_removes_its_sprints_after_its_tasks_with_a_trace_in_the_log() {
+    let store = Store::in_memory();
+    let project = store.project("Smart sensor node");
+    let other = store.project("Weather station");
+    let sprint = store.sprint(&project, "Sprint 1");
+    let kept = store.sprint(&other, "Sprint 1");
+    let mut board = new_task(&project, 1, "Design the board");
+    board.plan_into(Some(sprint.id()), moment(9));
+    store.tasks.save(&board).unwrap();
+    let start = store.database.operations().unwrap().len();
+
+    store.projects.delete(project.id()).unwrap();
+
+    assert_eq!(store.sprints.find(sprint.id()).unwrap(), None);
+    assert_eq!(store.sprints.list_for_project(other.id()).unwrap(), [kept]);
+    assert_eq!(
+        logged_after(&store, start),
+        pairs(&[
+            ("task", "delete"),
+            ("sprint", "delete"),
+            ("project", "delete")
+        ])
     );
 }
 

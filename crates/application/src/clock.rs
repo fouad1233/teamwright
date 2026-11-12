@@ -1,7 +1,7 @@
 //! The clock of the computer.
 
-use chrono::{DurationRound, TimeDelta, Utc};
-use teamwright_domain::Timestamp;
+use chrono::{DurationRound, Local, TimeDelta, Utc};
+use teamwright_domain::{CalendarDate, Timestamp};
 
 use crate::ports::Clock;
 
@@ -19,6 +19,12 @@ impl Clock for SystemClock {
         // library supports, in which case the uncut time is the best answer.
         now.duration_trunc(TimeDelta::milliseconds(1))
             .unwrap_or(now)
+    }
+
+    /// The day in the time zone the operating system is set to, where the
+    /// manager is.
+    fn day_of(&self, moment: Timestamp) -> CalendarDate {
+        moment.with_timezone(&Local).date_naive()
     }
 }
 

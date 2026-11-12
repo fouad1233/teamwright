@@ -92,6 +92,8 @@ pub(crate) enum Entity {
     /// Its identifier is the project's. These are facts about this
     /// computer, which must not be applied on another one.
     ProjectPlaces,
+    /// A sprint with its summary.
+    Sprint,
 }
 
 impl Entity {
@@ -108,6 +110,7 @@ impl Entity {
             Self::Interview => "interview",
             Self::Proposal => "proposal",
             Self::ProjectPlaces => "project_places",
+            Self::Sprint => "sprint",
         }
     }
 }

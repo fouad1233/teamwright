@@ -11,8 +11,8 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use chrono::TimeDelta;
 use teamwright_domain::{
-    Conversation, ConversationId, Member, MemberId, Project, ProjectId, Task, TaskId, Timestamp,
-    Turn, TurnId,
+    Conversation, ConversationId, Member, MemberId, Project, ProjectId, Sprint, SprintId, Task,
+    TaskId, Timestamp, Turn, TurnId,
 };
 
 use crate::agent_runtime::{
@@ -22,8 +22,8 @@ use crate::agent_runtime::{
 use crate::places::ChosenPlaces;
 use crate::ports::{
     ApprovedPlan, Clock, ConversationRepository, FileSystem, MemberRepository, PlacesRepository,
-    PlanningRepository, ProjectFolders, ProjectRepository, StorageError, TaskRepository,
-    WorkListener,
+    PlanningRepository, ProjectFolders, ProjectRepository, SprintRepository, StorageError,
+    TaskRepository, WorkListener,
 };
 
 /// Locks a mutex, and keeps working even if another thread panicked while it
@@ -107,6 +107,50 @@ impl TaskRepository for InMemoryTaskRepository {
 
     fn versions_of(&self, id: TaskId) -> Result<Vec<Task>, StorageError> {
         Ok(lock(&self.versions).get(&id).cloned().unwrap_or_default())
+    }
+}
+
+/// Keeps sprints in memory, and stores the tasks that change with them in
+/// the in-memory task repository it was given.
+#[derive(Debug)]
+pub struct InMemorySprintRepository {
+    sprints: Mutex<BTreeMap<SprintId, Sprint>>,
+    tasks: Arc<InMemoryTaskRepository>,
+}
+
+impl InMemorySprintRepository {
+    /// Stores the tasks that change with a sprint into `tasks`.
+    #[must_use]
+    pub const fn new(tasks: Arc<InMemoryTaskRepository>) -> Self {
+        Self {
+            sprints: Mutex::new(BTreeMap::new()),
+            tasks,
+        }
+    }
+}
+
+impl SprintRepository for InMemorySprintRepository {
+    fn save(&self, sprint: &Sprint, tasks: &[Task]) -> Result<(), StorageError> {
+        lock(&self.sprints).insert(sprint.id(), sprint.clone());
+        self.tasks.save_all(tasks)
+    }
+
+    fn find(&self, id: SprintId) -> Result<Option<Sprint>, StorageError> {
+        Ok(lock(&self.sprints).get(&id).cloned())
+    }
+
+    fn list_for_project(&self, project_id: ProjectId) -> Result<Vec<Sprint>, StorageError> {
+        Ok(lock(&self.sprints)
+            .values()
+            .filter(|sprint| sprint.project_id() == project_id)
+            .cloned()
+            .collect())
+    }
+
+    fn delete(&self, id: SprintId, tasks: &[Task]) -> Result<(), StorageError> {
+        self.tasks.save_all(tasks)?;
+        lock(&self.sprints).remove(&id);
+        Ok(())
     }
 }
 
