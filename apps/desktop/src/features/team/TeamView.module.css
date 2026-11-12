@@ -120,8 +120,10 @@
 }
 
 /* What a member is working on at this moment, next to its name: the point
-   of attention of the row, so it gets the brass. */
-.working {
+   of attention of the row, so it gets the gold. With the global label class
+   in the selector, the gold wins over the faint ink of that class, which is
+   loaded later. */
+:global(.label).working {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -140,7 +142,7 @@
 
 /* The member has stopped and waits for the manager: a hollow block that
    stands still. */
-.waiting {
+:global(.label).waiting {
   display: inline-flex;
   align-items: center;
   gap: 6px;

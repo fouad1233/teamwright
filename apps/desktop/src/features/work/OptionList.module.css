@@ -27,12 +27,12 @@
   background: var(--hover);
 }
 
-/* The option that is picked is outlined in ink, like a part that has been
-   picked up. */
+/* The option that is picked is outlined in gold and catches a little of its
+   light: it is the manager's answer. */
 .picked,
 .picked:hover {
-  border-color: var(--ink);
-  background: transparent;
+  border-color: var(--brass);
+  background: var(--brass-soft);
 }
 
 /* The radio button does the work for the keyboard and for screen readers;

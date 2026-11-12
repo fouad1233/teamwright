@@ -27,8 +27,10 @@
   flex: 1;
 }
 
-/* Somebody is at work: the one point of attention, so it gets the brass. */
-.working {
+/* Somebody is at work: the one point of attention, so it gets the gold. With
+   the global label class in the selector, the gold wins over the faint ink
+   of that class, which is loaded later. */
+:global(.label).working {
   display: inline-flex;
   align-items: center;
   gap: 6px;

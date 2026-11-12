@@ -20,7 +20,8 @@ interface DecisionCardProps {
  * options with what each leads to, and room for words of the manager's own.
  *
  * It is the one thing on its page that waits for the manager, so it is the
- * one thing there that carries the brass.
+ * one thing there that carries the gold, and the gilded sun of decision
+ * 0015.
  */
 export function DecisionCard({ decision, askedBy, onDecide }: DecisionCardProps) {
   const [pick, setPick] = useState<OptionPick | undefined>(undefined);
