@@ -11,6 +11,7 @@
 //! from. Whoever builds the program decides that by passing implementations
 //! in. Tests pass the ones in [`in_memory`].
 
+pub mod agent_runtime;
 pub mod clock;
 pub mod error;
 pub mod in_memory;
@@ -19,6 +20,12 @@ pub mod projects;
 pub mod tasks;
 pub mod team;
 
+pub use agent_runtime::{
+    AgentEvent, AgentRuntime, AgentRuntimeError, Effort, Installation, McpServer, ModelUsage,
+    PermissionDenial, PermissionMode, PermissionProfile, PlanUsage, PlanWindow, PlanWindowKind,
+    ProgramVersion, RunningTurn, SessionChoice, SessionId, SessionStarted, SignIn, TokenCounts,
+    TurnFailure, TurnOutcome, TurnRequest,
+};
 pub use clock::SystemClock;
 pub use error::ApplicationError;
 pub use ports::{Clock, MemberRepository, ProjectRepository, StorageError, TaskRepository};

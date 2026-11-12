@@ -11,6 +11,7 @@ window or agent runtime.
 | `tasks` | `TaskService`: open, change, move, connect and remove tasks |
 | `team` | `TeamService`: put members on the team of a project, change them, take them off |
 | `ports` | The interfaces the services need: `ProjectRepository`, `TaskRepository`, `MemberRepository`, `Clock` |
+| `agent_runtime` | `AgentRuntime`: the interface to the program that runs a team member's session, and the data it speaks |
 | `error` | `ApplicationError`, with a stable `code()` for interfaces |
 | `clock` | `SystemClock`, the real clock |
 | `in_memory` | In-memory repositories and a settable clock, for tests and demos |
@@ -56,6 +57,34 @@ project, two members of one team cannot have the same name.
 - Taking a member off a team gives the member's tasks to nobody.
 - A task can be given to the manager or to a member of the team of its own
   project, and to nobody else.
+
+## The agent runtime
+
+A team member's session runs on the user's own Claude Code
+([decision 0005](../../docs/decisions/0005-drive-the-users-claude-code.md)).
+The application only knows the trait `AgentRuntime`, implemented by the
+`teamwright-runtime` crate. Through it, the application can:
+
+- find the installed program and its version (`installation`),
+- ask the program whether the user is signed in (`sign_in`); no credential
+  is ever read or passed on,
+- run one turn of a session (`start_turn`). The turn runs on its own thread
+  and reports `AgentEvent`s to a listener: the session started, text, tool
+  use and results, denied permissions, retries, plan usage, and last of all
+  `TurnEnded` with the tokens per model. The returned `RunningTurn` can be
+  stopped,
+- open a session in the Claude desktop app (`open_in_desktop_app`).
+
+A turn request carries its permissions as data, a `PermissionProfile`.
+`PermissionProfile::specialist()` is the profile of a specialist: read,
+search, and edit inside the working folder; no shell; everything else is
+denied without waiting. The modes that approve risky tool use on the
+manager's behalf are not offered.
+
+Usage is counted in tokens
+([decision 0008](../../docs/decisions/0008-budgets-in-tokens.md)). The dollar
+figure is kept as `estimated_cost_usd`. Plan limits are reported as
+`PlanUsage` when the program reports them, and are unknown otherwise.
 
 ## Adding a use case
 
