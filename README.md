@@ -19,11 +19,13 @@ with a clear decision request whenever a choice is yours to make.
 > that keeps projects and tasks in a local database, shows them on a board,
 > in a list, on a Gantt chart and on a calendar, and lets you put together a
 > team. An AI specialist on that team carries out a task through your own
-> Claude Code: it gets a brief, works in the folder of the project, shows
-> every step, reports, and can be answered. When a choice is yours to make
-> it stops and asks, and its question waits in your inbox with the options
-> and what each leads to. What is still missing is the team as a team: the
-> Advisor that proposes it, and specialists that hand work to each other.
+> Claude Code: it gets a brief, works in the folder of the project or in
+> one you choose, reads the folders and files you give it for reference,
+> shows every step, reports, and can be answered. When a choice is yours to
+> make it stops and asks, and its question waits in your inbox with the
+> options and what each leads to. What is still missing is the team as a
+> team: the Advisor that proposes it, and specialists that hand work to
+> each other.
 > There is no installer; the app can be
 > [built from source](docs/development/README.md).
 > The [roadmap](docs/product/roadmap.md) says exactly what is done.

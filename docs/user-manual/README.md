@@ -79,6 +79,29 @@ another meaning.
 
 Changes are saved as you make them.
 
+### Folders
+
+*Folders* in the menu of a project says where its specialists work on this
+computer, and what else they may read.
+
+- **Work folder.** Here the specialists read, create and change files.
+  Teamwright makes a folder for every project. *Choose another folder* lets
+  them work somewhere else, for example in a folder that already holds the
+  project. What they change there is changed for real. *Use the folder of
+  Teamwright* goes back. The work folder cannot change while a specialist
+  works in the project.
+- **Reference folders.** Folders with material the specialists should know:
+  data sheets, an earlier design, a standard. They can read everything in
+  these folders, PDF files included, and cannot change anything in them. A
+  reference folder cannot be the work folder, lie inside it, or contain it.
+- **Reference files.** *Add files* copies single files into the folder
+  `references` inside the work folder. The specialists see the copies, and
+  nothing else of the folder a file came from.
+
+Teamwright never deletes a folder or a file of yours, also not when you
+delete the project. Keep in mind that what a specialist reads is sent to
+Anthropic under your account, like everything Claude Code reads.
+
 ## The header of a project
 
 Next to the name of the project are its key and, if the project has a team,
@@ -257,15 +280,18 @@ mark, and the specialist is free for other work.
 **Ask something.** *Ask something* in the menu of a specialist in the
 *Team* view opens a conversation that is not about a task.
 
-**Where the work is.** A specialist works in the folder of its project,
+**Where the work is.** A specialist works in the work folder of its
+project. Unless you choose another one, that is
 `Teamwright\<key of the project>` in your documents. What it produces are
-files in that folder, yours to open with any program.
+files in that folder, yours to open with any program. See
+[folders](#folders).
 
 **What a specialist may do.** It may read, search, create and change files
-in the folder of its project. It cannot run commands, it cannot fetch
-anything from the internet, and it can neither read nor change a file
-outside that folder. It also does not see what you have set up in your own
-Claude Code: your connectors, plugins and settings stay yours. When a task
+in the work folder of its project, and it may read the reference folders
+you gave the project. It cannot run commands, it cannot fetch anything from
+the internet, and it can neither read nor change a file anywhere else. It
+also does not see what you have set up in your own Claude Code: your
+connectors, plugins and settings stay yours. When a task
 needs one of these, the specialist says so in its report instead of
 working around it.
 [Why it is this strict](../decisions/0011-what-a-specialist-may-do.md).

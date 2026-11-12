@@ -53,6 +53,9 @@ A single specialist that really works through Claude Code.
 - ✅ Token usage of every turn
 - ✅ A specialist reads and writes files in the folder of its project and
   can do nothing else
+- ✅ The folders of a project: a work folder the manager chooses, folders
+  the specialists may read and not change, and single files copied in for
+  reference
 - 🚧 Open the session of a specialist in the Claude desktop app: built, not
   yet run against the real app
 - ⬜ Run a Claude Code that npm installed. On Windows that is a script,
