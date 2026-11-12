@@ -29,6 +29,7 @@ claude -p --output-format stream-json --verbose
        [--session-id <uuid> | --resume <id>] [--model …] [--effort …]
        [--append-system-prompt=…]
        --permission-mode acceptEdits --permission-prompts none
+       --restricted --strict-mcp-config
        --tools Read Glob Grep Edit Write NotebookEdit Skill ToolSearch
        --allowedTools Read Glob Grep --disallowedTools Bash PowerShell
 ```
@@ -103,9 +104,16 @@ and the tests rely on.
   denied as suspicious. The system's temporary folder is often given in
   that form, so the working folder is resolved to its full long form before
   the program is started.
-- The session keeps the user's own MCP servers, claude.ai connectors,
-  plugins and skills. With the specialist's profile their tools are denied
-  unless the user's own settings allow them.
+- A rule that allows a tool without naming a path, such as `Read` in
+  `--allowedTools`, allows it everywhere. With it alone, a session read a
+  file outside its working folder when asked to. `--restricted` confines
+  the file tools to the working folder, also for reading, and that is why a
+  specialist runs with it.
+- `--restricted` also ignores the user's settings files, so their hooks,
+  plugins and rules do not apply, and with `--strict-mcp-config` the session
+  has none of the user's MCP servers and claude.ai connectors either. The
+  sign-in still works. A session without all of that is also much lighter:
+  its first request wrote about 6,500 tokens to the cache instead of 25,000.
 - `--tools` ignores names it does not know.
 
 ## Stopping a turn

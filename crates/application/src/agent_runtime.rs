@@ -335,6 +335,14 @@ pub struct PermissionProfile {
     /// Whether tool use that would need approval is denied at once. Without
     /// it, a turn would wait for an answer that nobody can give.
     pub deny_instead_of_asking: bool,
+    /// Whether the session is confined to its working folder. Its file
+    /// tools then reach nothing outside that folder, also not for reading,
+    /// and the user's own settings do not apply to it, with the hooks,
+    /// plugins and rules they bring.
+    pub confined_to_working_folder: bool,
+    /// Whether the session sees only the tool servers it is given, and none
+    /// of those the user has set up for themself.
+    pub only_given_tool_servers: bool,
 }
 
 impl PermissionProfile {
@@ -344,6 +352,12 @@ impl PermissionProfile {
     /// its working folder. It may not run shell commands. Everything else,
     /// such as reading or writing outside its folder, fetching from the web
     /// or using a connector, is denied without waiting.
+    ///
+    /// The session is confined to its working folder. Without that, the
+    /// rule that lets it read without asking would let it read any file of
+    /// the user, which a real run showed. Confined, it also leaves the
+    /// user's own settings, hooks, plugins and tool servers alone: a
+    /// specialist is a member of this team, not the user's own session.
     ///
     /// The built-in tools are limited to those it needs, so that tools which
     /// schedule work, start other sessions or publish something are not
@@ -370,6 +384,8 @@ impl PermissionProfile {
             disallowed_tools: ["Bash", "PowerShell"].map(String::from).to_vec(),
             mode: PermissionMode::AcceptEdits,
             deny_instead_of_asking: true,
+            confined_to_working_folder: true,
+            only_given_tool_servers: true,
         }
     }
 }

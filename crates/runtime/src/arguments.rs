@@ -79,6 +79,15 @@ pub fn turn_arguments(request: &TurnRequest) -> Result<Vec<OsString>, AgentRunti
     if permissions.deny_instead_of_asking {
         push_pair(&mut arguments, "--permission-prompts", "none");
     }
+    // Restricted mode confines the file tools to the working folder and
+    // ignores the user's own settings. A version of the program that does
+    // not know the option refuses to start, which is the safe way to fail.
+    if permissions.confined_to_working_folder {
+        arguments.push("--restricted".into());
+    }
+    if permissions.only_given_tool_servers {
+        arguments.push("--strict-mcp-config".into());
+    }
 
     // The lists come last. Each takes every following argument up to the
     // next option, and an empty list must not be given at all: `--tools`
@@ -195,6 +204,8 @@ mod tests {
                 "acceptEdits",
                 "--permission-prompts",
                 "none",
+                "--restricted",
+                "--strict-mcp-config",
                 "--tools",
                 "Read",
                 "Glob",
@@ -276,6 +287,8 @@ mod tests {
             disallowed_tools: Vec::new(),
             mode: PermissionMode::DontAsk,
             deny_instead_of_asking: false,
+            confined_to_working_folder: false,
+            only_given_tool_servers: false,
         };
         let arguments = text(&turn_arguments(&open).unwrap());
         assert_eq!(

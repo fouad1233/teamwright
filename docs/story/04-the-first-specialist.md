@@ -223,3 +223,12 @@ was left for the founder to press.
 11. A ledger that has stood on the shelf since the first day. Somebody
     turns its pages backward. On every page is the same card, a little
     earlier each time.
+
+## Note, 12 November 2026, later the same day
+
+This chapter says that a specialist may write files in its folder and
+nothing else. When it was written, that was true of writing and not of
+reading: asked to, a specialist could read a file outside the folder of its
+project. A test with a planted file showed it a few hours later, and the
+profile was corrected the same afternoon. The record of that decision
+carries the correction.

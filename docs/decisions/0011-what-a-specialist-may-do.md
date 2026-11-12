@@ -39,6 +39,9 @@ with this profile:
 - The modes of Claude Code that approve everything, or that let a model
   decide what is safe, cannot be chosen. The type that describes the
   permissions of a turn does not contain them.
+- The session runs in the restricted mode of Claude Code, which confines
+  its file tools to the folder of the project and ignores the manager's own
+  settings, and it is given no tool server but the ones Teamwright names.
 
 The profile is data that the application hands to the runtime. The runtime
 only translates it into options of the program.
@@ -53,10 +56,9 @@ only translates it into options of the program.
   other and to the manager. Nothing of theirs is hidden in the database.
 - A specialist cannot be told from the interface to be less careful. That
   is on purpose.
-- The session still knows the manager's own MCP servers and connectors.
-  Their tools are denied unless the manager's own Claude Code settings
-  allow them for every session. When the team bus is built, a specialist
-  should get only the servers Teamwright gives it.
+- The session does not know the manager's own MCP servers, connectors,
+  plugins, hooks or settings. A specialist is a member of this team, not the
+  manager's own session. What it may use, Teamwright gives it.
 
 ## Alternatives considered
 
@@ -66,3 +68,19 @@ only translates it into options of the program.
   behalf, by another model.
 - **Wait until permission requests can be shown.** No specialist could work
   before the team bus exists, although most of their work is writing files.
+
+## Correction, 12 November 2026
+
+The first version of this profile did not keep its first promise. It let a
+specialist read without asking, by a rule that names the tool and no folder,
+and such a rule holds everywhere: asked to, a specialist read a file outside
+the folder of its project. Writing outside was refused, as intended.
+
+It was found on the day the profile was first used, by a test that asks a
+real specialist to read and to write outside its folder, before any project
+of a user had run with it. Since then the session runs in restricted mode,
+and the same test is refused both times.
+
+The first version also left the manager's own tool servers and connectors
+known to the session, with their tools denied. They are now not there at
+all.
