@@ -220,7 +220,7 @@
 
     /* Light reads less well on paper than at night, so it is stronger. */
     --glow-strength: 0.2;
-    --lamp-on-ink: rgb(var(--brass-rgb) / 30%);
+    --lamp-on-ink: rgb(var(--brass-rgb) / 22%);
     --sun-at-work: 0.14;
     --sun-peak: 0.32;
     --sun-from: #f2e8d5;

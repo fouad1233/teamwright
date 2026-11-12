@@ -3,6 +3,7 @@ import type { ComponentProps, ReactNode } from 'react';
 import { classNames } from '@/shared/lib/classNames';
 
 import styles from './Button.module.css';
+import { followPointer } from './lamplight';
 import { Tooltip } from './Tooltip';
 
 /** How much a button stands out. */
@@ -15,17 +16,36 @@ type ButtonProps = ComponentProps<'button'> & {
   icon?: ReactNode;
 };
 
-/** A button with a text label. */
+/** A button with a text label. The primary one is lit by a lamp under the pointer. */
 export function Button({
   variant = 'secondary',
   icon,
   className,
   children,
   type = 'button',
+  onPointerEnter,
+  onPointerMove,
   ...rest
 }: ButtonProps) {
+  const isLit = variant === 'primary';
   return (
-    <button type={type} className={classNames(styles.button, styles[variant], className)} {...rest}>
+    <button
+      type={type}
+      className={classNames(styles.button, styles[variant], className)}
+      onPointerEnter={(event) => {
+        if (isLit) {
+          followPointer(event);
+        }
+        onPointerEnter?.(event);
+      }}
+      onPointerMove={(event) => {
+        if (isLit) {
+          followPointer(event);
+        }
+        onPointerMove?.(event);
+      }}
+      {...rest}
+    >
       {icon}
       {children}
     </button>

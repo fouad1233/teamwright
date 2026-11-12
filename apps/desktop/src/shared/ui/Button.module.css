@@ -27,14 +27,41 @@
   stroke-width: 1.75;
 }
 
-/* The main action is ink on the ground: it needs no color to be seen. */
+/* The main action is ink on the ground: it needs no color to be seen. Under
+   the pointer it warms, and a lamp follows the pointer across it
+   (`followPointer` sets where). The button makes a layer of its own, so
+   the lamp sits over its ground and under its label. */
 .primary {
+  position: relative;
+  isolation: isolate;
   background: var(--ink);
   color: var(--ink-inverse);
 }
 
+/* It reaches over the border, which is transparent, so that the light has
+   no darker ring round it. */
+.primary::before {
+  position: absolute;
+  z-index: -1;
+  inset: -1px;
+  border-radius: inherit;
+  background: radial-gradient(
+    var(--lamp-reach-small) circle at var(--pointer-x, 50%) var(--pointer-y, 50%),
+    var(--lamp-on-ink),
+    transparent 70%
+  );
+  opacity: 0;
+  transition: opacity var(--duration-settle) ease;
+  pointer-events: none;
+  content: '';
+}
+
 .primary:hover:not(:disabled) {
-  opacity: 0.86;
+  background: var(--primary-hover);
+}
+
+.primary:hover:not(:disabled)::before {
+  opacity: 1;
 }
 
 .secondary {
