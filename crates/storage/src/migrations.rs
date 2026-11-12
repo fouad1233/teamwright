@@ -14,6 +14,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("schema/0002_team_members.sql"),
     include_str!("schema/0003_conversations.sql"),
     include_str!("schema/0004_member_profiles.sql"),
+    include_str!("schema/0005_decisions.sql"),
 ];
 
 /// Applies the migrations a database has not seen yet. Each one runs in its
@@ -79,6 +80,8 @@ mod tests {
             "statuses",
             "task_dependencies",
             "tasks",
+            "turn_decision_options",
+            "turn_decisions",
             "turn_steps",
             "turns",
         ] {
@@ -155,6 +158,47 @@ mod tests {
         assert_eq!(name, "Hardware engineer");
         assert_eq!(model, None);
         assert_eq!(effort, None);
+    }
+
+    #[test]
+    fn a_database_without_decisions_is_brought_up_to_date_with_its_turns_kept() {
+        let mut connection = Connection::open_in_memory().unwrap();
+        for migration in &MIGRATIONS[..4] {
+            connection.execute_batch(migration).unwrap();
+        }
+        connection.pragma_update(None, "user_version", 4).unwrap();
+        connection
+            .execute_batch(
+                "INSERT INTO projects (id, key, name, description, next_task_number, created_at)
+                 VALUES ('p1', 'SSN', 'Smart sensor node', '', 1, '2026-11-11T09:00:00.000Z');
+                 INSERT INTO conversations (id, project_id, member_id, task_id, started_at)
+                 VALUES ('c1', 'p1', NULL, NULL, '2026-11-11T09:00:00.000Z');
+                 INSERT INTO turns (
+                     id, conversation_id, request, origin, state, started_at, answer
+                 )
+                 VALUES (
+                     't1', 'c1', 'Which regulator?', 'message', 'running',
+                     '2026-11-11T09:00:00.000Z', ''
+                 );",
+            )
+            .unwrap();
+
+        migrate(&mut connection).unwrap();
+
+        assert_eq!(
+            version_of(&connection),
+            i64::try_from(MIGRATIONS.len()).unwrap()
+        );
+        let request: String = connection
+            .query_row("SELECT request FROM turns WHERE id = 't1'", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(request, "Which regulator?");
+        let questions: i64 = connection
+            .query_row("SELECT count(*) FROM turn_decisions", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(questions, 0);
     }
 
     #[test]

@@ -79,6 +79,9 @@ pub(crate) enum Entity {
     Turn,
     /// One step of a turn. Its identifier is the turn's and its position.
     TurnStep,
+    /// The question a turn asked the manager, with its options and its
+    /// answer. Its identifier is the turn's.
+    Decision,
 }
 
 impl Entity {
@@ -91,6 +94,7 @@ impl Entity {
             Self::Conversation => "conversation",
             Self::Turn => "turn",
             Self::TurnStep => "turn_step",
+            Self::Decision => "decision",
         }
     }
 }

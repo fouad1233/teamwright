@@ -18,7 +18,7 @@ involved.
 | `projects` | `SqliteProjectRepository` |
 | `tasks` | `SqliteTaskRepository` |
 | `members` | `SqliteMemberRepository` |
-| `conversations` | `SqliteConversationRepository`: conversations, their turns and the steps of the turns |
+| `conversations` | `SqliteConversationRepository`: conversations, their turns, the steps of the turns and the questions they asked the manager |
 | `operations` | The operation log, the hybrid logical clock, `DeviceId` |
 | `codec` | The text forms of moments, dates, identifiers and enumerations |
 | `error` | The crate's internal error type and its conversion to `StorageError` |
@@ -26,7 +26,8 @@ involved.
 ## How data is kept
 
 - **Current state** is in ordinary tables: `projects`, `statuses`, `tasks`,
-  `task_dependencies`, `members`, `conversations`, `turns`, `turn_steps`.
+  `task_dependencies`, `members`, `conversations`, `turns`, `turn_steps`,
+  `turn_decisions`, `turn_decision_options`.
   The schema with its conventions is in
   [`schema/0001_initial.sql`](src/schema/0001_initial.sql); later files in
   that folder add to it.
@@ -62,8 +63,15 @@ involved.
   step that is new or changed (a tool use whose outcome became known) is
   written and logged, and a step the turn no longer has is deleted and
   logged as such. A logged turn does not contain its steps.
+- **The question a turn asked the manager** has a row in `turn_decisions`,
+  keyed by the turn, and its options a row each in `turn_decision_options`.
+  It is written only when it differs from what is stored: when it is asked,
+  and when it is answered. It is logged as the entity `decision` with the
+  identifier of the turn, and the logged state is the whole question: its
+  options and its answer.
 - **Deleting a conversation is logged turn by turn.** Each turn is deleted
-  and logged, which stands for its steps, and then the conversation.
+  and logged, which stands for its steps and its question, and then the
+  conversation.
   Deleting a task or a member in the database would remove or detach the
   conversations through `ON DELETE CASCADE` and `ON DELETE SET NULL`
   without a trace; the use cases delete or detach them through the

@@ -11,13 +11,15 @@ use std::collections::{BTreeSet, HashMap};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError, Weak};
 
 use teamwright_domain::{
-    Assignee, Conversation, ConversationId, DomainError, Member, MemberId, MemberKind, Project,
-    ProjectId, Rank, StatusCategory, Task, TaskId, Turn, TurnId, TurnOrigin, TurnState,
+    Assignee, Conversation, ConversationId, DecisionOption, DecisionRequest, DomainError, Member,
+    MemberId, MemberKind, Project, ProjectId, Rank, StatusCategory, Task, TaskId, Timestamp, Turn,
+    TurnId, TurnOrigin, TurnState,
 };
 
 use crate::agent_runtime::{
-    self, AgentEvent, AgentRuntime, AgentRuntimeError, PermissionProfile, ProgramVersion,
-    RunningTurn, SessionChoice, SessionId, SignIn, TurnFailure, TurnOutcome, TurnRequest,
+    self, AgentEvent, AgentRuntime, AgentRuntimeError, ManagerQuestion, PermissionProfile,
+    ProgramVersion, RunningTurn, SessionChoice, SessionId, SignIn, TurnFailure, TurnOutcome,
+    TurnRequest,
 };
 use crate::error::ApplicationError;
 use crate::ports::{
@@ -274,6 +276,7 @@ impl WorkService {
                 conversation,
                 is_new_conversation: true,
                 earlier_turns: Vec::new(),
+                answered_turn: None,
                 turn,
             },
             &member,
@@ -291,7 +294,8 @@ impl WorkService {
     ///
     /// Returns an error if there is no such conversation, if its specialist
     /// has left the team, if the message is empty, if the specialist is
-    /// working on something, if the program cannot start the turn, or if
+    /// working on something, if it waits for the answer to a question
+    /// (`decision_open`), if the program cannot start the turn, or if
     /// storage fails.
     pub fn reply(
         &self,
@@ -301,11 +305,7 @@ impl WorkService {
         let _work = self.inner.hold_work();
         let ports = &self.inner.ports;
         let conversation = self.inner.require_conversation(conversation_id)?;
-        let member = match conversation.member_id() {
-            Some(member_id) => ports.members.find(member_id)?,
-            None => None,
-        }
-        .ok_or(ApplicationError::SpecialistLeft)?;
+        let member = self.inner.specialist_of(&conversation)?;
         let turn = Turn::start(
             conversation.id(),
             message,
@@ -313,19 +313,115 @@ impl WorkService {
             ports.clock.now(),
         )?;
         self.inner.guard().refuse_while_busy(&member)?;
+        let earlier_turns = ports.conversations.turns_of(conversation.id())?;
+        if open_decision_of(&earlier_turns).is_some() {
+            return Err(ApplicationError::DecisionOpen {
+                name: member.name().to_string(),
+            });
+        }
 
         let project = self.inner.require_project(conversation.project_id())?;
-        let earlier_turns = ports.conversations.turns_of(conversation.id())?;
         self.begin_turn(
             NewTurn {
                 conversation,
                 is_new_conversation: false,
                 earlier_turns,
+                answered_turn: None,
                 turn,
             },
             &member,
             &project,
         )
+    }
+
+    /// Answers the question the specialist of a conversation asked: with
+    /// one of its options (counted from 0), with words of the manager's
+    /// own, or with both. The specialist goes on in the same session, with
+    /// the answer as the request of a new turn.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if there is no such conversation, if no question is
+    /// open in it (`no_decision_open`), if its specialist has left the team,
+    /// if the answer does not fit the question (`rule_broken`), if the
+    /// specialist is working on something, if the program cannot start the
+    /// turn, or if storage fails.
+    pub fn answer_decision(
+        &self,
+        conversation_id: ConversationId,
+        option: Option<usize>,
+        note: &str,
+    ) -> Result<ConversationWithTurns, ApplicationError> {
+        let _work = self.inner.hold_work();
+        let ports = &self.inner.ports;
+        let conversation = self.inner.require_conversation(conversation_id)?;
+        let mut earlier_turns = ports.conversations.turns_of(conversation.id())?;
+        if open_decision_of(&earlier_turns).is_none() {
+            return Err(ApplicationError::NoDecisionOpen);
+        }
+        let member = self.inner.specialist_of(&conversation)?;
+        let now = ports.clock.now();
+        let asked = earlier_turns
+            .last_mut()
+            .ok_or(ApplicationError::NoDecisionOpen)?;
+        asked.answer_decision(option, note, now)?;
+        self.inner.guard().refuse_while_busy(&member)?;
+
+        let words = asked
+            .decision()
+            .and_then(|decision| {
+                let answer = decision.answer()?;
+                let chosen = answer
+                    .option
+                    .and_then(|place| decision.options().get(place));
+                Some(answer_in_words(
+                    chosen.map(|option| option.label.as_str()),
+                    &answer.note,
+                ))
+            })
+            .ok_or(ApplicationError::NoDecisionOpen)?;
+        let answered_turn = asked.clone();
+        let turn = Turn::start(conversation.id(), &words, TurnOrigin::Decision, now)?;
+        let project = self.inner.require_project(conversation.project_id())?;
+        self.begin_turn(
+            NewTurn {
+                conversation,
+                is_new_conversation: false,
+                earlier_turns,
+                answered_turn: Some(answered_turn),
+                turn,
+            },
+            &member,
+            &project,
+        )
+    }
+
+    /// Lists the conversations in which a specialist waits for the manager
+    /// to decide, in every project that is not archived. The one that has
+    /// waited longest, by the end of the turn that asked, comes first.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if storage fails.
+    pub fn waiting_for_manager(&self) -> Result<Vec<ConversationWithTurns>, ApplicationError> {
+        let ports = &self.inner.ports;
+        let mut waiting = Vec::new();
+        for project in ports.projects.list()? {
+            if project.is_archived() {
+                continue;
+            }
+            for conversation in ports.conversations.list_for_project(project.id())? {
+                let turns = ports.conversations.turns_of(conversation.id())?;
+                if open_decision_of(&turns).is_some() {
+                    waiting.push(ConversationWithTurns {
+                        conversation,
+                        turns,
+                    });
+                }
+            }
+        }
+        waiting.sort_by_key(asked_at);
+        Ok(waiting)
     }
 
     /// Asks a specialist something: opens a conversation that is not about
@@ -360,6 +456,7 @@ impl WorkService {
                 conversation,
                 is_new_conversation: true,
                 earlier_turns: Vec::new(),
+                answered_turn: None,
                 turn,
             },
             &member,
@@ -475,6 +572,7 @@ impl WorkService {
             conversation,
             is_new_conversation,
             earlier_turns: mut turns,
+            answered_turn,
             turn,
         } = new_turn;
 
@@ -490,17 +588,19 @@ impl WorkService {
             effort: member.effort(),
             extra_instructions: Some(instructions_for(member, project)),
             permissions: PermissionProfile::specialist(),
-            may_ask_manager: false,
+            may_ask_manager: true,
             readable_folders: Vec::new(),
         };
         let handle = ports
             .runtime
             .start_turn(request, self.listener_for(conversation.id(), turn.id()))?;
 
-        if let Err(error) = self
-            .inner
-            .store_new_turn(&conversation, is_new_conversation, &turn)
-        {
+        if let Err(error) = self.inner.store_new_turn(
+            &conversation,
+            is_new_conversation,
+            answered_turn.as_ref(),
+            &turn,
+        ) {
             // The program must not work on something nobody can see. If the
             // turn was stored, the event of its end records it as stopped.
             handle.stop();
@@ -539,6 +639,9 @@ struct NewTurn {
     /// Whether the conversation is new and has to be stored too.
     is_new_conversation: bool,
     earlier_turns: Vec<Turn>,
+    /// The earlier turn whose question the new turn answers, with the
+    /// answer recorded. It is stored only if the new turn starts.
+    answered_turn: Option<Turn>,
     turn: Turn,
 }
 
@@ -561,15 +664,20 @@ impl Inner {
     }
 
     /// Stores a turn that has just started, with its conversation if that
-    /// is new, and moves the task it is about into work.
+    /// is new and the turn whose question it answers if it answers one, and
+    /// moves the task it is about into work.
     fn store_new_turn(
         &self,
         conversation: &Conversation,
         is_new_conversation: bool,
+        answered_turn: Option<&Turn>,
         turn: &Turn,
     ) -> Result<(), ApplicationError> {
         if is_new_conversation {
             self.ports.conversations.save_conversation(conversation)?;
+        }
+        if let Some(answered_turn) = answered_turn {
+            self.ports.conversations.save_turn(answered_turn)?;
         }
         self.ports.conversations.save_turn(turn)?;
         if let Some(task_id) = conversation.task_id() {
@@ -657,8 +765,9 @@ impl Inner {
             // How much of the plan's limits is used is not shown yet. It
             // belongs with the budgets (decision 0008), which come later.
             AgentEvent::PlanUsage(_) => return Ok(()),
-            // Turns are not given the tool to ask yet.
-            AgentEvent::ManagerAsked(_) => return Ok(()),
+            AgentEvent::ManagerAsked(question) => {
+                decision_from(question).and_then(|decision| turn.ask(decision))
+            }
             AgentEvent::TurnEnded(outcome) => end_turn(turn, &outcome, now),
         };
         if recorded.is_err() {
@@ -668,9 +777,12 @@ impl Inner {
             return Ok(());
         }
 
-        let finished = turn.state() == TurnState::Finished;
+        // Work that ends in a question is not ready to be checked: the task
+        // stays in work until the manager has decided and the specialist
+        // has gone on.
+        let ready_to_check = turn.state() == TurnState::Finished && turn.decision().is_none();
         ports.conversations.save_turn(turn)?;
-        if let Some(task_id) = conversation.task_id().filter(|_| finished) {
+        if let Some(task_id) = conversation.task_id().filter(|_| ready_to_check) {
             self.move_task(task_id, &[StatusCategory::Active], StatusCategory::Review)?;
         }
         ports.listener.conversation_changed(&conversation, &turns);
@@ -732,12 +844,68 @@ impl Inner {
             .ok_or_else(|| not_found("team member", id))
     }
 
+    /// The specialist of a conversation, unless it has left the team.
+    fn specialist_of(&self, conversation: &Conversation) -> Result<Member, ApplicationError> {
+        match conversation.member_id() {
+            Some(member_id) => self.ports.members.find(member_id)?,
+            None => None,
+        }
+        .ok_or(ApplicationError::SpecialistLeft)
+    }
+
     fn require_conversation(&self, id: ConversationId) -> Result<Conversation, ApplicationError> {
         self.ports
             .conversations
             .find(id)?
             .ok_or_else(|| not_found("conversation", id))
     }
+}
+
+/// The question that is open in a conversation: the one its latest turn
+/// ended with, if the manager has not answered it yet.
+fn open_decision_of(turns: &[Turn]) -> Option<&DecisionRequest> {
+    turns
+        .last()
+        .filter(|latest| !latest.is_running())
+        .and_then(Turn::decision)
+        .filter(|decision| decision.is_open())
+}
+
+/// When the open question of a conversation was asked: when its latest turn
+/// ended.
+fn asked_at(conversation: &ConversationWithTurns) -> Timestamp {
+    conversation
+        .turns
+        .last()
+        .and_then(Turn::ended_at)
+        .unwrap_or_else(|| conversation.conversation.started_at())
+}
+
+/// The answer of the manager as the specialist reads it: the option that
+/// was chosen, and what the manager added in words.
+fn answer_in_words(option: Option<&str>, note: &str) -> String {
+    match option {
+        None => note.to_owned(),
+        Some(option) if note.is_empty() => format!("Decision: {option}"),
+        Some(option) => format!("Decision: {option}\n\n{note}"),
+    }
+}
+
+/// The question a specialist asked, as the domain keeps it.
+fn decision_from(question: ManagerQuestion) -> Result<DecisionRequest, DomainError> {
+    DecisionRequest::new(
+        &question.question,
+        &question.reason,
+        question
+            .options
+            .into_iter()
+            .map(|option| DecisionOption {
+                label: option.label,
+                consequence: option.consequence,
+            })
+            .collect(),
+        question.recommended,
+    )
 }
 
 /// Ends a turn the way the program says it ended.
@@ -994,8 +1162,9 @@ pub fn instructions_for(member: &Member, project: &Project) -> String {
              task needs one of these, say so in your report instead of working around it.",
             "- Decide small things yourself, and write down what you decided. A decision that \
              changes what is built, what it costs or when it is ready is the manager's: do not \
-             guess, but say exactly what you need to know, which options you see, and which \
-             one you recommend.",
+             guess, but ask with the tool ask_manager (the question, why it matters, two to \
+             four options with what each leads to, and the one you recommend), then end your \
+             turn. The answer comes as your next message.",
             "- Write in plain words. Your manager reads your report first, and may read nothing \
              else.",
         ]
@@ -1014,7 +1183,7 @@ mod tests {
     };
 
     use super::*;
-    use crate::agent_runtime::{ModelUsage, PermissionDenial, SessionStarted};
+    use crate::agent_runtime::{ModelUsage, PermissionDenial, QuestionOption, SessionStarted};
     use crate::in_memory::{
         FixedProjectFolders, InMemoryConversationRepository, InMemoryMemberRepository,
         InMemoryProjectRepository, InMemoryTaskRepository, ManualClock, RecordingWorkListener,
@@ -1242,6 +1411,79 @@ mod tests {
         }
     }
 
+    /// What the specialist reads when it waits for the manager.
+    const WAITING: &str = "I am waiting for your decision.";
+
+    /// The question a specialist asks before it works on a task whose
+    /// title says that something is to be chosen, as in the demo.
+    fn question_about(title: &str) -> ManagerQuestion {
+        ManagerQuestion {
+            question: format!("Which way should I take for \"{title}\"?"),
+            reason: "It changes what is built.".to_owned(),
+            options: vec![
+                QuestionOption {
+                    label: "The proven way".to_owned(),
+                    consequence: "A larger board.".to_owned(),
+                },
+                QuestionOption {
+                    label: "The compact way".to_owned(),
+                    consequence: "A new part to test.".to_owned(),
+                },
+            ],
+            recommended: Some(0),
+        }
+    }
+
+    impl Workspace {
+        /// Plays a whole turn, counted from 0, that asks the manager and
+        /// ends.
+        fn play_turn_that_asks(&self, turn: usize, title: &str) {
+            self.deliver(turn, session_started());
+            self.deliver(turn, AgentEvent::ManagerAsked(question_about(title)));
+            self.deliver(
+                turn,
+                AgentEvent::Text {
+                    text: WAITING.to_owned(),
+                },
+            );
+            self.deliver(turn, ended(None, WAITING));
+        }
+
+        /// Starts a task given to the engineer and lets the specialist
+        /// work on it until it has asked its question.
+        fn asked_about(&self, title: &str) -> (Task, ConversationWithTurns) {
+            let task = self.task_for(title, Some(Assignee::Member(self.engineer.id())));
+            let started = self.work.start_work(task.id()).unwrap();
+            let turn = self.ports.runtime.requests().len() - 1;
+            self.play_turn_that_asks(turn, title);
+            (task, self.conversation(started.conversation.id()))
+        }
+
+        /// Lets the specialist work on "Choose the battery" until it has
+        /// asked its question.
+        fn asked(&self) -> (Task, ConversationWithTurns) {
+            self.asked_about("Choose the battery")
+        }
+
+        fn conversation(&self, id: ConversationId) -> ConversationWithTurns {
+            self.work
+                .list_for_project(self.project.id())
+                .unwrap()
+                .into_iter()
+                .find(|listed| listed.conversation.id() == id)
+                .unwrap()
+        }
+
+        fn waiting(&self) -> Vec<ConversationId> {
+            self.work
+                .waiting_for_manager()
+                .unwrap()
+                .iter()
+                .map(|waiting| waiting.conversation.id())
+                .collect()
+        }
+    }
+
     fn ended(failure: Option<TurnFailure>, final_text: &str) -> AgentEvent {
         AgentEvent::TurnEnded(TurnOutcome {
             session_id: Some(SessionId::parse(SESSION).unwrap()),
@@ -1367,6 +1609,8 @@ mod tests {
         );
         assert_eq!(request.session, SessionChoice::New);
         assert_eq!(request.permissions, PermissionProfile::specialist());
+        assert!(request.may_ask_manager);
+        assert!(request.readable_folders.is_empty());
         assert_eq!(request.model, None);
         assert_eq!(request.effort, None);
         assert_eq!(
@@ -1967,6 +2211,324 @@ mod tests {
         assert_eq!(error.to_string(), "Test engineer is not an AI specialist");
     }
 
+    // Asking the manager to decide
+
+    #[test]
+    fn ends_the_turn_with_a_question_instead_of_a_report_and_leaves_the_task_in_work() {
+        let workspace = workspace();
+
+        let (choice, conversation) = workspace.asked();
+
+        let turn = &conversation.turns[0];
+        assert_eq!(turn.state(), TurnState::Finished);
+        let decision = turn.decision().unwrap();
+        assert_eq!(
+            decision.question(),
+            "Which way should I take for \"Choose the battery\"?"
+        );
+        assert_eq!(decision.recommended(), Some(0));
+        assert_eq!(decision.answer(), None);
+        let labels: Vec<&str> = decision
+            .options()
+            .iter()
+            .map(|option| option.label.as_str())
+            .collect();
+        assert_eq!(labels, ["The proven way", "The compact way"]);
+        assert_eq!(
+            workspace.stored_task(choice.id()).status_id(),
+            workspace.status_of(StatusCategory::Active)
+        );
+    }
+
+    #[test]
+    fn asks_nothing_in_a_turn_that_ends_in_a_report() {
+        let workspace = workspace();
+        workspace.work.start_work(workspace.schematic.id()).unwrap();
+
+        workspace.play_whole_turn(0);
+
+        assert_eq!(workspace.only_conversation().turns[0].decision(), None);
+    }
+
+    #[test]
+    fn lists_the_conversations_that_wait_for_the_manager_the_longest_wait_first() {
+        let workspace = workspace();
+        let writer = workspace
+            .team
+            .add(NewMember {
+                project_id: workspace.project.id(),
+                name: "Writer".to_owned(),
+                kind: MemberKind::Agent,
+                responsibility: String::new(),
+                model: None,
+                effort: None,
+            })
+            .unwrap();
+        let second = workspace.task_for("Select the paper", Some(Assignee::Member(writer.id())));
+        let (_, first) = workspace.asked();
+        workspace.ports.clock.advance(TimeDelta::seconds(60));
+        let later = workspace.work.start_work(second.id()).unwrap();
+        assert_eq!(workspace.waiting(), [first.conversation.id()]);
+
+        workspace.play_turn_that_asks(1, "Select the paper");
+
+        assert_eq!(
+            workspace.waiting(),
+            [first.conversation.id(), later.conversation.id()]
+        );
+    }
+
+    #[test]
+    fn does_not_list_a_conversation_of_a_project_that_is_put_away() {
+        let workspace = workspace();
+        workspace.asked();
+
+        workspace.projects.archive(workspace.project.id()).unwrap();
+
+        assert!(workspace.waiting().is_empty());
+    }
+
+    #[test]
+    fn takes_an_option_as_the_answer_and_sends_the_specialist_on_with_it() {
+        let workspace = workspace();
+        let (choice, conversation) = workspace.asked();
+        workspace.ports.clock.advance(TimeDelta::seconds(60));
+
+        let answered = workspace
+            .work
+            .answer_decision(conversation.conversation.id(), Some(1), "")
+            .unwrap();
+
+        assert_eq!(answered.turns.len(), 2);
+        assert_eq!(
+            answered.turns[0]
+                .decision()
+                .and_then(DecisionRequest::answer),
+            Some(&teamwright_domain::DecisionAnswer {
+                option: Some(1),
+                note: String::new(),
+                at: workspace.ports.clock.now(),
+            })
+        );
+        let turn = &answered.turns[1];
+        assert_eq!(turn.origin(), TurnOrigin::Decision);
+        assert_eq!(turn.state(), TurnState::Running);
+        assert_eq!(turn.request(), "Decision: The compact way");
+        assert_eq!(turn.decision(), None);
+        assert_eq!(
+            workspace.conversation(conversation.conversation.id()),
+            answered
+        );
+        assert!(workspace.waiting().is_empty());
+        let request = &workspace.ports.runtime.requests()[1];
+        assert_eq!(request.prompt, "Decision: The compact way");
+        assert_eq!(
+            request.session,
+            SessionChoice::Resume(SessionId::parse(SESSION).unwrap())
+        );
+
+        workspace.play_whole_turn(1);
+        assert_eq!(
+            workspace.stored_task(choice.id()).status_id(),
+            workspace.status_of(StatusCategory::Review)
+        );
+    }
+
+    #[test]
+    fn takes_words_of_the_manager_with_an_option_or_instead_of_one() {
+        let workspace = workspace();
+        let (_, conversation) = workspace.asked();
+        let with_both = workspace
+            .work
+            .answer_decision(
+                conversation.conversation.id(),
+                Some(0),
+                "  But keep the connector.  ",
+            )
+            .unwrap();
+        assert_eq!(
+            with_both.turns[1].request(),
+            "Decision: The proven way\n\nBut keep the connector."
+        );
+        let answer = with_both.turns[0]
+            .decision()
+            .and_then(DecisionRequest::answer)
+            .unwrap();
+        assert_eq!(answer.option, Some(0));
+        assert_eq!(answer.note, "But keep the connector.");
+        workspace.play_whole_turn(1);
+
+        let (_, second) = workspace.asked_about("Decide on the color");
+        let in_words = workspace
+            .work
+            .answer_decision(
+                second.conversation.id(),
+                None,
+                "Neither. Use the gray we already have.",
+            )
+            .unwrap();
+        assert_eq!(
+            in_words.turns[1].request(),
+            "Neither. Use the gray we already have."
+        );
+        assert_eq!(
+            in_words.turns[0]
+                .decision()
+                .and_then(DecisionRequest::answer)
+                .map(|answer| answer.option),
+            Some(None)
+        );
+    }
+
+    #[test]
+    fn refuses_an_answer_that_names_no_option_and_says_nothing() {
+        let workspace = workspace();
+        let (_, conversation) = workspace.asked();
+
+        let error = workspace
+            .work
+            .answer_decision(conversation.conversation.id(), None, "  ")
+            .unwrap_err();
+
+        assert_eq!(error.code(), "rule_broken");
+        assert_eq!(
+            error.to_string(),
+            "an answer names one of the options or says something in words"
+        );
+    }
+
+    #[test]
+    fn refuses_an_option_that_the_question_does_not_have() {
+        let workspace = workspace();
+        let (_, conversation) = workspace.asked();
+
+        let error = workspace
+            .work
+            .answer_decision(conversation.conversation.id(), Some(2), "")
+            .unwrap_err();
+
+        assert_eq!(error.code(), "rule_broken");
+        assert_eq!(error.to_string(), "the question has no such option");
+        assert_eq!(workspace.waiting().len(), 1);
+        assert_eq!(workspace.ports.runtime.requests().len(), 1);
+    }
+
+    #[test]
+    fn refuses_an_ordinary_message_while_a_question_is_open() {
+        let workspace = workspace();
+        let (_, conversation) = workspace.asked();
+
+        let error = workspace
+            .work
+            .reply(conversation.conversation.id(), "Go on.")
+            .unwrap_err();
+
+        assert_eq!(error.code(), "decision_open");
+        assert_eq!(
+            error.to_string(),
+            "Hardware engineer waits for a decision: answer its question first"
+        );
+    }
+
+    #[test]
+    fn refuses_an_answer_where_nothing_was_asked_or_was_answered_already() {
+        let workspace = workspace();
+        let report = workspace.work.start_work(workspace.schematic.id()).unwrap();
+        workspace.play_whole_turn(0);
+        let nothing_asked = workspace
+            .work
+            .answer_decision(report.conversation.id(), Some(0), "")
+            .unwrap_err();
+        assert_eq!(nothing_asked.code(), "no_decision_open");
+        assert_eq!(
+            nothing_asked.to_string(),
+            "no question is open in this conversation"
+        );
+
+        let (_, conversation) = workspace.asked();
+        let id = conversation.conversation.id();
+        workspace.work.answer_decision(id, Some(0), "").unwrap();
+        workspace.play_whole_turn(2);
+        let twice = workspace.work.answer_decision(id, Some(1), "").unwrap_err();
+        assert_eq!(twice.code(), "no_decision_open");
+    }
+
+    #[test]
+    fn lets_the_specialist_start_on_something_else_while_it_waits_for_a_decision() {
+        let workspace = workspace();
+        workspace.asked();
+
+        let other = workspace.work.start_work(workspace.schematic.id()).unwrap();
+
+        assert_eq!(other.turns[0].state(), TurnState::Running);
+    }
+
+    #[test]
+    fn refuses_an_answer_while_the_specialist_works_on_something_else() {
+        let workspace = workspace();
+        let (_, conversation) = workspace.asked();
+        workspace.work.start_work(workspace.schematic.id()).unwrap();
+
+        let error = workspace
+            .work
+            .answer_decision(conversation.conversation.id(), Some(0), "")
+            .unwrap_err();
+
+        assert_eq!(error.code(), "member_busy");
+        assert_eq!(workspace.waiting(), [conversation.conversation.id()]);
+    }
+
+    #[test]
+    fn refuses_an_answer_to_a_specialist_that_left_the_team() {
+        let workspace = workspace();
+        let (_, conversation) = workspace.asked();
+        workspace.team.remove(workspace.engineer.id()).unwrap();
+
+        let error = workspace
+            .work
+            .answer_decision(conversation.conversation.id(), Some(0), "")
+            .unwrap_err();
+
+        assert_eq!(error.code(), "no_specialist");
+    }
+
+    #[test]
+    fn an_answer_the_program_could_not_act_on_is_not_kept() {
+        let workspace = workspace();
+        let (_, conversation) = workspace.asked();
+        workspace
+            .ports
+            .runtime
+            .refuse_next_turn(AgentRuntimeError::NotInstalled);
+
+        let error = workspace
+            .work
+            .answer_decision(conversation.conversation.id(), Some(0), "")
+            .unwrap_err();
+
+        assert_eq!(error.code(), "agent_not_installed");
+        assert_eq!(workspace.waiting(), [conversation.conversation.id()]);
+    }
+
+    #[test]
+    fn a_second_question_in_one_turn_is_not_recorded() {
+        let workspace = workspace();
+        let choice = workspace.task_for(
+            "Choose the battery",
+            Some(Assignee::Member(workspace.engineer.id())),
+        );
+        workspace.work.start_work(choice.id()).unwrap();
+
+        workspace.deliver(0, AgentEvent::ManagerAsked(question_about("First")));
+        workspace.deliver(0, AgentEvent::ManagerAsked(question_about("Second")));
+
+        let turn = &workspace.only_conversation().turns[0];
+        assert_eq!(
+            turn.decision().map(DecisionRequest::question),
+            Some("Which way should I take for \"First\"?")
+        );
+    }
+
     // What happens to the record of the work
 
     #[test]
@@ -2302,6 +2864,8 @@ mod tests {
         );
         assert_eq!(lines.len(), 9);
         assert!(lines[8].starts_with("- Write in plain words."));
+        assert!(lines[7].contains("ask with the tool ask_manager"));
+        assert!(lines[7].ends_with("The answer comes as your next message."));
         assert_eq!(shorter.lines().count(), 8);
         assert!(!shorter.contains("What you are on the team for"));
     }

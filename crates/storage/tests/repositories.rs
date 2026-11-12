@@ -12,15 +12,17 @@ use teamwright_application::in_memory::{
     FixedProjectFolders, ManualClock, RecordingWorkListener, ScriptedRuntime,
 };
 use teamwright_application::{
-    AgentEvent, ConversationRepository, MemberRepository, ModelUsage, NewMember, NewProject,
-    NewTask, ProjectRepository, ProjectService, SessionId, StatusProperties, TaskRepository,
-    TaskService, TeamService, TurnOutcome, WorkPorts, WorkService, WorkflowTemplate,
+    AgentEvent, ConversationRepository, ManagerQuestion, MemberRepository, ModelUsage, NewMember,
+    NewProject, NewTask, ProjectRepository, ProjectService, QuestionOption, SessionId,
+    StatusProperties, TaskRepository, TaskService, TeamService, TurnOutcome, WorkPorts,
+    WorkService, WorkflowTemplate,
 };
 use teamwright_domain::{
-    Assignee, CalendarDate, Color, Conversation, ConversationId, Effort, Member, MemberId,
-    MemberKind, MemberName, MemberProfile, ModelName, Priority, Project, ProjectKey, ProjectName,
-    Rank, Schedule, Status, StatusCategory, StatusId, StatusName, StepContent, Task, TaskDraft,
-    TaskId, TaskTitle, Timestamp, TokenCounts, ToolOutcome, Turn, TurnOrigin, TurnState, Workflow,
+    Assignee, CalendarDate, Color, Conversation, ConversationId, DecisionOption, DecisionRequest,
+    Effort, Member, MemberId, MemberKind, MemberName, MemberProfile, ModelName, Priority, Project,
+    ProjectKey, ProjectName, Rank, Schedule, Status, StatusCategory, StatusId, StatusName,
+    StepContent, Task, TaskDraft, TaskId, TaskTitle, Timestamp, TokenCounts, ToolOutcome, Turn,
+    TurnOrigin, TurnState, Workflow,
 };
 use teamwright_storage::{
     Database, Operation, SqliteConversationRepository, SqliteMemberRepository,
@@ -1011,6 +1013,127 @@ fn a_finished_turn_keeps_its_tokens_and_a_tool_its_outcome() {
     assert!(store.conversations.running_turns().unwrap().is_empty());
 }
 
+/// A finished turn that asked the manager which battery to use.
+fn turn_that_asked(conversation: &Conversation) -> Turn {
+    let mut turn = running_turn(conversation, "Choose the battery", moment(9));
+    turn.ask(
+        DecisionRequest::new(
+            "Which battery?",
+            "It sets the size of the board.",
+            vec![
+                DecisionOption {
+                    label: "The proven way".to_owned(),
+                    consequence: "A larger board.".to_owned(),
+                },
+                DecisionOption {
+                    label: "The compact way".to_owned(),
+                    consequence: String::new(),
+                },
+                DecisionOption {
+                    label: "Ask the supplier".to_owned(),
+                    consequence: "A week of waiting.".to_owned(),
+                },
+            ],
+            Some(2),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    turn.finish("I am waiting for your decision.", tokens(), moment(10))
+        .unwrap();
+    turn
+}
+
+#[test]
+fn a_turn_with_a_question_is_found_again_unchanged() {
+    let store = Store::in_memory();
+    let (_, _, _, conversation) = stored_conversation(&store);
+    let turn = turn_that_asked(&conversation);
+
+    store.conversations.save_turn(&turn).unwrap();
+
+    assert_eq!(
+        store.conversations.turns_of(conversation.id()).unwrap(),
+        [turn]
+    );
+}
+
+#[test]
+fn a_turn_with_an_answered_question_is_found_again_unchanged() {
+    let store = Store::in_memory();
+    let (_, _, _, conversation) = stored_conversation(&store);
+    let mut by_option = turn_that_asked(&conversation);
+    by_option
+        .answer_decision(Some(0), "But keep the connector.", moment(11))
+        .unwrap();
+    let mut in_words = turn_that_asked(&conversation);
+    in_words
+        .answer_decision(None, "Neither: use the one we have.", moment(12))
+        .unwrap();
+
+    store.conversations.save_turn(&by_option).unwrap();
+    store.conversations.save_turn(&in_words).unwrap();
+
+    let found = store.conversations.turns_of(conversation.id()).unwrap();
+    assert_eq!(found.len(), 2);
+    assert!(found.contains(&by_option));
+    assert!(found.contains(&in_words));
+}
+
+#[test]
+fn asking_and_answering_are_logged_with_the_whole_question() {
+    let store = Store::in_memory();
+    let (_, _, _, conversation) = stored_conversation(&store);
+    let mut turn = running_turn(&conversation, "Choose the battery", moment(9));
+    store.conversations.save_turn(&turn).unwrap();
+    let asked = turn_that_asked(&conversation);
+    // The same turn, now with the question and its end.
+    turn = Turn::restore(teamwright_domain::TurnSnapshot {
+        id: turn.id(),
+        conversation_id: conversation.id(),
+        request: asked.request().to_owned(),
+        origin: asked.origin(),
+        state: asked.state(),
+        started_at: asked.started_at(),
+        ended_at: asked.ended_at(),
+        steps: asked.steps().to_vec(),
+        answer: asked.answer().to_owned(),
+        failure: None,
+        model: None,
+        tokens: asked.tokens(),
+        decision: asked.decision().cloned(),
+    });
+    let start = store.database.operations().unwrap().len();
+
+    store.conversations.save_turn(&turn).unwrap();
+    let after_asking = logged_after(&store, start);
+    store.conversations.save_turn(&turn).unwrap();
+    let after_nothing = logged_after(&store, start + after_asking.len());
+    turn.answer_decision(Some(1), "", moment(11)).unwrap();
+    store.conversations.save_turn(&turn).unwrap();
+    let after_answering = logged_after(&store, start + after_asking.len());
+
+    assert_eq!(
+        after_asking,
+        pairs(&[("turn", "upsert"), ("decision", "upsert")])
+    );
+    assert!(after_nothing.is_empty());
+    assert_eq!(after_answering, pairs(&[("decision", "upsert")]));
+    let log = store.database.operations().unwrap();
+    let last = log.last().unwrap();
+    assert_eq!(last.entity_id, turn.id().to_string());
+    let state: serde_json::Value = serde_json::from_str(last.payload.as_deref().unwrap()).unwrap();
+    assert_eq!(state["question"], "Which battery?");
+    assert_eq!(state["recommended"], 2);
+    assert_eq!(state["options"][1]["label"], "The compact way");
+    assert_eq!(state["answered_option"], 1);
+    assert_eq!(state["answer_note"], "");
+    assert_eq!(
+        store.conversations.turns_of(conversation.id()).unwrap(),
+        [turn]
+    );
+}
+
 #[test]
 fn a_conversation_without_its_member_is_kept_and_logged() {
     let store = Store::in_memory();
@@ -1565,6 +1688,49 @@ fn the_work_of_a_specialist_is_kept_on_the_real_database() {
         .turns_of(started.conversation.id())
         .unwrap();
     assert_eq!(turns[1].state(), TurnState::Failed);
+
+    // A third turn asks the manager to decide, and the manager answers.
+    let id = started.conversation.id();
+    work.reply(id, "Choose the regulator.").unwrap();
+    runtime.deliver(
+        2,
+        AgentEvent::ManagerAsked(ManagerQuestion {
+            question: "Which regulator?".to_owned(),
+            reason: String::new(),
+            options: ["The smaller one", "The cheaper one"]
+                .map(|label| QuestionOption {
+                    label: label.to_owned(),
+                    consequence: String::new(),
+                })
+                .to_vec(),
+            recommended: Some(0),
+        }),
+    );
+    runtime.deliver(
+        2,
+        AgentEvent::TurnEnded(TurnOutcome {
+            session_id: Some(SessionId::parse("abc-123").unwrap()),
+            failure: None,
+            final_text: "I am waiting for your decision.".to_owned(),
+            usage: Vec::new(),
+            estimated_cost_usd: None,
+            duration: None,
+            model_calls: None,
+            permission_denials: Vec::new(),
+        }),
+    );
+    assert_eq!(work.waiting_for_manager().unwrap().len(), 1);
+    work.answer_decision(id, Some(1), "").unwrap();
+    work.stop(id).unwrap();
+    let turns = conversation_repository.turns_of(id).unwrap();
+    let answer = turns[2]
+        .decision()
+        .and_then(DecisionRequest::answer)
+        .unwrap();
+    assert_eq!(answer.option, Some(1));
+    assert_eq!(turns[3].origin(), TurnOrigin::Decision);
+    assert_eq!(turns[3].request(), "Decision: The cheaper one");
+    assert!(work.waiting_for_manager().unwrap().is_empty());
 
     // The specialist leaves, the task goes, and the log shows each step.
     team.remove(engineer.id()).unwrap();

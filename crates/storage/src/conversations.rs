@@ -4,7 +4,9 @@
 //! A turn is saved after every event of the agent program, so saving it is
 //! made cheap: its row is written only when it changed, and of its steps
 //! only those that are new or changed (a tool use whose outcome is now
-//! known) are written. Each written row is logged; an unchanged one is not.
+//! known) are written. The question the turn asked the manager is written
+//! when it is new or has been answered. Each written row is logged; an
+//! unchanged one is not.
 
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
@@ -13,8 +15,9 @@ use rusqlite::{Connection, OptionalExtension, Row, Transaction, named_params};
 use serde::Serialize;
 use teamwright_application::{ConversationRepository, StorageError};
 use teamwright_domain::{
-    Conversation, ConversationId, ConversationSnapshot, ProjectId, Step, StepContent, StepKind,
-    TokenCounts, Turn, TurnSnapshot,
+    Conversation, ConversationId, ConversationSnapshot, DecisionAnswer, DecisionOption,
+    DecisionRequest, DecisionSnapshot, ProjectId, Step, StepContent, StepKind, TokenCounts, Turn,
+    TurnSnapshot,
 };
 
 use crate::codec;
@@ -85,6 +88,29 @@ const UPSERT_STEP: &str = "
         tool = excluded.tool,
         summary = excluded.summary,
         outcome = excluded.outcome";
+
+const UPSERT_DECISION: &str = "
+    INSERT INTO turn_decisions (
+        turn_id, question, reason, recommended, answered_option, answer_note, answered_at
+    )
+    VALUES (
+        :turn_id, :question, :reason, :recommended, :answered_option, :answer_note,
+        :answered_at
+    )
+    ON CONFLICT (turn_id) DO UPDATE SET
+        question = excluded.question,
+        reason = excluded.reason,
+        recommended = excluded.recommended,
+        answered_option = excluded.answered_option,
+        answer_note = excluded.answer_note,
+        answered_at = excluded.answered_at";
+
+const UPSERT_DECISION_OPTION: &str = "
+    INSERT INTO turn_decision_options (turn_id, position, label, consequence)
+    VALUES (:turn_id, :position, :label, :consequence)
+    ON CONFLICT (turn_id, position) DO UPDATE SET
+        label = excluded.label,
+        consequence = excluded.consequence";
 
 /// A conversation as the database and the operation log keep it.
 #[derive(Debug, Serialize)]
@@ -197,8 +223,13 @@ impl TurnRecord {
         })
     }
 
-    /// Rebuilds the turn with its steps, checking the stored values.
-    fn into_turn(self, steps: Vec<StepRecord>) -> Result<Turn, DatabaseError> {
+    /// Rebuilds the turn with its steps and its question, checking the
+    /// stored values.
+    fn into_turn(
+        self,
+        steps: Vec<StepRecord>,
+        decision: Option<DecisionRecord>,
+    ) -> Result<Turn, DatabaseError> {
         let tokens = self.tokens()?;
         let steps = steps
             .into_iter()
@@ -221,8 +252,7 @@ impl TurnRecord {
             failure: self.failure,
             model: self.model,
             tokens,
-            // Questions to the manager are not stored yet: nothing asks one.
-            decision: None,
+            decision: decision.map(DecisionRecord::into_decision).transpose()?,
         }))
     }
 
@@ -361,6 +391,84 @@ impl StepRecord {
     }
 }
 
+/// The question a turn asked the manager, with its options and its answer,
+/// as the database and the operation log keep it.
+#[derive(Debug, PartialEq, Eq, Serialize)]
+struct DecisionRecord {
+    turn_id: String,
+    question: String,
+    reason: String,
+    recommended: Option<i64>,
+    options: Vec<DecisionOptionRecord>,
+    answered_option: Option<i64>,
+    answer_note: Option<String>,
+    answered_at: Option<String>,
+}
+
+/// One option of a question, in its place.
+#[derive(Debug, PartialEq, Eq, Serialize)]
+struct DecisionOptionRecord {
+    label: String,
+    consequence: String,
+}
+
+impl DecisionRecord {
+    /// Takes the stored form of the question of a turn, if it asked one.
+    fn of(turn: &Turn) -> Option<Self> {
+        let decision = turn.decision()?;
+        let answer = decision.answer();
+        Some(Self {
+            turn_id: turn.id().to_string(),
+            question: decision.question().to_owned(),
+            reason: decision.reason().to_owned(),
+            recommended: decision.recommended().map(stored_position),
+            options: decision
+                .options()
+                .iter()
+                .map(|option| DecisionOptionRecord {
+                    label: option.label.clone(),
+                    consequence: option.consequence.clone(),
+                })
+                .collect(),
+            answered_option: answer.and_then(|answer| answer.option).map(stored_position),
+            answer_note: answer.map(|answer| answer.note.clone()),
+            answered_at: answer.map(|answer| codec::moment_to_text(answer.at)),
+        })
+    }
+
+    /// Rebuilds the question, checking the stored values.
+    fn into_decision(self) -> Result<DecisionRequest, DatabaseError> {
+        let answer = match (self.answered_at, self.answer_note) {
+            (None, None) if self.answered_option.is_none() => None,
+            (Some(at), Some(note)) => Some(DecisionAnswer {
+                option: self.answered_option.map(position_from_store).transpose()?,
+                note,
+                at: codec::moment_from_text(&at)?,
+            }),
+            _ => {
+                return Err(DatabaseError::Damaged(format!(
+                    "the question of the turn {} has some of its answer but not all",
+                    self.turn_id
+                )));
+            }
+        };
+        Ok(DecisionRequest::restore(DecisionSnapshot {
+            question: self.question,
+            reason: self.reason,
+            options: self
+                .options
+                .into_iter()
+                .map(|option| DecisionOption {
+                    label: option.label,
+                    consequence: option.consequence,
+                })
+                .collect(),
+            recommended: self.recommended.map(position_from_store).transpose()?,
+            answer,
+        }))
+    }
+}
+
 /// Stores the conversations in the SQLite database.
 #[derive(Debug, Clone)]
 pub struct SqliteConversationRepository {
@@ -397,6 +505,7 @@ impl ConversationRepository for SqliteConversationRepository {
     fn save_turn(&self, turn: &Turn) -> Result<(), StorageError> {
         let record = TurnRecord::of(turn);
         let steps = StepRecord::all_of(turn);
+        let decision = DecisionRecord::of(turn);
         self.database.write(|transaction, operations| {
             if stored_turn(transaction, &record.id)?.as_ref() != Some(&record) {
                 write_turn(transaction, &record)?;
@@ -425,6 +534,15 @@ impl ConversationRepository for SqliteConversationRepository {
                     },
                 )?;
                 operations.record_delete(Entity::TurnStep, &obsolete.log_id())?;
+            }
+
+            // A turn never loses its question, so there is nothing to
+            // remove: only a new or a newly answered question is written.
+            if let Some(decision) = &decision
+                && stored_decision(transaction, &record.id)?.as_ref() != Some(decision)
+            {
+                write_decision(transaction, decision)?;
+                operations.record_upsert(Entity::Decision, &decision.turn_id, decision)?;
             }
             Ok(())
         })
@@ -466,7 +584,8 @@ impl ConversationRepository for SqliteConversationRepository {
                 .into_iter()
                 .map(|record| {
                     let steps = steps_by_turn.remove(&record.id).unwrap_or_default();
-                    record.into_turn(steps)
+                    let decision = stored_decision(connection, &record.id)?;
+                    record.into_turn(steps, decision)
                 })
                 .collect()
         })
@@ -502,7 +621,8 @@ impl ConversationRepository for SqliteConversationRepository {
                 .into_iter()
                 .map(|record| {
                     let steps = steps_of(connection, &record.id)?;
-                    record.into_turn(steps)
+                    let decision = stored_decision(connection, &record.id)?;
+                    record.into_turn(steps, decision)
                 })
                 .collect()
         })
@@ -613,6 +733,88 @@ fn write_step(transaction: &Transaction<'_>, record: &StepRecord) -> Result<(), 
     Ok(())
 }
 
+/// Writes the question of a turn with its options.
+fn write_decision(
+    transaction: &Transaction<'_>,
+    record: &DecisionRecord,
+) -> Result<(), DatabaseError> {
+    transaction.execute(
+        UPSERT_DECISION,
+        named_params! {
+            ":turn_id": record.turn_id,
+            ":question": record.question,
+            ":reason": record.reason,
+            ":recommended": record.recommended,
+            ":answered_option": record.answered_option,
+            ":answer_note": record.answer_note,
+            ":answered_at": record.answered_at,
+        },
+    )?;
+    for (position, option) in (0_i64..).zip(&record.options) {
+        transaction.execute(
+            UPSERT_DECISION_OPTION,
+            named_params! {
+                ":turn_id": record.turn_id,
+                ":position": position,
+                ":label": option.label,
+                ":consequence": option.consequence,
+            },
+        )?;
+    }
+    transaction.execute(
+        "DELETE FROM turn_decision_options WHERE turn_id = :turn_id AND position >= :count",
+        named_params! {
+            ":turn_id": record.turn_id,
+            ":count": stored_position(record.options.len()),
+        },
+    )?;
+    Ok(())
+}
+
+/// Reads the stored question of one turn with its options, if it asked
+/// one.
+fn stored_decision(
+    connection: &Connection,
+    turn_id: &str,
+) -> Result<Option<DecisionRecord>, DatabaseError> {
+    let Some(mut record) = connection
+        .query_row(
+            "SELECT turn_id, question, reason, recommended, answered_option, answer_note,
+                    answered_at
+             FROM turn_decisions WHERE turn_id = :turn_id",
+            named_params! { ":turn_id": turn_id },
+            |row| {
+                Ok(DecisionRecord {
+                    turn_id: row.get("turn_id")?,
+                    question: row.get("question")?,
+                    reason: row.get("reason")?,
+                    recommended: row.get("recommended")?,
+                    options: Vec::new(),
+                    answered_option: row.get("answered_option")?,
+                    answer_note: row.get("answer_note")?,
+                    answered_at: row.get("answered_at")?,
+                })
+            },
+        )
+        .optional()?
+    else {
+        return Ok(None);
+    };
+    record.options = connection
+        .prepare(
+            "SELECT label, consequence FROM turn_decision_options
+             WHERE turn_id = :turn_id ORDER BY position",
+        )?
+        .query_map(named_params! { ":turn_id": turn_id }, |row| {
+            Ok(DecisionOptionRecord {
+                label: row.get("label")?,
+                consequence: row.get("consequence")?,
+            })
+        })?
+        .collect::<Result<_, _>>()?;
+    Ok(Some(record))
+}
+
 /// Reads the stored row of one turn, if there is one.
 fn stored_turn(connection: &Connection, id: &str) -> Result<Option<TurnRecord>, DatabaseError> {
     let query = format!("SELECT {TURN_COLUMNS} FROM turns WHERE id = :id");
@@ -680,6 +882,19 @@ fn step_log_id(turn_id: &str, position: i64) -> String {
 /// as that largest one.
 fn stored_count(count: u64) -> i64 {
     i64::try_from(count).unwrap_or(i64::MAX)
+}
+
+/// The place of an option as SQLite keeps it. A question has at most four
+/// options, so the place always fits.
+fn stored_position(position: usize) -> i64 {
+    i64::try_from(position).unwrap_or(i64::MAX)
+}
+
+/// Reads the place of an option that SQLite keeps.
+fn position_from_store(position: i64) -> Result<usize, DatabaseError> {
+    usize::try_from(position).map_err(|reason| {
+        DatabaseError::damaged("the place of an option", &position.to_string(), reason)
+    })
 }
 
 /// Reads a count of tokens that SQLite keeps.
@@ -780,6 +995,49 @@ mod tests {
             .unwrap();
 
         assert_eq!(count_of_steps(&database), 0);
+    }
+
+    #[test]
+    fn the_question_of_a_turn_goes_with_its_conversation() {
+        let (database, conversation, mut turn) = database_with_a_turn();
+        turn.ask(
+            DecisionRequest::new(
+                "Which regulator?",
+                "",
+                vec![
+                    DecisionOption {
+                        label: "The smaller one".to_owned(),
+                        consequence: String::new(),
+                    },
+                    DecisionOption {
+                        label: "The cheaper one".to_owned(),
+                        consequence: String::new(),
+                    },
+                ],
+                None,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        let repository = SqliteConversationRepository::new(database.clone());
+        repository.save_turn(&turn).unwrap();
+        let rows_of_questions = || -> i64 {
+            database
+                .read(|connection| {
+                    Ok(connection.query_row(
+                        "SELECT (SELECT count(*) FROM turn_decisions)
+                              + (SELECT count(*) FROM turn_decision_options)",
+                        [],
+                        |row| row.get(0),
+                    )?)
+                })
+                .unwrap()
+        };
+        assert_eq!(rows_of_questions(), 3);
+
+        repository.delete(&[conversation.id()]).unwrap();
+
+        assert_eq!(rows_of_questions(), 0);
     }
 
     #[test]

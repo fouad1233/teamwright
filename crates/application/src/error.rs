@@ -109,6 +109,19 @@ pub enum ApplicationError {
         work: String,
     },
 
+    /// A question of a specialist was to be answered in a conversation in
+    /// which none is open.
+    #[error("no question is open in this conversation")]
+    NoDecisionOpen,
+
+    /// A conversation was to go on with an ordinary message while its
+    /// specialist waits for the answer to a question.
+    #[error("{name} waits for a decision: answer its question first")]
+    DecisionOpen {
+        /// The name of the specialist.
+        name: String,
+    },
+
     /// A conversation was to be opened in the agent program before the
     /// program had started its session.
     #[error("the specialist has not started its session yet")]
@@ -154,6 +167,8 @@ impl ApplicationError {
             Self::WorkAlreadyStarted { .. } => "work_already_started",
             Self::MemberBusy { .. } => "member_busy",
             Self::WorkInProgress { .. } => "work_in_progress",
+            Self::NoDecisionOpen => "no_decision_open",
+            Self::DecisionOpen { .. } => "decision_open",
             Self::SessionNotStarted => "session_not_started",
             Self::AgentProgram(error) => error.code(),
             Self::Storage(_) => "storage_failed",

@@ -10,7 +10,7 @@ window or agent runtime.
 | `projects` | `ProjectService`: start, find, list, rename, describe, archive, restore and delete projects; add, change, move and remove the statuses of their workflows |
 | `tasks` | `TaskService`: open, change, move, connect and remove tasks, and tell the history of one from the versions storage has kept |
 | `team` | `TeamService`: put members on the team of a project, change them, take them off |
-| `work` | `WorkService`: let AI specialists work: start on a task, ask, reply, stop, follow every event, open a session in the desktop app, recover after a restart; `brief_for` and `instructions_for` |
+| `work` | `WorkService`: let AI specialists work: start on a task, ask, reply, answer a specialist's question, list what waits for the manager, stop, follow every event, open a session in the desktop app, recover after a restart; `brief_for` and `instructions_for` |
 | `ports` | The interfaces the services need: `ProjectRepository`, `TaskRepository`, `MemberRepository`, `ConversationRepository`, `ProjectFolders`, `WorkListener`, `Clock` |
 | `agent_runtime` | `AgentRuntime`: the interface to the program that runs a team member's session, and the data it speaks |
 | `error` | `ApplicationError`, with a stable `code()` for interfaces |
@@ -106,6 +106,20 @@ question; every request to the specialist is a turn of it.
   failure, a task in an active status moves to the bottom of the first
   review status, if the workflow has one. Nothing here moves a task to done,
   and a failed or stopped turn leaves the task where it is.
+- Every turn may ask the manager to decide (`may_ask_manager`). The
+  question it asks is recorded on the turn, and a turn that finishes with a
+  question leaves its task where it is: it is not ready to be checked.
+- A question is open while it is the question of the latest turn of its
+  conversation, that turn has ended, and the manager has not answered.
+  `answer_decision` answers it with an option (counted from 0), with words,
+  or with both, and starts a turn of origin `Decision` whose request is
+  `Decision: <option>`, followed by the words if there are any, or only the
+  words (`no_decision_open`, `no_specialist`, `rule_broken`,
+  `member_busy`). The answer is stored only if the new turn starts.
+  `reply` is refused while a question is open (`decision_open`), after the
+  checks it had before.
+- `waiting_for_manager` lists the conversations with an open question in
+  every project that is not archived, the one that has waited longest first.
 - `stop` records the running turn as stopped by the manager and then stops
   the program. Stopping a conversation in which nothing runs changes nothing.
 - `recover` ends, as failed, the turns that storage still calls running when
