@@ -145,6 +145,7 @@ describe('changesBetween and historyOf', () => {
   const before: Task = {
     id: 'task',
     projectId: 'project',
+    areaId: 'area',
     number: 1,
     title: 'Draw the schematic',
     description: '',

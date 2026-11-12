@@ -24,6 +24,7 @@ function task(id: string, more: Partial<Task> = {}): Task {
   return {
     id,
     projectId: 'p',
+    areaId: 'area',
     number: 1,
     title: id,
     description: '',

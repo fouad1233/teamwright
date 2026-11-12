@@ -73,6 +73,7 @@ function member(overrides: Partial<Member> & Pick<Member, 'id' | 'name'>): Membe
 function task(overrides: Partial<Task> & Pick<Task, 'id' | 'number'>): Task {
   return {
     projectId: 'project',
+    areaId: 'area',
     title: `Task ${overrides.number.toString()}`,
     description: '',
     sprintId: null,

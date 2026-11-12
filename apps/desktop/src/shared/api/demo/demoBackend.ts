@@ -4,6 +4,7 @@ import { BackendError, type Backend } from '../backend';
 import type {
   AgentProgram,
   ApprovedProposal,
+  Area,
   Assignee,
   CalendarDate,
   Color,
@@ -47,6 +48,13 @@ import type {
   ViewFilter,
   WorkflowTemplate,
 } from '../types';
+import {
+  refuseAreaInUse,
+  refuseAreaNameInUse,
+  refuseRemovingLastArea,
+  startingArea,
+  tidyAreaName,
+} from './areas';
 import { briefFor } from './brief';
 import { freeName, isInside, isSameFolder, nameOf } from './places';
 import { answersInWords, openInterviewOf, openProposalOf, waitInCircle } from './planning';
@@ -142,6 +150,12 @@ export interface DemoWorkspace {
    * that has none here gets the six views a new project starts with.
    */
   views?: View[];
+  /**
+   * The areas of the projects, in the order the manager gave them. A
+   * project that has none here gets the area "General", and every task of a
+   * project that is not in one of its areas goes into its first area.
+   */
+  areas?: Area[];
 }
 
 const browserEnvironment: DemoEnvironment = {
@@ -223,6 +237,8 @@ export class DemoBackend implements Backend {
   private readonly places = new Map<Id, ChosenPlaces>();
   /** The views of each project, in the order the manager gave them. */
   private readonly views = new Map<Id, View[]>();
+  /** The areas of each project, in the order the manager gave them. */
+  private readonly areas = new Map<Id, Area[]>();
   private sampleFoldersHandedOut = 0;
   /** The turns whose script is still being played. A turn that is stopped leaves this set. */
   private readonly playing = new Set<Id>();
@@ -279,6 +295,25 @@ export class DemoBackend implements Backend {
         views.push(...this.startingViewsOf(project.id));
       }
     }
+    for (const area of workspace?.areas ?? []) {
+      this.areasOf(area.projectId).push(structuredClone(area));
+    }
+    // A project that was kept before it had areas gets the area "General",
+    // and a task that is in none of the areas of its project goes into the
+    // first one. The tasks keep their versions: the area is new to them.
+    for (const project of this.projects.values()) {
+      const areas = this.areasOf(project.id);
+      if (areas.length === 0) {
+        areas.push(startingArea(project.id, this.environment.newId()));
+      }
+      const first = areas[0];
+      for (const task of this.tasksOfProject(project.id)) {
+        if (first && !areas.some((area) => area.id === task.areaId)) {
+          task.areaId = first.id;
+          this.versions.set(task.id, [structuredClone(task)]);
+        }
+      }
+    }
   }
 
   listProjects(): Promise<Project[]> {
@@ -304,6 +339,7 @@ export class DemoBackend implements Backend {
       };
       this.projects.set(project.id, project);
       this.views.set(project.id, this.startingViewsOf(project.id));
+      this.areas.set(project.id, [startingArea(project.id, this.environment.newId())]);
       return project;
     });
   }
@@ -364,6 +400,7 @@ export class DemoBackend implements Backend {
       }
       this.sprintsCreated.delete(project.id);
       this.views.delete(project.id);
+      this.areas.delete(project.id);
       for (const conversation of this.conversationsOf(project.id)) {
         this.forget(conversation);
       }
@@ -607,6 +644,7 @@ export class DemoBackend implements Backend {
         );
       }
       this.checkAssignee(newTask.assignee ?? null, project.id);
+      const areaId = this.areaForNewTask(project, newTask.areaId, parent);
 
       const lastInStatus = this.tasksOfStatus(project.id, status.id).at(-1);
       const number = this.nextTaskNumbers.get(project.id) ?? 1;
@@ -615,6 +653,7 @@ export class DemoBackend implements Backend {
       const task: Task = {
         id: this.environment.newId(),
         projectId: project.id,
+        areaId,
         number,
         title,
         description: newTask.description ?? '',
@@ -1148,6 +1187,9 @@ export class DemoBackend implements Backend {
         const task: Task = {
           id: this.environment.newId(),
           projectId: project.id,
+          // The tasks of a plan go into the first area. The manager sorts
+          // them into the others.
+          areaId: this.firstAreaOf(project.id).id,
           number,
           title: proposed.title,
           description: proposed.description,
@@ -1388,6 +1430,7 @@ export class DemoBackend implements Backend {
       const fromLaptop: Task = {
         id: this.environment.newId(),
         projectId: project.id,
+        areaId: this.firstAreaOf(project.id).id,
         number: taken,
         title: 'Measure the current in sleep',
         description: 'Written on Laptop, during a meeting.',
@@ -2028,6 +2071,160 @@ export class DemoBackend implements Backend {
   /** The six views a project starts with, with new identifiers. */
   private startingViewsOf(projectId: Id): View[] {
     return startingViews(projectId, () => this.environment.newId());
+  }
+
+  listAreas(projectId: Id): Promise<Area[]> {
+    return this.answer(() => this.areasOf(this.requireProject(projectId).id));
+  }
+
+  addArea(projectId: Id, name: string): Promise<Area> {
+    return this.answer(() => {
+      const project = this.requireProject(projectId);
+      const areas = this.areasOf(project.id);
+      const tidy = tidyAreaName(name);
+      refuseAreaNameInUse(areas, tidy);
+      const area: Area = { id: this.environment.newId(), projectId: project.id, name: tidy };
+      areas.push(area);
+      return area;
+    });
+  }
+
+  renameArea(areaId: Id, name: string): Promise<Area> {
+    return this.answer(() => {
+      const area = this.requireArea(areaId);
+      const tidy = tidyAreaName(name);
+      refuseAreaNameInUse(
+        this.areasOf(area.projectId).filter((other) => other.id !== area.id),
+        tidy,
+      );
+      area.name = tidy;
+      return area;
+    });
+  }
+
+  moveArea(areaId: Id, index: number): Promise<Area[]> {
+    return this.answer(() => {
+      const area = this.requireArea(areaId);
+      const areas = this.areasOf(area.projectId);
+      const others = areas.filter((other) => other.id !== area.id);
+      others.splice(Math.min(Math.max(index, 0), others.length), 0, area);
+      areas.splice(0, areas.length, ...others);
+      return areas;
+    });
+  }
+
+  removeArea(areaId: Id, moveTasksTo?: Id): Promise<void> {
+    return this.answer(() => {
+      const area = this.requireArea(areaId);
+      const areas = this.areasOf(area.projectId);
+      refuseRemovingLastArea(area, areas);
+      const tasks = this.tasksOfProject(area.projectId).filter((task) => task.areaId === area.id);
+      if (tasks.length > 0) {
+        if (moveTasksTo === undefined || moveTasksTo === area.id) {
+          refuseAreaInUse(area, tasks.length);
+        }
+        const target = this.requireArea(moveTasksTo);
+        if (target.projectId !== area.projectId) {
+          throw new BackendError(
+            'different_projects',
+            'the tasks of an area can only go to another area of the same project',
+          );
+        }
+        // The tasks keep their status and their place in it.
+        const now = this.nowAsText();
+        for (const task of tasks) {
+          task.areaId = target.id;
+          task.updatedAt = now;
+        }
+      }
+      areas.splice(areas.indexOf(area), 1);
+    });
+  }
+
+  moveTaskToArea(taskId: Id, areaId: Id): Promise<Task> {
+    return this.answer(() => {
+      const task = this.requireTask(taskId);
+      const project = this.requireProject(task.projectId);
+      const area = this.requireArea(areaId);
+      const parent = task.parentId === null ? undefined : this.tasks.get(task.parentId);
+      if (parent) {
+        throw new BackendError(
+          'subtask_moved_alone',
+          `${referenceOf(project, task)} is a part of ${referenceOf(project, parent)} and goes where it goes`,
+        );
+      }
+      if (area.projectId !== task.projectId) {
+        throw new BackendError(
+          'different_projects',
+          'a task can only be put into an area of its own project',
+        );
+      }
+      const now = this.nowAsText();
+      for (const id of this.subtreeOf(task)) {
+        const moved = this.tasks.get(id);
+        if (moved && moved.areaId !== area.id) {
+          moved.areaId = area.id;
+          moved.updatedAt = now;
+        }
+      }
+      return task;
+    });
+  }
+
+  /**
+   * The areas of a project, in the order the manager gave them. It is the
+   * list the backend keeps, so a change to it is a change of the areas.
+   */
+  private areasOf(projectId: Id): Area[] {
+    let areas = this.areas.get(projectId);
+    if (!areas) {
+      areas = [];
+      this.areas.set(projectId, areas);
+    }
+    return areas;
+  }
+
+  /** The first area of a project, which a task goes into when no area is named. */
+  private firstAreaOf(projectId: Id): Area {
+    const first = this.areasOf(projectId)[0];
+    if (!first) {
+      throw new BackendError('rule_broken', 'the project has no areas');
+    }
+    return first;
+  }
+
+  private requireArea(areaId: Id): Area {
+    for (const areas of this.areas.values()) {
+      const area = areas.find((candidate) => candidate.id === areaId);
+      if (area) {
+        return area;
+      }
+    }
+    throw new BackendError('not_found', `there is no area with the identifier ${areaId}`);
+  }
+
+  /**
+   * The area a new task goes into: the one it names, or the first area of
+   * its project. A subtask goes into the area of its task.
+   */
+  private areaForNewTask(project: Project, areaId: Id | undefined, parent: Task | undefined): Id {
+    if (areaId === undefined) {
+      return parent?.areaId ?? this.firstAreaOf(project.id).id;
+    }
+    const area = this.requireArea(areaId);
+    if (area.projectId !== project.id) {
+      throw new BackendError(
+        'different_projects',
+        'a task can only be put into an area of its own project',
+      );
+    }
+    if (parent && parent.areaId !== area.id) {
+      throw new BackendError(
+        'rule_broken',
+        `a subtask is in the area of the task it is a part of, ${referenceOf(project, parent)}`,
+      );
+    }
+    return area.id;
   }
 
   /** The sprints of a project, in no particular order. */

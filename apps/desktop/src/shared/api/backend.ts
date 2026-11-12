@@ -1,6 +1,7 @@
 import type {
   AgentProgram,
   ApprovedProposal,
+  Area,
   Assignee,
   CalendarDate,
   Conversation,
@@ -43,7 +44,10 @@ import type {
 export interface Backend {
   /** Lists the projects that are not archived, oldest first. */
   listProjects(): Promise<Project[]>;
-  /** Creates a project with the workflow it asks for and the six views every project starts with. */
+  /**
+   * Creates a project with the workflow it asks for, the six views every
+   * project starts with, and one area called "General".
+   */
   createProject(project: NewProject): Promise<Project>;
   renameProject(projectId: Id, name: string): Promise<Project>;
   describeProject(projectId: Id, description: string): Promise<Project>;
@@ -53,7 +57,7 @@ export interface Backend {
   listArchivedProjects(): Promise<Project[]>;
   /** Brings a project back that was put away. */
   restoreProject(projectId: Id): Promise<Project>;
-  /** Removes a project for good, with its tasks, its sprints, its views and its team. */
+  /** Removes a project for good, with its tasks, its sprints, its views, its areas and its team. */
   deleteProject(projectId: Id): Promise<void>;
 
   /** Says where the specialists of a project work and what else they may read. */
@@ -117,7 +121,11 @@ export interface Backend {
   listTasks(projectId: Id): Promise<Task[]>;
   /**
    * Opens a task. It starts in the backlog without points, or, as a
-   * subtask, in the sprint of the task it is a part of.
+   * subtask, in the sprint of the task it is a part of. It goes into the
+   * area it names, or the first area of the project; a subtask goes into
+   * the area of its task. An area of another project is refused
+   * (`different_projects`), and so is an area for a subtask that is not the
+   * area of its task (`rule_broken`).
    */
   createTask(task: NewTask): Promise<Task>;
   renameTask(taskId: Id, title: string): Promise<Task>;
@@ -215,6 +223,45 @@ export interface Backend {
   moveView(viewId: Id, index: number): Promise<View[]>;
   /** Removes a view. The last view of a project cannot be removed. */
   removeView(viewId: Id): Promise<void>;
+
+  /**
+   * Lists the areas of a project in the order the manager gave them. A
+   * project has at least one: a new project starts with one called
+   * "General". Refused for a project that does not exist (`not_found`).
+   */
+  listAreas(projectId: Id): Promise<Area[]>;
+  /**
+   * Adds an area at the end of the areas of a project. Its name is trimmed
+   * and put on one line; it is not empty and has at most 40 characters
+   * (`rule_broken`), and no other area of the project has it, whatever the
+   * capitals (`area_name_taken`). Refused for a project that does not exist
+   * (`not_found`).
+   */
+  addArea(projectId: Id, name: string): Promise<Area>;
+  /** Renames an area, by the same rules as a name given when it is added. */
+  renameArea(areaId: Id, name: string): Promise<Area>;
+  /**
+   * Moves an area to another place among the areas of its project. Index 0
+   * is the first place; an index past the end means the last, one before
+   * the start the first. Answers with all the areas of the project in their
+   * new order.
+   */
+  moveArea(areaId: Id, index: number): Promise<Area[]>;
+  /**
+   * Removes an area. The last area of a project cannot be removed
+   * (`last_area`). If tasks are in it, `moveTasksTo` names the area of the
+   * same project they go to (`area_in_use` without it, `different_projects`
+   * for an area of another project); they keep their status and their
+   * place in it. Without tasks, `moveTasksTo` is not looked at.
+   */
+  removeArea(areaId: Id, moveTasksTo?: Id): Promise<void>;
+  /**
+   * Moves a task, with its subtasks, into another area of its project
+   * (`different_projects` for an area of another project). A subtask is not
+   * moved by itself: it goes where the task it is a part of goes
+   * (`subtask_moved_alone`). Answers with the task.
+   */
+  moveTaskToArea(taskId: Id, areaId: Id): Promise<Task>;
 
   /** Lists the team of a project. The member who joined first comes first. */
   listMembers(projectId: Id): Promise<Member[]>;

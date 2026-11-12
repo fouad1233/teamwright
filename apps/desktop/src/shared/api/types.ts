@@ -121,9 +121,27 @@ export interface Member {
 /** Who is responsible for a task: the manager, or a member of the team. */
 export type Assignee = { kind: 'manager' } | { kind: 'member'; memberId: Id };
 
+/**
+ * A part of a project with a job of its own, such as the board, the
+ * firmware or the enclosure of a device. A project has one or more areas,
+ * in the order the manager gave them, and starts with one called "General".
+ * Every task is in exactly one area.
+ */
+export interface Area {
+  id: Id;
+  projectId: Id;
+  /** Unique within the project, whatever the capitals. At most 40 characters. */
+  name: string;
+}
+
 export interface Task {
   id: Id;
   projectId: Id;
+  /**
+   * The area of the project the task is in. A subtask is always in the area
+   * of the task it is a part of.
+   */
+  areaId: Id;
   /** The number of the task within its project. */
   number: number;
   title: string;
@@ -635,6 +653,12 @@ export interface NewTask {
   /** If it is left out, the task starts in the first "todo" status. */
   statusId?: Id;
   parentId?: Id;
+  /**
+   * The area the task goes into. Left out, the first area of the project.
+   * A subtask is in the area of the task it is a part of: left out, it goes
+   * there, and another area is refused.
+   */
+  areaId?: Id;
   estimateMinutes?: number;
   startOn?: CalendarDate;
   dueOn?: CalendarDate;

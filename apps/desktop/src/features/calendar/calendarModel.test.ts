@@ -9,6 +9,7 @@ import { addMonths, lanesUsed, layoutWeek, monthOf, tasksOn, weeksOfMonth } from
 function task(overrides: Partial<Task> & Pick<Task, 'id'>): Task {
   return {
     projectId: 'project',
+    areaId: 'area',
     number: 1,
     title: overrides.id,
     description: '',

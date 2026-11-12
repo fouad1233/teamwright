@@ -1,6 +1,7 @@
 import { evenlySpacedRanks } from '@/shared/lib/rank';
 
 import type {
+  Area,
   Assignee,
   CalendarDate,
   Id,
@@ -118,10 +119,24 @@ const SPRINTS = {
 
 type SprintName = keyof typeof SPRINTS;
 
+/**
+ * The areas of the sample project, in their order: the jobs a small
+ * connected device is made of.
+ */
+const AREAS = {
+  electronics: { id: 'demo-area-electronics', name: 'Electronics' },
+  firmware: { id: 'demo-area-firmware', name: 'Firmware' },
+  enclosure: { id: 'demo-area-enclosure', name: 'Enclosure' },
+} as const satisfies Record<string, Pick<Area, 'id' | 'name'>>;
+
+type AreaName = keyof typeof AREAS;
+
 /** One task of the sample project, written the way a person would list it. */
 interface SampleTask {
   number: number;
   title: string;
+  /** The area the task is in. A subtask is in the area of its task and leaves this out. */
+  area?: AreaName;
   status: StatusName;
   /** The sprint the task is planned into. A subtask is in the sprint of its task. */
   sprint?: SprintName;
@@ -149,6 +164,7 @@ const SAMPLE_TASKS: SampleTask[] = [
   {
     number: 1,
     title: 'Agree on what the device must do',
+    area: 'electronics',
     status: 'done',
     sprint: 'first',
     points: 2,
@@ -162,6 +178,7 @@ const SAMPLE_TASKS: SampleTask[] = [
   {
     number: 2,
     title: 'Choose the microcontroller',
+    area: 'electronics',
     status: 'done',
     sprint: 'first',
     points: 3,
@@ -175,6 +192,7 @@ const SAMPLE_TASKS: SampleTask[] = [
   {
     number: 3,
     title: 'Select the sensors and the display',
+    area: 'electronics',
     status: 'test',
     sprint: 'current',
     points: 5,
@@ -187,6 +205,7 @@ const SAMPLE_TASKS: SampleTask[] = [
   {
     number: 4,
     title: 'Draw the schematic',
+    area: 'electronics',
     status: 'progress',
     sprint: 'current',
     points: 8,
@@ -202,6 +221,7 @@ const SAMPLE_TASKS: SampleTask[] = [
   {
     number: 5,
     title: 'Define the pin map',
+    area: 'electronics',
     status: 'revision',
     sprint: 'current',
     points: 2,
@@ -215,6 +235,7 @@ const SAMPLE_TASKS: SampleTask[] = [
   {
     number: 6,
     title: 'Route the board',
+    area: 'electronics',
     status: 'todo',
     sprint: 'next',
     points: 8,
@@ -227,6 +248,7 @@ const SAMPLE_TASKS: SampleTask[] = [
   {
     number: 7,
     title: 'Write the Wi-Fi setup',
+    area: 'firmware',
     status: 'todo',
     sprint: 'next',
     points: 3,
@@ -239,6 +261,7 @@ const SAMPLE_TASKS: SampleTask[] = [
   {
     number: 8,
     title: 'Write the sensor drivers',
+    area: 'firmware',
     status: 'todo',
     sprint: 'next',
     points: 5,
@@ -251,6 +274,7 @@ const SAMPLE_TASKS: SampleTask[] = [
   {
     number: 9,
     title: 'Design the screens of the display',
+    area: 'firmware',
     status: 'todo',
     points: 2,
     owner: 'firmware',
@@ -261,6 +285,7 @@ const SAMPLE_TASKS: SampleTask[] = [
   {
     number: 10,
     title: 'Design the enclosure',
+    area: 'enclosure',
     status: 'todo',
     points: 5,
     owner: 'mechanical',
@@ -272,6 +297,7 @@ const SAMPLE_TASKS: SampleTask[] = [
   {
     number: 11,
     title: 'Order the parts for three prototypes',
+    area: 'electronics',
     status: 'todo',
     sprint: 'current',
     points: 1,
@@ -284,6 +310,7 @@ const SAMPLE_TASKS: SampleTask[] = [
   {
     number: 12,
     title: 'Assemble and test the prototype',
+    area: 'enclosure',
     status: 'todo',
     waitsFor: [6, 8, 10, 11],
     estimateHours: 6,
@@ -343,6 +370,7 @@ const SAMPLE_TASKS: SampleTask[] = [
   {
     number: 18,
     title: 'Check the power budget',
+    area: 'electronics',
     status: 'done',
     sprint: 'current',
     points: 3,
@@ -354,6 +382,7 @@ const SAMPLE_TASKS: SampleTask[] = [
   {
     number: 19,
     title: 'Set up the firmware project',
+    area: 'firmware',
     status: 'done',
     sprint: 'current',
     points: 3,
@@ -365,6 +394,7 @@ const SAMPLE_TASKS: SampleTask[] = [
   {
     number: 20,
     title: 'Write the guide for setting up the device',
+    area: 'firmware',
     status: 'todo',
     points: 3,
     priority: 'low',
@@ -374,6 +404,7 @@ const SAMPLE_TASKS: SampleTask[] = [
   {
     number: 21,
     title: 'Plan a second batch of boards',
+    area: 'electronics',
     status: 'todo',
     estimateHours: 2,
   },
@@ -418,6 +449,7 @@ export function sampleWorkspace(today: Date = new Date()): DemoWorkspace {
     return {
       id: taskId(sample.number),
       projectId: project.id,
+      areaId: areaIdOf(sample),
       number: sample.number,
       title: sample.title,
       description: sample.description ?? '',
@@ -459,7 +491,17 @@ export function sampleWorkspace(today: Date = new Date()): DemoWorkspace {
   // The sample project has the views every new project starts with.
   const views = startingViews(project.id, sampleViewId());
 
-  return { projects: [project], tasks, members, sprints, views };
+  // The sample project is cut into areas, so that they can be seen.
+  const areas = Object.values(AREAS).map((area): Area => ({ ...area, projectId: project.id }));
+
+  return { projects: [project], tasks, members, sprints, views, areas };
+}
+
+/** The area of a sample task: its own, or that of the task it is a part of. */
+function areaIdOf(sample: SampleTask): Id {
+  const parent = SAMPLE_TASKS.find((other) => other.number === sample.partOf);
+  const area = (parent ?? sample).area ?? 'electronics';
+  return AREAS[area].id;
 }
 
 /** The sprint of a sample task: its own, or that of the task it is a part of. */

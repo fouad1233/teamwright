@@ -31,6 +31,7 @@ function task(number: number, assignee: Assignee | null): Task {
   return {
     id: `task-${number.toString()}`,
     projectId: 'project',
+    areaId: 'area',
     number,
     title: `Task ${number.toString()}`,
     description: '',

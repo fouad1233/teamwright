@@ -6,6 +6,7 @@ import { BackendError, type Backend } from './backend';
 import type {
   AgentProgram,
   ApprovedProposal,
+  Area,
   Assignee,
   CalendarDate,
   Conversation,
@@ -205,6 +206,30 @@ export class TauriBackend implements Backend {
 
   removeView(viewId: Id): Promise<void> {
     return call('remove_view', { viewId });
+  }
+
+  listAreas(projectId: Id): Promise<Area[]> {
+    return call('list_areas', { projectId });
+  }
+
+  addArea(projectId: Id, name: string): Promise<Area> {
+    return call('add_area', { projectId, name });
+  }
+
+  renameArea(areaId: Id, name: string): Promise<Area> {
+    return call('rename_area', { areaId, name });
+  }
+
+  moveArea(areaId: Id, index: number): Promise<Area[]> {
+    return call('move_area', { areaId, index });
+  }
+
+  removeArea(areaId: Id, moveTasksTo?: Id): Promise<void> {
+    return call('remove_area', { areaId, moveTasksTo: moveTasksTo ?? null });
+  }
+
+  moveTaskToArea(taskId: Id, areaId: Id): Promise<Task> {
+    return call('move_task_to_area', { taskId, areaId });
   }
 
   projectPlaces(projectId: Id): Promise<ProjectPlaces> {
