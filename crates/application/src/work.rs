@@ -435,21 +435,28 @@ impl WorkService {
     /// Returns an error if storage fails.
     pub fn recover(&self) -> Result<(), ApplicationError> {
         let _work = self.inner.hold_work();
-        let ports = &self.inner.ports;
-        let now = ports.clock.now();
-        for mut turn in ports.conversations.running_turns()? {
-            if lock(&self.inner.running).contains_key(&turn.id()) {
-                // Started by this run of the program: it is really running.
-                continue;
-            }
-            turn.fail(CLOSED_WHILE_WORKING.to_owned(), None, now)?;
-            ports.conversations.save_turn(&turn)?;
-            if let Some(conversation) = ports.conversations.find(turn.conversation_id())? {
-                let turns = ports.conversations.turns_of(conversation.id())?;
-                ports.listener.conversation_changed(&conversation, &turns);
-            }
+        self.inner.end_turns_nothing_runs()
+    }
+
+    /// Stops every turn that is running, because Teamwright is closing: a
+    /// specialist must not go on working with nobody to follow it. Each
+    /// turn ends as failed, with a text that says so. Call it once, when
+    /// the program closes.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if storage fails. The specialists are stopped even
+    /// then, and [`Self::recover`] ends their turns at the next start.
+    pub fn close(&self) -> Result<(), ApplicationError> {
+        let _work = self.inner.hold_work();
+        // The programs are stopped before anything is recorded, so that
+        // they stop whatever happens to the record. What they still say
+        // waits for the lock on the work and then finds its turn ended.
+        let stopped: Vec<_> = lock(&self.inner.running).drain().collect();
+        for (_, handle) in &stopped {
+            handle.stop();
         }
-        Ok(())
+        self.inner.end_turns_nothing_runs()
     }
 
     /// Starts a turn on the agent program and stores it.
@@ -569,6 +576,28 @@ impl Inner {
                 &[StatusCategory::Todo, StatusCategory::Review],
                 StatusCategory::Active,
             )?;
+        }
+        Ok(())
+    }
+
+    /// Ends the turns that storage calls running although this run of the
+    /// program runs nothing for them: Teamwright was closed, or is closing,
+    /// while they ran. Each ends as failed, with a text that says so. The
+    /// caller holds the lock on the work.
+    fn end_turns_nothing_runs(&self) -> Result<(), ApplicationError> {
+        let ports = &self.ports;
+        let now = ports.clock.now();
+        for mut turn in ports.conversations.running_turns()? {
+            if lock(&self.running).contains_key(&turn.id()) {
+                // Started by this run of the program: it is really running.
+                continue;
+            }
+            turn.fail(CLOSED_WHILE_WORKING.to_owned(), None, now)?;
+            ports.conversations.save_turn(&turn)?;
+            if let Some(conversation) = ports.conversations.find(turn.conversation_id())? {
+                let turns = ports.conversations.turns_of(conversation.id())?;
+                ports.listener.conversation_changed(&conversation, &turns);
+            }
         }
         Ok(())
     }
@@ -2079,6 +2108,30 @@ mod tests {
                 SessionId::parse(SESSION).unwrap(),
                 PathBuf::from("projects").join("SSN")
             )]
+        );
+    }
+
+    #[test]
+    fn closing_the_program_stops_the_specialists_and_says_so_in_their_turns() {
+        let workspace = workspace();
+        workspace.work.start_work(workspace.schematic.id()).unwrap();
+        workspace.deliver(0, session_started());
+
+        workspace.work.close().unwrap();
+        workspace.deliver(0, ended(Some(TurnFailure::Stopped), ""));
+
+        assert!(workspace.ports.runtime.was_stopped(0));
+        let turn = &workspace.only_conversation().turns[0];
+        assert_eq!(turn.state(), TurnState::Failed);
+        assert_eq!(
+            turn.failure(),
+            Some("Teamwright was closed while the specialist was working."),
+            "what the program says after it was stopped does not change the record"
+        );
+        assert_eq!(
+            workspace.stored_task(workspace.schematic.id()).status_id(),
+            workspace.status_of(StatusCategory::Active),
+            "the task stays in work"
         );
     }
 
