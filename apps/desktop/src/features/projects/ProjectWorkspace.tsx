@@ -11,6 +11,7 @@ import { AdvisorView } from '../advisor/AdvisorView';
 import { BoardView } from '../board/BoardView';
 import { CalendarView } from '../calendar/CalendarView';
 import { GanttView } from '../gantt/GanttView';
+import { OfficeView } from '../office/OfficeView';
 import { TaskListView } from '../tasks/TaskListView';
 import { TaskPanel } from '../tasks/TaskPanel';
 import { useTasks } from '../tasks/taskQueries';
@@ -33,6 +34,7 @@ const VIEWS: { view: ProjectView; label: string }[] = [
   { view: 'gantt', label: 'Gantt' },
   { view: 'calendar', label: 'Calendar' },
   { view: 'team', label: 'Team' },
+  { view: 'office', label: 'Office' },
   { view: 'advisor', label: 'Advisor' },
 ];
 
@@ -175,6 +177,8 @@ function ChosenView({ view, project, tasks }: ChosenViewProps) {
       return <CalendarView project={project} tasks={tasks} />;
     case 'team':
       return <TeamView project={project} tasks={tasks} />;
+    case 'office':
+      return <OfficeView project={project} tasks={tasks} />;
     case 'advisor':
       return <AdvisorView project={project} />;
   }

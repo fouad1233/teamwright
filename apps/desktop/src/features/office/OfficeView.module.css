@@ -1,0 +1,237 @@
+.view {
+  height: 100%;
+  overflow: auto;
+  padding: var(--space-6) var(--space-5);
+}
+
+/* The sheet: the room, and the title block beside it or under it. The
+   arithmetic in officeModel.ts decides which, from the same tokens. */
+.sheet {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: end;
+  visibility: hidden;
+}
+
+.sheet[data-measured] {
+  visibility: visible;
+}
+
+.besideAside {
+  grid-template-columns: minmax(0, 1fr) var(--office-aside-width);
+}
+
+/* The room in plan: walls drawn as two hairlines with a kerf between them,
+   the way a drawing shows that a wall has a thickness. */
+.room {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  padding: var(--space-7) var(--space-6) var(--space-7);
+  border: 1px solid var(--rule-strong);
+  box-shadow:
+    inset 0 0 0 var(--space-1) var(--ground),
+    inset 0 0 0 calc(var(--space-1) + 1px) var(--rule-strong);
+}
+
+.rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-7);
+}
+
+.row {
+  position: relative;
+  display: flex;
+  justify-content: center;
+}
+
+/* The letter of a row sits in the margin, as on the edge of a plate. */
+.rowLetter {
+  position: absolute;
+  top: 50%;
+  left: calc(-1 * var(--space-5));
+  color: var(--ink-faint);
+  transform: translateY(-50%);
+}
+
+.places {
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: center;
+  gap: var(--space-4);
+  width: 100%;
+}
+
+.place {
+  flex: 0 1 var(--office-place-width);
+  min-width: 0;
+}
+
+/* The front of the room, where the plan is made, is set apart from the
+   floor by a partition with a passage through its middle. */
+.partition {
+  height: 1px;
+  margin: 0 calc(-1 * var(--space-6) + var(--space-1) + 1px);
+  background: linear-gradient(
+    to right,
+    var(--rule-strong) calc(50% - var(--space-7)),
+    transparent 0 calc(50% + var(--space-7)),
+    var(--rule-strong) 0
+  );
+}
+
+.empty {
+  max-width: 420px;
+  margin: 0 auto;
+  color: var(--ink-faint);
+  text-align: center;
+}
+
+/* The door sits in the wall at the foot of the room, near its right
+   corner. Its frame covers the two lines of the wall where the gap is. */
+.door {
+  position: absolute;
+  right: var(--space-7);
+  /* Down over the outer line of the wall, which lies outside the room. */
+  bottom: -1px;
+  width: var(--space-7);
+  height: var(--space-7);
+  background: linear-gradient(to top, var(--ground) calc(var(--space-1) + 3px), transparent 0);
+  overflow: visible;
+}
+
+.doorLeaf,
+.doorSwing {
+  fill: none;
+  stroke: var(--rule-strong);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.doorSwing {
+  stroke-dasharray: 2 3;
+}
+
+/* The title block in the corner of the sheet: what little needs saying,
+   set in cells like the block of an engineering drawing. */
+.titleBlock {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--rule-strong);
+  background: var(--surface);
+}
+
+.titleBlock > * + * {
+  border-top: 1px solid var(--rule);
+}
+
+.titleRow {
+  display: flex;
+  justify-content: space-between;
+  padding: var(--space-2) var(--space-3);
+  color: var(--ink-faint);
+}
+
+.titleName {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+}
+
+/* The one gesture of the serif in this view. */
+.title {
+  font-family: var(--font-serif);
+  font-size: var(--text-title);
+  font-weight: 400;
+  line-height: 1.1;
+}
+
+.summary {
+  color: var(--ink-soft);
+  font-size: var(--text-small);
+}
+
+.counts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
+.counts > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-2) var(--space-3);
+}
+
+.counts > div:nth-child(odd) {
+  border-right: 1px solid var(--rule);
+}
+
+.counts > div:nth-child(n + 3) {
+  border-top: 1px solid var(--rule);
+}
+
+.counts dt {
+  color: var(--ink-faint);
+}
+
+.counts dd {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.legend {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  color: var(--ink-soft);
+  font-size: var(--text-small);
+}
+
+.legend > li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* The marks of the legend are the marks of the room, drawn small: the
+   lamp out, the lamp lit, and a corner held in gold. */
+.key {
+  position: relative;
+  flex: none;
+  width: var(--office-lamp-size);
+  height: var(--office-lamp-size);
+  margin: 0 calc((var(--space-5) - var(--office-lamp-size)) / 2);
+  border: 1px solid var(--rule-strong);
+  border-radius: 50%;
+}
+
+.keyLit {
+  border-color: var(--brass);
+  background: var(--brass);
+}
+
+/* The corners need room of their own to read as corners and not as a
+   box, so their key is wider than a lamp, and the lamps are set in the
+   middle of the same width. */
+.keyCorners {
+  position: relative;
+  flex: none;
+  width: var(--space-5);
+  height: var(--space-4);
+}
+
+.joints {
+  composes: joints from '../board/TaskCard.module.css';
+}
+
+.note {
+  padding: var(--space-3);
+  color: var(--ink-faint);
+  font-size: var(--text-small);
+}

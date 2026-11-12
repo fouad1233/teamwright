@@ -49,6 +49,9 @@
   --sidebar-width: 236px;
   --panel-width: 560px;
   --lane-width: 292px;
+  /* A bench of the office, and the title block beside the room. */
+  --office-place-width: 248px;
+  --office-aside-width: 264px;
   --control-height: 30px;
 
   /* Night: the ground, from the back of the window to the front. The rules
@@ -124,6 +127,11 @@
      screen. */
   --joint-length: 9px;
   --joint-weight: 2px;
+
+  /* The office (decision 0018): the lamp that hangs over every bench, and
+     how strong the pool of light is that it casts while work goes on. */
+  --office-lamp-size: 13px;
+  --office-lamp-pool: 0.26;
 
   /* A mask that keeps all it covers. Two of them, one cut out of the other,
      leave only the rim of an element for a light to fall on. */
@@ -237,6 +245,7 @@
     --glow-strength: 0.2;
     --lamp-on-ink: rgb(var(--brass-rgb) / 22%);
     --sun-at-work: 0.14;
+    --office-lamp-pool: 0.32;
     --sun-peak: 0.32;
     --sun-from: #f2e8d5;
     --sun-to: #faf6ee;

@@ -1,0 +1,247 @@
+/* A bench in plan: a flat part with a hairline edge, its contents set
+   like the notes on a drawing. It makes a layer of its own, so that the
+   pool of its lamp sits over its ground and under its words. */
+.place {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-2);
+  width: 100%;
+  height: 100%;
+  padding: var(--space-5) var(--space-4) 0;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  color: var(--ink);
+  text-align: left;
+}
+
+.pressable {
+  cursor: pointer;
+  transition:
+    border-color var(--duration-quick) ease,
+    background-color var(--duration-quick) ease;
+}
+
+.pressable:hover {
+  border-color: var(--ink-faint);
+}
+
+/* The manager's place carries the keystone: a rule of gold along its top,
+   where it meets the rest of the room. Gold here marks where you are, not
+   light. */
+.keystone {
+  border-top: 2px solid var(--brass);
+}
+
+/* The lamp hangs over the middle of the bench, drawn in plan as a ring
+   with a cross, the register mark of the plate. It is out unless work goes
+   on here. */
+.lamp {
+  position: absolute;
+  top: calc(var(--office-lamp-size) / -2);
+  left: 50%;
+  width: var(--office-lamp-size);
+  height: var(--office-lamp-size);
+  border: 1px solid var(--rule-strong);
+  border-radius: 50%;
+  background: var(--ground);
+  transform: translateX(-50%);
+}
+
+.lamp::before,
+.lamp::after {
+  position: absolute;
+  background: var(--rule-strong);
+  content: '';
+}
+
+.lamp::before {
+  top: 50%;
+  left: calc(-1 * var(--space-1));
+  right: calc(-1 * var(--space-1));
+  height: 1px;
+}
+
+.lamp::after {
+  top: calc(-1 * var(--space-1));
+  bottom: calc(-1 * var(--space-1));
+  left: 50%;
+  width: 1px;
+}
+
+/* Work goes on: the lamp is lit and casts a pool of light on the bench
+   below it, the one place in the room where light falls. */
+.lit {
+  background:
+    radial-gradient(
+      90% 75% at 50% 0%,
+      rgb(var(--brass-rgb) / var(--office-lamp-pool)),
+      rgb(var(--brass-rgb) / 0) 70%
+    ),
+    var(--surface);
+}
+
+.lit .lamp {
+  border-color: var(--brass);
+  background: var(--brass);
+  box-shadow: 0 0 0 var(--space-1) rgb(var(--brass-rgb) / var(--glow-strength));
+}
+
+.lit .lamp::before,
+.lit .lamp::after {
+  background: var(--brass);
+}
+
+/* The joints of a place that waits for the manager are those of a waiting
+   card on the board. */
+.joints {
+  composes: joints from '../board/TaskCard.module.css';
+}
+
+.reference {
+  position: absolute;
+  top: var(--space-2);
+  left: var(--space-3);
+  color: var(--ink-faint);
+}
+
+.who {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.advisor {
+  composes: avatar large block from '../team/Assignee.module.css';
+  background: var(--ink);
+  color: var(--surface);
+  font-family: var(--font-mono);
+  font-size: var(--text-small);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.identity {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.name,
+.role,
+.title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.name {
+  font-size: var(--text-strong);
+  font-weight: 550;
+  line-height: 1.3;
+}
+
+.role {
+  color: var(--ink-faint);
+  font-size: var(--text-small);
+}
+
+/* The state is the first thing read after the name. Gold where something
+   happens or waits for the manager, faint ink where nothing does. */
+.state {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+  color: var(--ink-faint);
+}
+
+[data-state='working'] > .state,
+[data-state='waiting'] > .state {
+  color: var(--brass-text);
+}
+
+[data-state='manager'] > .state {
+  color: var(--ink-soft);
+}
+
+.atWork {
+  composes: atWork from '../board/TaskCard.module.css';
+}
+
+.waits {
+  composes: waits from '../board/TaskCard.module.css';
+}
+
+.subject {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.taskReference {
+  flex: none;
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: var(--text-small);
+}
+
+.title {
+  font-weight: 500;
+}
+
+.detail {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--ink-soft);
+  font-size: var(--text-small);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+/* The words beside the gold corners of a place that is at work and also
+   waits for the manager. */
+.alsoWaits {
+  color: var(--brass-text);
+  font-size: var(--text-small);
+  font-weight: 550;
+}
+
+.measures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-4);
+}
+
+.measure,
+.usage {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.measure > :global(.label),
+.usage :global(.label) {
+  color: var(--ink-faint);
+}
+
+.value {
+  font-family: var(--font-mono);
+  font-size: var(--text-small);
+  font-variant-numeric: tabular-nums;
+}
+
+/* What the place has used is its last line, under a hairline and at the
+   foot of the bench, so the lines of a row of benches meet. */
+.usage {
+  justify-content: space-between;
+  margin: auto calc(-1 * var(--space-4)) 0;
+  padding: var(--space-2) var(--space-4);
+  border-top: 1px solid var(--rule);
+}

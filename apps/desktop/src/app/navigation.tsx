@@ -3,7 +3,15 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 import type { Id } from '@/shared/api/types';
 
 /** The ways a project can be looked at. */
-export const PROJECT_VIEWS = ['board', 'list', 'gantt', 'calendar', 'team', 'advisor'] as const;
+export const PROJECT_VIEWS = [
+  'board',
+  'list',
+  'gantt',
+  'calendar',
+  'team',
+  'office',
+  'advisor',
+] as const;
 
 export type ProjectView = (typeof PROJECT_VIEWS)[number];
 
