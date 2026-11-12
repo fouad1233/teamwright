@@ -15,6 +15,7 @@ import type {
   Task,
 } from '../types';
 import type { DemoWorkspace } from './demoBackend';
+import { startingViews } from './views';
 
 /** The statuses of the sample project, by a short name used in this file. */
 const STATUSES = {
@@ -455,7 +456,10 @@ export function sampleWorkspace(today: Date = new Date()): DemoWorkspace {
     };
   });
 
-  return { projects: [project], tasks, members, sprints };
+  // The sample project has the views every new project starts with.
+  const views = startingViews(project.id, sampleViewId());
+
+  return { projects: [project], tasks, members, sprints, views };
 }
 
 /** The sprint of a sample task: its own, or that of the task it is a part of. */
@@ -473,6 +477,15 @@ function assigneeOf(sample: SampleTask): Assignee | null {
     return { kind: 'manager' };
   }
   return { kind: 'member', memberId: TEAM[sample.owner].id };
+}
+
+/** Hands out the identifiers of the views of the sample project, in turn. */
+function sampleViewId(): () => Id {
+  let handedOut = 0;
+  return () => {
+    handedOut += 1;
+    return `demo-view-${handedOut.toString()}`;
+  };
 }
 
 function taskId(number: number): Id {

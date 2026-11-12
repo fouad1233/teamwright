@@ -15,6 +15,7 @@ import type {
   NewProject,
   NewSprint,
   NewTask,
+  NewView,
   Priority,
   Project,
   ProjectPlaces,
@@ -28,6 +29,8 @@ import type {
   SyncState,
   Task,
   TaskChange,
+  View,
+  ViewFilter,
 } from './types';
 
 /**
@@ -40,6 +43,7 @@ import type {
 export interface Backend {
   /** Lists the projects that are not archived, oldest first. */
   listProjects(): Promise<Project[]>;
+  /** Creates a project with the workflow it asks for and the six views every project starts with. */
   createProject(project: NewProject): Promise<Project>;
   renameProject(projectId: Id, name: string): Promise<Project>;
   describeProject(projectId: Id, description: string): Promise<Project>;
@@ -49,7 +53,7 @@ export interface Backend {
   listArchivedProjects(): Promise<Project[]>;
   /** Brings a project back that was put away. */
   restoreProject(projectId: Id): Promise<Project>;
-  /** Removes a project for good, with its tasks, its sprints and its team. */
+  /** Removes a project for good, with its tasks, its sprints, its views and its team. */
   deleteProject(projectId: Id): Promise<void>;
 
   /** Says where the specialists of a project work and what else they may read. */
@@ -181,6 +185,37 @@ export interface Backend {
   /** Tells how much work remained in a sprint at the end of each of its days. */
   sprintReport(sprintId: Id): Promise<SprintReport>;
 
+  /**
+   * Lists the views of a project in the order the manager gave them. A new
+   * project starts with one view of each kind: board, backlog, list, gantt,
+   * calendar and dashboard, in that order, each named after its kind.
+   */
+  listViews(projectId: Id): Promise<View[]>;
+  /**
+   * Adds a view at the end of the views of a project, showing every task.
+   * Its name is trimmed, not empty, at most 40 characters long, and not the
+   * name of another view of the project, whatever the capitals. Left out or
+   * empty, it is the name of its kind, numbered if that is taken: "Board 2".
+   * A project has at most one backlog and one dashboard.
+   */
+  addView(view: NewView): Promise<View>;
+  /** Renames a view, by the same rules as a name given when it is added. */
+  renameView(viewId: Id, name: string): Promise<View>;
+  /**
+   * Replaces the filter of a view. Only a board, a list, a Gantt chart and a
+   * calendar can be filtered, and a member named by the filter is on the
+   * team of the project.
+   */
+  setViewFilter(viewId: Id, filter: ViewFilter): Promise<View>;
+  /**
+   * Moves a view to another place among the views of its project. Index 0
+   * is the first place; an index past the end means the last. Answers with
+   * all the views of the project in their new order.
+   */
+  moveView(viewId: Id, index: number): Promise<View[]>;
+  /** Removes a view. The last view of a project cannot be removed. */
+  removeView(viewId: Id): Promise<void>;
+
   /** Lists the team of a project. The member who joined first comes first. */
   listMembers(projectId: Id): Promise<Member[]>;
   addMember(member: NewMember): Promise<Member>;
@@ -192,7 +227,10 @@ export interface Backend {
    * holds from the next turn on. A person has no profile.
    */
   setMemberProfile(memberId: Id, profile: MemberProfile): Promise<Member>;
-  /** Takes a member off the team. The member's tasks are given to nobody. */
+  /**
+   * Takes a member off the team. The member's tasks are given to nobody, and
+   * a view that showed only the member's tasks shows everybody's again.
+   */
   removeMember(memberId: Id): Promise<void>;
 
   /** Says whether the program that runs the AI specialists is installed and signed in. */

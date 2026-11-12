@@ -24,6 +24,7 @@ import type {
   NewProject,
   NewSprint,
   NewTask,
+  NewView,
   Priority,
   Project,
   ProjectPlaces,
@@ -42,6 +43,8 @@ import type {
   Task,
   TaskChange,
   Turn,
+  View,
+  ViewFilter,
   WorkflowTemplate,
 } from '../types';
 import { briefFor } from './brief';
@@ -69,6 +72,16 @@ import {
   type Act,
   type Script,
 } from './simulatedSpecialist';
+import {
+  nameForNewView,
+  refuseFilterOf,
+  refuseRemovingLast,
+  refuseSecondOfKind,
+  refuseViewNameInUse,
+  startingViews,
+  tidyFilter,
+  tidyViewName,
+} from './views';
 
 /** Where the demo backend gets the time and new identifiers from. */
 export interface DemoEnvironment {
@@ -124,6 +137,11 @@ export interface DemoWorkspace {
   members: Member[];
   /** The sprints of the projects. Left out, there are none. */
   sprints?: Sprint[];
+  /**
+   * The views of the projects, in the order the manager gave them. A project
+   * that has none here gets the six views a new project starts with.
+   */
+  views?: View[];
 }
 
 const browserEnvironment: DemoEnvironment = {
@@ -203,6 +221,8 @@ export class DemoBackend implements Backend {
    */
   private readonly sprintsCreated = new Map<Id, number>();
   private readonly places = new Map<Id, ChosenPlaces>();
+  /** The views of each project, in the order the manager gave them. */
+  private readonly views = new Map<Id, View[]>();
   private sampleFoldersHandedOut = 0;
   /** The turns whose script is still being played. A turn that is stopped leaves this set. */
   private readonly playing = new Set<Id>();
@@ -248,6 +268,17 @@ export class DemoBackend implements Backend {
         (this.sprintsCreated.get(sprint.projectId) ?? 0) + 1,
       );
     }
+    for (const view of workspace?.views ?? []) {
+      this.viewsOf(view.projectId).push(structuredClone(view));
+    }
+    // A project that was kept before it had views gets the views a new
+    // project starts with.
+    for (const project of this.projects.values()) {
+      const views = this.viewsOf(project.id);
+      if (views.length === 0) {
+        views.push(...this.startingViewsOf(project.id));
+      }
+    }
   }
 
   listProjects(): Promise<Project[]> {
@@ -272,6 +303,7 @@ export class DemoBackend implements Backend {
         archivedAt: null,
       };
       this.projects.set(project.id, project);
+      this.views.set(project.id, this.startingViewsOf(project.id));
       return project;
     });
   }
@@ -331,6 +363,7 @@ export class DemoBackend implements Backend {
         this.sprints.delete(sprint.id);
       }
       this.sprintsCreated.delete(project.id);
+      this.views.delete(project.id);
       for (const conversation of this.conversationsOf(project.id)) {
         this.forget(conversation);
       }
@@ -842,6 +875,13 @@ export class DemoBackend implements Backend {
         if (task.assignee?.kind === 'member' && task.assignee.memberId === member.id) {
           task.assignee = null;
           task.updatedAt = now;
+        }
+      }
+      // A view that showed only the member's tasks shows everybody's again.
+      for (const view of this.viewsOf(member.projectId)) {
+        const shown = view.filter.assignee;
+        if (shown.kind === 'member' && shown.memberId === member.id) {
+          view.filter.assignee = { kind: 'anyone' };
         }
       }
       this.members.delete(member.id);
@@ -1879,6 +1919,115 @@ export class DemoBackend implements Backend {
         dayOfMoment(this.nowAsText()),
       );
     });
+  }
+
+  listViews(projectId: Id): Promise<View[]> {
+    return this.answer(() => this.viewsOf(this.requireProject(projectId).id));
+  }
+
+  addView(newView: NewView): Promise<View> {
+    return this.answer(() => {
+      const project = this.requireProject(newView.projectId);
+      const views = this.viewsOf(project.id);
+      refuseSecondOfKind(views, newView.kind);
+      const asked = newView.name ?? '';
+      let name: string;
+      if (asked.trim() === '') {
+        name = nameForNewView(newView.kind, views);
+      } else {
+        name = tidyViewName(asked);
+        refuseViewNameInUse(views, name);
+      }
+      const view: View = {
+        id: this.environment.newId(),
+        projectId: project.id,
+        kind: newView.kind,
+        name,
+        filter: { assignee: { kind: 'anyone' }, hidesFinished: false },
+      };
+      views.push(view);
+      return view;
+    });
+  }
+
+  renameView(viewId: Id, name: string): Promise<View> {
+    return this.answer(() => {
+      const view = this.requireView(viewId);
+      const tidy = tidyViewName(name);
+      refuseViewNameInUse(
+        this.viewsOf(view.projectId).filter((other) => other.id !== view.id),
+        tidy,
+      );
+      view.name = tidy;
+      return view;
+    });
+  }
+
+  setViewFilter(viewId: Id, filter: ViewFilter): Promise<View> {
+    return this.answer(() => {
+      const view = this.requireView(viewId);
+      refuseFilterOf(view);
+      const assignee = filter.assignee;
+      if (assignee.kind === 'member') {
+        const member = this.members.get(assignee.memberId);
+        if (member?.projectId !== view.projectId) {
+          throw new BackendError(
+            'member_not_on_team',
+            'the filter names a member who is not on the team of the project',
+          );
+        }
+      }
+      view.filter = tidyFilter(filter);
+      return view;
+    });
+  }
+
+  moveView(viewId: Id, index: number): Promise<View[]> {
+    return this.answer(() => {
+      const view = this.requireView(viewId);
+      const views = this.viewsOf(view.projectId);
+      const others = views.filter((other) => other.id !== view.id);
+      others.splice(Math.min(Math.max(index, 0), others.length), 0, view);
+      views.splice(0, views.length, ...others);
+      return views;
+    });
+  }
+
+  removeView(viewId: Id): Promise<void> {
+    return this.answer(() => {
+      const view = this.requireView(viewId);
+      const views = this.viewsOf(view.projectId);
+      refuseRemovingLast(view, views);
+      views.splice(views.indexOf(view), 1);
+    });
+  }
+
+  /**
+   * The views of a project, in the order the manager gave them. It is the
+   * list the backend keeps, so a change to it is a change of the views.
+   */
+  private viewsOf(projectId: Id): View[] {
+    let views = this.views.get(projectId);
+    if (!views) {
+      views = [];
+      this.views.set(projectId, views);
+    }
+    return views;
+  }
+
+  private requireView(viewId: Id): View {
+    for (const views of this.views.values()) {
+      const view = views.find((candidate) => candidate.id === viewId);
+      if (view) {
+        return view;
+      }
+    }
+    throw new BackendError('not_found', `there is no view with the identifier ${viewId}`);
+  }
+
+  /** The six views a project starts with, with new identifiers. */
+  private startingViewsOf(projectId: Id): View[] {
+    return startingViews(projectId, () => this.environment.newId());
   }
 
   /** The sprints of a project, in no particular order. */

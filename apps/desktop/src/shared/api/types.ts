@@ -226,6 +226,55 @@ export interface SprintReport {
 }
 
 /**
+ * The ways the tasks of a project can be shown. A project can have several
+ * views of the kinds board, list, gantt and calendar, and at most one
+ * backlog and one dashboard.
+ */
+export type ViewKind = 'board' | 'backlog' | 'list' | 'gantt' | 'calendar' | 'dashboard';
+
+/**
+ * Whose tasks a view shows: everybody's, the manager's, those of one member
+ * of the team, or those given to nobody.
+ */
+export type ViewAssignee =
+  { kind: 'anyone' } | { kind: 'manager' } | { kind: 'member'; memberId: Id } | { kind: 'nobody' };
+
+/**
+ * Which tasks a view shows. A task is shown if it passes the filter or one
+ * of its subtasks does; its subtasks are shown with it. Only views of the
+ * kinds board, list, gantt and calendar can be filtered.
+ */
+export interface ViewFilter {
+  assignee: ViewAssignee;
+  /** Whether tasks in a status of the category done are left out. */
+  hidesFinished: boolean;
+}
+
+/**
+ * One way the manager looks at the tasks of a project: a kind with a name
+ * and a filter of its own. The views of a project are kept in the order the
+ * manager gave them, and travel with the project.
+ */
+export interface View {
+  id: Id;
+  projectId: Id;
+  kind: ViewKind;
+  /** Unique within the project, whatever the capitals. */
+  name: string;
+  filter: ViewFilter;
+}
+
+export interface NewView {
+  projectId: Id;
+  kind: ViewKind;
+  /**
+   * Left out or empty, the view is named after its kind: "Board", or
+   * "Board 2" if the project has a view called "Board" already.
+   */
+  name?: string;
+}
+
+/**
  * Whether the program that runs the AI specialists can be used on this
  * computer. Today that program is the user's own Claude Code.
  *

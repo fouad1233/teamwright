@@ -20,6 +20,7 @@ import type {
   NewProject,
   NewSprint,
   NewTask,
+  NewView,
   Priority,
   Project,
   ProjectPlaces,
@@ -33,6 +34,8 @@ import type {
   SyncState,
   Task,
   TaskChange,
+  View,
+  ViewFilter,
 } from './types';
 
 /**
@@ -178,6 +181,30 @@ export class TauriBackend implements Backend {
 
   sprintReport(sprintId: Id): Promise<SprintReport> {
     return call('sprint_report', { sprintId });
+  }
+
+  listViews(projectId: Id): Promise<View[]> {
+    return call('list_views', { projectId });
+  }
+
+  addView(view: NewView): Promise<View> {
+    return call('add_view', { input: view });
+  }
+
+  renameView(viewId: Id, name: string): Promise<View> {
+    return call('rename_view', { viewId, name });
+  }
+
+  setViewFilter(viewId: Id, filter: ViewFilter): Promise<View> {
+    return call('set_view_filter', { viewId, filter });
+  }
+
+  moveView(viewId: Id, index: number): Promise<View[]> {
+    return call('move_view', { viewId, index });
+  }
+
+  removeView(viewId: Id): Promise<void> {
+    return call('remove_view', { viewId });
   }
 
   projectPlaces(projectId: Id): Promise<ProjectPlaces> {
