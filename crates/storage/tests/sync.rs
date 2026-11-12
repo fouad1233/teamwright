@@ -342,13 +342,18 @@ fn a_copied_database_is_found_out_and_both_go_on_after_a_new_identity() {
     assert_eq!(error.code(), "identity_in_use");
 
     let old_identity = desk.database.device_id();
-    desk.sync.new_identity().unwrap();
+    let new_identity = desk.sync.new_identity().unwrap();
     assert_eq!(desk.sync.round().unwrap_err().code(), "identity_in_use");
+    // Between the new identity and the start, the state already names the
+    // new identity; every change made meanwhile carries it.
+    assert_eq!(desk.sync.state().unwrap().this_computer, new_identity);
+    assert_eq!(desk.database.device_id(), new_identity);
     // Teamwright starts again with the new identity.
     let Computer { data, database, .. } = desk;
     drop(database);
     let desk = Computer::open(data);
     assert_ne!(desk.database.device_id(), old_identity);
+    assert_eq!(desk.database.device_id(), new_identity);
 
     settle(&[&desk, &copy, &laptop]);
 

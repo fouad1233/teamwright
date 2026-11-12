@@ -386,5 +386,19 @@ describe('syncing through a folder in the DemoBackend', () => {
       expect(refused.message).toBe(IDENTITY_IN_USE);
       expect((await backend.syncState()).problem).toBe(NEW_IDENTITY_TAKEN);
     });
+
+    it('keeps saying so after syncing is stopped', async () => {
+      await backend.chooseSyncFolder(FOLDER, 'Desk');
+      await backend.giveThisComputerANewIdentity();
+
+      const state = await backend.stopSyncing();
+
+      expect(state).toMatchObject({
+        folder: null,
+        phase: 'stopped',
+        problem: NEW_IDENTITY_TAKEN,
+        problemCode: 'restart_needed',
+      });
+    });
   });
 });

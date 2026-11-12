@@ -141,9 +141,12 @@ export class PretendedSync {
     this.folder = null;
     this.phase = 'off';
     this.lastRound = null;
-    this.problem = null;
-    this.problemCode = null;
-    this.restartNeeded = false;
+    // A new identity still waits for Teamwright to start again: the state
+    // keeps saying so, whether syncing is on or off.
+    if (!this.restartNeeded) {
+      this.problem = null;
+      this.problemCode = null;
+    }
     return this.state();
   }
 

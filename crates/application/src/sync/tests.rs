@@ -477,6 +477,27 @@ fn a_new_identity_stops_syncing_until_the_program_starts_again() {
     assert_eq!(state.problem_code, Some(RESTART_NEEDED));
 }
 
+#[test]
+fn stopping_does_not_hide_that_a_new_identity_waits_for_a_restart() {
+    let setup = setup();
+    setup.service.new_identity().unwrap();
+
+    let stopped = setup.service.stop().unwrap();
+
+    assert_eq!(stopped.folder, None);
+    assert_eq!(stopped.phase, SyncPhase::Stopped);
+    assert_eq!(stopped.problem_code, Some(RESTART_NEEDED));
+    assert!(stopped.problem.is_some());
+    setup
+        .service
+        .choose_folder(Path::new("sync"), "Desk")
+        .unwrap();
+    assert_eq!(
+        setup.service.state().unwrap().problem_code,
+        Some(RESTART_NEEDED)
+    );
+}
+
 /// A folder that counts how many rounds work in it at the same moment.
 #[derive(Default)]
 struct WatchedFolder {

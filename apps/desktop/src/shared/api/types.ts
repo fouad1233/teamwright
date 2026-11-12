@@ -721,7 +721,10 @@ export interface Computer {
 export interface SyncState {
   /** The chosen folder, or nothing while syncing is off. */
   folder: string | null;
-  /** The identity of this computer. */
+  /**
+   * The identity of this computer. After a new identity it is the new one,
+   * already before Teamwright starts again.
+   */
   thisComputer: Id;
   /** The name of this computer, once the manager gave one. */
   computerName: string | null;

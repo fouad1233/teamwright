@@ -521,7 +521,8 @@ impl SyncPhase {
 pub struct SyncState {
     /// The chosen folder, if syncing is on.
     pub folder: Option<PathBuf>,
-    /// The identity of this computer.
+    /// The identity of this computer. After a new identity it is the new
+    /// one, already before Teamwright starts again.
     pub this_computer: ComputerId,
     /// The name of this computer, once the manager gave one.
     pub computer_name: Option<String>,
@@ -709,7 +710,13 @@ impl SyncService {
     pub fn stop(&self) -> Result<SyncState, ApplicationError> {
         let _round = lock(&self.inner.round);
         self.inner.ports.ledger.set_folder(None)?;
-        *lock(&self.inner.status) = Status::default();
+        let mut status = lock(&self.inner.status);
+        // A new identity still waits for Teamwright to start again: the
+        // state keeps saying so, whether syncing is on or off.
+        if !status.restart_needed {
+            *status = Status::default();
+        }
+        drop(status);
         self.state()
     }
 
