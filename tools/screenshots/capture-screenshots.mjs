@@ -4,8 +4,9 @@
  *
  * It starts the built application on an empty temporary data folder, takes a
  * picture of the first screen, creates a sample project through the commands
- * of the shell, and takes pictures of the board, of one task, of the list and
- * of the team. Every picture is taken twice: in the dark theme and in the
+ * of the shell, and takes pictures of the board, of one task, of the list,
+ * of the Gantt chart, of the calendar, of the team and of the dialog for
+ * the statuses. Every picture is taken twice: in the dark theme and in the
  * light theme.
  *
  * Usage:
@@ -85,9 +86,10 @@ const SAMPLE_TEAM = [
 
 /**
  * The tasks of the sample project. `waitsFor` holds the numbers of the tasks
- * a task waits for. Days are counted from today; negative numbers lie in the
- * past. `owner` is 'manager' or the key of a member of the team; a task
- * without an owner is given to nobody.
+ * a task waits for, and `partOf` the number of the task a subtask is a part
+ * of. Days are counted from today; negative numbers lie in the past. `owner`
+ * is 'manager' or the key of a member of the team; a task without an owner
+ * is given to nobody.
  */
 const SAMPLE_TASKS = [
   {
@@ -214,9 +216,57 @@ const SAMPLE_TASKS = [
     startsInDays: 11,
     dueInDays: 14,
   },
+  // The parts of two of the tasks above. Each part has a status of its own.
+  {
+    number: 13,
+    title: 'Power supply and battery charger',
+    status: 'Done',
+    owner: 'hardware',
+    partOf: 4,
+    estimateHours: 2,
+    startsInDays: -2,
+    dueInDays: -1,
+  },
+  {
+    number: 14,
+    title: 'Microcontroller and its clock',
+    status: 'In progress',
+    owner: 'hardware',
+    partOf: 4,
+    estimateHours: 3,
+    startsInDays: -1,
+    dueInDays: 1,
+  },
+  {
+    number: 15,
+    title: 'Connectors for the sensors and the display',
+    status: 'To do',
+    owner: 'hardware',
+    partOf: 4,
+    estimateHours: 3,
+    dueInDays: 2,
+  },
+  {
+    number: 16,
+    title: 'Driver for temperature and humidity',
+    status: 'To do',
+    owner: 'firmware',
+    partOf: 8,
+    estimateHours: 3,
+    dueInDays: 4,
+  },
+  {
+    number: 17,
+    title: 'Driver for the oxygen sensor',
+    status: 'To do',
+    owner: 'firmware',
+    partOf: 8,
+    estimateHours: 5,
+    dueInDays: 7,
+  },
 ];
 
-/** The task that is opened for the picture of a task. */
+/** The task that is opened for the picture of a task. Its subtasks are shown unfolded. */
 const SHOWN_TASK = 'Draw the schematic';
 
 /** The calendar date that lies `days` after today, in the form year-month-day. */
@@ -240,7 +290,11 @@ async function run(window, name, args) {
   return answer.ok;
 }
 
-/** Creates the sample project: its team, its tasks, what they wait for, and where they stand. */
+/**
+ * Creates the sample project: its team, its tasks, what they wait for, and
+ * where they stand. Returns the project and the identifier of the task that
+ * is shown with its subtasks.
+ */
 async function createSampleProject(window) {
   const project = await run(window, 'create_project', { input: SAMPLE_PROJECT });
 
@@ -278,6 +332,8 @@ async function createSampleProject(window) {
         estimateMinutes: sample.estimateHours * 60,
         startOn: dateInDays(sample.startsInDays),
         dueOn: dateInDays(sample.dueInDays),
+        // A task is listed after the task it is a part of, so that one exists.
+        ...(sample.partOf === undefined ? {} : { parentId: taskIds.get(sample.partOf) }),
       },
     });
     taskIds.set(sample.number, task.id);
@@ -302,6 +358,21 @@ async function createSampleProject(window) {
       index: END_OF_STATUS,
     });
   }
+
+  const shownTask = SAMPLE_TASKS.find((sample) => sample.title === SHOWN_TASK);
+  return { project, shownTaskId: taskIds.get(shownTask.number) };
+}
+
+/**
+ * Unfolds the subtasks of a task, the way a click on its fold does. The
+ * interface remembers the folds of a project in the storage of the web view
+ * and reads them when it loads.
+ */
+async function unfoldSubtasks(window, projectId, taskId) {
+  await window.evaluate(
+    `localStorage.setItem(${JSON.stringify(`teamwright.openSubtasks.${projectId}`)},
+       ${JSON.stringify(JSON.stringify([taskId]))})`,
+  );
 }
 
 // -------------------------------------------------------------- the pictures
@@ -319,13 +390,38 @@ function tab(name) {
     .find((entry) => entry.innerText.trim() === ${JSON.stringify(name)})`;
 }
 
-/** JavaScript that finds the card of a task on the board by its title. */
+/**
+ * JavaScript that presses a button or an entry of a menu, found by its
+ * label. A menu opens when the pointer goes down on its button, so a plain
+ * click is not enough.
+ */
+function press(label) {
+  return `(() => {
+    const target = [...document.querySelectorAll('button, [role="menuitem"]')].find(
+      (entry) =>
+        entry.getAttribute('aria-label') === ${JSON.stringify(label)} ||
+        entry.innerText.trim() === ${JSON.stringify(label)},
+    );
+    for (const type of ['pointerdown', 'pointerup']) {
+      target.dispatchEvent(new PointerEvent(type, { bubbles: true, button: 0, pointerType: 'mouse' }));
+    }
+    target.click();
+  })()`;
+}
+
+/**
+ * JavaScript that finds the card of a task on the board by its title: the
+ * part of the card that opens the task when it is pressed.
+ */
 function card(title) {
-  return `[...document.querySelectorAll('li')]
+  return `[...document.querySelectorAll('li [role="button"]')]
     .find((entry) => entry.innerText.includes(${JSON.stringify(title)}))`;
 }
 
-/** Takes the pictures of the sample project in one theme: the board, a task, the list, the team. */
+/**
+ * Takes the pictures of the sample project in one theme: the board, a task,
+ * the list, the Gantt chart, the calendar, the team, and the statuses.
+ */
 async function takeProjectPictures(window, theme) {
   await window.showInTheme(theme);
 
@@ -342,9 +438,25 @@ async function takeProjectPictures(window, theme) {
   await window.waitForText('ASSIGNEE');
   await takePicture(window, `list-${theme}`);
 
+  await window.click(tab('Gantt'));
+  await window.waitForText('Today');
+  await takePicture(window, `gantt-${theme}`);
+
+  await window.click(tab('Calendar'));
+  await window.waitForText('MON');
+  await takePicture(window, `calendar-${theme}`);
+
   await window.click(tab('Team'));
   await window.waitForText('MEMBER');
   await takePicture(window, `team-${theme}`);
+
+  await window.click(tab('Board'));
+  await window.evaluate(press('Project'));
+  await window.waitForText('Statuses');
+  await window.evaluate(press('Statuses'));
+  await window.waitForText('MEANS');
+  await takePicture(window, `statuses-${theme}`);
+  await window.pressEscape();
 }
 
 const dataDirectory = mkdtempSync(join(tmpdir(), 'teamwright-screenshots-'));
@@ -361,7 +473,8 @@ try {
     await takePicture(window, `first-run-${theme}`);
   }
 
-  await createSampleProject(window);
+  const { project, shownTaskId } = await createSampleProject(window);
+  await unfoldSubtasks(window, project.id, shownTaskId);
   await window.reload();
   await window.waitForText(SHOWN_TASK);
   for (const theme of THEMES) {

@@ -11,12 +11,27 @@ show them. Every picture exists twice: `-dark.png` for the dark theme and
 | `board` | The board of the sample project |
 | `task` | A task opened from the board |
 | `list` | The list of the sample project |
+| `gantt` | The Gantt chart of the sample project |
+| `calendar` | The calendar of the sample project |
 | `team` | The team of the sample project |
+| `statuses` | The dialog in which the statuses of a project are edited |
+| `specialist-working` | A real specialist at work on a task |
+| `specialist-report` | The same specialist's report |
 
 Nobody edits these files by hand.
 [A tool](../../tools/screenshots/capture-screenshots.mjs) starts the built
 application on an empty data folder, creates the sample project through the
-same commands the interface uses, and takes the pictures.
+same commands the interface uses, and takes the pictures. The Claude Code
+in them is a stand-in, like the project is a sample: what the pictures say
+about the program and the sign-in is the same on every computer, and is
+nobody's account.
 [The development guide](../development/README.md#pictures-for-the-documentation)
 says how to run it. Take the pictures again after a change that they would
 show.
+
+The two pictures of a specialist are taken by another tool,
+[the test that lets a real specialist work](../../tools/smoke/specialist-smoke.mjs),
+when it is given this folder. What they show was done by a real session of
+Claude Code, so the words of the report differ from one run to the next.
+That test uses a part of a Claude plan, so these two are taken again only
+when the work of the specialists looks different.
