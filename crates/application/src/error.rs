@@ -237,8 +237,8 @@ impl ApplicationError {
             // stored folders and the computer, so they are checked here and
             // not in the domain. To the interface they are rules like any
             // other.
-            Self::Rule(_)
-            | Self::FolderNotNamed
+            Self::Rule(rule) => rule.code(),
+            Self::FolderNotNamed
             | Self::WorkFolderIsReference { .. }
             | Self::ReferenceInsideWorkFolder { .. }
             | Self::WorkFolderInsideReference { .. }

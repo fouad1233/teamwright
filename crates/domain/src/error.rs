@@ -219,4 +219,73 @@ pub enum DomainError {
         /// The due date that was given.
         due: CalendarDate,
     },
+
+    /// The start date of a sprint was later than its end date.
+    #[error("the start date {start} is after the end date {end}")]
+    StartAfterEnd {
+        /// The start date that was given.
+        start: CalendarDate,
+        /// The end date that was given.
+        end: CalendarDate,
+    },
+
+    /// Story points were not a whole number in their range.
+    #[error("story points are a whole number from 0 to {max}")]
+    PointsOutOfRange {
+        /// The most points a task can have.
+        max: u16,
+    },
+
+    /// A sprint that has started was to lose one of its dates.
+    #[error("a sprint that has started has a start and an end date")]
+    StartedSprintWithoutDates,
+
+    /// A completed sprint was to be changed, removed, started, completed or
+    /// given tasks. It is the record of what was done.
+    #[error("\"{name}\" is completed and {refused}")]
+    SprintCompleted {
+        /// The name of the sprint.
+        name: String,
+        /// What cannot be done to it, as the end of a sentence, such as
+        /// "can no longer be changed".
+        refused: &'static str,
+    },
+
+    /// An active sprint was to be removed.
+    #[error("\"{name}\" has started and cannot be deleted; complete it instead")]
+    ActiveSprintDeleted {
+        /// The name of the sprint.
+        name: String,
+    },
+
+    /// An active sprint was to be started again.
+    #[error("\"{name}\" has already started")]
+    SprintAlreadyStarted {
+        /// The name of the sprint.
+        name: String,
+    },
+
+    /// A sprint that has not started was to be completed.
+    #[error("\"{name}\" has not started, so it cannot be completed")]
+    SprintNotStarted {
+        /// The name of the sprint.
+        name: String,
+    },
+}
+
+impl DomainError {
+    /// A short, stable name for the kind of rule that was broken.
+    ///
+    /// Most rules are simply broken rules. Those about the state of a
+    /// sprint have codes of their own, so that an interface can tell the
+    /// manager what to do instead.
+    #[must_use]
+    pub const fn code(&self) -> &'static str {
+        match self {
+            Self::SprintCompleted { .. } => "sprint_completed",
+            Self::ActiveSprintDeleted { .. } | Self::SprintAlreadyStarted { .. } => "sprint_active",
+            Self::SprintNotStarted { .. } => "sprint_not_active",
+            _ => "rule_broken",
+        }
+    }
 }

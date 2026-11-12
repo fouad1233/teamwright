@@ -85,6 +85,12 @@ define_id!(
 );
 
 define_id!(
+    /// Identifies a sprint of a project.
+    SprintId,
+    kind = "sprint identifier"
+);
+
+define_id!(
     /// Identifies a conversation with an AI specialist.
     ConversationId,
     kind = "conversation identifier"

@@ -97,6 +97,39 @@ define_text!(
     max_length = 60
 );
 
+define_text!(
+    /// The name of a sprint, such as "Sprint 3" or "Board bring-up".
+    SprintName,
+    field = "sprint name",
+    max_length = 60
+);
+
+impl SprintName {
+    /// The name a sprint gets when the manager gives it none: "Sprint N",
+    /// where N is the number of the sprint among the sprints of its
+    /// project.
+    #[must_use]
+    pub fn numbered(number: u32) -> Self {
+        // At most "Sprint " and ten digits, well within the limit.
+        Self(format!("Sprint {number}"))
+    }
+
+    /// Checks and tidies a name like [`SprintName::parse`], but gives a name
+    /// that is empty after tidying the number `number_if_empty` instead of
+    /// refusing it.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the name is longer than [`Self::MAX_LENGTH`]
+    /// characters.
+    pub fn parse_or_numbered(raw: &str, number_if_empty: u32) -> Result<Self, DomainError> {
+        if raw.trim().is_empty() {
+            return Ok(Self::numbered(number_if_empty));
+        }
+        Self::parse(raw)
+    }
+}
+
 /// The name of a model, as the program that runs the specialists
 /// understands it: a short name for the latest model of a family, such as
 /// `sonnet`, or the full name of a model.
