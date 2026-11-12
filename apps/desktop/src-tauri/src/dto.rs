@@ -10,9 +10,10 @@ use std::str::FromStr;
 use chrono::SecondsFormat;
 use serde::{Deserialize, Serialize};
 use teamwright_application::{
-    AgentProgram, ApprovedMember, ApprovedOwner, ApprovedProposal, ApprovedTask,
-    ConversationWithTurns, NewMember, NewProject, NewSprint, NewTask, ProjectPlaces, SprintChanges,
-    SprintReport, SprintStart, StatusProperties, WorkflowTemplate,
+    Acceptance, AgentProgram, ApprovedMember, ApprovedOwner, ApprovedProposal, ApprovedTask,
+    ConversationWithTurns, KnownComputer, NewMember, NewProject, NewSprint, NewTask, ProjectPlaces,
+    SprintChanges, SprintReport, SprintStart, StatusProperties, SyncNotice, SyncState,
+    WorkflowTemplate,
 };
 use teamwright_domain::{
     Assignee, CalendarDate, Color, ComputerId, Conversation, DecisionOption, DecisionRequest,
@@ -1299,4 +1300,174 @@ fn moment_to_text(moment: Timestamp) -> String {
 /// Writes a calendar date the way the interface expects it.
 fn date_to_text(date: CalendarDate) -> String {
     date.format(DATE_FORMAT).to_string()
+}
+
+/// Where syncing through a folder stands, as the interface sees it. It is
+/// also the payload of the event `sync-changed`.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncStateDto {
+    /// The chosen folder, or nothing while syncing is off.
+    folder: Option<String>,
+    /// The identity of this computer.
+    this_computer: String,
+    /// The name of this computer, once the manager gave one.
+    computer_name: Option<String>,
+    /// A name to offer when the manager is asked for one: the name the
+    /// operating system gives the computer. Only a suggestion; it often
+    /// holds a person's name.
+    suggested_name: Option<String>,
+    /// `off`, `in_step`, `writing`, `unreachable` or `stopped`.
+    phase: &'static str,
+    /// When the last round ended, in this run of the program.
+    last_round: Option<String>,
+    /// What went wrong in the last round, in words.
+    problem: Option<String>,
+    /// The other computers.
+    computers: Vec<ComputerDto>,
+}
+
+impl SyncStateDto {
+    /// Takes the state of syncing, with a suggestion for the name of this
+    /// computer.
+    pub fn new(state: &SyncState, suggested_name: Option<String>) -> Self {
+        Self {
+            folder: state.folder.as_deref().map(path_to_text),
+            this_computer: state.this_computer.to_string(),
+            computer_name: state.computer_name.clone(),
+            suggested_name,
+            phase: state.phase.as_str(),
+            last_round: state.last_round.map(moment_to_text),
+            problem: state.problem.clone(),
+            computers: state.computers.iter().map(ComputerDto::from).collect(),
+        }
+    }
+}
+
+/// Another computer in the sync folder, as the interface sees it.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ComputerDto {
+    id: String,
+    /// The name it gave itself, once its card was read.
+    name: Option<String>,
+    /// The version of Teamwright it runs.
+    version: Option<String>,
+    /// `undecided`, `accepted` or `ignored`.
+    acceptance: &'static str,
+    /// When it last wrote into the folder.
+    last_heard: Option<String>,
+    /// Whether its clock is ahead of this computer's by more than five
+    /// minutes.
+    clock_ahead: bool,
+    /// Whether it uses a newer Teamwright, whose files this one cannot
+    /// read.
+    newer_format: bool,
+}
+
+impl From<&KnownComputer> for ComputerDto {
+    fn from(computer: &KnownComputer) -> Self {
+        Self {
+            id: computer.id.to_string(),
+            name: computer.name.clone(),
+            version: computer.version.clone(),
+            acceptance: match computer.acceptance {
+                Acceptance::Undecided => "undecided",
+                Acceptance::Accepted => "accepted",
+                Acceptance::Ignored => "ignored",
+            },
+            last_heard: computer.last_heard.map(moment_to_text),
+            clock_ahead: computer.clock_ahead_by_millis.is_some(),
+            newer_format: computer.newer_format.is_some(),
+        }
+    }
+}
+
+/// Something syncing tells the manager, as the interface sees it.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncNoticeDto {
+    id: i64,
+    at: String,
+    /// `task_renumbered`, `project_rekeyed`, `change_dropped`, `task_moved`
+    /// or `clock_ahead`.
+    kind: &'static str,
+    project_id: Option<String>,
+    task_id: Option<String>,
+    message: String,
+}
+
+impl From<&SyncNotice> for SyncNoticeDto {
+    fn from(notice: &SyncNotice) -> Self {
+        Self {
+            id: notice.id,
+            at: moment_to_text(notice.at),
+            kind: notice.kind.as_str(),
+            project_id: notice.project_id.map(|id| id.to_string()),
+            task_id: notice.task_id.map(|id| id.to_string()),
+            message: notice.message.clone(),
+        }
+    }
+}
+
+/// The payload of the event `data-changed`: the projects in which syncing
+/// changed something.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DataChangedDto {
+    project_ids: Vec<String>,
+}
+
+impl From<&[teamwright_domain::ProjectId]> for DataChangedDto {
+    fn from(projects: &[teamwright_domain::ProjectId]) -> Self {
+        Self {
+            project_ids: projects.iter().map(ToString::to_string).collect(),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::unwrap_used)]
+
+    use chrono::TimeZone;
+    use teamwright_domain::ComputerId;
+
+    use super::*;
+
+    #[test]
+    fn the_state_of_syncing_goes_out_in_camel_case_with_its_phase_in_words() {
+        let desk = ComputerId::generate();
+        let state = SyncState {
+            folder: Some(std::path::PathBuf::from("sync")),
+            this_computer: ComputerId::generate(),
+            computer_name: Some("Laptop".to_owned()),
+            computers: vec![KnownComputer {
+                id: desk,
+                name: Some("Desk".to_owned()),
+                version: Some("0.1.0".to_owned()),
+                acceptance: Acceptance::Undecided,
+                read_up_to: 0,
+                last_heard: Some(chrono::Utc.with_ymd_and_hms(2026, 11, 12, 9, 0, 0).unwrap()),
+                clock_ahead_by_millis: None,
+                newer_format: Some(2),
+            }],
+            phase: teamwright_application::SyncPhase::InStep,
+            last_round: None,
+            problem: None,
+        };
+
+        let json =
+            serde_json::to_value(SyncStateDto::new(&state, Some("SAMPLE".to_owned()))).unwrap();
+
+        assert_eq!(json["phase"], "in_step");
+        assert_eq!(json["computerName"], "Laptop");
+        assert_eq!(json["suggestedName"], "SAMPLE");
+        assert_eq!(json["computers"][0]["acceptance"], "undecided");
+        assert_eq!(json["computers"][0]["newerFormat"], true);
+        assert_eq!(
+            json["computers"][0]["lastHeard"],
+            "2026-11-12T09:00:00.000Z"
+        );
+    }
 }

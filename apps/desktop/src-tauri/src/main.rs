@@ -34,6 +34,7 @@ fn main() -> ExitCode {
         .setup(|app| {
             let state = AppState::open(app.handle())?;
             app.manage(state);
+            state::start_syncing_in_the_background(app.handle().clone());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -95,6 +96,16 @@ fn main() -> ExitCode {
             commands::work::list_conversations_waiting,
             commands::work::stop_work,
             commands::work::open_in_claude,
+            commands::sync::sync_state,
+            commands::sync::choose_sync_folder,
+            commands::sync::stop_syncing,
+            commands::sync::sync_now,
+            commands::sync::rename_this_computer,
+            commands::sync::accept_computer,
+            commands::sync::ignore_computer,
+            commands::sync::sync_notices,
+            commands::sync::dismiss_sync_notice,
+            commands::sync::give_this_computer_a_new_identity,
         ])
         .build(tauri::generate_context!());
 

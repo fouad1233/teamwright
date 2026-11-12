@@ -86,7 +86,66 @@ The shell is where the work of an AI specialist meets the outside world
 - **Closing.** When the program closes, the specialists that are still
   working are stopped and their turns end as failed, with a text that says
   why. A turn that was cut off harder than that, for example by a crash, is
-  ended the same way at the next start.
+  ended the same way at the next start. A turn of a conversation that runs
+  on another computer is never ended here.
+
+### Keeping computers in step
+
+The shell connects `SyncService` to the disk
+([decision 0017](../../docs/decisions/0017-sync-through-a-folder.md)):
+`state.rs` builds it with `SqliteSyncLedger` and `FolderOfComputers`, the
+version of the program, and the data folder, inside which the sync folder
+may not lie.
+
+- **The background round.** `start_syncing_in_the_background` starts one
+  thread when the program starts. Every five seconds it looks: this
+  computer's changes are written once the latest is five seconds old, or at
+  the latest thirty seconds after the last round, and the other computers
+  are read every twenty seconds. Nothing happens while no folder is chosen.
+  A round started by a command and one started by the thread never run at
+  once: the service runs one at a time.
+- **After a round** the turns that another computer deleted while they ran
+  here are stopped, and the interface is told: `data-changed` with
+  `{ "projectIds": [...] }` when something changed in projects,
+  `conversation-changed` with the whole conversation for each conversation
+  that changed, and `sync-changed` with the whole `SyncStateDto`, after
+  every round, also one that failed.
+- **The copy before the first take-in** is made by the ledger, as
+  `teamwright-before-sync-<date>.db` in the data folder.
+- **The name of this computer** is asked for when the folder is chosen.
+  `SyncStateDto.suggestedName` offers the name the operating system gives
+  the computer (`COMPUTERNAME` or `HOSTNAME`), only as a suggestion.
+- **A new identity** takes effect when Teamwright starts again; until then
+  the state is `stopped` and every round is refused with
+  `identity_in_use`.
+
+The commands are in `commands/sync.rs`:
+
+| Command | Arguments | Answer |
+|---|---|---|
+| `sync_state` | | `SyncStateDto` |
+| `choose_sync_folder` | `folder`, `computerName` | `SyncStateDto`, after a first round |
+| `stop_syncing` | | `SyncStateDto` |
+| `sync_now` | | `SyncStateDto`, after the round |
+| `rename_this_computer` | `name` | `SyncStateDto` |
+| `accept_computer` | `computerId` | `SyncStateDto`, after a round |
+| `ignore_computer` | `computerId` | `SyncStateDto` |
+| `sync_notices` | | `SyncNoticeDto[]`, newest first |
+| `dismiss_sync_notice` | `noticeId` | nothing |
+| `give_this_computer_a_new_identity` | | `SyncStateDto` |
+
+`SyncStateDto` has `folder`, `thisComputer`, `computerName`,
+`suggestedName`, `phase` (`off`, `in_step`, `writing`, `unreachable`,
+`stopped`), `lastRound`, `problem` and `computers`, each a `ComputerDto`
+with `id`, `name`, `version`, `acceptance` (`undecided`, `accepted`,
+`ignored`), `lastHeard`, `clockAhead` and `newerFormat`. A
+`SyncNoticeDto` has `id`, `at`, `kind` (`task_renumbered`,
+`project_rekeyed`, `change_dropped`, `task_moved`, `clock_ahead`),
+`projectId`, `taskId` and `message`. The error codes are those of the
+application: `sync_off`, `sync_folder_unreachable`, `sync_folder_in_data`,
+`identity_in_use`, `folder_not_found`, `rule_broken` (also for an
+identifier that cannot be read, or an empty name), `not_found` and
+`storage_failed`. `types.ts` does not have these types yet.
 
 ## The interface: `src`
 

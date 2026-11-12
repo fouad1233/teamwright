@@ -145,9 +145,25 @@ new task starts with what it needs instead of a transcript.
 
 - Current state is a SQLite database in the application's data directory.
 - Every change is also written to an operation log, stamped with the ID of
-  the computer and a hybrid logical clock.
+  the computer and a hybrid logical clock. Every field of every stored thing
+  keeps the stamp of the write that set it, and the merged state of each
+  thing is kept with those stamps.
 - To sync, each computer writes its own log files into a folder the user
-  chooses and reads the files of the others. No file ever has two writers.
+  chooses and reads the files of the computers the manager accepted
+  ([decision 0017](../decisions/0017-sync-through-a-folder.md)). No file
+  ever has two writers, and a file never changes once its name appears.
+- What two computers changed is merged field by field: the later stamp
+  wins, a counter keeps the larger value, and a deletion is final. Rules
+  that span records (one number per task, one key per project, one active
+  sprint, no chain of waiting that closes on itself) are repaired after a
+  batch is taken in, with ordinary logged changes.
+- A conversation belongs to the computer it was started on, where its
+  Claude Code session lives. Elsewhere it can be read, not continued, and
+  no computer ever ends a turn of another.
+- The shell runs a round in the background: its own changes are written
+  once they are five seconds old, or at the latest every thirty seconds,
+  and the others are read every twenty seconds. The folders of a project
+  never leave the computer.
 - Deliverables are ordinary files in the project folder: schematics, source
   code, CAD models, documents. Teamwright records where they are; it does not
   hide them in a database.
@@ -206,4 +222,8 @@ them.
 - Risky tool use by a team member is not approved by Teamwright on the
   manager's behalf. It is forwarded to the manager.
 - Nothing is sent anywhere except to Claude Code and, if the user sets it up,
-  to the user's own sync folder.
+  to the user's own sync folder. Teamwright makes no network connection to
+  sync. What goes into the folder is not encrypted in the first version:
+  whoever can read the folder can read the projects and the conversations,
+  and whoever can write into it can change them. Before the first take-in,
+  the database is copied next to itself.

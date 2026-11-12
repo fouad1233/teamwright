@@ -48,3 +48,41 @@ impl From<DomainError> for CommandError {
         ApplicationError::from(error).into()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_problems_of_syncing_reach_the_interface_with_their_codes() {
+        let cases = [
+            (ApplicationError::SyncOff, "sync_off"),
+            (
+                ApplicationError::SyncFolderUnreachable {
+                    folder: "D:/sample".to_owned(),
+                },
+                "sync_folder_unreachable",
+            ),
+            (
+                ApplicationError::SyncFolderInDataFolder {
+                    folder: "D:/sample".to_owned(),
+                },
+                "sync_folder_in_data",
+            ),
+            (ApplicationError::IdentityInUse, "identity_in_use"),
+            (
+                ApplicationError::ConversationRunsElsewhere {
+                    computer: teamwright_domain::ComputerId::generate(),
+                },
+                "runs_elsewhere",
+            ),
+        ];
+
+        for (error, code) in cases {
+            let message = error.to_string();
+            let command_error = CommandError::from(error);
+            assert_eq!(command_error.code, code);
+            assert_eq!(command_error.message, message);
+        }
+    }
+}

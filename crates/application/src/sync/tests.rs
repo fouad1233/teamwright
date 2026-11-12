@@ -471,3 +471,94 @@ fn a_new_identity_stops_syncing_until_the_program_starts_again() {
     assert_eq!(setup.service.round().unwrap_err().code(), "identity_in_use");
     assert_eq!(setup.service.state().unwrap().phase, SyncPhase::Stopped);
 }
+
+/// A folder that counts how many rounds work in it at the same moment.
+#[derive(Default)]
+struct WatchedFolder {
+    inner: Folder,
+    working: Mutex<usize>,
+    most_at_once: Mutex<usize>,
+}
+
+impl SyncFolder for WatchedFolder {
+    fn write_card(&self, root: &Path, card: &ComputerCard) -> Result<(), StorageError> {
+        {
+            let mut working = lock(&self.working);
+            *working += 1;
+            let mut most = lock(&self.most_at_once);
+            *most = (*most).max(*working);
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        *lock(&self.working) -= 1;
+        self.inner.write_card(root, card)
+    }
+
+    fn write_file(
+        &self,
+        root: &Path,
+        computer: ComputerId,
+        operations: &[ExchangedOperation],
+    ) -> Result<String, StorageError> {
+        self.inner.write_file(root, computer, operations)
+    }
+
+    fn computers(&self, root: &Path) -> Result<Vec<FoundComputer>, StorageError> {
+        self.inner.computers(root)
+    }
+
+    fn files_of(
+        &self,
+        root: &Path,
+        computer: ComputerId,
+        after: u64,
+    ) -> Result<Vec<String>, StorageError> {
+        self.inner.files_of(root, computer, after)
+    }
+
+    fn read_file(
+        &self,
+        root: &Path,
+        computer: ComputerId,
+        name: &str,
+    ) -> Result<FileContent, StorageError> {
+        self.inner.read_file(root, computer, name)
+    }
+
+    fn join_small_files(
+        &self,
+        root: &Path,
+        computer: ComputerId,
+    ) -> Result<Option<String>, StorageError> {
+        self.inner.join_small_files(root, computer)
+    }
+}
+
+#[test]
+fn two_rounds_started_at_once_run_one_after_the_other() {
+    let me = ComputerId::generate();
+    let folder = Arc::new(WatchedFolder::default());
+    let service = SyncService::new(SyncPorts {
+        ledger: Arc::new(Ledger {
+            this_computer: Some(me),
+            ..Ledger::default()
+        }),
+        folder: folder.clone(),
+        file_system: Arc::new(PretendFileSystem::with_folders(["sync"])),
+        clock: Arc::new(ManualClock::starting_at(moment())),
+        version: "0.1.0".to_owned(),
+        data_folder: PathBuf::from("data"),
+    });
+    service.choose_folder(Path::new("sync"), "Desk").unwrap();
+
+    let rounds: Vec<_> = (0..4)
+        .map(|_| {
+            let service = service.clone();
+            std::thread::spawn(move || service.round().map(|_| ()))
+        })
+        .collect();
+    for round in rounds {
+        round.join().unwrap().unwrap();
+    }
+
+    assert_eq!(*lock(&folder.most_at_once), 1);
+}
