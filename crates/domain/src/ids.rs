@@ -84,6 +84,18 @@ define_id!(
     kind = "team member identifier"
 );
 
+define_id!(
+    /// Identifies a conversation with an AI specialist.
+    ConversationId,
+    kind = "conversation identifier"
+);
+
+define_id!(
+    /// Identifies one turn of a conversation: a request and what came of it.
+    TurnId,
+    kind = "turn identifier"
+);
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -87,6 +87,18 @@ pub enum DomainError {
     #[error("a task cannot be its own parent")]
     SelfParent,
 
+    /// Something was to happen in a turn that has already ended: a step, or
+    /// a second ending.
+    #[error("the turn has already ended")]
+    TurnEnded,
+
+    /// A tool use was to be finished that the turn does not contain.
+    #[error("the turn has no tool use with the identifier '{id}'")]
+    UnknownToolUse {
+        /// The identifier of the tool use that was given.
+        id: String,
+    },
+
     /// A start date was later than the due date.
     #[error("the start date {start} is after the due date {due}")]
     StartAfterDue {

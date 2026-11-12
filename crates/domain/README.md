@@ -1,14 +1,14 @@
 # teamwright-domain
 
 The Teamwright model and its rules. This crate knows what a project, a
-workflow, a task and a team member are, and what may and may not be done with them. It does
+workflow, a task, a team member and a conversation with a specialist are, and what may and may not be done with them. It does
 no input or output.
 
 ## What is in it
 
 | Module | Concepts |
 |---|---|
-| `ids` | `ProjectId`, `StatusId`, `TaskId`, `MemberId`: one identifier type per kind of thing |
+| `ids` | `ProjectId`, `StatusId`, `TaskId`, `MemberId`, `ConversationId`, `TurnId`: one identifier type per kind of thing |
 | `text` | `ProjectName`, `StatusName`, `TaskTitle`, `MemberName`: names that are never empty, never multi-line, never too long |
 | `color` | `Color`: the named colors a status or a team member can have |
 | `workflow` | `Workflow`, `Status`, `StatusCategory` |
@@ -16,6 +16,7 @@ no input or output.
 | `task` | `Task`, `TaskDraft`, `Priority`, `Assignee`, `Schedule`, `Rank` |
 | `dependencies` | `DependencyGraph`: which task waits for which |
 | `member` | `Member`, `MemberKind`: an AI agent or a person on the team of a project |
+| `conversation` | `Conversation`, `Turn`, `Step`, `TokenCounts`: the work of an AI specialist, one request at a time |
 | `error` | `DomainError`: every rule that can be broken |
 | `time` | `Timestamp`, `CalendarDate` |
 
@@ -38,6 +39,11 @@ no input or output.
   must not close a loop.
 - A newcomer to a team gets a color that no other member has, as long as
   there is one left. Gray, amber and red are never handed out.
+- A turn of a conversation has a request that is not empty. It takes steps
+  only while it runs, a tool use is finished only if the turn has it, and the
+  turn ends exactly once: finished, failed or stopped.
+- A finished turn does not show its report twice: a last text step that is
+  the answer is dropped.
 
 ## How to work in it
 

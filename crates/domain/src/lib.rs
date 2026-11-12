@@ -16,6 +16,7 @@
 mod macros;
 
 pub mod color;
+pub mod conversation;
 pub mod dependencies;
 pub mod error;
 pub mod ids;
@@ -27,9 +28,13 @@ pub mod time;
 pub mod workflow;
 
 pub use color::Color;
+pub use conversation::{
+    Conversation, ConversationSnapshot, Step, StepContent, StepKind, TokenCounts, ToolOutcome,
+    Turn, TurnOrigin, TurnSnapshot, TurnState,
+};
 pub use dependencies::DependencyGraph;
 pub use error::DomainError;
-pub use ids::{MemberId, ProjectId, StatusId, TaskId};
+pub use ids::{ConversationId, MemberId, ProjectId, StatusId, TaskId, TurnId};
 pub use member::{Member, MemberKind, MemberSnapshot};
 pub use project::{Project, ProjectKey, ProjectSnapshot};
 pub use task::{Assignee, Priority, Rank, Schedule, Task, TaskDraft, TaskSnapshot};
