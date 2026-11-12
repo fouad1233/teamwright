@@ -30,3 +30,4 @@ two readers.
 | 2 | [The first build, and the interface that was thrown away](02-first-build.md) | 11 November 2026 |
 | 3 | [A team with faces](03-a-team-with-faces.md) | 12 November 2026 |
 | 4 | [The first specialist goes to work](04-the-first-specialist.md) | 12 November 2026 |
+| 5 | [What a specialist can reach](05-what-a-specialist-can-reach.md) | 12 November 2026 |
