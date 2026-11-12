@@ -11,18 +11,31 @@
  * never touched: the application is pointed at a folder that the caller
  * chooses, through TEAMWRIGHT_DATA_DIR, and its web view keeps its own files
  * in that folder too.
+ *
+ * Nor is the user's Claude Code, unless the caller asks for it. The
+ * application is pointed at a stand-in, through TEAMWRIGHT_AGENT_PROGRAM,
+ * that says it is installed and signed in and cannot do any work. What a
+ * tool sees therefore does not depend on the computer it runs on, and a
+ * picture never shows how somebody is signed in.
  */
 
 import { spawn } from 'node:child_process';
 import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
+import { fileURLToPath } from 'node:url';
 
 /** How long to wait for the window, or for a text in it, before giving up. */
 const TIMEOUT_MILLISECONDS = 30_000;
 
 /** How often to look again while waiting. */
 const POLL_MILLISECONDS = 300;
+
+/** The program that stands in for Claude Code. */
+const STAND_IN_AGENT_PROGRAM = fileURLToPath(new URL('./stand-in-agent.cmd', import.meta.url));
+
+/** The version the stand-in says it is. */
+export const STAND_IN_AGENT_VERSION = '2.1.322';
 
 /** The built desktop application, running on a data folder of its own. */
 export class DesktopApplication {
@@ -44,13 +57,19 @@ export class DesktopApplication {
    * @param {string} executable     The path of the built application.
    * @param {string} dataDirectory  The folder in which it keeps its data.
    * @param {number} debuggingPort  The port on which its web view offers the debugging protocol.
+   * @param {object} [options]
+   * @param {boolean} [options.withRealAgentProgram]  Lets the application find and use the
+   *   Claude Code of this computer, under the account that is signed in there, instead of the
+   *   stand-in.
    */
-  static start(executable, dataDirectory, debuggingPort) {
+  static start(executable, dataDirectory, debuggingPort, { withRealAgentProgram = false } = {}) {
     const child = spawn(executable, [], {
       stdio: 'ignore',
       env: {
         ...process.env,
         TEAMWRIGHT_DATA_DIR: dataDirectory,
+        // An empty name means: look for the real program.
+        TEAMWRIGHT_AGENT_PROGRAM: withRealAgentProgram ? '' : STAND_IN_AGENT_PROGRAM,
         // The web view keeps what the interface remembers about itself, such
         // as the view that was open, in a folder of its own. Left alone, it
         // would share that folder with the installed application and with

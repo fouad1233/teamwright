@@ -28,6 +28,14 @@ const DATABASE_FILE_NAME: &str = "teamwright.db";
 /// along.
 const DATA_DIRECTORY_VARIABLE: &str = "TEAMWRIGHT_DATA_DIR";
 
+/// Names the program that runs the specialists, instead of the Claude Code
+/// that is looked for on the computer. It serves a Claude Code that is
+/// installed where nobody would look. The tools that drive the program for
+/// tests and pictures point it at a stand-in, so that what they see does
+/// not depend on what is installed on the computer they run on, and never
+/// shows how its user is signed in.
+const AGENT_PROGRAM_VARIABLE: &str = "TEAMWRIGHT_AGENT_PROGRAM";
+
 /// The folder in the user's documents that holds the folders of the
 /// projects ([decision 0011](../../../../docs/decisions/0011-what-a-specialist-may-do.md)).
 const PROJECTS_FOLDER_NAME: &str = "Teamwright";
@@ -91,7 +99,7 @@ impl AppState {
         let task_repository = Arc::new(SqliteTaskRepository::new(database.clone()));
         let member_repository = Arc::new(SqliteMemberRepository::new(database.clone()));
         let conversation_repository = Arc::new(SqliteConversationRepository::new(database));
-        let runtime: Arc<dyn AgentRuntime> = Arc::new(ClaudeCode::new());
+        let runtime: Arc<dyn AgentRuntime> = Arc::new(agent_program());
         let clock = Arc::new(SystemClock);
 
         let work = WorkService::new(WorkPorts {
@@ -142,6 +150,18 @@ fn data_directory(app: &AppHandle) -> Result<PathBuf, StartupError> {
     match env::var_os(DATA_DIRECTORY_VARIABLE) {
         Some(directory) if !directory.is_empty() => Ok(PathBuf::from(directory)),
         _ => Ok(app.path().app_data_dir()?),
+    }
+}
+
+/// The program that runs the specialists: the one named by
+/// `TEAMWRIGHT_AGENT_PROGRAM` if that is set, and otherwise the Claude Code
+/// that is found on the computer.
+fn agent_program() -> ClaudeCode {
+    match env::var_os(AGENT_PROGRAM_VARIABLE) {
+        Some(program) if !program.is_empty() => {
+            ClaudeCode::new().with_program(PathBuf::from(program))
+        }
+        _ => ClaudeCode::new(),
     }
 }
 

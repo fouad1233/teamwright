@@ -30,7 +30,8 @@ The shell is where the work of an AI specialist meets the outside world
 - **The program.** `state.rs` hands the application crate the user's own
   Claude Code (`teamwright-runtime`) as its agent runtime. The shell never
   reads how the user is signed in; it only asks the program whether they
-  are.
+  are. `TEAMWRIGHT_AGENT_PROGRAM` names another program to use, which is how
+  the tools for tests and pictures put a stand-in in its place.
 - **The folder of a project.** A specialist works in
   `Teamwright/<key of the project>` in the user's documents. The folder is
   created when a turn first needs it. When `TEAMWRIGHT_DATA_DIR` names a

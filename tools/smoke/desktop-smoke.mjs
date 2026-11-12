@@ -19,7 +19,11 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { DesktopApplication, removeDataDirectory } from '../shared/desktop-application.mjs';
+import {
+  DesktopApplication,
+  removeDataDirectory,
+  STAND_IN_AGENT_VERSION,
+} from '../shared/desktop-application.mjs';
 
 const [executable, screenshotPath] = process.argv.slice(2);
 if (!executable) {
@@ -333,6 +337,42 @@ try {
     await window.screenshot(screenshotPath);
     console.log(`      screenshot written to ${screenshotPath}`);
   }
+
+  // The work of a specialist, as far as it goes without a real one. The
+  // application is pointed at a stand-in for Claude Code, which says that it
+  // is installed and signed in. The stand-in is a script, and Teamwright
+  // does not start a turn on a script, so this is also the way to see what
+  // a start leaves behind when the program refuses it: nothing.
+  const program = (await window.command('agent_program')).ok;
+  check(
+    'the program for the specialists is asked for its version and its sign-in',
+    program?.state === 'ready' &&
+      program.version === STAND_IN_AGENT_VERSION &&
+      program.subscription === 'max',
+    JSON.stringify(program),
+  );
+  const notForASpecialist = await window.command('start_work', { taskId: board.id });
+  check(
+    'work starts only on a task that is given to an AI specialist',
+    notForASpecialist.refused?.code === 'no_specialist',
+    JSON.stringify(notForASpecialist),
+  );
+  const statusBefore = (await window.command('list_tasks', { projectId: project.id })).ok?.find(
+    (stored) => stored.id === firmware.id,
+  )?.statusId;
+  const refusedStart = await window.command('start_work', { taskId: firmware.id });
+  check(
+    'a start that the program refuses says why in words',
+    refusedStart.refused?.code === 'agent_could_not_run' &&
+      refusedStart.refused.message.includes('installed as a script'),
+    JSON.stringify(refusedStart),
+  );
+  const afterRefusal = (await window.command('list_tasks', { projectId: project.id })).ok;
+  check(
+    'a start that was refused leaves nothing behind: no conversation, and the task where it was',
+    (await window.command('list_conversations', { projectId: project.id })).ok?.length === 0 &&
+      afterRefusal?.find((stored) => stored.id === firmware.id)?.statusId === statusBefore,
+  );
   window.close();
 
   // Second run: what was stored is still there.
