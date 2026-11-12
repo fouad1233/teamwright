@@ -16,6 +16,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("schema/0004_member_profiles.sql"),
     include_str!("schema/0005_decisions.sql"),
     include_str!("schema/0006_project_places.sql"),
+    include_str!("schema/0007_planning.sql"),
 ];
 
 /// Applies the migrations a database has not seen yet. Each one runs in its
@@ -85,6 +86,13 @@ mod tests {
             "tasks",
             "turn_decision_options",
             "turn_decisions",
+            "turn_interview_options",
+            "turn_interview_questions",
+            "turn_interviews",
+            "turn_proposal_members",
+            "turn_proposal_task_waits",
+            "turn_proposal_tasks",
+            "turn_proposals",
             "turn_steps",
             "turns",
         ] {
@@ -235,6 +243,43 @@ mod tests {
             .query_row("SELECT count(*) FROM project_places", [], |row| row.get(0))
             .unwrap();
         assert_eq!(chosen, 0);
+    }
+
+    #[test]
+    fn a_database_without_planning_is_brought_up_to_date_with_its_conversations_kept() {
+        let mut connection = Connection::open_in_memory().unwrap();
+        for migration in &MIGRATIONS[..6] {
+            connection.execute_batch(migration).unwrap();
+        }
+        connection.pragma_update(None, "user_version", 6).unwrap();
+        connection
+            .execute_batch(
+                "INSERT INTO projects (id, key, name, description, next_task_number, created_at)
+                 VALUES ('p1', 'SSN', 'Smart sensor node', '', 1, '2026-11-11T09:00:00.000Z');
+                 INSERT INTO conversations (id, project_id, member_id, task_id, started_at)
+                 VALUES ('c1', 'p1', NULL, NULL, '2026-11-11T09:00:00.000Z');",
+            )
+            .unwrap();
+
+        migrate(&mut connection).unwrap();
+
+        assert_eq!(
+            version_of(&connection),
+            i64::try_from(MIGRATIONS.len()).unwrap()
+        );
+        let (with_advisor, model, effort): (i64, Option<String>, Option<String>) = connection
+            .query_row(
+                "SELECT with_advisor, advisor_model, advisor_effort FROM conversations
+                 WHERE id = 'c1'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!((with_advisor, model, effort), (0, None, None));
+        let proposals: i64 = connection
+            .query_row("SELECT count(*) FROM turn_proposals", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(proposals, 0);
     }
 
     #[test]

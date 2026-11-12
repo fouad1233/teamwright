@@ -20,10 +20,11 @@ use teamwright_application::{
 };
 use teamwright_domain::{
     Assignee, CalendarDate, Color, Conversation, ConversationId, DecisionOption, DecisionRequest,
-    Effort, Member, MemberId, MemberKind, MemberName, MemberProfile, ModelName, Priority, Project,
-    ProjectKey, ProjectName, Rank, Schedule, Status, StatusCategory, StatusId, StatusName,
-    StepContent, Task, TaskDraft, TaskId, TaskTitle, Timestamp, TokenCounts, ToolOutcome, Turn,
-    TurnOrigin, TurnState, Workflow,
+    Effort, Interview, InterviewAnswer, InterviewQuestion, Member, MemberId, MemberKind,
+    MemberName, MemberProfile, ModelName, Priority, Project, ProjectKey, ProjectName, Proposal,
+    ProposedMember, ProposedOwner, ProposedTask, Rank, Schedule, Status, StatusCategory, StatusId,
+    StatusName, StepContent, Task, TaskDraft, TaskId, TaskTitle, Timestamp, TokenCounts,
+    ToolOutcome, Turn, TurnOrigin, TurnState, Workflow,
 };
 use teamwright_storage::{
     Database, Operation, SqliteConversationRepository, SqliteMemberRepository,
@@ -1137,6 +1138,212 @@ fn asking_and_answering_are_logged_with_the_whole_question() {
         store.conversations.turns_of(conversation.id()).unwrap(),
         [turn]
     );
+}
+
+/// A conversation with the Advisor, stored in a project of its own.
+fn stored_conversation_with_advisor(store: &Store) -> Conversation {
+    let project = store.project("Air quality node");
+    let conversation = Conversation::start_with_advisor(
+        project.id(),
+        Some(ModelName::parse("opus").unwrap()),
+        Some(Effort::High),
+        moment(9),
+    );
+    store
+        .conversations
+        .save_conversation(&conversation)
+        .unwrap();
+    conversation
+}
+
+fn an_interview() -> Interview {
+    Interview::new(vec![
+        InterviewQuestion {
+            question: "What matters most?".to_owned(),
+            reason: "It sets the order of the work.".to_owned(),
+            options: vec![
+                DecisionOption {
+                    label: "A prototype soon".to_owned(),
+                    consequence: "Cost comes later.".to_owned(),
+                },
+                DecisionOption {
+                    label: "The lowest cost".to_owned(),
+                    consequence: String::new(),
+                },
+            ],
+            recommended: Some(0),
+        },
+        InterviewQuestion {
+            question: "What is fixed?".to_owned(),
+            reason: String::new(),
+            options: Vec::new(),
+            recommended: None,
+        },
+    ])
+    .unwrap()
+}
+
+fn a_proposal() -> Proposal {
+    let task = |title: &str, owner: Option<ProposedOwner>, waits_for: Vec<usize>| ProposedTask {
+        title: TaskTitle::parse(title).unwrap(),
+        description: format!("{title}, and done."),
+        owner,
+        estimate_minutes: Some(120),
+        priority: Priority::High,
+        waits_for,
+    };
+    Proposal::new(
+        "A device that measures the air.",
+        vec![ProposedMember {
+            name: MemberName::parse("Hardware engineer").unwrap(),
+            responsibility: "The board.".to_owned(),
+            reason: "The device is a board.".to_owned(),
+            model: Some(ModelName::parse("sonnet").unwrap()),
+            effort: Some(Effort::Low),
+        }],
+        vec![
+            task(
+                "Agree on what the device must do",
+                Some(ProposedOwner::Manager),
+                Vec::new(),
+            ),
+            task(
+                "Draw the schematic",
+                Some(ProposedOwner::Member(
+                    MemberName::parse("Hardware engineer").unwrap(),
+                )),
+                vec![0],
+            ),
+            task("Order the parts", None, vec![1, 0]),
+        ],
+    )
+    .unwrap()
+}
+
+/// A finished turn of the Advisor that asked an interview or proposed.
+fn advisor_turn(conversation: &Conversation, change: impl FnOnce(&mut Turn)) -> Turn {
+    let mut turn = running_turn(conversation, "A small air sensor.", moment(10));
+    change(&mut turn);
+    turn.finish("I wait for you.", tokens(), moment(11))
+        .unwrap();
+    turn
+}
+
+#[test]
+fn a_conversation_with_the_advisor_is_found_again_unchanged() {
+    let store = Store::in_memory();
+
+    let conversation = stored_conversation_with_advisor(&store);
+
+    let found = store
+        .conversations
+        .find(conversation.id())
+        .unwrap()
+        .unwrap();
+    assert_eq!(found, conversation);
+    assert!(found.is_with_advisor());
+    let log = store.database.operations().unwrap();
+    let state: serde_json::Value =
+        serde_json::from_str(log.last().unwrap().payload.as_deref().unwrap()).unwrap();
+    assert_eq!(state["with_advisor"], true);
+    assert_eq!(state["advisor_model"], "opus");
+    assert_eq!(state["advisor_effort"], "high");
+}
+
+#[test]
+fn an_interview_and_its_answers_are_found_again_unchanged_and_logged_whole() {
+    let store = Store::in_memory();
+    let conversation = stored_conversation_with_advisor(&store);
+    let mut turn = advisor_turn(&conversation, |turn| {
+        turn.ask_interview(an_interview()).unwrap();
+    });
+    let start = store.database.operations().unwrap().len();
+
+    store.conversations.save_turn(&turn).unwrap();
+    let after_asking = logged_after(&store, start);
+    assert_eq!(
+        store.conversations.turns_of(conversation.id()).unwrap(),
+        [turn.clone()]
+    );
+    store.conversations.save_turn(&turn).unwrap();
+    let after_nothing = logged_after(&store, start + after_asking.len());
+    turn.answer_interview(
+        vec![
+            InterviewAnswer {
+                option: Some(1),
+                note: "And small.".to_owned(),
+            },
+            InterviewAnswer {
+                option: None,
+                note: "The microcontroller.".to_owned(),
+            },
+        ],
+        moment(12),
+    )
+    .unwrap();
+    store.conversations.save_turn(&turn).unwrap();
+    let after_answering = logged_after(&store, start + after_asking.len());
+
+    assert_eq!(
+        after_asking,
+        pairs(&[("turn", "upsert"), ("interview", "upsert")])
+    );
+    assert!(after_nothing.is_empty());
+    assert_eq!(after_answering, pairs(&[("interview", "upsert")]));
+    let log = store.database.operations().unwrap();
+    let last = log.last().unwrap();
+    assert_eq!(last.entity_id, turn.id().to_string());
+    let state: serde_json::Value = serde_json::from_str(last.payload.as_deref().unwrap()).unwrap();
+    assert_eq!(
+        state["questions"][0]["options"][1]["label"],
+        "The lowest cost"
+    );
+    assert_eq!(state["questions"][0]["answered_option"], 1);
+    assert_eq!(state["questions"][1]["answer_note"], "The microcontroller.");
+    assert_eq!(
+        store.conversations.turns_of(conversation.id()).unwrap(),
+        [turn]
+    );
+}
+
+#[test]
+fn a_proposal_and_its_approval_are_found_again_unchanged_and_logged_whole() {
+    let store = Store::in_memory();
+    let conversation = stored_conversation_with_advisor(&store);
+    let mut turn = advisor_turn(&conversation, |turn| {
+        turn.propose(a_proposal()).unwrap();
+    });
+    let start = store.database.operations().unwrap().len();
+
+    store.conversations.save_turn(&turn).unwrap();
+    let after_proposing = logged_after(&store, start);
+    assert_eq!(
+        store.conversations.turns_of(conversation.id()).unwrap(),
+        [turn.clone()]
+    );
+    // The manager takes out the last task and the member.
+    let mut tasks = a_proposal().tasks().to_vec();
+    tasks.pop();
+    tasks[1].owner = None;
+    turn.approve_proposal(Vec::new(), tasks, moment(12))
+        .unwrap();
+    store.conversations.save_turn(&turn).unwrap();
+    let after_approving = logged_after(&store, start + after_proposing.len());
+
+    assert_eq!(
+        after_proposing,
+        pairs(&[("turn", "upsert"), ("proposal", "upsert")])
+    );
+    assert_eq!(after_approving, pairs(&[("proposal", "upsert")]));
+    let log = store.database.operations().unwrap();
+    let state: serde_json::Value =
+        serde_json::from_str(log.last().unwrap().payload.as_deref().unwrap()).unwrap();
+    assert_eq!(state["members"], serde_json::json!([]));
+    assert_eq!(state["tasks"][1]["waits_for"], serde_json::json!([0]));
+    assert!(state["approved_at"].is_string());
+    let found = store.conversations.turns_of(conversation.id()).unwrap();
+    assert_eq!(found, [turn]);
+    assert_eq!(found[0].proposal().unwrap().tasks().len(), 2);
 }
 
 #[test]

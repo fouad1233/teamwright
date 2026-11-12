@@ -20,6 +20,7 @@ involved.
 | `tasks` | `SqliteTaskRepository` |
 | `members` | `SqliteMemberRepository` |
 | `conversations` | `SqliteConversationRepository`: conversations, their turns, the steps of the turns and the questions they asked the manager |
+| `planning` | The interviews and the proposals of the Advisor, as parts of their turns |
 | `places` | `SqlitePlacesRepository`: the work folder and the reference folders chosen for each project |
 | `operations` | The operation log, the hybrid logical clock, `DeviceId` |
 | `codec` | The text forms of moments, dates, identifiers and enumerations |
@@ -30,7 +31,9 @@ involved.
 - **Current state** is in ordinary tables: `projects`, `statuses`, `tasks`,
   `task_dependencies`, `members`, `conversations`, `turns`, `turn_steps`,
   `turn_decisions`, `turn_decision_options`, `project_places`,
-  `project_reference_folders`.
+  `project_reference_folders`, `turn_interviews`, `turn_interview_questions`,
+  `turn_interview_options`, `turn_proposals`, `turn_proposal_members`,
+  `turn_proposal_tasks`, `turn_proposal_task_waits`.
   The schema with its conventions is in
   [`schema/0001_initial.sql`](src/schema/0001_initial.sql); later files in
   that folder add to it.
@@ -84,7 +87,20 @@ involved.
   and when it is answered. It is logged as the entity `decision` with the
   identifier of the turn, and the logged state is the whole question: its
   options and its answer.
-- **Deleting a conversation is logged turn by turn.** Each turn is deleted
+- **A conversation is with a specialist or with the Advisor** (version 7):
+  the column `with_advisor`, and the model and the effort the Advisor runs
+  on in it in `advisor_model` and `advisor_effort`, NULL for the defaults of
+  the program. A conversation with a specialist that has either is damaged
+  data.
+- **The interview and the proposal of a turn of the Advisor** have rows of
+  their own, keyed by the turn: `turn_interviews` with its questions (each
+  with its answer) and their options, and `turn_proposals` with its members,
+  its tasks and what each task waits for. Each is written only when it
+  differs from what is stored: when it is made, and when it is answered or
+  approved. They are logged as the entities `interview` and `proposal` with
+  the identifier of the turn, and the logged state is the whole of it.
+  Rows are updated in place by position, and positions a list no longer has
+  are deleted. Each turn is deleted
   and logged, which stands for its steps and its question, and then the
   conversation.
   Deleting a task or a member in the database would remove or detach the

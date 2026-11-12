@@ -82,6 +82,12 @@ pub(crate) enum Entity {
     /// The question a turn asked the manager, with its options and its
     /// answer. Its identifier is the turn's.
     Decision,
+    /// The interview the Advisor asked in a turn, with its questions, their
+    /// options and the answers. Its identifier is the turn's.
+    Interview,
+    /// The proposal the Advisor made in a turn, with its members, its
+    /// tasks and what they wait for. Its identifier is the turn's.
+    Proposal,
     /// The folders chosen for a project, with all its reference folders.
     /// Its identifier is the project's. These are facts about this
     /// computer, which must not be applied on another one.
@@ -99,6 +105,8 @@ impl Entity {
             Self::Turn => "turn",
             Self::TurnStep => "turn_step",
             Self::Decision => "decision",
+            Self::Interview => "interview",
+            Self::Proposal => "proposal",
             Self::ProjectPlaces => "project_places",
         }
     }

@@ -5,8 +5,9 @@
 //! made cheap: its row is written only when it changed, and of its steps
 //! only those that are new or changed (a tool use whose outcome is now
 //! known) are written. The question the turn asked the manager is written
-//! when it is new or has been answered. Each written row is logged; an
-//! unchanged one is not.
+//! when it is new or has been answered, and so are the interview and the
+//! proposal of the Advisor (see [`crate::planning`]). Each written row is
+//! logged; an unchanged one is not.
 
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
@@ -16,17 +17,21 @@ use serde::Serialize;
 use teamwright_application::{ConversationRepository, StorageError};
 use teamwright_domain::{
     Conversation, ConversationId, ConversationSnapshot, DecisionAnswer, DecisionOption,
-    DecisionRequest, DecisionSnapshot, ProjectId, Step, StepContent, StepKind, TokenCounts, Turn,
-    TurnSnapshot,
+    DecisionRequest, DecisionSnapshot, DomainError, MemberProfile, ModelName, ProjectId, Step,
+    StepContent, StepKind, TokenCounts, Turn, TurnSnapshot,
 };
 
 use crate::codec;
 use crate::database::Database;
 use crate::error::DatabaseError;
 use crate::operations::{Entity, OperationRecorder};
+use crate::planning::{
+    InterviewRecord, ProposalRecord, store_planning_of, stored_interview, stored_proposal,
+};
 
 /// The columns of the `conversations` table that every query reads.
-const CONVERSATION_COLUMNS: &str = "id, project_id, member_id, task_id, started_at, session_id";
+const CONVERSATION_COLUMNS: &str = "id, project_id, member_id, task_id, started_at, session_id, \
+     with_advisor, advisor_model, advisor_effort";
 
 /// The columns of the `turns` table that every query reads.
 const TURN_COLUMNS: &str = "id, conversation_id, request, origin, state, started_at, ended_at, \
@@ -39,14 +44,23 @@ const STEP_COLUMNS: &str = "turn_id, position, at, kind, text, tool_use_id, tool
 // conversation or a turn would delete it first, and its turns or steps
 // with it.
 const UPSERT_CONVERSATION: &str = "
-    INSERT INTO conversations (id, project_id, member_id, task_id, started_at, session_id)
-    VALUES (:id, :project_id, :member_id, :task_id, :started_at, :session_id)
+    INSERT INTO conversations (
+        id, project_id, member_id, task_id, started_at, session_id, with_advisor,
+        advisor_model, advisor_effort
+    )
+    VALUES (
+        :id, :project_id, :member_id, :task_id, :started_at, :session_id, :with_advisor,
+        :advisor_model, :advisor_effort
+    )
     ON CONFLICT (id) DO UPDATE SET
         project_id = excluded.project_id,
         member_id = excluded.member_id,
         task_id = excluded.task_id,
         started_at = excluded.started_at,
-        session_id = excluded.session_id";
+        session_id = excluded.session_id,
+        with_advisor = excluded.with_advisor,
+        advisor_model = excluded.advisor_model,
+        advisor_effort = excluded.advisor_effort";
 
 const UPSERT_TURN: &str = "
     INSERT INTO turns (
@@ -121,11 +135,17 @@ struct ConversationRecord {
     task_id: Option<String>,
     started_at: String,
     session_id: Option<String>,
+    with_advisor: bool,
+    /// The model of the Advisor; `None` leaves it to the program.
+    advisor_model: Option<String>,
+    /// The effort of the Advisor; `None` leaves it to the program.
+    advisor_effort: Option<String>,
 }
 
 impl ConversationRecord {
     /// Takes the stored form of a conversation.
     fn of(conversation: &Conversation) -> Self {
+        let advisor = conversation.advisor_profile();
         Self {
             id: conversation.id().to_string(),
             project_id: conversation.project_id().to_string(),
@@ -133,6 +153,13 @@ impl ConversationRecord {
             task_id: conversation.task_id().map(|id| id.to_string()),
             started_at: codec::moment_to_text(conversation.started_at()),
             session_id: conversation.session_id().map(str::to_owned),
+            with_advisor: advisor.is_some(),
+            advisor_model: advisor
+                .and_then(|profile| profile.model.as_ref())
+                .map(ToString::to_string),
+            advisor_effort: advisor
+                .and_then(|profile| profile.effort)
+                .map(|effort| effort.as_str().to_owned()),
         }
     }
 
@@ -145,11 +172,40 @@ impl ConversationRecord {
             task_id: row.get("task_id")?,
             started_at: row.get("started_at")?,
             session_id: row.get("session_id")?,
+            with_advisor: row.get("with_advisor")?,
+            advisor_model: row.get("advisor_model")?,
+            advisor_effort: row.get("advisor_effort")?,
         })
     }
 
-    /// Rebuilds the conversation, checking the stored values.
+    /// Rebuilds the conversation, checking the stored values. A
+    /// conversation with a specialist that has a model or an effort of the
+    /// Advisor is damaged data.
     fn into_conversation(self) -> Result<Conversation, DatabaseError> {
+        let broken = |reason: DomainError| codec::damaged_record("conversation", &self.id, &reason);
+        let advisor = if self.with_advisor {
+            Some(MemberProfile {
+                model: self
+                    .advisor_model
+                    .as_deref()
+                    .map(ModelName::parse)
+                    .transpose()
+                    .map_err(broken)?,
+                effort: self
+                    .advisor_effort
+                    .as_deref()
+                    .map(codec::parse)
+                    .transpose()?,
+            })
+        } else if self.advisor_model.is_some() || self.advisor_effort.is_some() {
+            return Err(DatabaseError::Damaged(format!(
+                "the conversation {} is with a specialist and has a model or an effort of the \
+                 Advisor",
+                self.id
+            )));
+        } else {
+            None
+        };
         Ok(Conversation::restore(ConversationSnapshot {
             id: codec::parse(&self.id)?,
             project_id: codec::parse(&self.project_id)?,
@@ -157,7 +213,7 @@ impl ConversationRecord {
             task_id: self.task_id.as_deref().map(codec::parse).transpose()?,
             started_at: codec::moment_from_text(&self.started_at)?,
             session_id: self.session_id,
-            advisor: None,
+            advisor,
         }))
     }
 }
@@ -224,12 +280,14 @@ impl TurnRecord {
         })
     }
 
-    /// Rebuilds the turn with its steps and its question, checking the
-    /// stored values.
+    /// Rebuilds the turn with its steps, its question, its interview and
+    /// its proposal, checking the stored values.
     fn into_turn(
         self,
         steps: Vec<StepRecord>,
         decision: Option<DecisionRecord>,
+        interview: Option<InterviewRecord>,
+        proposal: Option<ProposalRecord>,
     ) -> Result<Turn, DatabaseError> {
         let tokens = self.tokens()?;
         let steps = steps
@@ -254,8 +312,8 @@ impl TurnRecord {
             model: self.model,
             tokens,
             decision: decision.map(DecisionRecord::into_decision).transpose()?,
-            interview: None,
-            proposal: None,
+            interview: interview.map(InterviewRecord::into_interview).transpose()?,
+            proposal: proposal.map(ProposalRecord::into_proposal).transpose()?,
         }))
     }
 
@@ -499,6 +557,9 @@ impl ConversationRepository for SqliteConversationRepository {
                     ":task_id": record.task_id,
                     ":started_at": record.started_at,
                     ":session_id": record.session_id,
+                    ":with_advisor": record.with_advisor,
+                    ":advisor_model": record.advisor_model,
+                    ":advisor_effort": record.advisor_effort,
                 },
             )?;
             operations.record_upsert(Entity::Conversation, &record.id, &record)
@@ -506,49 +567,8 @@ impl ConversationRepository for SqliteConversationRepository {
     }
 
     fn save_turn(&self, turn: &Turn) -> Result<(), StorageError> {
-        let record = TurnRecord::of(turn);
-        let steps = StepRecord::all_of(turn);
-        let decision = DecisionRecord::of(turn);
-        self.database.write(|transaction, operations| {
-            if stored_turn(transaction, &record.id)?.as_ref() != Some(&record) {
-                write_turn(transaction, &record)?;
-                operations.record_upsert(Entity::Turn, &record.id, &record)?;
-            }
-
-            let mut stored_steps: BTreeMap<i64, StepRecord> = steps_of(transaction, &record.id)?
-                .into_iter()
-                .map(|step| (step.position, step))
-                .collect();
-            for step in &steps {
-                if stored_steps.remove(&step.position).as_ref() != Some(step) {
-                    write_step(transaction, step)?;
-                    operations.record_upsert(Entity::TurnStep, &step.log_id(), step)?;
-                }
-            }
-            // What is left was stored once and is no longer part of the
-            // turn, like the last text of a finished turn, which is its
-            // answer.
-            for obsolete in stored_steps.values() {
-                transaction.execute(
-                    "DELETE FROM turn_steps WHERE turn_id = :turn_id AND position = :position",
-                    named_params! {
-                        ":turn_id": obsolete.turn_id,
-                        ":position": obsolete.position,
-                    },
-                )?;
-                operations.record_delete(Entity::TurnStep, &obsolete.log_id())?;
-            }
-
-            // A turn never loses its question, so there is nothing to
-            // remove: only a new or a newly answered question is written.
-            if let Some(decision) = &decision
-                && stored_decision(transaction, &record.id)?.as_ref() != Some(decision)
-            {
-                write_decision(transaction, decision)?;
-                operations.record_upsert(Entity::Decision, &decision.turn_id, decision)?;
-            }
-            Ok(())
-        })
+        self.database
+            .write(|transaction, operations| store_turn(transaction, operations, turn))
     }
 
     fn find(&self, id: ConversationId) -> Result<Option<Conversation>, StorageError> {
@@ -587,8 +607,7 @@ impl ConversationRepository for SqliteConversationRepository {
                 .into_iter()
                 .map(|record| {
                     let steps = steps_by_turn.remove(&record.id).unwrap_or_default();
-                    let decision = stored_decision(connection, &record.id)?;
-                    record.into_turn(steps, decision)
+                    read_turn(connection, record, steps)
                 })
                 .collect()
         })
@@ -624,8 +643,7 @@ impl ConversationRepository for SqliteConversationRepository {
                 .into_iter()
                 .map(|record| {
                     let steps = steps_of(connection, &record.id)?;
-                    let decision = stored_decision(connection, &record.id)?;
-                    record.into_turn(steps, decision)
+                    read_turn(connection, record, steps)
                 })
                 .collect()
         })
@@ -639,6 +657,66 @@ impl ConversationRepository for SqliteConversationRepository {
             Ok(())
         })
     }
+}
+
+/// Writes a turn: its row, its steps, its question, its interview and its
+/// proposal, each only if it changed, and logs what was written.
+pub(crate) fn store_turn(
+    transaction: &Transaction<'_>,
+    operations: &mut OperationRecorder<'_>,
+    turn: &Turn,
+) -> Result<(), DatabaseError> {
+    let record = TurnRecord::of(turn);
+    if stored_turn(transaction, &record.id)?.as_ref() != Some(&record) {
+        write_turn(transaction, &record)?;
+        operations.record_upsert(Entity::Turn, &record.id, &record)?;
+    }
+
+    let mut stored_steps: BTreeMap<i64, StepRecord> = steps_of(transaction, &record.id)?
+        .into_iter()
+        .map(|step| (step.position, step))
+        .collect();
+    for step in &StepRecord::all_of(turn) {
+        if stored_steps.remove(&step.position).as_ref() != Some(step) {
+            write_step(transaction, step)?;
+            operations.record_upsert(Entity::TurnStep, &step.log_id(), step)?;
+        }
+    }
+    // What is left was stored once and is no longer part of the turn, like
+    // the last text of a finished turn, which is its answer.
+    for obsolete in stored_steps.values() {
+        transaction.execute(
+            "DELETE FROM turn_steps WHERE turn_id = :turn_id AND position = :position",
+            named_params! {
+                ":turn_id": obsolete.turn_id,
+                ":position": obsolete.position,
+            },
+        )?;
+        operations.record_delete(Entity::TurnStep, &obsolete.log_id())?;
+    }
+
+    // A turn never loses its question, so there is nothing to remove: only
+    // a new or a newly answered question is written.
+    if let Some(decision) = &DecisionRecord::of(turn)
+        && stored_decision(transaction, &record.id)?.as_ref() != Some(decision)
+    {
+        write_decision(transaction, decision)?;
+        operations.record_upsert(Entity::Decision, &decision.turn_id, decision)?;
+    }
+    store_planning_of(transaction, operations, turn)
+}
+
+/// Rebuilds a turn from its row and its steps, with what it asked or
+/// proposed.
+fn read_turn(
+    connection: &Connection,
+    record: TurnRecord,
+    steps: Vec<StepRecord>,
+) -> Result<Turn, DatabaseError> {
+    let decision = stored_decision(connection, &record.id)?;
+    let interview = stored_interview(connection, &record.id)?;
+    let proposal = stored_proposal(connection, &record.id)?;
+    record.into_turn(steps, decision, interview, proposal)
 }
 
 /// Removes the conversations of a project with their turns, and logs each
@@ -1041,6 +1119,89 @@ mod tests {
         repository.delete(&[conversation.id()]).unwrap();
 
         assert_eq!(rows_of_questions(), 0);
+    }
+
+    #[test]
+    fn the_interview_and_the_proposal_of_a_turn_go_with_its_conversation() {
+        use teamwright_domain::{
+            Interview, InterviewQuestion, MemberName, Priority, Proposal, ProposedTask, TaskTitle,
+        };
+
+        let (database, conversation, mut turn) = database_with_a_turn();
+        turn.ask_interview(
+            Interview::new(vec![InterviewQuestion {
+                question: "What matters most?".to_owned(),
+                reason: String::new(),
+                options: vec![
+                    DecisionOption {
+                        label: "Soon".to_owned(),
+                        consequence: String::new(),
+                    },
+                    DecisionOption {
+                        label: "Cheap".to_owned(),
+                        consequence: String::new(),
+                    },
+                ],
+                recommended: None,
+            }])
+            .unwrap(),
+        )
+        .unwrap();
+        let mut proposing =
+            Turn::start(conversation.id(), "Propose.", TurnOrigin::Message, moment()).unwrap();
+        proposing
+            .propose(
+                Proposal::new(
+                    "A device.",
+                    Vec::new(),
+                    vec![
+                        ProposedTask {
+                            title: TaskTitle::parse("Draw the schematic").unwrap(),
+                            description: String::new(),
+                            owner: Some(teamwright_domain::ProposedOwner::Member(
+                                MemberName::parse("Hardware engineer").unwrap(),
+                            )),
+                            estimate_minutes: None,
+                            priority: Priority::Normal,
+                            waits_for: Vec::new(),
+                        },
+                        ProposedTask {
+                            title: TaskTitle::parse("Route the board").unwrap(),
+                            description: String::new(),
+                            owner: None,
+                            estimate_minutes: None,
+                            priority: Priority::Normal,
+                            waits_for: vec![0],
+                        },
+                    ],
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        let repository = SqliteConversationRepository::new(database.clone());
+        repository.save_turn(&turn).unwrap();
+        repository.save_turn(&proposing).unwrap();
+        let rows = || -> i64 {
+            database
+                .read(|connection| {
+                    Ok(connection.query_row(
+                        "SELECT (SELECT count(*) FROM turn_interviews)
+                              + (SELECT count(*) FROM turn_interview_questions)
+                              + (SELECT count(*) FROM turn_interview_options)
+                              + (SELECT count(*) FROM turn_proposals)
+                              + (SELECT count(*) FROM turn_proposal_tasks)
+                              + (SELECT count(*) FROM turn_proposal_task_waits)",
+                        [],
+                        |row| row.get(0),
+                    )?)
+                })
+                .unwrap()
+        };
+        assert_eq!(rows(), 8);
+
+        repository.delete(&[conversation.id()]).unwrap();
+
+        assert_eq!(rows(), 0);
     }
 
     #[test]

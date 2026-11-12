@@ -27,6 +27,7 @@ mod members;
 mod migrations;
 mod operations;
 mod places;
+mod planning;
 mod projects;
 mod tasks;
 
