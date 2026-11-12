@@ -981,7 +981,7 @@ export class DemoBackend implements Backend {
         conversation,
         answersInWords(interview.questions, tidy),
         'interview',
-        scriptForAnswers(),
+        scriptForAnswers(this.teamOf(conversation.projectId).map((member) => member.name)),
       );
       return conversation;
     });

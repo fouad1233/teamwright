@@ -225,8 +225,22 @@ export function scriptForBrief(): Script {
   };
 }
 
-/** The script of the Advisor that has the answers: it proposes a team and a plan. */
-export function scriptForAnswers(): Script {
+/**
+ * The script of the Advisor that has the answers: it proposes a team and a
+ * plan. A specialist the team already has is not proposed again. Its tasks
+ * are given to the one that is there. `team` holds the names of the members
+ * the project has.
+ */
+export function scriptForAnswers(team: readonly string[] = []): Script {
+  const there = new Set(team.map((name) => name.toLowerCase()));
+  const proposal = structuredClone(PROPOSAL);
+  proposal.members = proposal.members.filter((member) => !there.has(member.name.toLowerCase()));
+  const whom = [
+    'The team you have covers this. I propose',
+    'I propose one more specialist and',
+    'I propose two more specialists and',
+    'I propose a team of three and',
+  ][proposal.members.length];
   return {
     acts: [
       { after: 0, act: { kind: 'note', message: WHAT_THIS_IS } },
@@ -235,15 +249,14 @@ export function scriptForAnswers(): Script {
         after: 1200,
         act: {
           kind: 'say',
-          text: 'Three disciplines, so three specialists. The work that needs hands is yours.',
+          text: 'Three disciplines: the board, its software and the enclosure. The work that needs hands is yours.',
         },
       },
     ],
     endsAfter: 900,
-    answer:
-      'I propose a team of three and twelve tasks. Ordering the parts, assembling and testing are yours. Change what does not fit, and approve it when it does.',
+    answer: `${whom ?? 'I propose'} twelve tasks. Ordering the parts, assembling and testing are yours. Change what does not fit, and approve it when it does.`,
     tokens: { input: 30, output: 2240, cacheRead: 16_700, cacheWritten: 2600 },
-    proposes: structuredClone(PROPOSAL),
+    proposes: proposal,
   };
 }
 

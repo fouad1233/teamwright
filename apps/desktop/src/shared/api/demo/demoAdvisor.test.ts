@@ -403,12 +403,13 @@ describe('planning with the Advisor in the DemoBackend', () => {
     });
 
     it('gives a task to the member the team already has, and does not add that member again', async () => {
+      const conversation = await proposed();
+      // The member joins after the Advisor proposed one of its name.
       const there = await backend.addMember({
         projectId: project.id,
         name: 'hardware engineer',
         kind: 'agent',
       });
-      const conversation = await proposed();
 
       await backend.approveProposal(conversation.id, unchanged(proposalOf(conversation)));
 
@@ -420,6 +421,22 @@ describe('planning with the Advisor in the DemoBackend', () => {
       ]);
       const tasks = await backend.listTasks(project.id);
       expect(tasks[1]?.assignee).toEqual({ kind: 'member', memberId: there.id });
+    });
+
+    it('does not propose a specialist the team already has', async () => {
+      await backend.addMember({ projectId: project.id, name: 'FIRMWARE engineer', kind: 'agent' });
+
+      const conversation = await proposed();
+
+      expect(proposalOf(conversation).members.map((member) => member.name)).toEqual([
+        'Hardware engineer',
+        'Mechanical engineer',
+      ]);
+      expect(proposalOf(conversation).tasks[6]?.owner).toEqual({
+        kind: 'member',
+        name: 'Firmware engineer',
+      });
+      expect(latestTurn(conversation).answer).toContain('two more specialists');
     });
 
     it('adds to the tasks the project already has', async () => {
