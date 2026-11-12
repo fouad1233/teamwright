@@ -15,7 +15,7 @@
  * TEAMWRIGHT_DATA_DIR.
  */
 
-import { mkdtempSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -380,6 +380,69 @@ try {
     JSON.stringify({ wasOpen, chosen }),
   );
 
+  // The folders of a project: where its specialists work, and what else
+  // they may read. The folders are made inside the data folder of this run.
+  const places = (await window.command('project_places', { projectId: project.id })).ok;
+  check(
+    'a project has a work folder of its own, named by its key',
+    places?.isWorkFolderChosen === false &&
+      places.referenceFolders.length === 0 &&
+      places.workFolder.replaceAll('\\', '/').toLowerCase().endsWith('/projects/ssn'),
+    JSON.stringify(places),
+  );
+  const chosenFolder = join(dataDirectory, 'chosen work');
+  const shelf = join(dataDirectory, 'shelf (data sheets)');
+  mkdirSync(chosenFolder);
+  mkdirSync(shelf);
+  writeFileSync(join(shelf, 'sheet.txt'), 'The supply is 3.3 V.');
+  const withChosenFolder = await window.command('set_work_folder', {
+    projectId: project.id,
+    folder: chosenFolder,
+  });
+  check(
+    'the manager chooses the folder the specialists work in',
+    withChosenFolder.ok?.isWorkFolderChosen === true,
+    JSON.stringify(withChosenFolder),
+  );
+  const nowhere = await window.command('set_work_folder', {
+    projectId: project.id,
+    folder: join(dataDirectory, 'nowhere'),
+  });
+  check(
+    'a work folder that does not exist is refused',
+    nowhere.refused?.code === 'folder_not_found',
+    JSON.stringify(nowhere),
+  );
+  const withShelf = await window.command('add_reference_folder', {
+    projectId: project.id,
+    folder: shelf,
+  });
+  check(
+    'a folder is added that the specialists may read',
+    withShelf.ok?.referenceFolders.length === 1,
+    JSON.stringify(withShelf),
+  );
+  const around = await window.command('add_reference_folder', {
+    projectId: project.id,
+    folder: dataDirectory,
+  });
+  check(
+    'a reference folder that contains the work folder is refused',
+    around.refused?.code === 'rule_broken',
+    JSON.stringify(around),
+  );
+  const copied = await window.command('add_reference_files', {
+    projectId: project.id,
+    files: [join(shelf, 'sheet.txt'), join(shelf, 'sheet.txt')],
+  });
+  check(
+    'single files are copied into the work folder, and a name that is taken gets a number',
+    JSON.stringify(copied.ok) === '["sheet.txt","sheet (2).txt"]' &&
+      existsSync(join(chosenFolder, 'references', 'sheet (2).txt')) &&
+      readFileSync(join(chosenFolder, 'references', 'sheet.txt'), 'utf8') === 'The supply is 3.3 V.',
+    JSON.stringify(copied),
+  );
+
   // The work of a specialist, as far as it goes without a real one. The
   // application is pointed at a stand-in for Claude Code, which says that it
   // is installed and signed in. The stand-in is a script, and Teamwright
@@ -457,6 +520,13 @@ try {
       team[0].model === 'sonnet' &&
       team[0].effort === 'high',
     JSON.stringify(team),
+  );
+  const storedPlaces = (await window.command('project_places', { projectId: projects[0]?.id }))
+    .ok;
+  check(
+    'the folders of the project survive a restart',
+    storedPlaces?.isWorkFolderChosen === true && storedPlaces.referenceFolders.length === 1,
+    JSON.stringify(storedPlaces),
   );
   check(
     'a task is still given to the same member',
