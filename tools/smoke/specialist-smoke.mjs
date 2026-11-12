@@ -5,13 +5,14 @@
  * one AI specialist, gives it a task that takes a minute, and follows the
  * work to its end: the steps, the report, the file the specialist wrote, and
  * the task moving on to be checked. Then it answers the specialist, asks it
- * a question, asks it to read and to write outside its folder, which must
- * fail, stops a turn half-way, and starts the application again to see that
- * the record is still there.
+ * a question, gives it a choice that is the manager's, which it must ask
+ * about instead of making, asks it to read and to write outside its folder,
+ * which must fail, stops a turn half-way, and starts the application again
+ * to see that the record is still there.
  *
  * Unlike the smoke test next to it, this one is not free. It runs the Claude
  * Code that is installed on this computer, signed in as whoever is signed in
- * there, and each of its five turns uses a part of that account's plan. So
+ * there, and each of its seven turns uses a part of that account's plan. So
  * it is not part of any automatic check: run it by hand after a change to
  * the work of the specialists. It prints what every turn used.
  *
@@ -28,7 +29,14 @@
  * in a temporary folder.
  */
 
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
@@ -384,6 +392,96 @@ try {
       answer.answer,
     );
 
+    // A choice that is the manager's: the specialist asks instead of guessing.
+    const choice = await command('create_task', {
+      input: {
+        projectId: project.id,
+        title: 'Choose the name of the installation guide',
+        description:
+          "The guide can be called INSTALL.md or SETUP.md. Which name it gets changes where people look for it, so it is the manager's decision and not yours. Ask the manager, offer exactly these two names, and recommend one. Write no file before you have the answer. After the answer, create the file with the chosen name and one sentence in it.",
+      },
+    });
+    await command('assign_task', {
+      taskId: choice.id,
+      assignee: { kind: 'member', memberId: writer.id },
+    });
+    const asking = await command('start_work', { taskId: choice.id });
+    const asked = (await waitForEnd(asking.id)).turns[0];
+    report('the turn that asks', asked);
+    const options = asked.decision?.options ?? [];
+    console.log(`        asked: ${asked.decision?.question ?? '(nothing)'}`);
+    for (const option of options) {
+      console.log(`          - ${option.label}: ${option.consequence}`);
+    }
+    check(
+      'a specialist asks the manager instead of guessing, with options to choose from',
+      asked.state === 'finished' && options.length >= 2 && asked.decision.answer === null,
+      JSON.stringify(asked.decision)?.slice(0, 400),
+    );
+    check(
+      'it wrote nothing before it had the answer',
+      !readdirSync(folder).some((name) => /^(install|setup)/i.test(name)),
+      readdirSync(folder).join(', '),
+    );
+    check(
+      'a task that waits for a decision stays in work',
+      (await categoryOf(choice.id)) === 'active',
+    );
+    const waiting = await command('list_conversations_waiting');
+    check(
+      'the question is listed among what waits for the manager',
+      waiting.length === 1 && waiting[0].id === asking.id,
+      JSON.stringify(waiting).slice(0, 200),
+    );
+    // The manager finds the question in the inbox, without loading anything again.
+    await window.click(
+      `[...document.querySelectorAll('button')].find((button) => button.innerText.trim().startsWith('Inbox'))`,
+    );
+    const inbox = await window.waitForText('ASKS YOU TO DECIDE');
+    check(
+      'the inbox shows the question with its options',
+      inbox.includes(asked.decision.question) &&
+        options.every((option) => inbox.includes(option.label)),
+      inbox.slice(0, 300),
+    );
+    await picture('inbox');
+    await window.click(
+      `[...document.querySelectorAll('button')].find((button) => button.innerText.trim().startsWith('Specialist run'))`,
+    );
+    const instead = await window.command('reply', { conversationId: asking.id, message: 'Go on.' });
+    check(
+      'an ordinary message is refused while the question is open',
+      instead.refused?.code === 'decision_open',
+      JSON.stringify(instead),
+    );
+
+    const setup = options.findIndex((option) => /setup/i.test(option.label));
+    const picked = setup === -1 ? 0 : setup;
+    await command('answer_decision', {
+      conversationId: asking.id,
+      answer: { option: picked, note: '' },
+    });
+    const decided = (await waitForEnd(asking.id)).turns;
+    report('the turn after the decision', decided[1]);
+    check(
+      'the answer is recorded with the question and starts the next turn',
+      decided[0].decision.answer?.option === picked &&
+        decided[1]?.origin === 'decision' &&
+        decided[1].state === 'finished',
+      JSON.stringify(decided[1])?.slice(0, 300),
+    );
+    const wanted = setup === -1 ? /^install/i : /^setup/i;
+    check(
+      'the specialist goes on with what the manager decided',
+      readdirSync(folder).some((name) => wanted.test(name)),
+      readdirSync(folder).join(', '),
+    );
+    check('the task moves on to be checked', (await categoryOf(choice.id)) === 'review');
+    check(
+      'nothing waits for the manager any more',
+      (await command('list_conversations_waiting')).length === 0,
+    );
+
     // A specialist is confined to the folder of its project. The files are
     // next to that folder, where a specialist that could reach out would
     // find them.
@@ -457,7 +555,7 @@ try {
     const stored = (await window.command('list_conversations', { projectId: project.id })).ok;
     check(
       'the conversations survive a restart with their turns',
-      stored?.length === 3 &&
+      stored?.length === 4 &&
         stored.find((other) => other.id === started.id)?.turns.length === 2 &&
         stored.find((other) => other.id === chat.id)?.turns[0].answer === answer.answer,
       JSON.stringify(stored)?.slice(0, 300),

@@ -77,9 +77,11 @@ This is the one test that is not free. It forms a team of one AI specialist
 in the built application and lets it do a real, small piece of work with the
 Claude Code that is installed on this computer, signed in as whoever is
 signed in there: write a file, change it after an answer, answer a question,
-and be stopped half-way. It checks the steps, the report, the file on disk,
-where the task moves, and that the record survives a restart. It prints what
-every turn used.
+ask the manager to decide and go on with the answer, try to reach outside
+its folder, and be stopped half-way. It checks the steps, the report, the
+file on disk, where the task moves, that the question shows in the inbox,
+that nothing outside the folder was read or written, and that the record
+survives a restart. It prints what every turn used.
 
 Because it uses a part of that account's plan, it is not part of any
 automatic check. Run it by hand after a change to the work of the
@@ -104,8 +106,8 @@ again: the built application on a sample project, in the dark and in the
 light theme. Run it after a change to the interface that the pictures would
 show, and commit the new pictures with the change. Windows only for now.
 
-The two pictures of a specialist at work are not taken by this tool, because
-nobody works in the sample project. The test of a real specialist takes
+The three pictures of a specialist at work are not taken by this tool,
+because nobody works in the sample project. The test of a real specialist takes
 them when it is given the folder:
 
 ```bash
