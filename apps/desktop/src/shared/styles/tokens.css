@@ -141,6 +141,9 @@
      behind them; and the band of shared places at the foot of the room. */
   --office-aisle: 80px;
   --office-commons-height: 112px;
+  /* The frame of a portrait: the head and shoulders of a character, the
+     size of a large avatar. */
+  --portrait-size: 32px;
 
   /* A mask that keeps all it covers. Two of them, one cut out of the other,
      leave only the rim of an element for a light to fall on. */

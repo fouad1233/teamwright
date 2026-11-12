@@ -115,16 +115,6 @@
   min-width: 0;
 }
 
-.advisor {
-  composes: avatar large block from '../team/Assignee.module.css';
-  background: var(--ink);
-  color: var(--surface);
-  font-family: var(--font-mono);
-  font-size: var(--text-small);
-  font-weight: 600;
-  letter-spacing: 0.02em;
-}
-
 .identity {
   display: flex;
   flex-direction: column;

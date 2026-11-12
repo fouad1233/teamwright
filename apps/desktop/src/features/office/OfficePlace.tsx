@@ -1,24 +1,26 @@
 import { classNames } from '@/shared/lib/classNames';
 
-import { ManagerAvatar, MemberAvatar } from '../team/Assignee';
+import { MANAGER_NAME } from '../team/Assignee';
+import { Portrait } from './characters/Portrait';
 import type { Place, PlaceFigure } from './officeModel';
 import styles from './OfficePlace.module.css';
+import { sitterOf } from './roomModel';
 
-/** Who sits at a place, drawn the way the rest of the program draws them. */
+/** Who sits at a place: the head and shoulders of their character (decision 0019). */
 function Figure({ figure }: { figure: PlaceFigure }) {
   switch (figure.kind) {
     case 'manager':
-      return <ManagerAvatar size="large" />;
+      return <Portrait sitter={sitterOf(figure)} name={MANAGER_NAME} />;
     case 'advisor':
-      // The Advisor is the part of ink in the logo: a block, like a
-      // specialist, but in the ink of the drawing rather than a pigment.
-      return (
-        <span className={styles.advisor} role="img" aria-label="Advisor" title="Advisor">
-          AD
-        </span>
-      );
+      return <Portrait sitter={sitterOf(figure)} name="Advisor" />;
     case 'member':
-      return <MemberAvatar member={figure.member} size="large" />;
+      return (
+        <Portrait
+          sitter={sitterOf(figure)}
+          name={figure.member.name}
+          isPerson={figure.member.kind === 'human'}
+        />
+      );
   }
 }
 

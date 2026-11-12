@@ -1,0 +1,37 @@
+/* The frame of a portrait is the frame of a large avatar: the member's
+   pigment as a wash and a hairline of it, a block for an AI specialist. */
+.portrait {
+  display: inline-flex;
+  flex: none;
+  width: var(--portrait-size);
+  height: var(--portrait-size);
+  overflow: hidden;
+  border-radius: var(--radius-card);
+  background: var(--tone-wash, var(--pressed));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tone, var(--ink-faint)) 42%, transparent);
+}
+
+/* A person is round. */
+.person {
+  border-radius: 50%;
+}
+
+/* The manager wears the gold of the keystone. */
+.manager {
+  border-radius: 50%;
+  background: var(--brass-soft);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--brass) 55%, transparent);
+}
+
+/* The Advisor is the ink of the drawing, thinned. */
+.advisor {
+  background: var(--pressed);
+  box-shadow: inset 0 0 0 1px var(--rule-strong);
+}
+
+/* Drawn pixel for pixel: the canvas is as large as its frame and never smoothed. */
+.picture {
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+}
