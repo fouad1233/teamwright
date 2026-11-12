@@ -4,28 +4,101 @@ import {
   KeyboardSensor,
   PointerSensor,
   closestCorners,
+  defaultDropAnimationSideEffects,
   useSensor,
   useSensors,
   type DragEndEvent,
   type DragOverEvent,
   type DragStartEvent,
+  type DropAnimation,
 } from '@dnd-kit/core';
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { useMemo, useState } from 'react';
 
 import { useNavigation } from '@/app/navigation';
 import type { Id, Project, Task } from '@/shared/api/types';
+import { durationToken, easingToken, usePrefersReducedMotion } from '@/shared/ui/motion';
 
 import { useSubtaskFolds } from '../tasks/subtaskFolds';
 import { indexById, indexSubtasks, unfinishedBlockers } from '../tasks/taskModel';
 import { useTaskCommands } from '../tasks/taskQueries';
 import { BoardLane } from './BoardLane';
-import { arrangementOf, locate, moveCard, statusUnder, type Arrangement } from './boardModel';
+import {
+  arrangementOf,
+  locate,
+  moveCard,
+  newArrivals,
+  statusUnder,
+  type Arrangement,
+} from './boardModel';
 import styles from './BoardView.module.css';
 import { TaskCard, type BoardContents } from './TaskCard';
 
 /** How far the pointer must move before a press becomes a drag, in pixels. */
 const DRAG_START_DISTANCE = 6;
+
+/** No task has just arrived. */
+const NO_ARRIVALS: ReadonlySet<Id> = new Set();
+
+/**
+ * How a card that is let go is put down in its place (decision 0015). It
+ * travels there and settles, while the copy in the hand loses its lift.
+ * With motion turned down nothing travels: the copy fades where it was let
+ * go, and the card is in its place.
+ */
+function putDown(reducesMotion: boolean): DropAnimation {
+  const sideEffects = defaultDropAnimationSideEffects({
+    // The card in the lane stays hidden until the copy has landed on it.
+    styles: { active: { opacity: '0' } },
+    className: { dragOverlay: styles.puttingDown },
+  });
+  if (reducesMotion) {
+    return {
+      duration: durationToken('--duration-quick'),
+      easing: 'linear',
+      sideEffects,
+      keyframes: ({ transform }) => [
+        { opacity: 1, transform: CSS.Transform.toString(transform.initial) },
+        { opacity: 0, transform: CSS.Transform.toString(transform.initial) },
+      ],
+    };
+  }
+  return {
+    duration: durationToken('--duration-settle'),
+    easing: easingToken('--ease-arrive'),
+    sideEffects,
+  };
+}
+
+/** What the board knows about the tasks it has shown, to tell which are new. */
+interface Seen {
+  projectId: Id;
+  tasks: readonly Task[];
+  arrivals: ReadonlySet<Id>;
+}
+
+/**
+ * The tasks that have just come onto the board, so that their cards can
+ * arrive in their lane. The tasks the board opens with are not new. The
+ * newest arrivals are kept until others come or a card is picked up, so a
+ * second answer from the backend does not cut their arrival short.
+ */
+function useArrivals(projectId: Id, tasks: readonly Task[]) {
+  const [seen, setSeen] = useState<Seen>({ projectId, tasks, arrivals: NO_ARRIVALS });
+  if (seen.projectId !== projectId) {
+    setSeen({ projectId, tasks, arrivals: NO_ARRIVALS });
+  } else if (seen.tasks !== tasks) {
+    const fresh = newArrivals(new Set(seen.tasks.map((task) => task.id)), tasks);
+    setSeen({ projectId, tasks, arrivals: fresh.size > 0 ? fresh : seen.arrivals });
+  }
+  return {
+    arrivals: seen.arrivals,
+    forget: () => {
+      setSeen((current) => ({ ...current, arrivals: NO_ARRIVALS }));
+    },
+  };
+}
 
 /** A card that is being dragged, and how the board looks meanwhile. */
 interface Drag {
@@ -59,6 +132,9 @@ export function BoardView({ project, tasks }: BoardViewProps) {
   const folds = useSubtaskFolds(project.id);
   const [drag, setDrag] = useState<Drag | null>(null);
   const [drop, setDrop] = useState<Drop | null>(null);
+  const reducesMotion = usePrefersReducedMotion();
+  const dropAnimation = useMemo(() => putDown(reducesMotion), [reducesMotion]);
+  const { arrivals, forget: forgetArrivals } = useArrivals(project.id, tasks);
 
   const tasksById = useMemo(() => indexById(tasks), [tasks]);
   const subtasksByParent = useMemo(() => indexSubtasks(tasks), [tasks]);
@@ -67,6 +143,7 @@ export function BoardView({ project, tasks }: BoardViewProps) {
     tasksById,
     subtasksByParent,
     folds,
+    arrivals,
     onOpenTask: navigation.openTask,
   };
   const stored = useMemo(() => arrangementOf(project.statuses, tasks), [project.statuses, tasks]);
@@ -84,6 +161,9 @@ export function BoardView({ project, tasks }: BoardViewProps) {
   );
 
   function handleDragStart(event: DragStartEvent) {
+    // A card that moves to another lane is put there anew; it must not
+    // arrive there as if it were new.
+    forgetArrivals();
     setDrag({ taskId: String(event.active.id), arrangement: stored });
   }
 
@@ -155,7 +235,7 @@ export function BoardView({ project, tasks }: BoardViewProps) {
         ))}
       </div>
 
-      <DragOverlay>
+      <DragOverlay dropAnimation={dropAnimation}>
         {draggedTask && (
           <div className={styles.dragged}>
             <TaskCard

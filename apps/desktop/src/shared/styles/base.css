@@ -139,6 +139,13 @@ svg {
   text-transform: uppercase;
 }
 
+/*
+ * With motion turned down, everything ends at once. A part that has a
+ * reduced form of its own movement, as the motion table of decision 0015
+ * gives it (a short fade instead of a slide, or standing still), declares
+ * it with !important inside the same query. Its class is more specific than
+ * this rule, so it wins.
+ */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

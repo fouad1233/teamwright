@@ -79,3 +79,11 @@ export function moveCard(arrangement: Arrangement, taskId: Id, targetId: Id): Ar
   moved.set(toStatusId, destination);
   return moved;
 }
+
+/**
+ * The tasks that have just arrived: those among `tasks` that were not among
+ * the `known` ones. A task that only moved, or changed, is not new.
+ */
+export function newArrivals(known: ReadonlySet<Id>, tasks: readonly Task[]): ReadonlySet<Id> {
+  return new Set(tasks.filter((task) => !known.has(task.id)).map((task) => task.id));
+}

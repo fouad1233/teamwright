@@ -141,8 +141,17 @@
   --duration-room: 220ms;
   --duration-arrive: 240ms;
   --duration-panel: 280ms;
+  /* Several things that appear together, with motion turned down. */
+  --duration-reveal: 160ms;
   /* Something new in a lane is outlined in gold, which then lets go. */
   --duration-welcome: 1400ms;
+  /* What follows what: a card after the room made for it, its outline after
+     the card, the words of a decision after its rule, and each of several
+     options after the one before. */
+  --delay-arrive: 80ms;
+  --delay-welcome: 400ms;
+  --delay-words: 140ms;
+  --stagger: 60ms;
   /* Work that goes on: the block that comes and goes, and one turn of the
      light round the edge of a card. */
   --duration-at-work: 1100ms;

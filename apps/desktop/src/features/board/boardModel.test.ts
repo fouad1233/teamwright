@@ -2,7 +2,14 @@ import { describe, expect, it } from 'vitest';
 
 import type { Status, Task } from '@/shared/api/types';
 
-import { arrangementOf, locate, moveCard, statusUnder, type Arrangement } from './boardModel';
+import {
+  arrangementOf,
+  locate,
+  moveCard,
+  newArrivals,
+  statusUnder,
+  type Arrangement,
+} from './boardModel';
 
 const statuses: Status[] = [
   { id: 'todo', name: 'To do', category: 'todo', color: 'gray' },
@@ -112,5 +119,22 @@ describe('moveCard', () => {
     moveCard(board, 'a', 'doing');
 
     expect(columns(board).todo).toEqual(['a', 'b', 'c']);
+  });
+});
+
+describe('newArrivals', () => {
+  it('names the tasks that were not known before, and no other', () => {
+    const tasks = [
+      { id: 'old', statusId: 'doing' },
+      { id: 'new', statusId: 'todo' },
+    ] as Task[];
+
+    expect([...newArrivals(new Set(['old', 'gone']), tasks)]).toEqual(['new']);
+  });
+
+  it('names nothing when every task was known', () => {
+    const tasks = [{ id: 'old', statusId: 'todo' }] as Task[];
+
+    expect(newArrivals(new Set(['old']), tasks).size).toBe(0);
   });
 });

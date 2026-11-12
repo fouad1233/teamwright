@@ -214,6 +214,78 @@
   background: transparent;
 }
 
+/* A card that has just come onto the board: the lane makes room for it,
+   the card drops a few pixels into the room, and a gold outline says it is
+   new before it lets go. The room is the one movement of the interface that
+   changes a size: the height of one row, for one card at a time. */
+.arriving {
+  position: relative;
+  display: grid;
+  grid-template-rows: 1fr;
+  animation: make-room var(--duration-room) var(--ease-settle) both;
+}
+
+.arriving > .card {
+  min-height: 0;
+  animation: arrive var(--duration-arrive) var(--ease-arrive) var(--delay-arrive) both;
+}
+
+.arriving::after {
+  position: absolute;
+  inset: 0;
+  border: 1px solid var(--brass);
+  border-radius: var(--radius-card);
+  opacity: 0;
+  animation: welcome var(--duration-welcome) ease-out var(--delay-welcome) both;
+  pointer-events: none;
+  content: '';
+}
+
+@keyframes make-room {
+  from {
+    grid-template-rows: 0fr;
+  }
+}
+
+@keyframes arrive {
+  from {
+    opacity: 0;
+    transform: translateY(calc(-1 * var(--arrive-travel)));
+  }
+}
+
+@keyframes welcome {
+  from {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* With motion turned down the room is there at once and the card fades in.
+   The outline still fades, because a fade is not a movement. */
+@media (prefers-reduced-motion: reduce) {
+  .arriving {
+    animation: none !important;
+  }
+
+  .arriving > .card {
+    animation: fade-in var(--duration-quick) linear both !important;
+  }
+
+  .arriving::after {
+    animation: welcome var(--duration-welcome) ease-out var(--delay-welcome) both !important;
+  }
+}
+
 .lifted > .card > *,
 .lifted > .card::before,
 .lifted > .card::after,

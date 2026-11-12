@@ -25,6 +25,8 @@ export interface BoardContents {
   subtasksByParent: ReadonlyMap<Id, readonly Task[]>;
   /** Which tasks show their subtasks. */
   folds: SubtaskFolds;
+  /** The tasks that have just come onto the board, whose cards arrive in their lane. */
+  arrivals: ReadonlySet<Id>;
   onOpenTask: (taskId: Id) => void;
 }
 
@@ -193,6 +195,7 @@ export function SortableTaskCard({ board, task }: BoardCardProps) {
     isDragging,
   } = useSortable({ id: task.id });
   const card = cardOf(board, task);
+  const isArriving = board.arrivals.has(task.id) && !isDragging;
 
   function handleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     if (event.key === 'Enter') {
@@ -205,7 +208,11 @@ export function SortableTaskCard({ board, task }: BoardCardProps) {
   return (
     <li
       ref={setNodeRef}
-      className={classNames(styles.item, isDragging && styles.lifted)}
+      className={classNames(
+        styles.item,
+        isDragging && styles.lifted,
+        isArriving && styles.arriving,
+      )}
       style={{ transform: CSS.Translate.toString(transform), transition }}
     >
       <TaskCard

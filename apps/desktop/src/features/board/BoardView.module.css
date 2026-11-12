@@ -7,9 +7,73 @@
   overflow-x: auto;
 }
 
-/* The card under the pointer while it is dragged. */
+/* The card under the pointer while it is dragged. It is lifted off the
+   table: it rises, grows a little, tilts by a degree, and takes a shadow.
+   The shadow is a layer of its own that fades in, because only position and
+   opacity move. */
 .dragged {
+  position: relative;
+  isolation: isolate;
   border-radius: var(--radius-card);
-  box-shadow: var(--shadow-lifted);
   cursor: grabbing;
+  animation: lift var(--duration-lift) var(--ease-settle) both;
+}
+
+.dragged::before {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: var(--shadow-lifted);
+  animation: fade-in var(--duration-lift) var(--ease-settle) both;
+  content: '';
+}
+
+/* Let go, it is put down: it loses its lift while it travels to its place. */
+.puttingDown > .dragged {
+  animation: put-down var(--duration-settle) var(--ease-arrive) both;
+}
+
+.puttingDown > .dragged::before {
+  animation: fade-out var(--duration-settle) var(--ease-arrive) both;
+}
+
+@keyframes lift {
+  to {
+    transform: translateY(calc(-1 * var(--lift-rise))) scale(var(--lift-scale))
+      rotate(var(--lift-tilt));
+  }
+}
+
+@keyframes put-down {
+  from {
+    transform: translateY(calc(-1 * var(--lift-rise))) scale(var(--lift-scale))
+      rotate(var(--lift-tilt));
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes fade-out {
+  to {
+    opacity: 0;
+  }
+}
+
+/* With motion turned down the card is not lifted: the copy in the hand
+   fades in, with its shadow, and fades out where it is let go. */
+@media (prefers-reduced-motion: reduce) {
+  .dragged {
+    animation: fade-in var(--duration-quick) linear both !important;
+  }
+
+  .dragged::before,
+  .puttingDown > .dragged,
+  .puttingDown > .dragged::before {
+    animation: none !important;
+  }
 }
