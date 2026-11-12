@@ -26,6 +26,11 @@
   animation: rise 160ms ease-out;
 }
 
+/* The dialog takes the focus when it opens. It needs no ring for that. */
+.dialog:focus-visible {
+  outline: none;
+}
+
 .wide {
   top: 12vh;
   width: min(640px, calc(100vw - 2 * var(--space-5)));

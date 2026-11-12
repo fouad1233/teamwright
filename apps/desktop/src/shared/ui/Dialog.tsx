@@ -23,7 +23,8 @@ interface DialogProps {
  *
  * When the dialog opens, the focus goes to the element inside it that
  * carries the attribute `data-initial-focus`: the first field of a form, or
- * the safe choice of a confirmation.
+ * the safe choice of a confirmation. Without such an element the dialog
+ * takes the focus itself.
  *
  * A field that is edited in place and takes Escape to undo the edit carries
  * the attribute `data-escape-undoes`. While the focus is in such a field,
@@ -72,15 +73,19 @@ function leaveEscapeToTheField(event: KeyboardEvent) {
   }
 }
 
-/** Moves the focus to the element the dialog marked as its starting point. */
+/**
+ * Moves the focus to the element the dialog marked as its starting point.
+ *
+ * A dialog that marks none takes the focus itself. Left alone, the focus
+ * would go to the first button in the dialog, which is the one that closes
+ * it: its tooltip would open, and the tooltip would take the first Escape
+ * instead of the dialog.
+ */
 function focusInitialElement(event: Event) {
   const dialog = event.currentTarget;
   if (!(dialog instanceof HTMLElement)) {
     return;
   }
-  const initial = dialog.querySelector<HTMLElement>('[data-initial-focus]');
-  if (initial) {
-    event.preventDefault();
-    initial.focus();
-  }
+  event.preventDefault();
+  (dialog.querySelector<HTMLElement>('[data-initial-focus]') ?? dialog).focus();
 }
