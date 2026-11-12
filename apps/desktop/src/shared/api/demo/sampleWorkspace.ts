@@ -8,6 +8,9 @@ import type {
   MemberProfile,
   Priority,
   Project,
+  Sprint,
+  SprintState,
+  SprintSummary,
   Status,
   Task,
 } from '../types';
@@ -62,11 +65,66 @@ const TEAM = {
 
 type TeamMemberName = keyof typeof TEAM;
 
+/** One sprint of the sample project, with its days counted from today. */
+interface SampleSprint {
+  id: Id;
+  name: string;
+  goal: string;
+  state: SprintState;
+  /** Days from today. Negative numbers lie in the past. */
+  createdInDays: number;
+  startsInDays?: number;
+  endsInDays?: number;
+  /** When the sprint was completed, if it was. */
+  completedInDays?: number;
+  summary?: SprintSummary;
+}
+
+/**
+ * The sprints of the sample project: one that is over, one that runs with
+ * some of its work done, and one that is planned to come next.
+ */
+const SPRINTS = {
+  first: {
+    id: 'demo-sprint-1',
+    name: 'Sprint 1',
+    goal: 'Agree on the device and choose its heart',
+    state: 'completed',
+    createdInDays: -10,
+    startsInDays: -10,
+    endsInDays: -5,
+    completedInDays: -5,
+    // The sensors were not chosen in time and went on into the next sprint.
+    summary: { unit: 'points', committed: 10, completed: 5 },
+  },
+  current: {
+    id: 'demo-sprint-2',
+    name: 'Sprint 2',
+    goal: 'A schematic that can be routed',
+    state: 'active',
+    createdInDays: -6,
+    startsInDays: -4,
+    endsInDays: 9,
+  },
+  next: {
+    id: 'demo-sprint-3',
+    name: 'Sprint 3',
+    goal: 'Firmware that talks to the sensors',
+    state: 'planned',
+    createdInDays: -1,
+  },
+} as const satisfies Record<string, SampleSprint>;
+
+type SprintName = keyof typeof SPRINTS;
+
 /** One task of the sample project, written the way a person would list it. */
 interface SampleTask {
   number: number;
   title: string;
   status: StatusName;
+  /** The sprint the task is planned into. A subtask is in the sprint of its task. */
+  sprint?: SprintName;
+  points?: number;
   description?: string;
   priority?: Priority;
   /** Who the task is given to. A task without an owner is unassigned. */
@@ -91,6 +149,8 @@ const SAMPLE_TASKS: SampleTask[] = [
     number: 1,
     title: 'Agree on what the device must do',
     status: 'done',
+    sprint: 'first',
+    points: 2,
     description:
       'Temperature, humidity and oxygen. A small screen. Wi-Fi. Low cost and a compact board.',
     owner: 'manager',
@@ -102,6 +162,8 @@ const SAMPLE_TASKS: SampleTask[] = [
     number: 2,
     title: 'Choose the microcontroller',
     status: 'done',
+    sprint: 'first',
+    points: 3,
     owner: 'hardware',
     priority: 'high',
     waitsFor: [1],
@@ -113,6 +175,8 @@ const SAMPLE_TASKS: SampleTask[] = [
     number: 3,
     title: 'Select the sensors and the display',
     status: 'test',
+    sprint: 'current',
+    points: 5,
     owner: 'hardware',
     waitsFor: [1],
     estimateHours: 4,
@@ -123,6 +187,8 @@ const SAMPLE_TASKS: SampleTask[] = [
     number: 4,
     title: 'Draw the schematic',
     status: 'progress',
+    sprint: 'current',
+    points: 8,
     owner: 'hardware',
     description:
       'Power, microcontroller, sensors on I2C, display on SPI. Keep the board under 40 by 60 mm.',
@@ -136,6 +202,8 @@ const SAMPLE_TASKS: SampleTask[] = [
     number: 5,
     title: 'Define the pin map',
     status: 'revision',
+    sprint: 'current',
+    points: 2,
     owner: 'hardware',
     description: 'The firmware cannot start before the pins are fixed.',
     waitsFor: [2],
@@ -147,6 +215,8 @@ const SAMPLE_TASKS: SampleTask[] = [
     number: 6,
     title: 'Route the board',
     status: 'todo',
+    sprint: 'next',
+    points: 8,
     owner: 'hardware',
     waitsFor: [4],
     estimateHours: 10,
@@ -157,6 +227,8 @@ const SAMPLE_TASKS: SampleTask[] = [
     number: 7,
     title: 'Write the Wi-Fi setup',
     status: 'todo',
+    sprint: 'next',
+    points: 3,
     owner: 'firmware',
     waitsFor: [5],
     estimateHours: 6,
@@ -167,6 +239,8 @@ const SAMPLE_TASKS: SampleTask[] = [
     number: 8,
     title: 'Write the sensor drivers',
     status: 'todo',
+    sprint: 'next',
+    points: 5,
     owner: 'firmware',
     waitsFor: [5],
     estimateHours: 8,
@@ -177,6 +251,7 @@ const SAMPLE_TASKS: SampleTask[] = [
     number: 9,
     title: 'Design the screens of the display',
     status: 'todo',
+    points: 2,
     owner: 'firmware',
     priority: 'low',
     estimateHours: 5,
@@ -186,6 +261,7 @@ const SAMPLE_TASKS: SampleTask[] = [
     number: 10,
     title: 'Design the enclosure',
     status: 'todo',
+    points: 5,
     owner: 'mechanical',
     waitsFor: [6],
     estimateHours: 8,
@@ -196,6 +272,8 @@ const SAMPLE_TASKS: SampleTask[] = [
     number: 11,
     title: 'Order the parts for three prototypes',
     status: 'todo',
+    sprint: 'current',
+    points: 1,
     priority: 'urgent',
     owner: 'manager',
     waitsFor: [4],
@@ -259,6 +337,45 @@ const SAMPLE_TASKS: SampleTask[] = [
     estimateHours: 5,
     dueInDays: 7,
   },
+  // Work of the running sprint that is already finished, and more work for
+  // the backlog.
+  {
+    number: 18,
+    title: 'Check the power budget',
+    status: 'done',
+    sprint: 'current',
+    points: 3,
+    owner: 'hardware',
+    estimateHours: 2,
+    startsInDays: -2,
+    dueInDays: -1,
+  },
+  {
+    number: 19,
+    title: 'Set up the firmware project',
+    status: 'done',
+    sprint: 'current',
+    points: 3,
+    owner: 'firmware',
+    estimateHours: 2,
+    startsInDays: -4,
+    dueInDays: -3,
+  },
+  {
+    number: 20,
+    title: 'Write the guide for setting up the device',
+    status: 'todo',
+    points: 3,
+    priority: 'low',
+    owner: 'manager',
+    estimateHours: 3,
+  },
+  {
+    number: 21,
+    title: 'Plan a second batch of boards',
+    status: 'todo',
+    estimateHours: 2,
+  },
 ];
 
 const SAMPLE_PROJECT_ID: Id = 'demo-project-sensor';
@@ -309,6 +426,8 @@ export function sampleWorkspace(today: Date = new Date()): DemoWorkspace {
       parentId: sample.partOf === undefined ? null : taskId(sample.partOf),
       blockedBy: (sample.waitsFor ?? []).map(taskId),
       estimateMinutes: sample.estimateHours === undefined ? null : sample.estimateHours * 60,
+      sprintId: sprintIdOf(sample),
+      points: sample.points ?? null,
       startOn: dateInDays(today, sample.startsInDays),
       dueOn: dateInDays(today, sample.dueInDays),
       rank: rankWithinStatus(sample),
@@ -318,7 +437,32 @@ export function sampleWorkspace(today: Date = new Date()): DemoWorkspace {
     };
   });
 
-  return { projects: [project], tasks, members };
+  const sprints = Object.values(SPRINTS).map((sample: SampleSprint): Sprint => {
+    const momentInDays = (days: number | undefined) =>
+      days === undefined ? null : shiftedByDays(today, days).toISOString();
+    return {
+      id: sample.id,
+      projectId: project.id,
+      name: sample.name,
+      goal: sample.goal,
+      startOn: dateInDays(today, sample.startsInDays),
+      endOn: dateInDays(today, sample.endsInDays),
+      state: sample.state,
+      createdAt: shiftedByDays(today, sample.createdInDays).toISOString(),
+      startedAt: sample.state === 'planned' ? null : momentInDays(sample.startsInDays),
+      completedAt: momentInDays(sample.completedInDays),
+      summary: sample.summary ?? null,
+    };
+  });
+
+  return { projects: [project], tasks, members, sprints };
+}
+
+/** The sprint of a sample task: its own, or that of the task it is a part of. */
+function sprintIdOf(sample: SampleTask): Id | null {
+  const parent = SAMPLE_TASKS.find((other) => other.number === sample.partOf);
+  const sprint = parent ? parent.sprint : sample.sprint;
+  return sprint === undefined ? null : SPRINTS[sprint].id;
 }
 
 function assigneeOf(sample: SampleTask): Assignee | null {

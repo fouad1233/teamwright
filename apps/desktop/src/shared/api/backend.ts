@@ -12,10 +12,16 @@ import type {
   NewDecisionAnswer,
   NewMember,
   NewProject,
+  NewSprint,
   NewTask,
   Priority,
   Project,
   ProjectPlaces,
+  Sprint,
+  SprintChanges,
+  SprintCompletion,
+  SprintReport,
+  SprintStart,
   StatusProperties,
   Task,
   TaskChange,
@@ -40,7 +46,7 @@ export interface Backend {
   listArchivedProjects(): Promise<Project[]>;
   /** Brings a project back that was put away. */
   restoreProject(projectId: Id): Promise<Project>;
-  /** Removes a project for good, with its tasks and its team. */
+  /** Removes a project for good, with its tasks, its sprints and its team. */
   deleteProject(projectId: Id): Promise<void>;
 
   /** Says where the specialists of a project work and what else they may read. */
@@ -102,6 +108,10 @@ export interface Backend {
 
   /** Lists the tasks of a project in the order the manager arranged them. */
   listTasks(projectId: Id): Promise<Task[]>;
+  /**
+   * Opens a task. It starts in the backlog without points, or, as a
+   * subtask, in the sprint of the task it is a part of.
+   */
   createTask(task: NewTask): Promise<Task>;
   renameTask(taskId: Id, title: string): Promise<Task>;
   describeTask(taskId: Id, description: string): Promise<Task>;
@@ -121,10 +131,52 @@ export interface Backend {
   /** Makes a task wait until another task is finished. */
   addTaskDependency(taskId: Id, blockerId: Id): Promise<Task>;
   removeTaskDependency(taskId: Id, blockerId: Id): Promise<Task>;
-  /** Removes a task together with its subtasks. */
+  /** Removes a task together with its subtasks. They leave their sprint with it. */
   deleteTask(taskId: Id): Promise<void>;
   /** Lists what has happened to a task since it was opened, the oldest change first. */
   listTaskHistory(taskId: Id): Promise<TaskChange[]>;
+
+  /**
+   * Lists the sprints of a project: the active one first, then the planned
+   * ones in the order they were created, then the completed ones, the one
+   * completed last first.
+   */
+  listSprints(projectId: Id): Promise<Sprint[]>;
+  /**
+   * Plans a new sprint. Its name is trimmed and has at most 60 characters;
+   * left empty, it is "Sprint N", N being one more than the number of
+   * sprints the project has had. The start date is not after the end date.
+   */
+  createSprint(sprint: NewSprint): Promise<Sprint>;
+  /**
+   * Replaces the name, the goal and the dates of a sprint that is planned
+   * or active. A completed sprint is not changed.
+   */
+  changeSprint(sprintId: Id, changes: SprintChanges): Promise<Sprint>;
+  /** Removes a planned sprint. Its tasks go back to the backlog. */
+  deleteSprint(sprintId: Id): Promise<void>;
+  /**
+   * Starts a planned sprint with its name, goal and dates. It needs at
+   * least one task, and no other sprint of the project may be active.
+   */
+  startSprint(sprintId: Id, start: SprintStart): Promise<Sprint>;
+  /**
+   * Completes the active sprint. Its unfinished tasks, with their subtasks,
+   * go to the backlog or to a planned sprint of the same project. The
+   * finished ones stay in it as its record, and the sprint keeps a summary
+   * of what was committed and what was completed.
+   */
+  completeSprint(sprintId: Id, completion: SprintCompletion): Promise<Sprint>;
+  /**
+   * Puts a task into a planned or an active sprint, or with nothing back
+   * into the backlog. Its subtasks go with it. A subtask is not planned by
+   * itself: it goes where the task it is a part of goes.
+   */
+  planTask(taskId: Id, sprintId: Id | null): Promise<Task>;
+  /** Gives a task story points, a whole number from 0 to 999, or takes them away. */
+  setTaskPoints(taskId: Id, points: number | null): Promise<Task>;
+  /** Tells how much work remained in a sprint at the end of each of its days. */
+  sprintReport(sprintId: Id): Promise<SprintReport>;
 
   /** Lists the team of a project. The member who joined first comes first. */
   listMembers(projectId: Id): Promise<Member[]>;

@@ -136,6 +136,16 @@ export interface Task {
   /** The tasks that must be finished before this one can start. */
   blockedBy: Id[];
   estimateMinutes: number | null;
+  /**
+   * The sprint the task is planned into, or nothing if it is in the
+   * backlog. A subtask is always in the sprint of the task it is a part of.
+   */
+  sprintId: Id | null;
+  /**
+   * The story points of the task: how big it is compared with other work,
+   * a whole number from 0 to 999. Nothing if it has none.
+   */
+  points: number | null;
   startOn: CalendarDate | null;
   dueOn: CalendarDate | null;
   /** The position among the tasks of the same status. Lower comes first. */
@@ -143,6 +153,76 @@ export interface Task {
   createdAt: Moment;
   updatedAt: Moment;
   completedAt: Moment | null;
+}
+
+/**
+ * Where a sprint stands. A sprint is planned until it is started, active
+ * while it runs, and completed for good. At most one sprint of a project is
+ * active.
+ */
+export type SprintState = 'planned' | 'active' | 'completed';
+
+/**
+ * What a sprint counts in: story points if any of its tasks had points, and
+ * tasks otherwise. A task without points then counts as no points.
+ */
+export type SprintUnit = 'points' | 'tasks';
+
+/** What a completed sprint took on and what it finished. */
+export interface SprintSummary {
+  unit: SprintUnit;
+  /** The work of every task that was in the sprint when it was completed. */
+  committed: number;
+  /** The work of the tasks among them that were finished. */
+  completed: number;
+}
+
+/**
+ * A stretch of time in which the team works on a chosen part of the
+ * backlog. A task is in at most one sprint.
+ */
+export interface Sprint {
+  id: Id;
+  projectId: Id;
+  name: string;
+  /** What the sprint is for, in a sentence. May be empty. */
+  goal: string;
+  /** The first day of the sprint. May be missing while it is planned. */
+  startOn: CalendarDate | null;
+  /** The last day of the sprint. May be missing while it is planned. */
+  endOn: CalendarDate | null;
+  state: SprintState;
+  createdAt: Moment;
+  /** When the sprint was started. Nothing while it is planned. */
+  startedAt: Moment | null;
+  /** When the sprint was completed. Nothing before. */
+  completedAt: Moment | null;
+  /** What the sprint achieved. Nothing until it is completed. */
+  summary: SprintSummary | null;
+}
+
+/** One day of a sprint in its report. */
+export interface SprintDay {
+  date: CalendarDate;
+  /**
+   * The work that remained at the end of the day. Nothing for a day that
+   * has not come yet, or that came after the sprint was completed.
+   */
+  remaining: number | null;
+}
+
+/**
+ * The course of a sprint, for its burndown chart. It counts the tasks that
+ * are in the sprint now, from the moments at which they were finished.
+ * Tasks that joined or left the sprint while it ran are not followed.
+ */
+export interface SprintReport {
+  sprintId: Id;
+  unit: SprintUnit;
+  /** The work of all the tasks of the sprint. */
+  total: number;
+  /** Every day from the start date to the end date, in order. Empty without both dates. */
+  days: SprintDay[];
 }
 
 /**
@@ -491,4 +571,38 @@ export interface NewTask {
   estimateMinutes?: number;
   startOn?: CalendarDate;
   dueOn?: CalendarDate;
+}
+
+export interface NewSprint {
+  projectId: Id;
+  /** Left out or empty, the sprint is called "Sprint N". */
+  name?: string;
+  goal?: string;
+  startOn?: CalendarDate | null;
+  endOn?: CalendarDate | null;
+}
+
+/** What can be changed about a sprint that is planned or active. Every field is replaced. */
+export interface SprintChanges {
+  name: string;
+  goal: string;
+  startOn: CalendarDate | null;
+  endOn: CalendarDate | null;
+}
+
+/** What a sprint is started with: its name and goal as they are to be, and its dates. */
+export interface SprintStart {
+  name: string;
+  goal: string;
+  startOn: CalendarDate;
+  endOn: CalendarDate;
+}
+
+/** What happens when a sprint is completed. */
+export interface SprintCompletion {
+  /**
+   * The planned sprint of the same project that the unfinished tasks go
+   * to, or nothing for the backlog.
+   */
+  moveUnfinishedTo: Id | null;
 }

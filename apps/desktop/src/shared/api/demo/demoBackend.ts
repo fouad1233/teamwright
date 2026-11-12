@@ -20,12 +20,18 @@ import type {
   NewDecisionAnswer,
   NewMember,
   NewProject,
+  NewSprint,
   NewTask,
   Priority,
   Project,
   ProjectPlaces,
   ProposedMember,
   ProposedTask,
+  Sprint,
+  SprintChanges,
+  SprintCompletion,
+  SprintReport,
+  SprintStart,
   Status,
   StatusCategory,
   StatusProperties,
@@ -38,6 +44,16 @@ import { briefFor } from './brief';
 import { freeName, isInside, isSameFolder, nameOf } from './places';
 import { answersInWords, openInterviewOf, openProposalOf, waitInCircle } from './planning';
 import { scriptForAnswers, scriptForBrief, scriptForChange } from './simulatedAdvisor';
+import {
+  asListed,
+  dayOfMoment,
+  reportOf,
+  requirePoints,
+  requireStartNotAfterEnd,
+  summaryOf,
+  tidySprintName,
+  type CountedTask,
+} from './sprints';
 import { historyOf } from './taskHistory';
 import {
   SIMULATED_MODEL,
@@ -98,6 +114,8 @@ export interface DemoWorkspace {
   projects: Project[];
   tasks: Task[];
   members: Member[];
+  /** The sprints of the projects. Left out, there are none. */
+  sprints?: Sprint[];
 }
 
 const browserEnvironment: DemoEnvironment = {
@@ -170,6 +188,12 @@ export class DemoBackend implements Backend {
    */
   private readonly versions = new Map<Id, Task[]>();
   private readonly nextTaskNumbers = new Map<Id, number>();
+  private readonly sprints = new Map<Id, Sprint>();
+  /**
+   * How many sprints each project has had, the deleted ones included. A new
+   * sprint without a name is named after the next number.
+   */
+  private readonly sprintsCreated = new Map<Id, number>();
   private readonly places = new Map<Id, ChosenPlaces>();
   private sampleFoldersHandedOut = 0;
   /** The turns whose script is still being played. A turn that is stopped leaves this set. */
@@ -189,6 +213,13 @@ export class DemoBackend implements Backend {
     }
     for (const member of workspace?.members ?? []) {
       this.members.set(member.id, structuredClone(member));
+    }
+    for (const sprint of workspace?.sprints ?? []) {
+      this.sprints.set(sprint.id, structuredClone(sprint));
+      this.sprintsCreated.set(
+        sprint.projectId,
+        (this.sprintsCreated.get(sprint.projectId) ?? 0) + 1,
+      );
     }
   }
 
@@ -269,6 +300,10 @@ export class DemoBackend implements Backend {
       for (const member of this.teamOf(project.id)) {
         this.members.delete(member.id);
       }
+      for (const sprint of this.sprintsOf(project.id)) {
+        this.sprints.delete(sprint.id);
+      }
+      this.sprintsCreated.delete(project.id);
       for (const conversation of this.conversationsOf(project.id)) {
         this.forget(conversation);
       }
@@ -504,14 +539,12 @@ export class DemoBackend implements Backend {
       const status = newTask.statusId
         ? requireStatus(project, newTask.statusId)
         : initialStatus(project);
-      if (newTask.parentId) {
-        const parent = this.requireTask(newTask.parentId);
-        if (parent.projectId !== project.id) {
-          throw new BackendError(
-            'different_projects',
-            'tasks of different projects cannot be connected',
-          );
-        }
+      const parent = newTask.parentId ? this.requireTask(newTask.parentId) : undefined;
+      if (parent && parent.projectId !== project.id) {
+        throw new BackendError(
+          'different_projects',
+          'tasks of different projects cannot be connected',
+        );
       }
       this.checkAssignee(newTask.assignee ?? null, project.id);
 
@@ -531,6 +564,9 @@ export class DemoBackend implements Backend {
         parentId: newTask.parentId ?? null,
         blockedBy: [],
         estimateMinutes: newTask.estimateMinutes ?? null,
+        // A subtask goes where the task it is a part of goes.
+        sprintId: parent?.sprintId ?? null,
+        points: null,
         startOn: newTask.startOn ?? null,
         dueOn: newTask.dueOn ?? null,
         rank: rankBetween(lastInStatus?.rank, undefined),
@@ -1055,6 +1091,8 @@ export class DemoBackend implements Backend {
           parentId: null,
           blockedBy: [],
           estimateMinutes: proposed.estimateMinutes,
+          sprintId: null,
+          points: null,
           startOn: null,
           dueOn: null,
           rank: rankBetween(lastInStatus?.rank, undefined),
@@ -1391,6 +1429,247 @@ export class DemoBackend implements Backend {
       this.requireTask(taskId);
       return historyOf(this.versions.get(taskId) ?? []);
     });
+  }
+
+  listSprints(projectId: Id): Promise<Sprint[]> {
+    return this.answer(() => {
+      this.requireProject(projectId);
+      return this.sprintsOf(projectId).sort(asListed);
+    });
+  }
+
+  createSprint(newSprint: NewSprint): Promise<Sprint> {
+    return this.answer(() => {
+      const project = this.requireProject(newSprint.projectId);
+      const number = (this.sprintsCreated.get(project.id) ?? 0) + 1;
+      const name = tidySprintName(newSprint.name ?? '', number);
+      const startOn = newSprint.startOn ?? null;
+      const endOn = newSprint.endOn ?? null;
+      requireStartNotAfterEnd(startOn, endOn);
+
+      this.sprintsCreated.set(project.id, number);
+      const sprint: Sprint = {
+        id: this.environment.newId(),
+        projectId: project.id,
+        name,
+        goal: newSprint.goal?.trim() ?? '',
+        startOn,
+        endOn,
+        state: 'planned',
+        createdAt: this.nowAsText(),
+        startedAt: null,
+        completedAt: null,
+        summary: null,
+      };
+      this.sprints.set(sprint.id, sprint);
+      return sprint;
+    });
+  }
+
+  changeSprint(sprintId: Id, changes: SprintChanges): Promise<Sprint> {
+    return this.answer(() => {
+      const sprint = this.requireSprint(sprintId);
+      refuseCompleted(sprint, 'can no longer be changed');
+      const name = tidySprintName(changes.name);
+      requireStartNotAfterEnd(changes.startOn, changes.endOn);
+      if (sprint.state === 'active' && (changes.startOn === null || changes.endOn === null)) {
+        throw new BackendError(
+          'rule_broken',
+          'a sprint that has started has a start and an end date',
+        );
+      }
+      sprint.name = name;
+      sprint.goal = changes.goal.trim();
+      sprint.startOn = changes.startOn;
+      sprint.endOn = changes.endOn;
+      return sprint;
+    });
+  }
+
+  deleteSprint(sprintId: Id): Promise<void> {
+    return this.answer(() => {
+      const sprint = this.requireSprint(sprintId);
+      refuseCompleted(sprint, 'is kept as a record');
+      if (sprint.state === 'active') {
+        throw new BackendError(
+          'sprint_active',
+          `"${sprint.name}" has started and cannot be deleted; complete it instead`,
+        );
+      }
+      const now = this.nowAsText();
+      for (const task of this.tasksOfSprint(sprint.id)) {
+        task.sprintId = null;
+        task.updatedAt = now;
+      }
+      this.sprints.delete(sprint.id);
+    });
+  }
+
+  startSprint(sprintId: Id, start: SprintStart): Promise<Sprint> {
+    return this.answer(() => {
+      const sprint = this.requireSprint(sprintId);
+      refuseCompleted(sprint, 'cannot be started again');
+      if (sprint.state === 'active') {
+        throw new BackendError('sprint_active', `"${sprint.name}" has already started`);
+      }
+      const active = this.sprintsOf(sprint.projectId).find((other) => other.state === 'active');
+      if (active) {
+        throw new BackendError(
+          'another_sprint_active',
+          `"${active.name}" is still running; complete it before you start another sprint`,
+        );
+      }
+      if (this.tasksOfSprint(sprint.id).length === 0) {
+        throw new BackendError(
+          'sprint_empty',
+          `"${sprint.name}" has no tasks; plan some into it before you start it`,
+        );
+      }
+      const name = tidySprintName(start.name);
+      requireStartNotAfterEnd(start.startOn, start.endOn);
+
+      sprint.name = name;
+      sprint.goal = start.goal.trim();
+      sprint.startOn = start.startOn;
+      sprint.endOn = start.endOn;
+      sprint.state = 'active';
+      sprint.startedAt = this.nowAsText();
+      return sprint;
+    });
+  }
+
+  completeSprint(sprintId: Id, completion: SprintCompletion): Promise<Sprint> {
+    return this.answer(() => {
+      const sprint = this.requireSprint(sprintId);
+      refuseCompleted(sprint, 'cannot be completed again');
+      if (sprint.state !== 'active') {
+        throw new BackendError(
+          'sprint_not_active',
+          `"${sprint.name}" has not started, so it cannot be completed`,
+        );
+      }
+      const target =
+        completion.moveUnfinishedTo === null
+          ? null
+          : this.requireSprint(completion.moveUnfinishedTo);
+      if (target && target.projectId !== sprint.projectId) {
+        throw new BackendError(
+          'different_projects',
+          'the unfinished tasks can only go to a sprint of the same project',
+        );
+      }
+      if (target?.id === sprint.id) {
+        throw new BackendError(
+          'rule_broken',
+          'the unfinished tasks cannot stay in the sprint that is completed',
+        );
+      }
+      if (target) {
+        refuseCompleted(target, 'cannot take the unfinished tasks');
+      }
+
+      // The tasks are counted as the manager sees them: a subtask is part
+      // of its task and goes where its task goes.
+      const mainTasks = this.tasksOfSprint(sprint.id).filter((task) => task.parentId === null);
+      const now = this.nowAsText();
+      for (const task of mainTasks) {
+        if (this.categoryOf(task) === 'done') {
+          continue;
+        }
+        for (const id of this.subtreeOf(task)) {
+          const moving = this.tasks.get(id);
+          if (moving) {
+            moving.sprintId = target?.id ?? null;
+            moving.updatedAt = now;
+          }
+        }
+      }
+      sprint.summary = summaryOf(mainTasks.map((task) => this.countedTask(task)));
+      sprint.state = 'completed';
+      sprint.completedAt = now;
+      return sprint;
+    });
+  }
+
+  planTask(taskId: Id, sprintId: Id | null): Promise<Task> {
+    return this.answer(() => {
+      const task = this.requireTask(taskId);
+      const project = this.requireProject(task.projectId);
+      const parent = task.parentId === null ? undefined : this.tasks.get(task.parentId);
+      if (parent) {
+        throw new BackendError(
+          'subtask_planned_alone',
+          `${referenceOf(project, task)} is a part of ${referenceOf(project, parent)} and goes where it goes`,
+        );
+      }
+      if (sprintId !== null) {
+        const sprint = this.requireSprint(sprintId);
+        if (sprint.projectId !== task.projectId) {
+          throw new BackendError(
+            'different_projects',
+            'a task can only be planned into a sprint of its own project',
+          );
+        }
+        refuseCompleted(sprint, 'takes no more tasks');
+      }
+      const now = this.nowAsText();
+      for (const id of this.subtreeOf(task)) {
+        const planned = this.tasks.get(id);
+        if (planned && planned.sprintId !== sprintId) {
+          planned.sprintId = sprintId;
+          planned.updatedAt = now;
+        }
+      }
+      return task;
+    });
+  }
+
+  setTaskPoints(taskId: Id, points: number | null): Promise<Task> {
+    return this.answer(() => {
+      requirePoints(points);
+      return this.change(taskId, (task) => {
+        task.points = points;
+      });
+    });
+  }
+
+  sprintReport(sprintId: Id): Promise<SprintReport> {
+    return this.answer(() => {
+      const sprint = this.requireSprint(sprintId);
+      const mainTasks = this.tasksOfSprint(sprint.id).filter((task) => task.parentId === null);
+      return reportOf(
+        sprint,
+        mainTasks.map((task) => this.countedTask(task)),
+        dayOfMoment(this.nowAsText()),
+      );
+    });
+  }
+
+  /** The sprints of a project, in no particular order. */
+  private sprintsOf(projectId: Id): Sprint[] {
+    return [...this.sprints.values()].filter((sprint) => sprint.projectId === projectId);
+  }
+
+  /** The tasks of a sprint, its subtasks included. */
+  private tasksOfSprint(sprintId: Id): Task[] {
+    return [...this.tasks.values()].filter((task) => task.sprintId === sprintId);
+  }
+
+  private requireSprint(sprintId: Id): Sprint {
+    const sprint = this.sprints.get(sprintId);
+    if (!sprint) {
+      throw new BackendError('not_found', `there is no sprint with the identifier ${sprintId}`);
+    }
+    return sprint;
+  }
+
+  /** A task as a sprint counts it. Finished means: in a status of the category done. */
+  private countedTask(task: Task): CountedTask {
+    return {
+      points: task.points,
+      completedAt: task.completedAt,
+      isFinished: this.categoryOf(task) === 'done',
+    };
   }
 
   /**
@@ -1859,6 +2138,16 @@ function tidyMessage(raw: string): string {
     throw new BackendError('rule_broken', 'the message must not be empty');
   }
   return message;
+}
+
+/**
+ * Refuses to touch a completed sprint: it is the record of what was done.
+ * `what` says what cannot be done to it, after its name.
+ */
+function refuseCompleted(sprint: Sprint, what: string): void {
+  if (sprint.state === 'completed') {
+    throw new BackendError('sprint_completed', `"${sprint.name}" is completed and ${what}`);
+  }
 }
 
 /** Writes a number of tasks: "1 task", "3 tasks". */

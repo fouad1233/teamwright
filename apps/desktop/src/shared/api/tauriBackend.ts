@@ -17,10 +17,16 @@ import type {
   NewDecisionAnswer,
   NewMember,
   NewProject,
+  NewSprint,
   NewTask,
   Priority,
   Project,
   ProjectPlaces,
+  Sprint,
+  SprintChanges,
+  SprintCompletion,
+  SprintReport,
+  SprintStart,
   StatusProperties,
   Task,
   TaskChange,
@@ -133,6 +139,42 @@ export class TauriBackend implements Backend {
 
   listTaskHistory(taskId: Id): Promise<TaskChange[]> {
     return call('list_task_history', { taskId });
+  }
+
+  listSprints(projectId: Id): Promise<Sprint[]> {
+    return call('list_sprints', { projectId });
+  }
+
+  createSprint(sprint: NewSprint): Promise<Sprint> {
+    return call('create_sprint', { input: sprint });
+  }
+
+  changeSprint(sprintId: Id, changes: SprintChanges): Promise<Sprint> {
+    return call('change_sprint', { sprintId, changes });
+  }
+
+  deleteSprint(sprintId: Id): Promise<void> {
+    return call('delete_sprint', { sprintId });
+  }
+
+  startSprint(sprintId: Id, start: SprintStart): Promise<Sprint> {
+    return call('start_sprint', { sprintId, input: start });
+  }
+
+  completeSprint(sprintId: Id, completion: SprintCompletion): Promise<Sprint> {
+    return call('complete_sprint', { sprintId, input: completion });
+  }
+
+  planTask(taskId: Id, sprintId: Id | null): Promise<Task> {
+    return call('plan_task', { taskId, sprintId });
+  }
+
+  setTaskPoints(taskId: Id, points: number | null): Promise<Task> {
+    return call('set_task_points', { taskId, points });
+  }
+
+  sprintReport(sprintId: Id): Promise<SprintReport> {
+    return call('sprint_report', { sprintId });
   }
 
   projectPlaces(projectId: Id): Promise<ProjectPlaces> {

@@ -34,6 +34,8 @@ function task(overrides: Partial<Task> & Pick<Task, 'id'>): Task {
     parentId: null,
     blockedBy: [],
     estimateMinutes: null,
+    sprintId: null,
+    points: null,
     startOn: null,
     dueOn: null,
     rank: 0,
