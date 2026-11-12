@@ -7,7 +7,9 @@ import type {
   Assignee,
   CalendarDate,
   Color,
+  Computer,
   Conversation,
+  DataChanged,
   DecisionRequest,
   Effort,
   Id,
@@ -35,6 +37,8 @@ import type {
   Status,
   StatusCategory,
   StatusProperties,
+  SyncNotice,
+  SyncState,
   Task,
   TaskChange,
   Turn,
@@ -54,10 +58,12 @@ import {
   tidySprintName,
   type CountedTask,
 } from './sprints';
+import { LAPTOP, PretendedSync, THIS_COMPUTER, type SyncTrouble } from './sync';
 import { historyOf } from './taskHistory';
 import {
   SIMULATED_MODEL,
   scriptAfterDecision,
+  scriptForChoice,
   scriptForMessage,
   scriptForTask,
   type Act,
@@ -104,6 +110,8 @@ const PROJECTS_FOLDER = 'C:\\Users\\you\\Documents\\Teamwright';
 const SAMPLE_FOLDERS = [
   'C:\\Users\\you\\Projects\\sensor-node',
   'C:\\Users\\you\\Documents\\Datasheets',
+  // A folder that a cloud drive keeps in step, as one chooses for syncing.
+  'C:\\Users\\you\\Cloud Drive\\Teamwright',
 ];
 
 /** The file the browser demo hands out when the manager is asked to pick files. */
@@ -199,9 +207,28 @@ export class DemoBackend implements Backend {
   /** The turns whose script is still being played. A turn that is stopped leaves this set. */
   private readonly playing = new Set<Id>();
   private readonly conversationListeners = new Set<(conversation: Conversation) => void>();
+  private readonly syncListeners = new Set<(state: SyncState) => void>();
+  private readonly dataListeners = new Set<(change: DataChanged) => void>();
+  /** Syncing through a folder, pretended, with a second computer called "Laptop". */
+  private readonly sync: PretendedSync;
 
   constructor(workspace?: DemoWorkspace, environment: DemoEnvironment = browserEnvironment) {
     this.environment = environment;
+    this.sync = new PretendedSync({
+      now: () => environment.now(),
+      later: environment.later ?? ((work, pause) => void setTimeout(work, pause)),
+      takeIn: (computerId) => this.takeInFrom(computerId),
+      stateChanged: (state) => {
+        for (const listener of this.syncListeners) {
+          listener(structuredClone(state));
+        }
+      },
+      dataChanged: (projectIds) => {
+        for (const listener of this.dataListeners) {
+          listener({ projectIds: [...projectIds] });
+        }
+      },
+    });
     for (const project of workspace?.projects ?? []) {
       this.projects.set(project.id, structuredClone(project));
     }
@@ -863,6 +890,8 @@ export class DemoBackend implements Backend {
         memberId: member.id,
         taskId: task.id,
         startedAt: this.nowAsText(),
+        homeComputer: THIS_COMPUTER,
+        isHere: true,
         turns: [],
       };
       this.conversations.set(conversation.id, conversation);
@@ -878,7 +907,7 @@ export class DemoBackend implements Backend {
 
   reply(conversationId: Id, message: string): Promise<Conversation> {
     return this.answer(() => {
-      const conversation = this.requireConversation(conversationId);
+      const conversation = this.requireConversationHere(conversationId);
       if (conversation.isWithAdvisor) {
         return this.replyToAdvisor(conversation, message);
       }
@@ -905,7 +934,7 @@ export class DemoBackend implements Backend {
 
   answerDecision(conversationId: Id, answer: NewDecisionAnswer): Promise<Conversation> {
     return this.answer(() => {
-      const conversation = this.requireConversation(conversationId);
+      const conversation = this.requireConversationHere(conversationId);
       const decision = openDecisionOf(conversation);
       if (!decision) {
         throw new BackendError('no_decision_open', 'no question is open in this conversation');
@@ -976,6 +1005,8 @@ export class DemoBackend implements Backend {
         memberId: null,
         taskId: null,
         startedAt: this.nowAsText(),
+        homeComputer: THIS_COMPUTER,
+        isHere: true,
         turns: [],
       };
       this.conversations.set(conversation.id, conversation);
@@ -986,7 +1017,7 @@ export class DemoBackend implements Backend {
 
   answerInterview(conversationId: Id, answers: InterviewAnswer[]): Promise<Conversation> {
     return this.answer(() => {
-      const conversation = this.requireConversation(conversationId);
+      const conversation = this.requireConversationHere(conversationId);
       const interview = openInterviewOf(conversation);
       if (!interview) {
         throw new BackendError('no_interview_open', 'no questions are open in this conversation');
@@ -1025,7 +1056,7 @@ export class DemoBackend implements Backend {
 
   approveProposal(conversationId: Id, approved: ApprovedProposal): Promise<Conversation> {
     return this.answer(() => {
-      const conversation = this.requireConversation(conversationId);
+      const conversation = this.requireConversationHere(conversationId);
       const proposal = openProposalOf(conversation);
       if (!proposal) {
         throw new BackendError('no_proposal_open', 'no proposal is open in this conversation');
@@ -1167,6 +1198,8 @@ export class DemoBackend implements Backend {
         memberId: member.id,
         taskId: null,
         startedAt: this.nowAsText(),
+        homeComputer: THIS_COMPUTER,
+        isHere: true,
         turns: [],
       };
       this.conversations.set(conversation.id, conversation);
@@ -1177,7 +1210,7 @@ export class DemoBackend implements Backend {
 
   stopWork(conversationId: Id): Promise<Conversation> {
     return this.answer(() => {
-      const conversation = this.requireConversation(conversationId);
+      const conversation = this.requireConversationHere(conversationId);
       const turn = conversation.turns.find((candidate) => candidate.state === 'running');
       if (turn) {
         this.playing.delete(turn.id);
@@ -1207,6 +1240,193 @@ export class DemoBackend implements Backend {
     };
   }
 
+  syncState(): Promise<SyncState> {
+    return this.answer(() => this.sync.state());
+  }
+
+  chooseSyncFolder(folder: string, computerName: string): Promise<SyncState> {
+    return this.answer(() =>
+      this.sync.chooseFolder(folder, computerName, this.environment.folders),
+    );
+  }
+
+  stopSyncing(): Promise<SyncState> {
+    return this.answer(() => this.sync.stop());
+  }
+
+  syncNow(): Promise<SyncState> {
+    return this.answer(() => this.sync.syncNow());
+  }
+
+  renameThisComputer(name: string): Promise<SyncState> {
+    return this.answer(() => this.sync.rename(name));
+  }
+
+  acceptComputer(computerId: Id): Promise<SyncState> {
+    return this.answer(() => this.sync.accept(computerId));
+  }
+
+  ignoreComputer(computerId: Id): Promise<SyncState> {
+    return this.answer(() => this.sync.ignore(computerId));
+  }
+
+  syncNotices(): Promise<SyncNotice[]> {
+    return this.answer(() => this.sync.notices());
+  }
+
+  dismissSyncNotice(noticeId: number): Promise<void> {
+    return this.answer(() => {
+      this.sync.dismiss(noticeId);
+    });
+  }
+
+  giveThisComputerANewIdentity(): Promise<SyncState> {
+    return this.answer(() => this.sync.newIdentity());
+  }
+
+  onSyncChanged(listener: (state: SyncState) => void): () => void {
+    this.syncListeners.add(listener);
+    return () => {
+      this.syncListeners.delete(listener);
+    };
+  }
+
+  onDataChanged(listener: (change: DataChanged) => void): () => void {
+    this.dataListeners.add(listener);
+    return () => {
+      this.dataListeners.delete(listener);
+    };
+  }
+
+  /**
+   * Makes the pretended sync folder show a trouble, so that a scenario can
+   * look at every state: a round under way, a folder that cannot be
+   * reached, or another computer that uses this one's identity. With
+   * nothing, the folder is well again. Not part of the `Backend`.
+   */
+  pretendSync(trouble: SyncTrouble | null): Promise<SyncState> {
+    return this.answer(() => this.sync.pretend(trouble));
+  }
+
+  /**
+   * Makes another computer show up in the pretended sync folder, or changes
+   * one that is there, by its name. Not part of the `Backend`.
+   */
+  pretendComputer(
+    name: string,
+    details?: Partial<Pick<Computer, 'version' | 'clockAhead' | 'newerFormat'>>,
+  ): Promise<SyncState> {
+    return this.answer(() => this.sync.pretendComputer(name, details));
+  }
+
+  /**
+   * Takes in what the pretended "Laptop" wrote, the first time it is read,
+   * in the first project that is not put away. Laptop created a task under
+   * the number that this computer gave its newest task at the same time,
+   * so the task here gets the next free number and the manager a notice.
+   * And a specialist works on a task on Laptop, so a conversation of the
+   * project runs on another computer: the oldest one, or else a new one
+   * whose steps arrive while the turn goes on there. Answers with the
+   * projects that changed.
+   */
+  private takeInFrom(computerId: Id): Id[] {
+    const project = this.allProjects().find((candidate) => candidate.archivedAt === null);
+    if (computerId !== LAPTOP || !project) {
+      return [];
+    }
+    const now = this.nowAsText();
+
+    const newest = this.tasksOfProject(project.id).sort((a, b) => b.number - a.number)[0];
+    if (newest) {
+      const taken = newest.number;
+      const free = this.nextTaskNumbers.get(project.id) ?? taken + 1;
+      this.nextTaskNumbers.set(project.id, free + 1);
+      newest.number = free;
+      newest.updatedAt = now;
+      const status = initialStatus(project);
+      const lastInStatus = this.tasksOfStatus(project.id, status.id).at(-1);
+      const fromLaptop: Task = {
+        id: this.environment.newId(),
+        projectId: project.id,
+        number: taken,
+        title: 'Measure the current in sleep',
+        description: 'Written on Laptop, during a meeting.',
+        statusId: status.id,
+        priority: 'normal',
+        assignee: { kind: 'manager' },
+        parentId: null,
+        blockedBy: [],
+        estimateMinutes: null,
+        sprintId: null,
+        points: null,
+        startOn: null,
+        dueOn: null,
+        rank: rankBetween(lastInStatus?.rank, undefined),
+        createdAt: now,
+        updatedAt: now,
+        completedAt: status.category === 'done' ? now : null,
+      };
+      this.tasks.set(fromLaptop.id, fromLaptop);
+      const key = project.key;
+      this.sync.addNotice({
+        kind: 'task_renumbered',
+        projectId: project.id,
+        taskId: newest.id,
+        message: `${key}-${taken.toString()} is now ${key}-${free.toString()}: another computer gave the number ${taken.toString()} to another task at the same time.`,
+      });
+    }
+
+    const oldest = this.conversationsOf(project.id)[0];
+    if (oldest) {
+      oldest.homeComputer = LAPTOP;
+      oldest.isHere = false;
+      this.tellListeners(oldest);
+    } else {
+      this.startWorkOnLaptop(project);
+    }
+    this.noteVersions();
+    return [project.id];
+  }
+
+  /**
+   * A specialist starts on a task of a project on Laptop: the first task in
+   * work that is given to an AI specialist. Its steps arrive one after the
+   * other, and it ends with a question for the manager.
+   */
+  private startWorkOnLaptop(project: Project): void {
+    const task = this.tasksOfProject(project.id)
+      .sort((a, b) => a.number - b.number)
+      .find((candidate) => {
+        const member =
+          candidate.assignee?.kind === 'member'
+            ? this.members.get(candidate.assignee.memberId)
+            : undefined;
+        return member?.kind === 'agent' && this.categoryOf(candidate) === 'active';
+      });
+    if (task?.assignee?.kind !== 'member') {
+      return;
+    }
+    const conversation: Conversation = {
+      id: this.environment.newId(),
+      projectId: project.id,
+      isWithAdvisor: false,
+      memberId: task.assignee.memberId,
+      taskId: task.id,
+      startedAt: this.nowAsText(),
+      homeComputer: LAPTOP,
+      isHere: false,
+      turns: [],
+    };
+    this.conversations.set(conversation.id, conversation);
+    this.beginTurn(
+      conversation,
+      briefFor(project, task, this.tasksOfProject(project.id)),
+      'brief',
+      scriptForChoice(task),
+    );
+    this.tellListeners(conversation);
+  }
+
   /** The conversations of a project, the oldest first. */
   private conversationsOf(projectId: Id): Conversation[] {
     return [...this.conversations.values()]
@@ -1220,6 +1440,22 @@ export class DemoBackend implements Backend {
       throw new BackendError(
         'not_found',
         `there is no conversation with the identifier ${conversationId}`,
+      );
+    }
+    return conversation;
+  }
+
+  /**
+   * A conversation that can be continued: one that runs on this computer.
+   * Its session lives where it was started, so elsewhere it can be read
+   * and nothing more.
+   */
+  private requireConversationHere(conversationId: Id): Conversation {
+    const conversation = this.requireConversation(conversationId);
+    if (!conversation.isHere) {
+      throw new BackendError(
+        'runs_elsewhere',
+        'this conversation runs on another computer, and can only be continued there',
       );
     }
     return conversation;

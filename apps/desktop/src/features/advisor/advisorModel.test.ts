@@ -60,6 +60,8 @@ function conversation(overrides: Partial<Conversation> = {}): Conversation {
     memberId: null,
     taskId: null,
     startedAt: '2026-11-12T09:00:00.000Z',
+    homeComputer: 'desk',
+    isHere: true,
     turns: [],
     ...overrides,
   };

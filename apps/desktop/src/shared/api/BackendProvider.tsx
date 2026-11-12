@@ -27,7 +27,18 @@ export function connectToBackend(): BackendConnection {
   }
   const startsEmpty = new URLSearchParams(window.location.search).get('demo') === 'empty';
   const workspace = startsEmpty ? undefined : sampleWorkspace();
-  return { backend: new DemoBackend(workspace), isDemo: true };
+  const demo = new DemoBackend(workspace);
+  // Scenarios that take pictures of the demo reach it here, to show what a
+  // browser cannot make happen, such as a sync folder that is gone.
+  window.teamwrightDemo = demo;
+  return { backend: demo, isDemo: true };
+}
+
+declare global {
+  interface Window {
+    /** The demo backend, while the interface runs in a browser on sample data. */
+    teamwrightDemo?: DemoBackend;
+  }
 }
 
 const BackendContext = createContext<BackendConnection | null>(null);

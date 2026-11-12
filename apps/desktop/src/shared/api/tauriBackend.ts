@@ -9,6 +9,7 @@ import type {
   Assignee,
   CalendarDate,
   Conversation,
+  DataChanged,
   Id,
   InterviewAnswer,
   Member,
@@ -28,6 +29,8 @@ import type {
   SprintReport,
   SprintStart,
   StatusProperties,
+  SyncNotice,
+  SyncState,
   Task,
   TaskChange,
 } from './types';
@@ -286,19 +289,83 @@ export class TauriBackend implements Backend {
 
   onConversationChanged(listener: (conversation: Conversation) => void): () => void {
     // The shell sends this event with the whole conversation every time one changes.
-    const listening = listen<Conversation>(CONVERSATION_CHANGED, (event) => {
-      listener(event.payload);
-    });
-    return () => {
-      void listening.then((stopListening) => {
-        stopListening();
-      });
-    };
+    return listenTo(CONVERSATION_CHANGED, listener);
+  }
+
+  syncState(): Promise<SyncState> {
+    return call('sync_state');
+  }
+
+  chooseSyncFolder(folder: string, computerName: string): Promise<SyncState> {
+    return call('choose_sync_folder', { folder, computerName });
+  }
+
+  stopSyncing(): Promise<SyncState> {
+    return call('stop_syncing');
+  }
+
+  syncNow(): Promise<SyncState> {
+    return call('sync_now');
+  }
+
+  renameThisComputer(name: string): Promise<SyncState> {
+    return call('rename_this_computer', { name });
+  }
+
+  acceptComputer(computerId: Id): Promise<SyncState> {
+    return call('accept_computer', { computerId });
+  }
+
+  ignoreComputer(computerId: Id): Promise<SyncState> {
+    return call('ignore_computer', { computerId });
+  }
+
+  syncNotices(): Promise<SyncNotice[]> {
+    return call('sync_notices');
+  }
+
+  dismissSyncNotice(noticeId: number): Promise<void> {
+    return call('dismiss_sync_notice', { noticeId });
+  }
+
+  giveThisComputerANewIdentity(): Promise<SyncState> {
+    return call('give_this_computer_a_new_identity');
+  }
+
+  onSyncChanged(listener: (state: SyncState) => void): () => void {
+    // The shell sends the whole state after every round, also one that failed.
+    return listenTo(SYNC_CHANGED, listener);
+  }
+
+  onDataChanged(listener: (change: DataChanged) => void): () => void {
+    // The shell sends the projects in which a round took in changes.
+    return listenTo(DATA_CHANGED, listener);
   }
 }
 
 /** The name of the event the shell sends when a conversation has changed. */
 const CONVERSATION_CHANGED = 'conversation-changed';
+
+/** The name of the event the shell sends with the state of syncing after a round. */
+const SYNC_CHANGED = 'sync-changed';
+
+/** The name of the event the shell sends when a round changed projects. */
+const DATA_CHANGED = 'data-changed';
+
+/**
+ * Calls a listener with the payload of every event of a name the shell
+ * sends. Returns the function that stops the calls.
+ */
+function listenTo<Payload>(event: string, listener: (payload: Payload) => void): () => void {
+  const listening = listen<Payload>(event, (received) => {
+    listener(received.payload);
+  });
+  return () => {
+    void listening.then((stopListening) => {
+      stopListening();
+    });
+  };
+}
 
 /** Calls a command of the shell and turns its failure into a `BackendError`. */
 async function call<Result>(command: string, args?: Record<string, unknown>): Promise<Result> {

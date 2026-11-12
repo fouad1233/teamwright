@@ -145,7 +145,18 @@ with `id`, `name`, `version`, `acceptance` (`undecided`, `accepted`,
 application: `sync_off`, `sync_folder_unreachable`, `sync_folder_in_data`,
 `identity_in_use`, `folder_not_found`, `rule_broken` (also for an
 identifier that cannot be read, or an empty name), `not_found` and
-`storage_failed`. `types.ts` does not have these types yet.
+`storage_failed`. `types.ts` mirrors these types (`SyncState`, `Computer`,
+`SyncNotice`, `DataChanged`), and `Backend` has one method for each command
+and two listeners, `onSyncChanged` and `onDataChanged`.
+
+The demo backend pretends syncing (`shared/api/demo/sync.ts`, tested in
+`demoSync.test.ts`): it is off at first; once a folder and a name are
+chosen it is in step, and a second computer, "Laptop", shows up undecided
+a moment later. Taking it in brings a task, a notice of a renumbered task,
+and a conversation that runs on Laptop. Its refusals are those of the shell.
+`pretendSync` and `pretendComputer` let a scenario show a round under way,
+a folder that cannot be reached, a copied identity, or another computer;
+in the browser the demo is `window.teamwrightDemo`.
 
 ## The interface: `src`
 

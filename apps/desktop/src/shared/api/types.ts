@@ -497,6 +497,17 @@ export interface Conversation {
   /** The task the conversation is about, if it is about one. */
   taskId: Id | null;
   startedAt: Moment;
+  /**
+   * The identity of the computer the conversation runs on: the one it was
+   * started on, where the session of its specialist lives. It never
+   * changes.
+   */
+  homeComputer: Id;
+  /**
+   * Whether that computer is this one. Only there can the manager reply,
+   * answer, approve, start or stop. Elsewhere the conversation can be read.
+   */
+  isHere: boolean;
   /** The turns, the oldest first. */
   turns: Turn[];
 }
@@ -605,4 +616,98 @@ export interface SprintCompletion {
    * to, or nothing for the backlog.
    */
   moveUnfinishedTo: Id | null;
+}
+
+/**
+ * Where keeping computers in step through a folder stands, in one word.
+ *
+ * - `off`: no folder is chosen.
+ * - `in_step`: the last round went well.
+ * - `writing`: a round is writing or reading right now.
+ * - `unreachable`: the folder could not be reached in the last round.
+ * - `stopped`: another computer uses this computer's identity, or a new
+ *   identity waits for Teamwright to start again.
+ */
+export type SyncPhase = 'off' | 'in_step' | 'writing' | 'unreachable' | 'stopped';
+
+/**
+ * Whether this computer takes in what another computer writes: not decided
+ * yet, taken in, or ignored.
+ */
+export type ComputerAcceptance = 'undecided' | 'accepted' | 'ignored';
+
+/** Another computer that writes into the sync folder. */
+export interface Computer {
+  id: Id;
+  /** The name it gave itself, once its card was read. */
+  name: string | null;
+  /** The version of Teamwright it runs, once its card was read. */
+  version: string | null;
+  acceptance: ComputerAcceptance;
+  /** When it last wrote into the folder, if it ever did. */
+  lastHeard: Moment | null;
+  /** Whether its clock is ahead of this computer's by more than five minutes. */
+  clockAhead: boolean;
+  /** Whether it uses a newer Teamwright, whose files this one cannot read. */
+  newerFormat: boolean;
+}
+
+/**
+ * Where syncing through a folder stands, as the manager sees it. It is also
+ * what the event `sync-changed` carries.
+ */
+export interface SyncState {
+  /** The chosen folder, or nothing while syncing is off. */
+  folder: string | null;
+  /** The identity of this computer. */
+  thisComputer: Id;
+  /** The name of this computer, once the manager gave one. */
+  computerName: string | null;
+  /**
+   * A name to offer when the manager is asked for one: the name the
+   * operating system gives the computer. Only a suggestion, because it
+   * often holds a person's name.
+   */
+  suggestedName: string | null;
+  phase: SyncPhase;
+  /** When the last round ended, in this run of the program. */
+  lastRound: Moment | null;
+  /** What went wrong in the last round, in words. */
+  problem: string | null;
+  /** The other computers. */
+  computers: Computer[];
+}
+
+/**
+ * What a notice of syncing is about:
+ *
+ * - `task_renumbered`: a task got a new number, because another computer
+ *   gave its number to another task at the same time.
+ * - `project_rekeyed`: a project got a new key, for the same reason.
+ * - `change_dropped`: a change made here was dropped, because the thing was
+ *   deleted on another computer.
+ * - `task_moved`: a task moved, because its status was removed on another
+ *   computer.
+ * - `clock_ahead`: another computer's clock is ahead of this one's.
+ */
+export type SyncNoticeKind =
+  'task_renumbered' | 'project_rekeyed' | 'change_dropped' | 'task_moved' | 'clock_ahead';
+
+/** Something syncing tells the manager. It is kept on this computer until dismissed. */
+export interface SyncNotice {
+  /** A number of this computer's own; notices never leave it. */
+  id: number;
+  at: Moment;
+  kind: SyncNoticeKind;
+  /** The project it is about, if it is about one. */
+  projectId: Id | null;
+  /** The task it is about, if it is about one. */
+  taskId: Id | null;
+  /** What happened, in words written for the manager. */
+  message: string;
+}
+
+/** What the event `data-changed` carries: the projects in which syncing changed something. */
+export interface DataChanged {
+  projectIds: Id[];
 }

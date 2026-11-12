@@ -119,6 +119,8 @@ function conversation(overrides: Partial<Conversation> & Pick<Conversation, 'id'
     memberId: 'hardware',
     taskId: null,
     startedAt: '2026-11-12T09:00:00.000Z',
+    homeComputer: 'desk',
+    isHere: true,
     turns: [],
     ...overrides,
   };

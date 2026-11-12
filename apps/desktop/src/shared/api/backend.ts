@@ -4,6 +4,7 @@ import type {
   Assignee,
   CalendarDate,
   Conversation,
+  DataChanged,
   Id,
   InterviewAnswer,
   Member,
@@ -23,6 +24,8 @@ import type {
   SprintReport,
   SprintStart,
   StatusProperties,
+  SyncNotice,
+  SyncState,
   Task,
   TaskChange,
 } from './types';
@@ -194,7 +197,12 @@ export interface Backend {
 
   /** Says whether the program that runs the AI specialists is installed and signed in. */
   agentProgram(): Promise<AgentProgram>;
-  /** Lists the conversations of a project with their turns, the oldest first. */
+  /**
+   * Lists the conversations of a project with their turns, the oldest
+   * first, also those that run on another computer. A conversation can only
+   * be continued on the computer it runs on: replying, answering,
+   * approving and stopping are refused elsewhere (`runs_elsewhere`).
+   */
   listConversations(projectId: Id): Promise<Conversation[]>;
   /**
    * Lets the AI specialist a task is given to start on it. The specialist
@@ -260,6 +268,80 @@ export interface Backend {
    * takes a step, or ends. Returns the function that stops the calls.
    */
   onConversationChanged(listener: (conversation: Conversation) => void): () => void;
+
+  /**
+   * Says where keeping this computer in step with the manager's other
+   * computers stands: the folder, the name of this computer, the other
+   * computers, and how the last round went.
+   */
+  syncState(): Promise<SyncState>;
+  /**
+   * Chooses the folder to keep computers in step through, a folder the
+   * manager owns (for example one that a cloud drive keeps in step), and
+   * names this computer. The name is written into the folder, where the
+   * other computers read it. Answers after a first round, which writes the
+   * whole log of this computer into the folder; what went wrong in it is in
+   * the state. Refused if the folder is not named or the name is empty or
+   * longer than 60 characters (`rule_broken`), if the folder does not exist
+   * (`folder_not_found`), or if it lies inside Teamwright's own data folder
+   * (`sync_folder_in_data`).
+   */
+  chooseSyncFolder(folder: string, computerName: string): Promise<SyncState>;
+  /** Stops syncing. Nothing in the folder is removed; choosing it again goes on where it stopped. */
+  stopSyncing(): Promise<SyncState>;
+  /**
+   * Runs a round now instead of waiting for the next one, and answers after
+   * it. Refused while no folder is chosen (`sync_off`), when the folder
+   * cannot be reached (`sync_folder_unreachable`), and when another
+   * computer uses the identity of this one or a new identity waits for
+   * Teamwright to start again (`identity_in_use`).
+   */
+  syncNow(): Promise<SyncState>;
+  /**
+   * Gives this computer another name, which the other computers see after
+   * the next round. Refused if the name is empty or longer than 60
+   * characters (`rule_broken`).
+   */
+  renameThisComputer(name: string): Promise<SyncState>;
+  /**
+   * Takes in what another computer writes into the folder, from now on and
+   * all it wrote before. Answers after a round. Refused for a computer that
+   * is not known (`not_found`).
+   */
+  acceptComputer(computerId: Id): Promise<SyncState>;
+  /**
+   * Takes in nothing more of another computer. What was taken in stays.
+   * Refused for a computer that is not known (`not_found`).
+   */
+  ignoreComputer(computerId: Id): Promise<SyncState>;
+  /**
+   * Lists what syncing tells the manager, the newest first: a task or a
+   * project that got a new number or key, a change that was dropped, a task
+   * that moved, a clock that is ahead.
+   */
+  syncNotices(): Promise<SyncNotice[]>;
+  /** Forgets a notice. A notice that is not kept is ignored. */
+  dismissSyncNotice(noticeId: number): Promise<void>;
+  /**
+   * Gives this computer a new identity, for when its data folder was copied
+   * to another computer, which now writes under the same identity. Syncing
+   * stays stopped until Teamwright starts again. The old identity then
+   * counts as another computer, so nothing is lost; the conversations with
+   * the specialists stay with it.
+   */
+  giveThisComputerANewIdentity(): Promise<SyncState>;
+  /**
+   * Calls the listener with the whole state of syncing whenever it changes:
+   * after every round, also one that failed. Returns the function that
+   * stops the calls.
+   */
+  onSyncChanged(listener: (state: SyncState) => void): () => void;
+  /**
+   * Calls the listener when syncing took in changes from another computer,
+   * with the projects they changed. Whatever is shown of those projects is
+   * to be asked for again. Returns the function that stops the calls.
+   */
+  onDataChanged(listener: (change: DataChanged) => void): () => void;
 }
 
 /**
