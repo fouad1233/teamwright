@@ -20,6 +20,7 @@ import {
   planRoom,
   startRoom,
   type Figure,
+  type Gesture,
   type Person,
   type RoomPlan,
   type RoomState,
@@ -54,6 +55,14 @@ export interface RoomSitter {
   person: Person;
   sitter: Sitter;
 }
+
+/** The pose of each small thing somebody idle does at the bench. */
+const GESTURE_POSES: Readonly<Record<Gesture, Pose>> = {
+  glance: 'seatGlance',
+  sip: 'seatSip',
+  stretch: 'seatStretch',
+  page: 'seatPage',
+};
 
 function lookKey(look: Look): string {
   return `${look.role}.${look.skin.toString()}.${look.hair.toString()}.${look.hairStyle}.${look.shirt}`;
@@ -356,8 +365,8 @@ export class RoomPainter {
             ? 'seatWork'
             : figure.activity === 'waiting'
               ? 'seatWait'
-              : figure.glancing
-                ? 'seatGlance'
+              : figure.gesture
+                ? GESTURE_POSES[figure.gesture]
                 : 'seatRest';
         const frame = figure.frame % 4;
         const isWorking = figure.activity === 'working';

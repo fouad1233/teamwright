@@ -344,13 +344,27 @@ export interface RoomState {
   phases: Readonly<Record<string, Phase>>;
 }
 
-/** How fast people walk, in pixels of the page each second: an unhurried pace. */
-export const WALKING_SPEED = 30;
+/**
+ * How fast people walk, in pixels of a character each second: an easy
+ * office pace, a little more than a body's height a second, so that most
+ * walks to a shared place take less than twenty seconds.
+ */
+export const WALKING_SPEED = 28;
+
+/** How fast people walk in a plan, in pixels of the page each second. */
+export function speedIn(plan: RoomPlan): number {
+  return WALKING_SPEED * plan.unit;
+}
 
 /** How long somebody stays at a shared place, in seconds. */
 const VISIT = { shortest: 8, longest: 16 };
 /** How long somebody stays at the bench between two walks, in seconds. */
-const REST = { shortest: 30, longest: 80 };
+const REST = { shortest: 25, longest: 70 };
+
+/** How many people may be away from their bench at once: two in a team of six or more. */
+export function mostAway(people: number): number {
+  return people >= 6 ? 2 : 1;
+}
 /** How long before the first walk of the day, so that a room that opens is soon alive. */
 const FIRST_REST = { shortest: 3, longest: 30 };
 
@@ -380,10 +394,27 @@ function spotOf(phase: Phase): string | null {
 }
 
 /**
- * The room a moment later. At most one person walks at a time for the
- * pleasure of it, and nobody goes to a place another person holds, so two
- * people never stand in each other. Somebody whose work starts while away
- * turns back at once.
+ * The free place a person goes to: the nearest, now and then the second
+ * nearest, so that a short walk is the rule and the room still varies.
+ */
+function chooseSpot(
+  seat: Seat,
+  free: readonly Spot[],
+  plan: RoomPlan,
+  random: () => number,
+): Walk | null {
+  const walks = free
+    .map((spot) => walkTo(seat, spot, plan))
+    .sort((first, second) => first.length - second.length);
+  const pick = walks.length > 1 && random() < 0.3 ? 1 : 0;
+  return walks[pick] ?? null;
+}
+
+/**
+ * The room a moment later. One person walks at a time for the pleasure of
+ * it; one may be away from the bench, or two in a team of six or more; and
+ * nobody goes to a place another person holds, so two people never stand
+ * in each other. Somebody whose work starts while away turns back at once.
  */
 export function advanceRoom(
   state: RoomState,
@@ -393,6 +424,7 @@ export function advanceRoom(
   random: () => number,
 ): RoomState {
   const time = state.time + Math.max(0, seconds);
+  const speed = speedIn(plan);
   const phases: Record<string, Phase> = {};
   for (const person of people) {
     phases[person.key] = state.phases[person.key] ?? {
@@ -402,6 +434,7 @@ export function advanceRoom(
   }
   const seats = new Map(plan.seats.map((seat) => [seat.key, seat]));
   const anybodyWalking = () => Object.values(phases).some(isWalking);
+  const away = () => Object.values(phases).filter((phase) => phase.kind !== 'seated').length;
   // Somebody whose visit is over and who waits to come back goes first.
   const anybodyDueBack = () =>
     Object.values(phases).some((phase) => phase.kind === 'visiting' && time >= phase.until);
@@ -426,24 +459,27 @@ export function advanceRoom(
         }
         const taken = takenSpots();
         const free = plan.spots.filter((spot) => !taken.has(spot.id));
-        const spot = free[Math.floor(random() * free.length)];
-        if (anybodyWalking() || anybodyDueBack() || !spot) {
+        const walk =
+          anybodyWalking() || anybodyDueBack() || away() >= mostAway(people.length)
+            ? null
+            : chooseSpot(seat, free, plan, random);
+        if (!walk) {
           // Try again in a little while.
           phases[person.key] = { kind: 'seated', restUntil: time + 2 + 4 * random() };
           break;
         }
-        phases[person.key] = { kind: 'out', walk: walkTo(seat, spot, plan), startedAt: time };
+        phases[person.key] = { kind: 'out', walk, startedAt: time };
         break;
       }
       case 'out': {
-        const travelled = (time - phase.startedAt) * WALKING_SPEED;
+        const travelled = (time - phase.startedAt) * speed;
         if (!mayStayAway) {
           // Turn round where one stands: the way back is what is left of the way out.
           const left = Math.min(travelled, phase.walk.length);
           phases[person.key] = {
             kind: 'back',
             walk: phase.walk,
-            startedAt: time - (phase.walk.length - left) / WALKING_SPEED,
+            startedAt: time - (phase.walk.length - left) / speed,
           };
         } else if (travelled >= phase.walk.length) {
           phases[person.key] = {
@@ -461,7 +497,7 @@ export function advanceRoom(
         break;
       }
       case 'back': {
-        if ((time - phase.startedAt) * WALKING_SPEED >= phase.walk.length) {
+        if ((time - phase.startedAt) * speed >= phase.walk.length) {
           phases[person.key] = { kind: 'seated', restUntil: time + between(REST, random) };
         }
         break;
@@ -472,8 +508,18 @@ export function advanceRoom(
 }
 
 /** How a person is drawn at a moment: seated at the bench, or standing somewhere in the room. */
+/** A small thing somebody idle at the bench does now and then. */
+export type Gesture = 'glance' | 'sip' | 'stretch' | 'page';
+
 export type Figure =
-  | { kind: 'seated'; seat: Seat; activity: Activity; frame: number; glancing: boolean }
+  | {
+      kind: 'seated';
+      seat: Seat;
+      activity: Activity;
+      frame: number;
+      /** What an idle person is doing for a moment, if anything. */
+      gesture: Gesture | null;
+    }
   | {
       kind: 'standing';
       /** Where the feet are. */
@@ -491,15 +537,41 @@ const STRIDE = 3;
 const WORK_BEAT = 0.42;
 /** How long the raised hand of somebody waiting takes to dip and rise, in seconds. */
 const WAVE_BEAT = 1.1;
-/** How often an idle person glances aside, in seconds, and for how long. */
-const GLANCE_EVERY = 9;
-const GLANCE_FOR = 1.4;
+/** How often an idle person does a small thing, in seconds, and for how long. */
+const GESTURE_EVERY = 9;
+const GESTURE_FOR = 2.4;
+/** How long each of the two frames of a gesture lasts, in seconds: slow. */
+const GESTURE_BEAT = 0.6;
+/** The small things, in the order a person goes through them, glancing most. */
+const GESTURES: readonly Gesture[] = [
+  'glance',
+  'sip',
+  'glance',
+  'page',
+  'stretch',
+  'glance',
+  'sip',
+];
+
+/** What an idle person does at a moment: mostly nothing, now and then a small thing. */
+export function gestureAt(seed: number, time: number): { gesture: Gesture | null; frame: number } {
+  const shifted = time + (seed % 997) * 0.37;
+  const into = shifted % GESTURE_EVERY;
+  if (into >= GESTURE_FOR) {
+    return { gesture: null, frame: 0 };
+  }
+  const round = Math.floor(shifted / GESTURE_EVERY) + (seed % GESTURES.length);
+  return {
+    gesture: GESTURES[round % GESTURES.length] ?? null,
+    frame: Math.floor(into / GESTURE_BEAT) % 2,
+  };
+}
 
 /** The figure of a seated person: its pose follows what the bench says. */
 function seatedFigure(person: Person, seat: Seat, time: number, isStill: boolean): Figure {
   const offset = (person.seed % 1000) / 1000;
   if (isStill) {
-    return { kind: 'seated', seat, activity: person.activity, frame: 0, glancing: false };
+    return { kind: 'seated', seat, activity: person.activity, frame: 0, gesture: null };
   }
   switch (person.activity) {
     case 'working':
@@ -508,7 +580,7 @@ function seatedFigure(person: Person, seat: Seat, time: number, isStill: boolean
         seat,
         activity: 'working',
         frame: Math.floor(time / WORK_BEAT + offset * 4),
-        glancing: false,
+        gesture: null,
       };
     case 'waiting':
       return {
@@ -516,11 +588,11 @@ function seatedFigure(person: Person, seat: Seat, time: number, isStill: boolean
         seat,
         activity: 'waiting',
         frame: Math.floor(time / WAVE_BEAT + offset * 2),
-        glancing: false,
+        gesture: null,
       };
     case 'idle': {
-      const into = (time + offset * GLANCE_EVERY) % GLANCE_EVERY;
-      return { kind: 'seated', seat, activity: 'idle', frame: 0, glancing: into < GLANCE_FOR };
+      const { gesture, frame } = gestureAt(person.seed, time);
+      return { kind: 'seated', seat, activity: 'idle', frame, gesture };
     }
   }
 }
@@ -564,7 +636,7 @@ export function figuresOf(
       });
       continue;
     }
-    const travelled = Math.min(phase.walk.length, (state.time - phase.startedAt) * WALKING_SPEED);
+    const travelled = Math.min(phase.walk.length, (state.time - phase.startedAt) * speedIn(plan));
     const along =
       phase.kind === 'out'
         ? pointAlong(phase.walk.path, travelled)

@@ -7,7 +7,10 @@ import {
   chance,
   commonsOf,
   figuresOf,
+  gestureAt,
+  mostAway,
   planRoom,
+  speedIn,
   pointAlong,
   SCENE_OFFSET,
   seatAt,
@@ -225,8 +228,66 @@ describe('figuresOf', () => {
       expect(figure.kind).toBe('seated');
       if (figure.kind === 'seated') {
         expect(figure.frame).toBe(0);
-        expect(figure.glancing).toBe(false);
+        expect(figure.gesture).toBeNull();
       }
     }
+  });
+});
+
+/** A room laid out as the office draws eight members at three times in a wide window. */
+function wideRoom(): RoomMeasures {
+  const aisle = 120;
+  const row = (top: number, columns: number[]) =>
+    columns.map((column) => ({ left: 40 + column * 264, top, width: 248, height: 205 }));
+  const boxes = [
+    ...row(aisle, [0.5, 1.5]),
+    ...row(aisle + 165 + 16 + aisle, [0, 1, 2]),
+    ...row(aisle + 165 + 16 + aisle + 205 + aisle, [0, 1, 2]),
+    ...row(aisle + 165 + 16 + aisle + 2 * (205 + aisle), [0.5, 1.5]),
+  ];
+  const bottom = Math.max(...boxes.map((box) => box.top + box.height));
+  return {
+    unit: 3,
+    benches: boxes.map((box, index) => ({ key: `place-${index.toString()}`, box })),
+    wallRight: 40 + 3 * 248 + 2 * 16 + 48 - 5,
+    commons: { left: 40, top: bottom + 24, width: 3 * 248 + 32, height: 160 },
+  };
+}
+
+describe('the pace of the room', () => {
+  it('takes most people to their nearest shared place in under twenty seconds', () => {
+    const plan = planRoom(wideRoom());
+    const seconds = plan.seats.map((seat) =>
+      Math.min(...plan.spots.map((spot) => walkTo(seat, spot, plan).length / speedIn(plan))),
+    );
+    const quick = seconds.filter((time) => time < 20).length;
+    expect(quick / seconds.length).toBeGreaterThanOrEqual(0.6);
+    expect(Math.max(...seconds)).toBeLessThan(30);
+  });
+
+  it('lets two be away in a team of six or more, and one in a smaller team', () => {
+    expect(mostAway(5)).toBe(1);
+    expect(mostAway(6)).toBe(2);
+    const random = chance(6);
+    for (const count of [4, 8]) {
+      const who = people().slice(0, count);
+      let most = 0;
+      run(startRoom(who, random), who, 900, random, (state) => {
+        const away = Object.values(state.phases).filter((phase) => phase.kind !== 'seated');
+        most = Math.max(most, away.length);
+      });
+      expect(most).toBe(mostAway(count));
+    }
+  });
+});
+
+describe('gestureAt', () => {
+  it('has somebody idle do a small thing now and then, and mostly nothing', () => {
+    const moments = Array.from({ length: 900 }, (_, index) => gestureAt(42, index / 10));
+    const busy = moments.filter((moment) => moment.gesture !== null).length;
+    expect(busy).toBeGreaterThan(0);
+    expect(busy / moments.length).toBeLessThan(0.4);
+    const kinds = new Set(moments.map((moment) => moment.gesture));
+    expect(kinds).toEqual(new Set([null, 'glance', 'sip', 'page', 'stretch']));
   });
 });
