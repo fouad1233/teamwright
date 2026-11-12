@@ -41,7 +41,9 @@ export function TaskTally({ project, tasks }: TaskTallyProps) {
         </span>
       )}
       <span className={styles.count}>
-        {tasks.length} {tasks.length === 1 ? 'task' : 'tasks'} · {finishedCount} done
+        {tasks.length === 0
+          ? 'No tasks'
+          : `${tasks.length.toString()} ${tasks.length === 1 ? 'task' : 'tasks'} · ${finishedCount.toString()} done`}
       </span>
     </div>
   );
