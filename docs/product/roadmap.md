@@ -128,11 +128,14 @@ Several specialists working together with the manager in the loop.
   Seen in the built program on stored data, with nobody at work there.
   Plan limits are not shown, because they are not known, and there is no
   latest activity yet
-- 🚧 Views the manager adds, names, filters, orders and removes, next to
+- ✅ Views the manager adds, names, filters, orders and removes, next to
   the fixed places Team, Office and Advisor
   ([decision 0021](../decisions/0021-views-the-manager-can-add.md)).
-  Built in the interface and the demo only: the shell does not serve the
-  views yet, so the built program shows none
+  In the built program a view was added with the "+", named, and filtered
+  to one member through its menu; the views are there after a restart and
+  travel to another computer. Dragging a tab to another place and the
+  "N more" of a narrow window were seen on demo data only. A view cannot
+  be grouped by anything but status yet
 - ⬜ Project report at completion
 
 ## M6 · Agile 🚧
