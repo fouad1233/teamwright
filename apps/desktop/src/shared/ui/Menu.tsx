@@ -72,7 +72,11 @@ export function ChoiceMenu<Value extends string>({
 /** One of the things an action menu can do. */
 export interface Action {
   label: string;
+  /** A line under the label that says what the action is for. */
+  detail?: string;
   icon?: ReactNode;
+  /** Shows the action, and does not let it be chosen. */
+  isDisabled?: boolean;
   /** Shows the action in the color of danger, for something that destroys. */
   isDestructive?: boolean;
   onSelect: () => void;
@@ -82,25 +86,60 @@ interface ActionMenuProps {
   /** What the menu is about, for screen readers. */
   label: string;
   actions: readonly Action[];
+  /** Which edge of the control the menu lines up with. The end, if left out. */
+  align?: 'start' | 'end';
+  /**
+   * Leaves the focus where the chosen action put it, instead of giving it
+   * back to the control, for an action that opens a field to type in.
+   */
+  leavesFocus?: boolean;
   /** The control that opens the menu. */
   children: ReactElement;
 }
 
 /** A menu of things to do. */
-export function ActionMenu({ label, actions, children }: ActionMenuProps) {
+export function ActionMenu({
+  label,
+  actions,
+  align = 'end',
+  leavesFocus = false,
+  children,
+}: ActionMenuProps) {
   return (
     <DropdownMenu.Root>
       <DropdownMenu.Trigger asChild>{children}</DropdownMenu.Trigger>
       <DropdownMenu.Portal>
-        <DropdownMenu.Content className={styles.menu} align="end" sideOffset={4} aria-label={label}>
+        <DropdownMenu.Content
+          className={styles.menu}
+          align={align}
+          sideOffset={4}
+          aria-label={label}
+          onCloseAutoFocus={(event) => {
+            if (leavesFocus) {
+              event.preventDefault();
+            }
+          }}
+        >
           {actions.map((action) => (
             <DropdownMenu.Item
               key={action.label}
-              className={classNames(styles.item, action.isDestructive && styles.destructive)}
+              className={classNames(
+                styles.item,
+                action.isDestructive && styles.destructive,
+                action.detail !== undefined && styles.withDetail,
+              )}
+              disabled={action.isDisabled}
               onSelect={action.onSelect}
             >
               {action.icon !== undefined && <span className={styles.icon}>{action.icon}</span>}
-              <span className={styles.label}>{action.label}</span>
+              {action.detail === undefined ? (
+                <span className={styles.label}>{action.label}</span>
+              ) : (
+                <span className={styles.label}>
+                  {action.label}
+                  <span className={styles.detail}>{action.detail}</span>
+                </span>
+              )}
             </DropdownMenu.Item>
           ))}
         </DropdownMenu.Content>

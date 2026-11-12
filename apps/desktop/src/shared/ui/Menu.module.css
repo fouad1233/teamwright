@@ -67,6 +67,54 @@
   stroke-width: 2;
 }
 
+/* An item that cannot be chosen now. */
+.item[data-disabled] {
+  color: var(--ink-faint);
+}
+
+/* An item with a second line that says what it is for. */
+.withDetail {
+  align-items: flex-start;
+  height: auto;
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+
+.withDetail .icon {
+  height: 18px;
+}
+
+.detail {
+  display: block;
+  overflow: hidden;
+  color: var(--ink-faint);
+  font-size: var(--text-small);
+  text-overflow: ellipsis;
+}
+
+/* A rule between groups of items. */
+.separator {
+  height: 1px;
+  margin: var(--space-1) calc(-1 * var(--space-1));
+  background: var(--rule);
+}
+
+/* An item that opens a menu of its own, with a mark at its end. */
+.item[data-state='open'] {
+  background: var(--pressed);
+}
+
+.more {
+  display: inline-flex;
+  color: var(--ink-faint);
+}
+
+.more svg {
+  width: 14px;
+  height: 14px;
+  stroke-width: 1.75;
+}
+
 .destructive {
   color: var(--danger);
 }
