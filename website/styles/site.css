@@ -702,19 +702,23 @@ html:not(.scrub) .lines {
   transform: translateY(-50%);
 }
 
-.line[data-place='saying'],
-.line[data-place='invitation'] {
-  color: var(--ink-soft);
+/* The type and the colour of each line come from the film's own data. */
+.line[data-type='serif'] {
   font-family: var(--font-serif);
-  font-weight: 400;
   letter-spacing: 0;
 }
 
-.line[data-place='address'] {
-  color: var(--brass-text);
+.line[data-type='mono'] {
   font-family: var(--font-mono);
-  font-weight: 400;
   letter-spacing: 0;
+}
+
+.line[data-tone='soft'] {
+  color: var(--ink-soft);
+}
+
+.line[data-tone='brass'] {
+  color: var(--brass-text);
 }
 
 .word {

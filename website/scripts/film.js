@@ -63,24 +63,15 @@
   const LEAVE = 0.25;
   const RISE = 0.0085;
 
-  /* Where each kind of line stands on the picture, and how large it is,
-     as fractions of the height of the picture (lines.py). */
-  const PLACES = {
-    caption: { y: 0.915, size: 0.043 },
-    saying: { y: 0.735, size: 0.047 },
-    statement: { y: 0.732, size: 0.037 },
-    invitation: { y: 0.792, size: 0.04 },
-    address: { y: 0.862, size: 0.033 },
-  };
-  /* Under the picture, where the window is tall: the offset from the top of
-     the band of text, and the size, in pixels. */
-  const PLACES_BELOW = {
-    caption: { y: 0, size: 19 },
-    saying: { y: 44, size: 20 },
-    statement: { y: 44, size: 17 },
-    invitation: { y: 72, size: 18 },
-    address: { y: 100, size: 14 },
-  };
+  /* Each line says where it stands and how large it is, as fractions of the
+     height of the picture (film.json, from the film's own data). Under the
+     picture, where the window is tall, the same fractions are turned into
+     pixels: a line low in the picture opens the band of text, and the
+     lines of the end card keep their order and spacing below it. */
+  const LOW_LINE = 0.9;
+  const BELOW_TOP = 0.73;
+  const BELOW_SPACING = 520;
+  const BELOW_SIZE = 460;
 
   const clamp = (value, low = 0, high = 1) => Math.min(high, Math.max(low, value));
   const easeOut = (x) => 1 - (1 - clamp(x)) ** 3;
@@ -323,13 +314,12 @@
   lineLayer.setAttribute('aria-hidden', 'true');
   canvas.after(lineLayer);
 
-  // A line whose place is "picture" is drawn into the film itself (the name
-  // on the end card), so it is not laid over it a second time.
-  const lineItems = [...film.querySelectorAll('.chapter-lines li')].filter((item) => item.dataset.place !== 'picture');
-  const lines = lineItems.map((item) => {
+  const lines = [...film.querySelectorAll('.chapter-lines li')].map((item) => {
     const element = document.createElement('p');
     element.className = 'line';
-    element.dataset.place = item.dataset.place;
+    element.dataset.type = item.dataset.type;
+    element.dataset.tone = item.dataset.tone;
+    element.style.fontWeight = item.dataset.weight;
     const words = item.textContent.trim().split(/\s+/).map((text, index) => {
       if (index > 0) element.append(' ');
       const word = document.createElement('span');
@@ -342,7 +332,8 @@
     return {
       element,
       words,
-      place: item.dataset.place,
+      size: Number(item.dataset.size),
+      y: Number(item.dataset.y),
       start: Number(item.dataset.start),
       end: item.dataset.end === '' ? null : Number(item.dataset.end),
       shown: false,
@@ -359,15 +350,14 @@
       let top;
       let size;
       if (below) {
-        const place = PLACES_BELOW[line.place] || PLACES_BELOW.caption;
-        size = place.size;
-        top = bandTop + place.y + size / 2;
+        size = Math.max(14, line.size * BELOW_SIZE);
+        const offset = line.y > LOW_LINE ? 0 : Math.max(0, line.y - BELOW_TOP) * BELOW_SPACING;
+        top = bandTop + offset + size / 2;
       } else {
-        const place = PLACES[line.place] || PLACES.caption;
-        size = Math.max(14, place.size * picture.height);
+        size = Math.max(14, line.size * picture.height);
         // Above the rail where it runs along the foot of a narrow window.
         const room = width < RAIL_AT_FOOT ? 72 : 16;
-        top = clamp(picture.y + place.y * picture.height, size, height - room - size * 0.6);
+        top = clamp(picture.y + line.y * picture.height, size, height - room - size * 0.6);
       }
       line.rise = RISE * (below ? 400 : picture.height);
       line.element.style.left = `${gutter}px`;

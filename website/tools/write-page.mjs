@@ -7,8 +7,8 @@
  *
  * - The chapters of the film, the rail that names them, the address of the
  *   film's media and the structured data of the film (VideoObject) come
- *   from website/film.json, the one place where the times of the film are
- *   kept.
+ *   from website/film.json. Its numbers are written there by
+ *   prepare-film.py from the film's own data file, never by hand.
  * - The structured data of the questions (FAQPage) comes from the section
  *   "Questions" of the page itself, so that the two always say the same.
  *
@@ -79,7 +79,7 @@ export function chaptersHtml(film) {
       const lines = linesOf(film, chapter)
         .map(
           (line) =>
-            `      <li data-start="${line.start}" data-end="${line.end ?? ''}" data-place="${line.place}">${escapeHtml(line.text)}</li>`,
+            `      <li data-start="${line.start}" data-end="${line.end ?? ''}" data-type="${line.type}" data-weight="${line.weight}" data-size="${line.size}" data-y="${line.y}" data-tone="${line.tone}">${escapeHtml(line.text)}</li>`,
         )
         .join('\n');
       return [

@@ -59,7 +59,7 @@ const ids = new Set();
 for (const chapter of chapters) {
   if (ids.has(chapter.id)) fail(`film.json: two chapters are called "${chapter.id}"`);
   ids.add(chapter.id);
-  if (!(chapter.start <= chapter.stillAt && chapter.stillAt < chapter.end)) {
+  if (!(chapter.stillAfter >= 0 && chapter.stillAfter < chapter.end - chapter.start)) {
     fail(`film.json: the still of "${chapter.id}" is not inside the chapter`);
   }
   // The chapter in the page says the same as the chapter in the data.

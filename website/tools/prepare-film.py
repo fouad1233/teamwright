@@ -1,15 +1,28 @@
-"""Prepares the film for the website: frames to scroll through, stills, video.
+"""Prepares the film for the website: its data, frames, stills and video.
 
-    python website/tools/prepare-film.py FRAMES [--video FILM.mp4]
-        [--small-video FILM-SMALL.mp4] [--data website/film.json]
-        [--out website/media/film] [--zip website-film.zip]
+    python website/tools/prepare-film.py --web-json WEB.json [FRAMES]
+        [--video FILM.mp4] [--small-video FILM-SMALL.mp4]
+        [--data website/film.json] [--out website/media/film]
+        [--zip website-film.zip]
 
-FRAMES is a folder of PNG pictures of the film, one for each frame, named
-by their number (0001.png, 0002.png, ...), at the frame rate that
-website/film.json gives. Run it from the root of the repository with
-Python 3 and Pillow. Nothing else is needed: no ffmpeg, no packages.
+WEB.json is the data file that the film's assembly writes beside the film
+(film/web.json): its frame rate, its frames, every shot with its seconds,
+and every line with its moments and how it is set. It is the only source
+of the film's numbers. From it this tool first writes the numbers of
+website/film.json (the length of the film, the seconds of each chapter, the
+lines) and then the parts of index.html made from them, through
+write-page.mjs. Everything else in film.json is the site's own and is
+kept: the name and the text of each chapter, and the shot it begins with.
+A shot that begins no chapter belongs to the chapter before it, so a new
+shot in the film lengthens a chapter without any change here.
 
-It writes into the output folder, which git ignores:
+FRAMES is a folder of PNG pictures of the film without its lines, one for
+each frame, named by their number (0001.png, 0002.png, ...). Without it,
+only the data and the page are written. Run the tool from the root of the
+repository with Python 3 and Pillow, and Node.js for the page. Nothing
+else is needed: no ffmpeg, no packages.
+
+With FRAMES it writes into the output folder, which git ignores:
 
 - manifest.json: what the page needs to know about everything below;
 - large/pack-NN.bin and small/pack-NN.bin: every second frame of the film
@@ -18,7 +31,7 @@ It writes into the output folder, which git ignores:
   how long it is. The first packs hold every sixteenth frame of the film,
   so that the page can scrub through the whole film once they are in;
   the later packs fill in between;
-- stills/<chapter>.webp: the frame that film.json names for each chapter,
+- stills/<chapter>.webp: the frame stillAfter seconds into each chapter,
   shown before any frame has loaded;
 - the video files, copied, if they are given.
 
@@ -30,6 +43,7 @@ import io
 import json
 import os
 import shutil
+import subprocess
 import sys
 import time
 import zipfile
@@ -65,9 +79,76 @@ def encode(image, width, quality):
     return buffer.getvalue(), height
 
 
+TYPES = {'Instrument Sans': 'sans', 'Instrument Serif': 'serif', 'IBM Plex Mono': 'mono'}
+# The colours of the lines, as the tokens of the site name them.
+TONES = {'#e8e0d0': 'ink', '#b9af9d': 'soft', '#c9a96e': 'brass'}
+
+
+def number(value):
+    """11.0 is written 11, so that the page and the data read alike."""
+    return int(value) if float(value).is_integer() else round(value, 3)
+
+
+def write_film_data(web, data_path):
+    """Writes the film's numbers from WEB.json into film.json."""
+    with open(data_path, encoding='utf-8') as file:
+        data = json.load(file)
+    film = data['film']
+    film['framesPerSecond'] = web['fps']
+    film['frames'] = web['frames']
+    film['seconds'] = number(web['seconds'])
+
+    starts = {shot['shot']: shot['from_second'] for shot in web['shots']}
+    for chapter in data['chapters']:
+        if chapter['fromShot'] not in starts:
+            sys.exit(f'Chapter "{chapter["id"]}" begins with shot {chapter["fromShot"]}, which the film does not have')
+    chapters = sorted(data['chapters'], key=lambda chapter: starts[chapter['fromShot']])
+    for index, chapter in enumerate(chapters):
+        chapter['start'] = number(starts[chapter['fromShot']])
+        following = chapters[index + 1]['fromShot'] if index + 1 < len(chapters) else None
+        chapter['end'] = number(starts[following] if following else web['seconds'])
+    if chapters[0]['start'] != 0:
+        sys.exit('No chapter begins with the first shot of the film')
+    for shot in web['shots']:
+        if shot['shot'] not in {chapter['fromShot'] for chapter in chapters}:
+            owner = [c for c in chapters if c['start'] <= shot['from_second'] < c['end']][0]
+            print(f'Shot {shot["shot"]} begins no chapter; it is in "{owner["title"]}"')
+    data['chapters'] = chapters
+
+    lines = []
+    for line in web['lines']:
+        kind = TYPES.get(line['type'])
+        tone = TONES.get(line['colour'].lower())
+        if not kind or not tone:
+            sys.exit(f'"{line["text"]}" is set in {line["type"]}, {line["colour"]}, which the site does not know')
+        lines.append({
+            'text': line['text'],
+            'start': number(line['first_second']),
+            'end': None if line['stays_to_the_end'] else number(line['last_second']),
+            'type': kind,
+            'weight': line['weight'],
+            'size': line['size_of_height'],
+            'y': line['centre_y_of_height'],
+            'tone': tone,
+        })
+    data['lines'] = lines
+
+    with open(data_path, 'w', encoding='utf-8', newline='\n') as file:
+        json.dump(data, file, indent=2, ensure_ascii=False)
+        file.write('\n')
+    print(f'Wrote {data_path}: {film["seconds"]} s, {len(chapters)} chapters, {len(lines)} lines')
+
+    page_tool = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'write-page.mjs')
+    result = subprocess.run(['node', page_tool], check=False)
+    if result.returncode:
+        sys.exit('write-page.mjs failed: the page is not up to date with film.json')
+    return data
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split('\n')[0])
-    parser.add_argument('frames')
+    parser.add_argument('frames', nargs='?')
+    parser.add_argument('--web-json', required=True)
     parser.add_argument('--video')
     parser.add_argument('--small-video')
     parser.add_argument('--data', default=os.path.join('website', 'film.json'))
@@ -75,13 +156,16 @@ def main():
     parser.add_argument('--zip')
     arguments = parser.parse_args()
 
-    with open(arguments.data, encoding='utf-8') as file:
-        data = json.load(file)
+    with open(arguments.web_json, encoding='utf-8') as file:
+        web = json.load(file)
+    data = write_film_data(web, arguments.data)
+    if not arguments.frames:
+        return
+
     film = data['film']
     if film['framesPerSecond'] % STEP:
         sys.exit(f'{film["framesPerSecond"]} frames a second cannot be halved')
-    source_count = round(film['seconds'] * film['framesPerSecond'])
-    count = source_count // STEP
+    count = film['frames'] // STEP
 
     def source_path(index):
         # Picture `index` of the page is frame index * STEP + 1 of the film.
@@ -155,7 +239,10 @@ def main():
     stills = os.path.join(arguments.out, 'stills')
     os.makedirs(stills)
     for chapter in data['chapters']:
-        frame = round(chapter['stillAt'] * film['framesPerSecond']) + 1
+        # stillAfter is counted from the start of the chapter, so that the
+        # still stays in its chapter when the film around it changes.
+        moment = min(chapter['start'] + chapter['stillAfter'], chapter['end'] - 1 / film['framesPerSecond'])
+        frame = int(moment * film['framesPerSecond']) + 1
         path = os.path.join(arguments.frames, f'{frame:04d}.png')
         if not os.path.isfile(path):
             continue
