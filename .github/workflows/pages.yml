@@ -1,0 +1,78 @@
+# Publishes the website (website/) to GitHub Pages. See website/README.md,
+# section "Publish it".
+#
+# The film's frames and video are not in git. If the repository has a
+# release with the tag "website-film" and the file "website-film.zip"
+# attached to it, that file is unpacked into website/media/film before the
+# site is published. Without it the site is published without the film.
+name: Website
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'website/**'
+      - '.github/workflows/pages.yml'
+  release:
+    types: [published, edited]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One publishing at a time; a running one is let finish.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Put the site together
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Check the website
+        run: node website/tools/check.mjs
+
+      - name: Fetch the film from the release "website-film", if there is one
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release download website-film --repo "$GITHUB_REPOSITORY" \
+              --pattern website-film.zip --dir "$RUNNER_TEMP"; then
+            mkdir -p website/media/film
+            unzip -q "$RUNNER_TEMP/website-film.zip" -d website/media/film
+            echo "The film is in: $(du -sh website/media/film | cut -f1)"
+          else
+            echo "There is no release website-film with website-film.zip."
+            echo "The site is published without the film."
+            node website/tools/write-page.mjs --without-film
+          fi
+
+      - name: Leave out what is not published
+        run: |
+          mkdir -p "$RUNNER_TEMP/site"
+          cp -r website/. "$RUNNER_TEMP/site/"
+          rm -rf "$RUNNER_TEMP/site/tools" "$RUNNER_TEMP/site/README.md"
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: ${{ runner.temp }}/site
+
+  deploy:
+    name: Publish
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
