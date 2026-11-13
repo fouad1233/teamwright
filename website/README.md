@@ -166,6 +166,11 @@ no such release, it publishes the page without the film:
 structured data of the video, and every chapter shows its still and its
 text.
 
+The workflow runs on a push to `main` that changes `website/` or the
+workflow, when a release is published or edited, and by hand. Before its
+first run, GitHub Pages must be set to deploy from GitHub Actions
+(Settings, Pages, Source). That is the owner's step.
+
 Set `published` in `film.json` to the day the film is put in the release.
 It is the upload date in the structured data of the video.
 
