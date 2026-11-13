@@ -236,6 +236,24 @@ try {
     JSON.stringify(deskViews.map((view) => [view.name, view.filter])),
   );
 
+  // An area added on one computer, and a task moved into it, are the same
+  // on the other; the area a project starts with is not doubled.
+  const laptopArea = await onLaptop('add_area', { projectId: project.id, name: 'Firmware' });
+  await onLaptop('move_task_to_area', { taskId: firmware.id, areaId: laptopArea.id });
+  await onLaptop('sync_now');
+  await onDesk('sync_now');
+  const deskAreas = await onDesk('list_areas', { projectId: project.id });
+  check(
+    'an area added on the laptop reaches the desk, after the one the project started with',
+    deskAreas.map((area) => area.name).join(', ') === 'General, Firmware',
+    JSON.stringify(deskAreas),
+  );
+  check(
+    'and the task that was moved into it on the laptop is in it on the desk',
+    (await onDesk('list_tasks', { projectId: project.id })).find((task) => task.id === firmware.id)
+      ?.areaId === laptopArea.id,
+  );
+
   // Two changes to one task, made apart, must both survive.
   await onDesk('rename_task', { taskId: board.id, title: 'Draw the schematic of the board' });
   await onLaptop('prioritize_task', { taskId: board.id, priority: 'urgent' });

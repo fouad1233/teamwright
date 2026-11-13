@@ -564,6 +564,88 @@ try {
     JSON.stringify([answersToNothing, approvalOfNothing]),
   );
 
+  // The areas of a project: one to start with, and more for the jobs
+  // inside it. Every task is in one.
+  const areasOf = async () => (await window.command('list_areas', { projectId: project.id })).ok;
+  const everyTask = async () => (await window.command('list_tasks', { projectId: project.id })).ok;
+  const startingAreas = await areasOf();
+  check(
+    'a project starts with one area, General, and every task is in it',
+    startingAreas?.map((area) => area.name).join(', ') === 'General' &&
+      (await everyTask())?.every((stored) => stored.areaId === startingAreas[0].id),
+    JSON.stringify(startingAreas),
+  );
+  const lastArea = await window.command('remove_area', {
+    areaId: startingAreas[0].id,
+    moveTasksTo: null,
+  });
+  check(
+    'the last area of a project is not removed',
+    lastArea.refused?.code === 'last_area' &&
+      lastArea.refused.message ===
+        '"General" is the last area of the project and cannot be removed',
+    JSON.stringify(lastArea),
+  );
+  const firmwareArea = await window.command('add_area', {
+    projectId: project.id,
+    name: ' Firmware ',
+  });
+  const areaNameTaken = await window.command('add_area', {
+    projectId: project.id,
+    name: 'general',
+  });
+  check(
+    'an area is added with its name trimmed, and a name that is taken is refused',
+    firmwareArea.ok?.name === 'Firmware' &&
+      areaNameTaken.refused?.code === 'area_name_taken' &&
+      areaNameTaken.refused.message === 'the project already has an area called "general"',
+    JSON.stringify([firmwareArea, areaNameTaken]),
+  );
+  const movedIntoArea = await window.command('move_task_to_area', {
+    taskId: enclosure.id,
+    areaId: firmwareArea.ok.id,
+  });
+  const subtaskMovedAlone = await window.command('move_task_to_area', {
+    taskId: part.id,
+    areaId: startingAreas[0].id,
+  });
+  check(
+    'a task moves into another area with its subtasks, and a subtask is not moved by itself',
+    movedIntoArea.ok?.areaId === firmwareArea.ok.id &&
+      (await everyTask())?.find((stored) => stored.id === part.id)?.areaId === firmwareArea.ok.id &&
+      subtaskMovedAlone.refused?.code === 'subtask_moved_alone' &&
+      subtaskMovedAlone.refused.message === 'SSN-4 is a part of SSN-3 and goes where it goes',
+    JSON.stringify([movedIntoArea, subtaskMovedAlone]),
+  );
+  const areaInUse = await window.command('remove_area', {
+    areaId: firmwareArea.ok.id,
+    moveTasksTo: null,
+  });
+  check(
+    'an area that holds tasks is not removed without another area for them',
+    areaInUse.refused?.code === 'area_in_use' &&
+      areaInUse.refused.message ===
+        'the area "Firmware" still has 2 tasks, which need another area to go to',
+    JSON.stringify(areaInUse),
+  );
+  const orderedAreas = await window.command('move_area', { areaId: firmwareArea.ok.id, index: 0 });
+  const renamedArea = await window.command('rename_area', {
+    areaId: startingAreas[0].id,
+    name: 'Hardware',
+  });
+  check(
+    'an area is moved to the front and another is renamed',
+    orderedAreas.ok?.map((area) => area.name).join(', ') === 'Firmware, General' &&
+      renamedArea.ok?.name === 'Hardware',
+    JSON.stringify([orderedAreas, renamedArea]),
+  );
+  await window.reload();
+  const withAreas = await window.waitForText('Hardware');
+  check(
+    'the navigation shows the areas of a project once it has two',
+    withAreas.includes('Firmware') && withAreas.includes('Hardware'),
+  );
+
   // The views of a project: six to start with, and more that the manager
   // adds, names, filters, orders and removes.
   const viewsOf = async () => (await window.command('list_views', { projectId: project.id })).ok;
@@ -851,6 +933,14 @@ try {
       storedViews[0].filter.assignee.memberId === team?.[0]?.id &&
       storedViews[0].filter.hidesFinished === true,
     JSON.stringify(storedViews),
+  );
+  const storedAreas = (await window.command('list_areas', { projectId: projects[0]?.id })).ok;
+  check(
+    'the areas survive a restart, in their order, with their tasks in them',
+    storedAreas?.map((area) => area.name).join(', ') === 'Firmware, Hardware' &&
+      tasks?.find((stored) => stored.number === 3)?.areaId === storedAreas[0].id &&
+      tasks.find((stored) => stored.number === 1)?.areaId === storedAreas[1].id,
+    JSON.stringify([storedAreas, tasks?.map((stored) => [stored.number, stored.areaId])]),
   );
   const storedSprints = (await window.command('list_sprints', { projectId: projects[0]?.id })).ok;
   const record = storedSprints?.find((stored) => stored.state === 'completed');
