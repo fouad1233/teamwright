@@ -49,6 +49,27 @@ pub(crate) fn migrate(connection: &mut Connection) -> Result<(), DatabaseError> 
     Ok(())
 }
 
+/// Help for tests that start from data an earlier version of the program
+/// kept.
+#[cfg(test)]
+pub(crate) mod testing {
+    use rusqlite::Connection;
+
+    use super::MIGRATIONS;
+
+    /// Brings a new database to an earlier version of the format.
+    pub(crate) fn migrate_to(connection: &mut Connection, version: usize) {
+        for (number, migration) in (1_i64..).zip(&MIGRATIONS[..version]) {
+            let transaction = connection.transaction().unwrap();
+            transaction.execute_batch(migration).unwrap();
+            transaction
+                .pragma_update(None, "user_version", number)
+                .unwrap();
+            transaction.commit().unwrap();
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

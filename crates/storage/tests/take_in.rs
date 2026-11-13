@@ -10,18 +10,20 @@ use std::sync::Arc;
 use chrono::{TimeZone, Utc};
 use teamwright_application::in_memory::ManualClock;
 use teamwright_application::{
-    ChosenPlaces, ConversationRepository, ExchangedChange, ExchangedOperation, MemberRepository,
-    NewMember, NewProject, NewSprint, NewTask, NewView, NoticeKind, PlacesRepository,
-    ProjectRepository, ProjectService, SprintRepository, SprintService, SprintStart,
-    TaskRepository, TaskService, TeamService, ViewRepository, ViewService, WorkflowTemplate,
+    AreaRepository, AreaService, ChosenPlaces, ConversationRepository, ExchangedChange,
+    ExchangedOperation, MemberRepository, NewMember, NewProject, NewSprint, NewTask, NewView,
+    NoticeKind, PlacesRepository, ProjectRepository, ProjectService, SprintRepository,
+    SprintService, SprintStart, TaskRepository, TaskService, TeamService, ViewRepository,
+    ViewService, WorkflowTemplate,
 };
 use teamwright_domain::{
-    Assignee, ComputerId, MemberKind, Priority, Project, Task, Timestamp, View, ViewAssignee,
-    ViewFilter, ViewKind,
+    Area, AreaId, Assignee, ComputerId, MemberKind, Priority, Project, Task, Timestamp, View,
+    ViewAssignee, ViewFilter, ViewKind,
 };
 use teamwright_storage::{
-    Database, SqliteConversationRepository, SqliteMemberRepository, SqlitePlacesRepository,
-    SqliteProjectRepository, SqliteSprintRepository, SqliteTaskRepository, SqliteViewRepository,
+    Database, SqliteAreaRepository, SqliteConversationRepository, SqliteMemberRepository,
+    SqlitePlacesRepository, SqliteProjectRepository, SqliteSprintRepository, SqliteTaskRepository,
+    SqliteViewRepository,
 };
 
 /// One computer: its database and the use cases on it.
@@ -32,6 +34,7 @@ struct Computer {
     team: TeamService,
     sprints: SprintService,
     views: ViewService,
+    areas: AreaService,
     places: SqlitePlacesRepository,
 }
 
@@ -49,9 +52,7 @@ impl Computer {
         let places = Arc::new(SqlitePlacesRepository::new(database.clone()));
         let sprints = Arc::new(SqliteSprintRepository::new(database.clone()));
         let views = Arc::new(SqliteViewRepository::new(database.clone()));
-        let area_store = Arc::new(teamwright_storage::SqliteAreaRepository::new(
-            database.clone(),
-        ));
+        let area_store = Arc::new(SqliteAreaRepository::new(database.clone()));
         let clock = Arc::new(ManualClock::starting_at(moment()));
         Self {
             projects: ProjectService::new(
@@ -76,6 +77,7 @@ impl Computer {
             ),
             sprints: SprintService::new(projects.clone(), tasks.clone(), sprints, clock.clone()),
             views: ViewService::new(projects.clone(), members.clone(), views.clone()),
+            areas: AreaService::new(projects.clone(), tasks.clone(), area_store, clock.clone()),
             team: TeamService::new(projects, members, tasks, conversations, views, clock),
             places: SqlitePlacesRepository::new(database.clone()),
             database,
@@ -90,7 +92,7 @@ impl Computer {
 
     /// Everything the manager works with, in a form that can be compared:
     /// every project with its tasks, its team, its sprints, its
-    /// conversations and its views, sorted.
+    /// conversations, its views and its areas, sorted.
     fn everything(&self) -> String {
         let projects = SqliteProjectRepository::new(self.database.clone());
         let tasks = SqliteTaskRepository::new(self.database.clone());
@@ -122,6 +124,9 @@ impl Computer {
             }
             for view in self.views.list_for_project(project.id()).unwrap() {
                 text.push_str(&format!("  {view:?}\n"));
+            }
+            for area in self.areas.list_for_project(project.id()).unwrap() {
+                text.push_str(&format!("  {area:?}\n"));
             }
         }
         text
@@ -892,7 +897,26 @@ fn random_change(computer: &Computer, project: &Project, dice: &mut Dice) {
         .team
         .list_for_project(project.id())
         .unwrap_or_default();
-    let _ = match dice.roll(9) {
+    let areas = computer
+        .areas
+        .list_for_project(project.id())
+        .unwrap_or_default();
+    let area_of = |dice: &mut Dice| areas.get(dice.roll(areas.len().max(1))).map(Area::id);
+    let _ = match dice.roll(12) {
+        9 => computer
+            .areas
+            .add(project.id(), &format!("Area {}", dice.roll(1000)))
+            .map(|_| ()),
+        10 => match (pick(dice), area_of(dice)) {
+            (Some(task), Some(area)) => computer.areas.move_task(task.id(), area).map(|_| ()),
+            _ => Ok(()),
+        },
+        11 => match (area_of(dice), area_of(dice)) {
+            (Some(removed), Some(target)) if dice.roll(3) == 0 => {
+                computer.areas.remove(removed, Some(target))
+            }
+            _ => Ok(()),
+        },
         0 | 1 => computer
             .tasks
             .create(NewTask::titled(
@@ -1088,4 +1112,179 @@ fn the_history_of_a_task_names_the_computer_of_each_change() {
             Some(computer)
         ) if computer == laptop.database.device_id()
     ));
+}
+
+/// The names of the areas of a project on a computer, in their order.
+fn area_names(computer: &Computer, project: &Project) -> Vec<String> {
+    computer
+        .areas
+        .list_for_project(project.id())
+        .unwrap()
+        .iter()
+        .map(|area| area.name().to_string())
+        .collect()
+}
+
+#[test]
+fn the_area_of_a_new_project_reaches_the_other_computer() {
+    let (desk, laptop, project, task) = desk_and_laptop();
+
+    assert_eq!(area_names(&laptop, &project), ["General"]);
+    assert_eq!(
+        laptop.areas.list_for_project(project.id()).unwrap(),
+        desk.areas.list_for_project(project.id()).unwrap()
+    );
+    assert_eq!(
+        laptop.task(&task).unwrap().area_id(),
+        Area::starting_id(project.id())
+    );
+}
+
+#[test]
+fn an_area_renamed_on_one_computer_and_moved_on_the_other_keeps_both_changes() {
+    let (desk, laptop, project, _) = desk_and_laptop();
+    let firmware = desk.areas.add(project.id(), "Firmware").unwrap();
+    laptop.take_in_from(&desk);
+    desk.areas.rename(firmware.id(), "Software").unwrap();
+    laptop.areas.move_to(firmware.id(), 0).unwrap();
+
+    keep_in_step(&desk, &laptop);
+
+    assert_eq!(area_names(&desk, &project), ["Software", "General"]);
+    assert_eq!(laptop.everything(), desk.everything());
+}
+
+#[test]
+fn a_task_moved_into_another_area_on_one_computer_is_moved_on_the_other() {
+    let (desk, laptop, project, task) = desk_and_laptop();
+    let firmware = desk.areas.add(project.id(), "Firmware").unwrap();
+    desk.areas.move_task(task.id(), firmware.id()).unwrap();
+
+    keep_in_step(&desk, &laptop);
+
+    assert_eq!(laptop.task(&task).unwrap().area_id(), firmware.id());
+    assert_eq!(laptop.everything(), desk.everything());
+}
+
+#[test]
+fn an_area_added_to_a_project_deleted_elsewhere_goes_with_it() {
+    let (desk, laptop, project, _) = desk_and_laptop();
+    let added = laptop.areas.add(project.id(), "Firmware").unwrap();
+    desk.projects.delete(project.id()).unwrap();
+
+    keep_in_step(&desk, &laptop);
+
+    let areas = SqliteAreaRepository::new(laptop.database.clone());
+    assert!(areas.find(added.id()).unwrap().is_none());
+    assert!(areas.list_for_project(project.id()).unwrap().is_empty());
+    assert!(
+        SqliteAreaRepository::new(desk.database.clone())
+            .find(added.id())
+            .unwrap()
+            .is_none()
+    );
+    assert_eq!(laptop.everything(), desk.everything());
+}
+
+/// The case `demoAreas.test.ts` calls "puts a kept task whose area the
+/// project does not have into the first area". Here such a task comes from
+/// another computer: it was put into an area that was removed elsewhere.
+#[test]
+fn puts_a_kept_task_whose_area_the_project_does_not_have_into_the_first_area() {
+    let (desk, laptop, project, _) = desk_and_laptop();
+    let firmware = desk.areas.add(project.id(), "Firmware").unwrap();
+    let board = desk.areas.add(project.id(), "Board").unwrap();
+    desk.areas.move_to(firmware.id(), 0).unwrap();
+    laptop.take_in_from(&desk);
+    let lost = laptop
+        .tasks
+        .create(NewTask {
+            area_id: Some(board.id()),
+            ..NewTask::titled(project.id(), "Route the board")
+        })
+        .unwrap();
+    desk.areas.remove(board.id(), None).unwrap();
+
+    keep_in_step(&desk, &laptop);
+
+    assert_eq!(desk.task(&lost).unwrap().area_id(), firmware.id());
+    assert_eq!(laptop.task(&lost).unwrap().area_id(), firmware.id());
+    assert_eq!(area_names(&laptop, &project), ["Firmware", "General"]);
+    assert_eq!(laptop.everything(), desk.everything());
+}
+
+#[test]
+fn of_two_areas_named_alike_the_older_keeps_the_name_and_the_younger_is_numbered() {
+    let (desk, laptop, project, _) = desk_and_laptop();
+    let older = desk.areas.add(project.id(), "Firmware").unwrap();
+    let_the_clock_move_on();
+    let younger = laptop.areas.add(project.id(), "FIRMWARE").unwrap();
+
+    keep_in_step(&desk, &laptop);
+
+    let name_of = |id| area_named_by_id(&desk, &project, id);
+    assert_eq!(name_of(older.id()), "Firmware");
+    assert_eq!(name_of(younger.id()), "FIRMWARE 2");
+    assert_eq!(laptop.everything(), desk.everything());
+}
+
+/// The name of an area of a project on a computer.
+fn area_named_by_id(computer: &Computer, project: &Project, id: AreaId) -> String {
+    computer
+        .areas
+        .list_for_project(project.id())
+        .unwrap()
+        .into_iter()
+        .find(|area| area.id() == id)
+        .map(|area| area.name().to_string())
+        .unwrap()
+}
+
+#[test]
+fn a_project_whose_areas_were_all_removed_on_two_computers_gets_general_again() {
+    let (desk, laptop, project, task) = desk_and_laptop();
+    let firmware = desk.areas.add(project.id(), "Firmware").unwrap();
+    laptop.take_in_from(&desk);
+    let general = Area::starting_id(project.id());
+    desk.areas.remove(general, Some(firmware.id())).unwrap();
+    laptop.areas.remove(firmware.id(), None).unwrap();
+
+    keep_in_step(&desk, &laptop);
+
+    let left = desk.areas.list_for_project(project.id()).unwrap();
+    assert_eq!(left.len(), 1);
+    assert_eq!(left[0].name().as_str(), "General");
+    assert_ne!(
+        left[0].id(),
+        general,
+        "a deleted identifier is never used again"
+    );
+    assert_eq!(
+        Some(left[0].clone()),
+        Area::general_again(project.id(), 1),
+        "every computer gives the same area"
+    );
+    assert_eq!(desk.task(&task).unwrap().area_id(), left[0].id());
+    assert_eq!(laptop.everything(), desk.everything());
+}
+
+#[test]
+fn a_subtask_made_on_one_computer_follows_its_task_into_the_area_it_was_moved_to_on_the_other() {
+    let (desk, laptop, project, task) = desk_and_laptop();
+    let firmware = desk.areas.add(project.id(), "Firmware").unwrap();
+    laptop.take_in_from(&desk);
+    desk.areas.move_task(task.id(), firmware.id()).unwrap();
+    let part = laptop
+        .tasks
+        .create(NewTask {
+            parent_id: Some(task.id()),
+            ..NewTask::titled(project.id(), "Power supply")
+        })
+        .unwrap();
+
+    keep_in_step(&desk, &laptop);
+
+    assert_eq!(desk.task(&part).unwrap().area_id(), firmware.id());
+    assert_eq!(laptop.task(&part).unwrap().area_id(), firmware.id());
+    assert_eq!(laptop.everything(), desk.everything());
 }

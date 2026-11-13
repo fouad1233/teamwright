@@ -18,10 +18,12 @@ use rusqlite::{ErrorCode, OptionalExtension, Transaction, named_params};
 use serde_json::{Map, Value};
 use teamwright_application::{ExchangedChange, ExchangedOperation, NoticeKind, TakeInReport};
 use teamwright_domain::{
-    Assignee, Project, Sprint, Status, StatusCategory, Task, TaskId, View, ViewAssignee, ViewName,
+    Area, AreaName, Assignee, Project, Sprint, Status, StatusCategory, Task, TaskId, View,
+    ViewAssignee, ViewName,
 };
 
 use crate::apply;
+use crate::areas;
 use crate::codec;
 use crate::conversations;
 use crate::error::DatabaseError;
@@ -44,12 +46,13 @@ pub(crate) const DAMAGED: &str = "damaged";
 pub(crate) const NEVER: &str = "never";
 
 /// The kinds of things whose dropped changes the manager is told about.
-const TOLD_WHEN_DROPPED: [Entity; 6] = [
+const TOLD_WHEN_DROPPED: [Entity; 7] = [
     Entity::Project,
     Entity::Task,
     Entity::Member,
     Entity::Sprint,
     Entity::View,
+    Entity::Area,
     Entity::Conversation,
 ];
 
@@ -407,6 +410,9 @@ fn references_of(entity: Entity, state: &Map<String, Value>) -> Vec<(Entity, Str
             }
             if let Some(sprint) = text_of(state, "sprint_id") {
                 references.push((Entity::Sprint, sprint.to_owned()));
+            }
+            if let Some(area) = text_of(state, "area_id") {
+                references.push((Entity::Area, area.to_owned()));
             }
         }
         Entity::Conversation => {
@@ -883,6 +889,7 @@ impl Round {
             Entity::Member => format!("the member \"{name}\""),
             Entity::Sprint => format!("the sprint \"{name}\""),
             Entity::View => format!("the view \"{name}\""),
+            Entity::Area => format!("the area \"{name}\""),
             _ => "a conversation".to_owned(),
         };
         let project_id = match entity {
@@ -1088,6 +1095,7 @@ impl Round {
             | Entity::Member
             | Entity::Sprint
             | Entity::View
+            | Entity::Area
             | Entity::Conversation => state
                 .and_then(|state| text_of(state, "project_id"))
                 .map(str::to_owned),
@@ -1236,7 +1244,126 @@ impl Round {
         }
 
         self.repair_views(transaction, operations, project_id)?;
-        self.give_a_board_if_no_view_is_left(transaction, operations, project_id)
+        self.give_a_board_if_no_view_is_left(transaction, operations, project_id)?;
+        self.repair_area_names(transaction, operations, project_id)?;
+        self.give_general_if_no_area_is_left(transaction, operations, project_id)?;
+        self.put_tasks_into_areas(transaction, operations, project_id)
+    }
+
+    /// Repairs the names of the areas of a project after two computers
+    /// added or renamed areas at the same time. Of two areas with one name,
+    /// whatever the capitals, the older keeps it and the younger gets the
+    /// name with the first free number from 2 on. An area is as old as its
+    /// first change in the log. Every computer that sees the same areas
+    /// repairs them the same way.
+    fn repair_area_names(
+        &mut self,
+        transaction: &Transaction<'_>,
+        operations: &mut OperationRecorder<'_>,
+        project_id: &str,
+    ) -> Result<(), DatabaseError> {
+        let mut aged: Vec<(String, Area)> = Vec::new();
+        for area in areas::areas_of_project(transaction, project_id)? {
+            let created = first_stamp(transaction, Entity::Area, &area.id().to_string())?;
+            aged.push((created, area));
+        }
+        aged.sort_by(|(one_stamp, one), (other_stamp, other)| {
+            one_stamp
+                .cmp(other_stamp)
+                .then_with(|| one.id().cmp(&other.id()))
+        });
+
+        let mut names: Vec<String> = aged
+            .iter()
+            .map(|(_, area)| area.name().as_str().to_lowercase())
+            .collect();
+        let mut names_kept: BTreeSet<String> = BTreeSet::new();
+        for (_, mut area) in aged {
+            if names_kept.insert(area.name().as_str().to_lowercase()) {
+                continue;
+            }
+            let renamed = AreaName::numbered(area.name().as_str(), &|candidate: &str| {
+                !names.contains(&candidate.to_lowercase())
+            });
+            names.push(renamed.as_str().to_lowercase());
+            names_kept.insert(renamed.as_str().to_lowercase());
+            area.rename(renamed);
+            areas::store_area(transaction, operations, &area)?;
+        }
+        Ok(())
+    }
+
+    /// A project left with no areas, because two computers each removed
+    /// other areas, gets "General" again, so that its tasks have somewhere
+    /// to be. Every computer gives it the same area
+    /// ([`Area::general_again`]): the first identifier that was not
+    /// deleted.
+    fn give_general_if_no_area_is_left(
+        &mut self,
+        transaction: &Transaction<'_>,
+        operations: &mut OperationRecorder<'_>,
+        project_id: &str,
+    ) -> Result<(), DatabaseError> {
+        if !areas::areas_of_project(transaction, project_id)?.is_empty() {
+            return Ok(());
+        }
+        let project = codec::parse(project_id)?;
+        for attempt in 0..=Area::LAST_GENERAL_ATTEMPT {
+            let Some(general) = Area::general_again(project, attempt) else {
+                break;
+            };
+            if presence(transaction, Entity::Area, &general.id().to_string())? != Presence::Deleted
+            {
+                return areas::store_area(transaction, operations, &general);
+            }
+        }
+        Ok(())
+    }
+
+    /// Puts every task of a project into an area it has. A task whose area
+    /// was removed on another computer goes into the first area of the
+    /// project, and a subtask goes into the area of the task at the top of
+    /// its chain of parts, which two computers can leave apart when one
+    /// moves a task and the other gives it a subtask.
+    fn put_tasks_into_areas(
+        &mut self,
+        transaction: &Transaction<'_>,
+        operations: &mut OperationRecorder<'_>,
+        project_id: &str,
+    ) -> Result<(), DatabaseError> {
+        let mut areas = areas::areas_of_project(transaction, project_id)?;
+        areas.sort_by_key(|area| (area.position(), area.id()));
+        let Some(first) = areas.first().map(Area::id) else {
+            return Ok(());
+        };
+        let tasks = tasks::tasks_of_project(transaction, project_id)?;
+        let kept_area = |task: &Task| {
+            if areas.iter().any(|area| area.id() == task.area_id()) {
+                task.area_id()
+            } else {
+                first
+            }
+        };
+        let by_id: BTreeMap<TaskId, &Task> = tasks.iter().map(|task| (task.id(), task)).collect();
+        let now = Utc::now();
+        for task in &tasks {
+            // The chains of parts are free of loops by now; the count only
+            // guards against damaged data.
+            let mut top = task;
+            for _ in 0..tasks.len() {
+                match top.parent_id().and_then(|parent| by_id.get(&parent)) {
+                    Some(parent) => top = parent,
+                    None => break,
+                }
+            }
+            let area_id = kept_area(top);
+            if task.area_id() != area_id {
+                let mut moved = task.clone();
+                moved.put_into_area(area_id, now);
+                tasks::store_task(transaction, operations, &moved)?;
+            }
+        }
+        Ok(())
     }
 
     /// A project left with no views, because two computers each removed
@@ -1526,4 +1653,93 @@ fn find_cycle(tasks: &[Task], field: &str) -> Option<Vec<(TaskId, TaskId)>> {
         }
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+
+    use rusqlite::Connection;
+    use teamwright_domain::{Area, ProjectId};
+
+    use crate::database::Database;
+    use crate::migrations::testing::migrate_to;
+
+    /// A project both computers had before there were areas.
+    const PROJECT: &str = "0196f3a2-8000-7abc-9def-0123456789ab";
+    /// The computer that made the project, and gave it to both.
+    const ORIGIN: &str = "0196f3a2-7c1e-7d53-9b6f-000000000001";
+
+    /// Writes a database of version 13 that knows the project, its two
+    /// statuses and a task, and that took the project in from the computer
+    /// that made it.
+    fn kept_before_areas(path: &Path, computer: &str) {
+        let mut connection = Connection::open(path).unwrap();
+        migrate_to(&mut connection, 13);
+        let stamp = format!("1762851600000-00000-{ORIGIN}");
+        connection
+            .execute_batch(&format!(
+                "INSERT INTO meta (key, value) VALUES ('device_id', '{computer}');
+                 INSERT INTO projects (id, key, name, description, next_task_number, created_at)
+                 VALUES ('{PROJECT}', 'AQN', 'Air quality node', '', 2,
+                         '2026-11-11T09:00:00.000Z');
+                 INSERT INTO statuses (id, project_id, position, name, category, color)
+                 VALUES ('0196f3a2-8000-7abc-9def-0000000000a1', '{PROJECT}', 0, 'To do',
+                         'todo', 'gray'),
+                        ('0196f3a2-8000-7abc-9def-0000000000a2', '{PROJECT}', 1, 'Done',
+                         'done', 'green');
+                 INSERT INTO tasks (
+                     id, project_id, number, title, description, status_id, priority,
+                     assignee_kind, assignee_member_id, parent_id, estimate_minutes,
+                     start_on, due_on, rank, created_at, updated_at, completed_at
+                 )
+                 VALUES (
+                     '0196f3a2-8000-7abc-9def-0000000000b1', '{PROJECT}', 1,
+                     'Choose the sensors', '', '0196f3a2-8000-7abc-9def-0000000000a1',
+                     'normal', NULL, NULL, NULL, NULL, NULL, NULL, 0.0,
+                     '2026-11-11T09:00:00.000Z', '2026-11-11T09:00:00.000Z', NULL
+                 );
+                 INSERT INTO operations (
+                     device_id, device_sequence, stamp, entity, entity_id, kind, payload
+                 )
+                 VALUES ('{ORIGIN}', 1, '{stamp}', 'project', '{PROJECT}', 'upsert', '{{}}');
+                 INSERT INTO merged_states (entity, entity_id, state, base_stamp)
+                 VALUES ('project', '{PROJECT}', '{{}}', '{stamp}');"
+            ))
+            .unwrap();
+    }
+
+    #[test]
+    fn two_computers_that_kept_a_project_before_areas_give_it_one_area_general() {
+        let folder = tempfile::tempdir().unwrap();
+        let desk_file = folder.path().join("desk.db");
+        let laptop_file = folder.path().join("laptop.db");
+        kept_before_areas(&desk_file, "0196f3a2-7c1e-7d53-9b6f-00000000000d");
+        kept_before_areas(&laptop_file, "0196f3a2-7c1e-7d53-9b6f-00000000000e");
+        let desk = Database::open(&desk_file).unwrap();
+        let laptop = Database::open(&laptop_file).unwrap();
+
+        for _ in 0..2 {
+            desk.take_in(&laptop.operations_to_send(0).unwrap())
+                .unwrap();
+            laptop
+                .take_in(&desk.operations_to_send(0).unwrap())
+                .unwrap();
+        }
+
+        let project: ProjectId = PROJECT.parse().unwrap();
+        for computer in [&desk, &laptop] {
+            let areas = computer
+                .read(|connection| crate::areas::areas_of_project(connection, PROJECT))
+                .unwrap();
+            assert_eq!(areas, [Area::starting(project)]);
+            let tasks = computer
+                .read(|connection| crate::tasks::tasks_of_project(connection, PROJECT))
+                .unwrap();
+            assert_eq!(tasks.len(), 1);
+            assert_eq!(tasks[0].area_id(), areas[0].id());
+        }
+        let notices = desk.notices().unwrap().len() + laptop.notices().unwrap().len();
+        assert_eq!(notices, 0);
+    }
 }

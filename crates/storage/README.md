@@ -147,7 +147,9 @@ involved.
   place (`position`). An area is logged as the entity `area` with its whole
   state. A task has the column `area_id`, and its logged state gains
   `area_id`. No reference is enforced from a task to its area: the use case
-  that removes an area moves its tasks first. Deleting a project deletes and logs its
+  that removes an area moves its tasks first, and a take-in moves a task
+  whose area was removed elsewhere into the first area of its project (see
+  below). Deleting a project deletes and logs its
   areas after its views. Migration 14 gives every project of an earlier
   version the area "General", logged as a change of this computer like the
   views of migration 13, with an identifier that follows from the project
@@ -249,7 +251,7 @@ in one transaction:
    (`'never'`).
 3. An operation for a thing whose parent was deleted (a task of a deleted
    project) is dropped. One whose parent, or something its merged state
-   refers to (a task it waits for, its member, its sprint), has not arrived
+   refers to (a task it waits for, its member, its sprint, its area), has not arrived
    yet waits (`'parent'`) and is tried again until a pass makes no progress.
 4. An upsert is merged into the merged state field by field: a field takes
    the incoming value if its stamp is later, and a field whose larger value
@@ -263,7 +265,7 @@ in one transaction:
    deleted, and one with a deleted member forgets it, as does a view that
    showed only the tasks of a deleted member: it shows everybody's again
    and keeps hiding finished tasks if it did. A view of a deleted project is
-   dropped like a task of one.
+   dropped like a task of one, and so is an area of a deleted project.
 5. A deletion first repairs, with logged changes of this computer, what
    still refers to the thing (the subtasks and the tasks that wait for a
    task, the conversations about it, the tasks given to a member and the
@@ -286,12 +288,17 @@ in one transaction:
    | A project has two backlogs, or two dashboards | the younger is removed | any computer |
    | Two views of a project have one name, whatever the capitals | the younger gets the name with the first free number from 2 on (`Board` gives `Board 2`) | any computer |
    | A project has no view left, because two computers each removed others | it gets a board again, with the identifier of its starting board, or, if that was deleted, the next one `View::board_again` gives | any computer |
+   | Two areas of a project have one name, whatever the capitals | the younger gets the name with the first free number from 2 on (`Firmware` gives `Firmware 2`) | any computer |
+   | A project has no area left, because two computers each removed others | it gets "General" again, with the identifier of its starting area, or, if that was deleted, the next one `Area::general_again` gives | any computer |
+   | A task is in an area its project no longer has, because it was removed on another computer | the task goes into the first area of the project | any computer |
+   | A subtask is in another area than the task at the top of its chain of parts, because one computer moved the task and the other gave it the subtask | the subtask goes into that task's area | any computer |
 
    "Set later" is decided by the stamp of the field, and the creator of a
    thing is the computer of its first operation. A view is as old as its
-   first operation. A renumbered task and a project with a new key leave a
-   notice; a repaired view does not, because no kind of notice is about
-   views.
+   first operation, and so is an area. A renumbered task and a project with
+   a new key leave a notice; a repaired view or area does not, because no
+   kind of notice is about them. A change to an area that its deletion on
+   another computer threw away leaves a notice, as for a view.
 
 `TakeInReport` says how many operations were new, which projects and
 conversations changed, which turns that ran here were deleted elsewhere
