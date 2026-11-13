@@ -92,6 +92,11 @@ electronics, the firmware and the enclosure of a device. Every task is in
 one area. A new project has one, called *General*, and as long as it has
 only one, you see nothing of areas at all.
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="../screenshots/area-dark.png">
+  <img alt="A project with three areas listed under its name at the side; the area Firmware is open, and the board shows only its tasks" src="../screenshots/area-light.png">
+</picture>
+
 *Areas* in the menu of the project opens the list of its areas. It works
 like the list of the statuses:
 

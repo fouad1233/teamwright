@@ -270,6 +270,21 @@ const SAMPLE_TASKS = [
 const SHOWN_TASK = 'Draw the schematic';
 
 /**
+ * The areas of the sample project and the tasks in them, by their numbers.
+ * The first is the area every project starts with, under another name; a
+ * subtask is in the area of its task. Every task that is not listed is in
+ * the first area.
+ */
+const SAMPLE_AREAS = [
+  { name: 'Electronics', tasks: [] },
+  { name: 'Firmware', tasks: [7, 8, 9] },
+  { name: 'Enclosure', tasks: [10] },
+];
+
+/** The area that is opened for its picture. */
+const SHOWN_AREA = 'Firmware';
+
+/**
  * The story points of the sample tasks, by their numbers. A task that is
  * not listed has none, as a task has until somebody sizes it.
  */
@@ -399,9 +414,26 @@ async function createSampleProject(window) {
   }
 
   await planSampleSprints(window, project.id, taskIds);
+  await cutIntoSampleAreas(window, project.id, taskIds);
 
   const shownTask = SAMPLE_TASKS.find((sample) => sample.title === SHOWN_TASK);
   return { project, shownTaskId: taskIds.get(shownTask.number) };
+}
+
+/**
+ * Cuts the sample project into its areas: the one it started with gets its
+ * name, the others are added, and the tasks are moved into theirs.
+ */
+async function cutIntoSampleAreas(window, projectId, taskIds) {
+  const [first, ...others] = SAMPLE_AREAS;
+  const [starting] = await run(window, 'list_areas', { projectId });
+  await run(window, 'rename_area', { areaId: starting.id, name: first.name });
+  for (const sample of others) {
+    const area = await run(window, 'add_area', { projectId, name: sample.name });
+    for (const number of sample.tasks) {
+      await run(window, 'move_task_to_area', { taskId: taskIds.get(number), areaId: area.id });
+    }
+  }
 }
 
 /**
@@ -495,6 +527,15 @@ function press(label) {
 }
 
 /**
+ * JavaScript that finds the line of a project in the navigation at the
+ * side. Pressing it shows every area of the project again.
+ */
+function projectInNavigation(name) {
+  return `[...document.querySelectorAll('nav button, aside button')]
+    .find((entry) => entry.innerText.trim().startsWith(${JSON.stringify(name)}))`;
+}
+
+/**
  * JavaScript that finds the card of a task on the board by its title: the
  * part of the card that opens the task when it is pressed.
  */
@@ -505,8 +546,9 @@ function card(title) {
 
 /**
  * Takes the pictures of the sample project in one theme: the board of the
- * sprint and of all tasks, a task, the backlog, the list, the Gantt chart,
- * the calendar, the dashboard, the team, the office, and the statuses.
+ * sprint and of all tasks, one area, a task, the backlog, the list, the
+ * Gantt chart, the calendar, the dashboard, the team, the office, and the
+ * statuses.
  */
 async function takeProjectPictures(window, theme) {
   await window.showInTheme(theme);
@@ -518,6 +560,17 @@ async function takeProjectPictures(window, theme) {
   await window.evaluate(press('All tasks'));
   await window.waitForText(SAMPLE_TASKS[0].title);
   await takePicture(window, `board-${theme}`);
+
+  // One area of the project, and back to all of them: the name of the
+  // project in the header leads back.
+  await window.evaluate(press(SHOWN_AREA));
+  await window.waitForText(`tasks in ${SHOWN_AREA}`);
+  await window.evaluate(press('All tasks'));
+  await takePicture(window, `area-${theme}`);
+  await window.click(projectInNavigation(SAMPLE_PROJECT.name));
+  await window.waitForText(SHOWN_TASK);
+  await window.evaluate(press('All tasks'));
+  await window.waitForText(SAMPLE_TASKS[0].title);
 
   await window.click(card(SHOWN_TASK));
   await window.waitForText('WAITS FOR');

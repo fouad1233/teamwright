@@ -11,6 +11,7 @@ show them. Every picture exists twice: `-dark.png` for the dark theme and
 | `board` | The board of the sample project, with all its tasks |
 | `sprint-board` | The same board with the tasks of the sprint that runs |
 | `backlog` | The sprints and the backlog of the sample project |
+| `area` | One area of the sample project, opened on the board |
 | `task` | A task opened from the board |
 | `list` | The list of the sample project |
 | `gantt` | The Gantt chart of the sample project |

@@ -136,11 +136,16 @@ Several specialists working together with the manager in the loop.
   travel to another computer. Dragging a tab to another place and the
   "N more" of a narrow window were seen on demo data only. A view cannot
   be grouped by anything but status yet
-- 🚧 Areas: a project cut into the jobs inside it, shown at the side
+- ✅ Areas: a project cut into the jobs inside it, shown at the side
   under the project, each showing only its tasks in every view
   ([decision 0022](../decisions/0022-areas-inside-a-project.md)).
-  Built in the interface and the demo only: the shell does not serve the
-  areas yet, so the built program shows a project as one heap
+  In the built program areas were added, renamed and ordered, a task was
+  moved with its subtask, and an area was opened on the board; they are
+  there after a restart and travel to another computer. The dialog of
+  the areas and the field in the panel of a task were seen on demo data
+  only. Inside an area the sentence about the sprint and the burndown
+  still count the whole sprint, and folders that group projects are not
+  built
 - ⬜ Project report at completion
 
 ## M6 · Agile 🚧
