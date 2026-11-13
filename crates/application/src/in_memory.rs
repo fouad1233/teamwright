@@ -11,8 +11,8 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use chrono::TimeDelta;
 use teamwright_domain::{
-    Conversation, ConversationId, Member, MemberId, Project, ProjectId, Sprint, SprintId, Task,
-    TaskId, Timestamp, Turn, TurnId, View, ViewId,
+    Area, AreaId, Conversation, ConversationId, Member, MemberId, Project, ProjectId, Sprint,
+    SprintId, Task, TaskId, Timestamp, Turn, TurnId, View, ViewId,
 };
 
 use crate::agent_runtime::{
@@ -21,9 +21,9 @@ use crate::agent_runtime::{
 };
 use crate::places::ChosenPlaces;
 use crate::ports::{
-    ApprovedPlan, Clock, ConversationRepository, FileSystem, MemberRepository, PlacesRepository,
-    PlanningRepository, ProjectFolders, ProjectRepository, SprintRepository, StorageError,
-    TaskRepository, ViewRepository, WorkListener,
+    ApprovedPlan, AreaRepository, Clock, ConversationRepository, FileSystem, MemberRepository,
+    PlacesRepository, PlanningRepository, ProjectFolders, ProjectRepository, SprintRepository,
+    StorageError, TaskRepository, ViewRepository, WorkListener,
 };
 
 /// Locks a mutex, and keeps working even if another thread panicked while it
@@ -183,6 +183,39 @@ impl ViewRepository for InMemoryViewRepository {
 
     fn delete(&self, id: ViewId) -> Result<(), StorageError> {
         lock(&self.views).remove(&id);
+        Ok(())
+    }
+}
+
+/// Keeps the areas of the projects in memory.
+#[derive(Debug, Default)]
+pub struct InMemoryAreaRepository {
+    areas: Mutex<BTreeMap<AreaId, Area>>,
+}
+
+impl AreaRepository for InMemoryAreaRepository {
+    fn save_all(&self, areas: &[Area]) -> Result<(), StorageError> {
+        let mut stored = lock(&self.areas);
+        for area in areas {
+            stored.insert(area.id(), area.clone());
+        }
+        Ok(())
+    }
+
+    fn find(&self, id: AreaId) -> Result<Option<Area>, StorageError> {
+        Ok(lock(&self.areas).get(&id).cloned())
+    }
+
+    fn list_for_project(&self, project_id: ProjectId) -> Result<Vec<Area>, StorageError> {
+        Ok(lock(&self.areas)
+            .values()
+            .filter(|area| area.project_id() == project_id)
+            .cloned()
+            .collect())
+    }
+
+    fn delete(&self, id: AreaId) -> Result<(), StorageError> {
+        lock(&self.areas).remove(&id);
         Ok(())
     }
 }

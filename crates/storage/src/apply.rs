@@ -12,6 +12,7 @@
 use rusqlite::Transaction;
 use serde_json::{Map, Value};
 
+use crate::areas;
 use crate::conversations;
 use crate::error::DatabaseError;
 use crate::members;
@@ -41,6 +42,7 @@ pub(crate) fn write_state(
         Entity::Member => members::write_state(transaction, state),
         Entity::Sprint => sprints::write_state(transaction, state),
         Entity::View => views::write_state(transaction, state),
+        Entity::Area => areas::write_state(transaction, state),
         Entity::Conversation => conversations::write_conversation_state(transaction, state),
         Entity::Turn => conversations::write_turn_state(transaction, state),
         Entity::TurnStep => conversations::write_step_state(transaction, state),
@@ -83,6 +85,9 @@ pub(crate) fn remove(
         Entity::View => {
             views::remove_view(transaction, entity_id)?;
         }
+        Entity::Area => {
+            areas::remove_area(transaction, entity_id)?;
+        }
         Entity::Conversation => {
             conversations::remove_conversation(transaction, operations, entity_id)?;
         }
@@ -105,8 +110,8 @@ mod tests {
     use rusqlite::Connection;
     use rusqlite::types::Value as Cell;
     use teamwright_application::{
-        ConversationRepository, MemberRepository, ProjectRepository, SprintRepository,
-        TaskRepository,
+        AreaRepository, ConversationRepository, MemberRepository, ProjectRepository,
+        SprintRepository, TaskRepository,
     };
     use teamwright_domain::{
         Assignee, Color, Conversation, DecisionOption, DecisionRequest, Interview,
@@ -127,6 +132,7 @@ mod tests {
     /// The tables that hold the data the manager works with.
     const TABLES: &[&str] = &[
         "projects",
+        "areas",
         "statuses",
         "tasks",
         "task_dependencies",
@@ -194,6 +200,9 @@ mod tests {
         SqliteProjectRepository::new(database.clone())
             .save(&project)
             .unwrap();
+        crate::areas::SqliteAreaRepository::new(database.clone())
+            .save_all(&[teamwright_domain::Area::starting(project.id())])
+            .unwrap();
         let member = Member::create(
             project.id(),
             MemberName::parse("Hardware engineer").unwrap(),
@@ -218,6 +227,7 @@ mod tests {
         let status = project.workflow().initial_status().clone();
         let board = Task::create(
             project.id(),
+            teamwright_domain::Area::starting_id(project.id()),
             first,
             &status,
             Rank::between(None, None),
@@ -234,6 +244,7 @@ mod tests {
         );
         let mut power = Task::create(
             project.id(),
+            teamwright_domain::Area::starting_id(project.id()),
             second,
             &status,
             Rank::between(Some(board.rank()), None),

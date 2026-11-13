@@ -4,7 +4,7 @@ use std::cmp::Ordering;
 use std::collections::BTreeSet;
 
 use crate::error::DomainError;
-use crate::ids::{MemberId, ProjectId, SprintId, StatusId, TaskId};
+use crate::ids::{AreaId, MemberId, ProjectId, SprintId, StatusId, TaskId};
 use crate::macros::text_enum;
 use crate::sprint::StoryPoints;
 use crate::text::TaskTitle;
@@ -225,6 +225,8 @@ pub struct TaskSnapshot {
     pub id: TaskId,
     /// The project the task belongs to.
     pub project_id: ProjectId,
+    /// The area of the project the task is in.
+    pub area_id: AreaId,
     /// The number of the task within its project.
     pub number: u32,
     /// What the task is about.
@@ -264,6 +266,7 @@ pub struct TaskSnapshot {
 pub struct Task {
     id: TaskId,
     project_id: ProjectId,
+    area_id: AreaId,
     number: u32,
     title: TaskTitle,
     description: String,
@@ -285,13 +288,17 @@ pub struct Task {
 impl Task {
     /// Opens a task in a project.
     ///
-    /// `number` comes from [`Project::allocate_task_number`], and `status` is
-    /// one of the statuses of that project's workflow.
+    /// `area_id` is an area of that project, `number` comes from
+    /// [`Project::allocate_task_number`], and `status` is one of the
+    /// statuses of that project's workflow. That a subtask is in the area
+    /// of its task depends on another stored task and is checked by the use
+    /// case.
     ///
     /// [`Project::allocate_task_number`]: crate::Project::allocate_task_number
     #[must_use]
     pub fn create(
         project_id: ProjectId,
+        area_id: AreaId,
         number: u32,
         status: &Status,
         rank: Rank,
@@ -301,6 +308,7 @@ impl Task {
         Self {
             id: TaskId::generate(),
             project_id,
+            area_id,
             number,
             title: draft.title,
             description: draft.description,
@@ -327,6 +335,7 @@ impl Task {
         Self {
             id: snapshot.id,
             project_id: snapshot.project_id,
+            area_id: snapshot.area_id,
             number: snapshot.number,
             title: snapshot.title,
             description: snapshot.description,
@@ -356,6 +365,12 @@ impl Task {
     #[must_use]
     pub const fn project_id(&self) -> ProjectId {
         self.project_id
+    }
+
+    /// The area of the project the task is in.
+    #[must_use]
+    pub const fn area_id(&self) -> AreaId {
+        self.area_id
     }
 
     /// The number of the task within its project.
@@ -509,6 +524,16 @@ impl Task {
         self.touch(now);
     }
 
+    /// Puts the task into another area of its project.
+    ///
+    /// That the area belongs to the project, and that a subtask goes where
+    /// its task goes, depends on other stored things and is checked by the
+    /// use case.
+    pub fn put_into_area(&mut self, area_id: AreaId, now: Timestamp) {
+        self.area_id = area_id;
+        self.touch(now);
+    }
+
     /// Gives the task story points, or takes them away.
     pub fn set_points(&mut self, points: Option<StoryPoints>, now: Timestamp) {
         self.points = points;
@@ -618,12 +643,27 @@ mod tests {
     fn task_in(workflow: &Workflow) -> Task {
         Task::create(
             ProjectId::generate(),
+            AreaId::generate(),
             1,
             workflow.initial_status(),
             Rank::FIRST,
             draft("Choose the microcontroller"),
             moment(9),
         )
+    }
+
+    #[test]
+    fn a_task_put_into_another_area_keeps_its_status_and_its_place() {
+        let workflow = Workflow::standard();
+        let mut task = task_in(&workflow);
+        let firmware = AreaId::generate();
+
+        task.put_into_area(firmware, moment(10));
+
+        assert_eq!(task.area_id(), firmware);
+        assert_eq!(task.status_id(), workflow.initial_status().id());
+        assert_eq!(task.rank(), Rank::FIRST);
+        assert_eq!(task.updated_at(), moment(10));
     }
 
     #[test]
@@ -638,6 +678,7 @@ mod tests {
 
         let task = Task::create(
             project_id,
+            AreaId::generate(),
             7,
             workflow.initial_status(),
             Rank::FIRST,
@@ -765,6 +806,7 @@ mod tests {
 
         let task = Task::create(
             ProjectId::generate(),
+            AreaId::generate(),
             1,
             workflow.first_in(StatusCategory::Done).unwrap(),
             Rank::FIRST,

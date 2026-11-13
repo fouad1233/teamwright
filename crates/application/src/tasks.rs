@@ -4,8 +4,8 @@ use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use teamwright_domain::{
-    Assignee, CalendarDate, ComputerId, DependencyGraph, Priority, Project, ProjectId, Rank,
-    Schedule, SprintId, Status, StatusId, StoryPoints, Task, TaskChange, TaskDraft, TaskId,
+    AreaId, Assignee, CalendarDate, ComputerId, DependencyGraph, Priority, Project, ProjectId,
+    Rank, Schedule, SprintId, Status, StatusId, StoryPoints, Task, TaskChange, TaskDraft, TaskId,
     TaskTitle, Timestamp, changes_between, history_of,
 };
 
@@ -18,10 +18,11 @@ pub struct HistoryEntry {
     pub computer: Option<ComputerId>,
 }
 
+use crate::areas::area_for_new_task;
 use crate::error::ApplicationError;
 use crate::ports::{
-    Clock, ConversationRepository, MemberRepository, ProjectRepository, SprintRepository,
-    TaskRepository,
+    AreaRepository, Clock, ConversationRepository, MemberRepository, ProjectRepository,
+    SprintRepository, TaskRepository,
 };
 use crate::work::WorkInProgress;
 
@@ -43,6 +44,10 @@ pub struct NewTask {
     pub status_id: Option<StatusId>,
     /// The task this one is a part of, if it is a subtask.
     pub parent_id: Option<TaskId>,
+    /// The area the task goes into. If it is missing, the task goes into
+    /// the first area of the project, or, as a subtask, into the area of
+    /// its task. A subtask cannot name another area than its task's.
+    pub area_id: Option<AreaId>,
     /// The expected working time in minutes.
     pub estimate_minutes: Option<u32>,
     /// The day work is planned to start.
@@ -63,6 +68,7 @@ impl NewTask {
             assignee: None,
             status_id: None,
             parent_id: None,
+            area_id: None,
             estimate_minutes: None,
             start_on: None,
             due_on: None,
@@ -78,6 +84,7 @@ pub struct TaskService {
     members: Arc<dyn MemberRepository>,
     conversations: Arc<dyn ConversationRepository>,
     sprints: Arc<dyn SprintRepository>,
+    areas: Arc<dyn AreaRepository>,
     clock: Arc<dyn Clock>,
 }
 
@@ -85,7 +92,7 @@ impl TaskService {
     /// Creates the service. The conversations are needed because the record
     /// of the work on a task goes with the task, and a task a specialist is
     /// working on is not removed. The sprints are needed to plan a task
-    /// into one.
+    /// into one, and the areas to put a new task into one.
     #[must_use]
     pub fn new(
         projects: Arc<dyn ProjectRepository>,
@@ -93,6 +100,7 @@ impl TaskService {
         members: Arc<dyn MemberRepository>,
         conversations: Arc<dyn ConversationRepository>,
         sprints: Arc<dyn SprintRepository>,
+        areas: Arc<dyn AreaRepository>,
         clock: Arc<dyn Clock>,
     ) -> Self {
         Self {
@@ -101,19 +109,22 @@ impl TaskService {
             members,
             conversations,
             sprints,
+            areas,
             clock,
         }
     }
 
     /// Opens a task at the bottom of its status. It starts in the backlog
     /// without points, or, as a subtask, in the sprint of the task it is a
-    /// part of.
+    /// part of. It goes into the area it names, or the first area of the
+    /// project; a subtask goes into the area of its task.
     ///
     /// # Errors
     ///
-    /// Returns an error if the project, the status, the parent task or the
-    /// assignee does not exist, if the parent or the assignee belongs to
-    /// another project, if the title or the dates are not valid, or if
+    /// Returns an error if the project, the status, the parent task, the
+    /// assignee or the area does not exist, if the parent, the assignee or
+    /// the area belongs to another project, if a subtask names another area
+    /// than its task's, if the title or the dates are not valid, or if
     /// storage fails.
     pub fn create(&self, new_task: NewTask) -> Result<Task, ApplicationError> {
         let mut project = self.require_project(new_task.project_id)?;
@@ -134,6 +145,12 @@ impl TaskService {
             return Err(ApplicationError::DifferentProjects);
         }
         self.check_assignee(new_task.assignee, project.id())?;
+        let area_id = area_for_new_task(
+            self.areas.as_ref(),
+            &project,
+            new_task.area_id,
+            parent.as_ref(),
+        )?;
 
         let last_rank_in_status = self
             .tasks
@@ -155,6 +172,7 @@ impl TaskService {
         let now = self.clock.now();
         let mut task = Task::create(
             project.id(),
+            area_id,
             number,
             &status,
             Rank::between(last_rank_in_status, None),
@@ -710,6 +728,7 @@ mod tests {
         let task_repository = Arc::new(InMemoryTaskRepository::default());
         let member_repository = Arc::new(InMemoryMemberRepository::default());
         let conversation_repository = Arc::new(InMemoryConversationRepository::default());
+        let area_store = Arc::new(crate::in_memory::InMemoryAreaRepository::default());
         let clock = Arc::new(ManualClock::starting_at(start_of_day()));
         Workspace {
             projects: ProjectService::new(
@@ -720,6 +739,7 @@ mod tests {
                 Arc::new(InMemoryPlacesRepository::default()),
                 Arc::new(InMemorySprintRepository::new(task_repository.clone())),
                 Arc::new(crate::in_memory::InMemoryViewRepository::default()),
+                area_store.clone(),
                 clock.clone(),
             ),
             tasks: TaskService::new(
@@ -728,6 +748,7 @@ mod tests {
                 member_repository.clone(),
                 conversation_repository.clone(),
                 Arc::new(InMemorySprintRepository::new(task_repository.clone())),
+                area_store.clone(),
                 clock.clone(),
             ),
             team: TeamService::new(

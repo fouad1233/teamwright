@@ -73,11 +73,13 @@ pub(crate) enum Entity {
     Sprint,
     /// A view of a project with its filter.
     View,
+    /// An area of a project.
+    Area,
 }
 
 impl Entity {
     /// Every kind of thing whose changes are logged.
-    pub(crate) const ALL: [Self; 12] = [
+    pub(crate) const ALL: [Self; 13] = [
         Self::Project,
         Self::Task,
         Self::Member,
@@ -90,6 +92,7 @@ impl Entity {
         Self::ProjectPlaces,
         Self::Sprint,
         Self::View,
+        Self::Area,
     ];
 
     /// The entity of a name in the log, if this version knows it.
@@ -112,6 +115,7 @@ impl Entity {
             Self::ProjectPlaces => "project_places",
             Self::Sprint => "sprint",
             Self::View => "view",
+            Self::Area => "area",
         }
     }
 }
@@ -529,6 +533,7 @@ mod tests {
             .unwrap();
         let task = Task::create(
             project.id(),
+            teamwright_domain::Area::starting_id(project.id()),
             number,
             project.workflow().initial_status(),
             Rank::between(None, None),

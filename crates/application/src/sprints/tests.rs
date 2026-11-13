@@ -42,6 +42,7 @@ fn backlog() -> Backlog {
     let members_store = Arc::new(InMemoryMemberRepository::default());
     let conversations_store = Arc::new(InMemoryConversationRepository::default());
     let sprints_store = Arc::new(InMemorySprintRepository::new(tasks_store.clone()));
+    let area_store = Arc::new(crate::in_memory::InMemoryAreaRepository::default());
     let clock = Arc::new(ManualClock::starting_at(start_of_day()));
     let projects = ProjectService::new(
         projects_store.clone(),
@@ -51,6 +52,7 @@ fn backlog() -> Backlog {
         Arc::new(InMemoryPlacesRepository::default()),
         sprints_store.clone(),
         Arc::new(crate::in_memory::InMemoryViewRepository::default()),
+        area_store.clone(),
         clock.clone(),
     );
     let tasks = TaskService::new(
@@ -59,6 +61,7 @@ fn backlog() -> Backlog {
         members_store,
         conversations_store,
         sprints_store.clone(),
+        area_store.clone(),
         clock.clone(),
     );
     let sprints = SprintService::new(projects_store, tasks_store, sprints_store, clock.clone());

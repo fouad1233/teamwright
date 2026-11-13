@@ -5,7 +5,8 @@
 //! sprint, put someone on the team, choose the folders of a project, let an
 //! AI specialist work on a task. Each use case is a method of a service
 //! ([`ProjectService`], [`TaskService`], [`SprintService`], [`ViewService`],
-//! [`TeamService`], [`PlacesService`], [`WorkService`]) that loads what it
+//! [`AreaService`], [`TeamService`], [`PlacesService`], [`WorkService`])
+//! that loads what it
 //! needs, lets the
 //! domain apply its rules, and stores the result.
 //!
@@ -15,6 +16,7 @@
 //! in. Tests pass the ones in [`in_memory`].
 
 pub mod agent_runtime;
+pub mod areas;
 pub mod clock;
 pub mod error;
 pub mod in_memory;
@@ -36,13 +38,14 @@ pub use agent_runtime::{
     SessionId, SessionStarted, SignIn, TeamTool, TokenCounts, TurnFailure, TurnOutcome,
     TurnRequest,
 };
+pub use areas::AreaService;
 pub use clock::SystemClock;
 pub use error::ApplicationError;
 pub use places::{ChosenPlaces, PlacesService, ProjectPlaces, REFERENCES_FOLDER};
 pub use ports::{
-    ApprovedPlan, Clock, ConversationRepository, FileSystem, MemberRepository, PlacesRepository,
-    PlanningRepository, ProjectFolders, ProjectRepository, SprintRepository, StorageError,
-    TaskRepository, ViewRepository, WorkListener,
+    ApprovedPlan, AreaRepository, Clock, ConversationRepository, FileSystem, MemberRepository,
+    PlacesRepository, PlanningRepository, ProjectFolders, ProjectRepository, SprintRepository,
+    StorageError, TaskRepository, ViewRepository, WorkListener,
 };
 pub use projects::{NewProject, ProjectService, StatusProperties, WorkflowTemplate};
 pub use sprints::{NewSprint, SprintChanges, SprintDay, SprintReport, SprintService, SprintStart};

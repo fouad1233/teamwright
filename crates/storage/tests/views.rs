@@ -35,6 +35,9 @@ fn workspace() -> Workspace {
     let conversations = Arc::new(SqliteConversationRepository::new(database.clone()));
     let sprints = Arc::new(SqliteSprintRepository::new(database.clone()));
     let views = Arc::new(SqliteViewRepository::new(database.clone()));
+    let area_store = Arc::new(teamwright_storage::SqliteAreaRepository::new(
+        database.clone(),
+    ));
     let clock = Arc::new(ManualClock::starting_at(
         Utc.with_ymd_and_hms(2026, 11, 13, 9, 0, 0).unwrap(),
     ));
@@ -46,6 +49,7 @@ fn workspace() -> Workspace {
         Arc::new(SqlitePlacesRepository::new(database.clone())),
         sprints,
         views.clone(),
+        area_store.clone(),
         clock.clone(),
     );
     let project = project_service

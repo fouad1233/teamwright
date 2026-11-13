@@ -49,6 +49,9 @@ impl Computer {
         let places = Arc::new(SqlitePlacesRepository::new(database.clone()));
         let sprints = Arc::new(SqliteSprintRepository::new(database.clone()));
         let views = Arc::new(SqliteViewRepository::new(database.clone()));
+        let area_store = Arc::new(teamwright_storage::SqliteAreaRepository::new(
+            database.clone(),
+        ));
         let clock = Arc::new(ManualClock::starting_at(moment()));
         Self {
             projects: ProjectService::new(
@@ -59,6 +62,7 @@ impl Computer {
                 places.clone(),
                 sprints.clone(),
                 views.clone(),
+                area_store.clone(),
                 clock.clone(),
             ),
             tasks: TaskService::new(
@@ -67,6 +71,7 @@ impl Computer {
                 members.clone(),
                 conversations.clone(),
                 sprints.clone(),
+                area_store.clone(),
                 clock.clone(),
             ),
             sprints: SprintService::new(projects.clone(), tasks.clone(), sprints, clock.clone()),

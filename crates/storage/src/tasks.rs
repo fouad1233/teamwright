@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use teamwright_application::{StorageError, TaskRepository};
 use teamwright_domain::{
-    Assignee, ComputerId, DomainError, ProjectId, Rank, Schedule, StoryPoints, Task, TaskId,
+    Area, Assignee, ComputerId, DomainError, ProjectId, Rank, Schedule, StoryPoints, Task, TaskId,
     TaskSnapshot, TaskTitle,
 };
 
@@ -18,7 +18,7 @@ use crate::error::DatabaseError;
 use crate::operations::{self, Entity, OperationRecorder};
 
 /// The columns of the `tasks` table that every query reads.
-const TASK_COLUMNS: &str = "id, project_id, number, title, description, status_id, priority, \
+const TASK_COLUMNS: &str = "id, project_id, area_id, number, title, description, status_id, priority, \
      assignee_kind, assignee_member_id, parent_id, estimate_minutes, sprint_id, points, start_on, \
      due_on, rank, created_at, updated_at, completed_at";
 
@@ -31,17 +31,18 @@ const ASSIGNEE_MEMBER: &str = "member";
 // it the dependencies and subtask links that refer to it.
 const UPSERT_TASK: &str = "
     INSERT INTO tasks (
-        id, project_id, number, title, description, status_id, priority,
+        id, project_id, area_id, number, title, description, status_id, priority,
         assignee_kind, assignee_member_id, parent_id, estimate_minutes,
         sprint_id, points, start_on, due_on, rank, created_at, updated_at, completed_at
     )
     VALUES (
-        :id, :project_id, :number, :title, :description, :status_id, :priority,
+        :id, :project_id, :area_id, :number, :title, :description, :status_id, :priority,
         :assignee_kind, :assignee_member_id, :parent_id, :estimate_minutes,
         :sprint_id, :points, :start_on, :due_on, :rank, :created_at, :updated_at, :completed_at
     )
     ON CONFLICT (id) DO UPDATE SET
         project_id = excluded.project_id,
+        area_id = excluded.area_id,
         number = excluded.number,
         title = excluded.title,
         description = excluded.description,
@@ -66,6 +67,11 @@ const UPSERT_TASK: &str = "
 struct TaskRecord {
     id: String,
     project_id: String,
+    // A task logged before there were areas, or a row written before, is
+    // in the area its project started with, which the migration to areas
+    // gave every project.
+    #[serde(default)]
+    area_id: Option<String>,
     number: u32,
     title: String,
     description: String,
@@ -104,6 +110,7 @@ impl TaskRecord {
         Self {
             id: task.id().to_string(),
             project_id: task.project_id().to_string(),
+            area_id: Some(task.area_id().to_string()),
             number: task.number(),
             title: task.title().to_string(),
             description: task.description().to_owned(),
@@ -131,6 +138,7 @@ impl TaskRecord {
         Ok(Self {
             id: row.get("id")?,
             project_id: row.get("project_id")?,
+            area_id: row.get("area_id")?,
             number: row.get("number")?,
             title: row.get("title")?,
             description: row.get("description")?,
@@ -175,9 +183,15 @@ impl TaskRecord {
             .map(|blocker_id| codec::parse(blocker_id))
             .collect::<Result<BTreeSet<TaskId>, _>>()?;
 
+        let project_id: ProjectId = codec::parse(&self.project_id)?;
+        let area_id = match self.area_id.as_deref() {
+            Some(area_id) => codec::parse(area_id)?,
+            None => Area::starting_id(project_id),
+        };
         Ok(Task::restore(TaskSnapshot {
             id: codec::parse(&self.id)?,
-            project_id: codec::parse(&self.project_id)?,
+            project_id,
+            area_id,
             number: self.number,
             title: TaskTitle::parse(&self.title).map_err(broken)?,
             description: self.description,
@@ -395,6 +409,7 @@ fn write_rows(transaction: &Transaction<'_>, record: &TaskRecord) -> Result<(), 
         named_params! {
             ":id": record.id,
             ":project_id": record.project_id,
+            ":area_id": record.area_id,
             ":number": record.number,
             ":title": record.title,
             ":description": record.description,
@@ -500,5 +515,42 @@ mod tests {
         assert_eq!(task.estimate_minutes(), Some(240));
         assert_eq!(task.sprint_id(), None);
         assert_eq!(task.points(), None);
+    }
+
+    #[test]
+    fn a_task_logged_before_there_were_areas_is_read_into_the_area_its_project_started_with() {
+        let logged = r#"{
+            "id": "0190a000-0000-7000-8000-000000000001",
+            "project_id": "0190a000-0000-7000-8000-000000000002",
+            "number": 1,
+            "title": "Design the board",
+            "description": "",
+            "status_id": "0190a000-0000-7000-8000-000000000003",
+            "priority": "normal",
+            "assignee_kind": null,
+            "assignee_member_id": null,
+            "parent_id": null,
+            "estimate_minutes": null,
+            "start_on": null,
+            "due_on": null,
+            "rank": 0.0,
+            "created_at": "2026-11-11T09:00:00.000Z",
+            "updated_at": "2026-11-11T09:00:00.000Z",
+            "completed_at": null,
+            "blocked_by": []
+        }"#;
+
+        let record: TaskRecord = serde_json::from_str(logged).unwrap();
+        let task = record.into_task().unwrap();
+
+        assert_eq!(
+            task.area_id(),
+            Area::starting_id(task.project_id()),
+            "the area \"General\" the migration gave the project"
+        );
+        assert_eq!(
+            task.area_id().to_string(),
+            "0190a000-0000-0000-8000-000000000002"
+        );
     }
 }

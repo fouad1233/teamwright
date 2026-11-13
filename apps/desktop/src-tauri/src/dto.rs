@@ -87,6 +87,7 @@ impl From<&Status> for StatusDto {
 pub struct TaskDto {
     id: String,
     project_id: String,
+    area_id: String,
     number: u32,
     title: String,
     description: String,
@@ -111,6 +112,7 @@ impl From<&Task> for TaskDto {
         Self {
             id: task.id().to_string(),
             project_id: task.project_id().to_string(),
+            area_id: task.area_id().to_string(),
             number: task.number(),
             title: task.title().to_string(),
             description: task.description().to_owned(),
@@ -1253,6 +1255,8 @@ pub struct NewTaskInput {
     #[serde(default)]
     parent_id: Option<String>,
     #[serde(default)]
+    area_id: Option<String>,
+    #[serde(default)]
     estimate_minutes: Option<u32>,
     #[serde(default)]
     start_on: Option<String>,
@@ -1277,6 +1281,7 @@ impl TryFrom<NewTaskInput> for NewTask {
             assignee: input.assignee.map(Assignee::try_from).transpose()?,
             status_id: input.status_id.as_deref().map(parse_id).transpose()?,
             parent_id: input.parent_id.as_deref().map(parse_id).transpose()?,
+            area_id: input.area_id.as_deref().map(parse_id).transpose()?,
             estimate_minutes: input.estimate_minutes,
             start_on: parse_optional_date(input.start_on.as_deref())?,
             due_on: parse_optional_date(input.due_on.as_deref())?,

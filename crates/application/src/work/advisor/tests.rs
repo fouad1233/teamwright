@@ -60,6 +60,7 @@ fn planning() -> Planning {
     let places = Arc::new(InMemoryPlacesRepository::default());
     let runtime = Arc::new(ScriptedRuntime::new());
     let listener = Arc::new(RecordingWorkListener::default());
+    let area_store = Arc::new(crate::in_memory::InMemoryAreaRepository::default());
     let clock = Arc::new(ManualClock::starting_at(start_of_day()));
     let projects = ProjectService::new(
         projects_store.clone(),
@@ -69,6 +70,7 @@ fn planning() -> Planning {
         places.clone(),
         Arc::new(InMemorySprintRepository::new(tasks_store.clone())),
         Arc::new(crate::in_memory::InMemoryViewRepository::default()),
+        area_store.clone(),
         clock.clone(),
     );
     let tasks = TaskService::new(
@@ -77,6 +79,7 @@ fn planning() -> Planning {
         members_store.clone(),
         conversations_store.clone(),
         Arc::new(InMemorySprintRepository::new(tasks_store.clone())),
+        area_store.clone(),
         clock.clone(),
     );
     let team = TeamService::new(
@@ -90,6 +93,7 @@ fn planning() -> Planning {
     let work = WorkService::new(WorkPorts {
         projects: projects_store.clone(),
         tasks: tasks_store.clone(),
+        areas: area_store.clone(),
         members: members_store.clone(),
         conversations: conversations_store.clone(),
         planning: Arc::new(InMemoryPlanningRepository::new(
@@ -998,6 +1002,10 @@ fn adds_the_members_to_the_team_and_creates_the_tasks_when_it_is_approved() {
     assert_eq!(numbers, (1..=12).collect::<Vec<_>>());
     let first_status = planning.project.workflow().statuses()[0].id();
     assert!(tasks.iter().all(|task| task.status_id() == first_status));
+    // The plan lands in the first area of the project, the one it started
+    // with.
+    let first_area = teamwright_domain::Area::starting_id(planning.project.id());
+    assert!(tasks.iter().all(|task| task.area_id() == first_area));
     // The plan lands in the backlog, without points.
     assert!(
         tasks

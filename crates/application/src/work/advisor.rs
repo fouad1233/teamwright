@@ -24,6 +24,7 @@ use super::{
     ConversationWithTurns, NewTurn, REFERENCES_FOLDER, WorkService, Worker, open_interview_of,
     open_proposal_of, reference_of,
 };
+use crate::areas::first_area_of;
 use crate::error::ApplicationError;
 use crate::ports::ApprovedPlan;
 
@@ -286,6 +287,9 @@ impl WorkService {
             .filter(|task| task.status_id() == status.id())
             .map(Task::rank)
             .max();
+        // The tasks of a plan go into the first area. The manager sorts
+        // them into the others.
+        let area_id = first_area_of(ports.areas.as_ref(), project.id())?.id();
         let mut created: Vec<Task> = Vec::new();
         for proposed in &tasks {
             let assignee = match &proposed.owner {
@@ -301,6 +305,7 @@ impl WorkService {
             let number = project.allocate_task_number();
             created.push(Task::create(
                 project.id(),
+                area_id,
                 number,
                 &status,
                 rank,

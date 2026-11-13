@@ -55,6 +55,7 @@ fn workspace() -> Workspace {
     let members_store = Arc::new(InMemoryMemberRepository::default());
     let conversations_store = Arc::new(InMemoryConversationRepository::default());
     let views_store = Arc::new(InMemoryViewRepository::default());
+    let area_store = Arc::new(crate::in_memory::InMemoryAreaRepository::default());
     let clock = Arc::new(ManualClock::starting_at(start_of_day()));
     let projects = ProjectService::new(
         projects_store.clone(),
@@ -64,6 +65,7 @@ fn workspace() -> Workspace {
         Arc::new(InMemoryPlacesRepository::default()),
         Arc::new(InMemorySprintRepository::new(tasks_store.clone())),
         views_store.clone(),
+        area_store.clone(),
         clock.clone(),
     );
     let team = TeamService::new(

@@ -63,7 +63,7 @@ mod tests {
     use chrono::TimeZone;
 
     use super::*;
-    use crate::ids::ProjectId;
+    use crate::ids::{AreaId, ProjectId};
     use crate::task::{Rank, TaskDraft};
     use crate::text::TaskTitle;
     use crate::time::Timestamp;
@@ -76,6 +76,7 @@ mod tests {
     fn task(title: &str) -> Task {
         Task::create(
             ProjectId::generate(),
+            AreaId::generate(),
             1,
             Workflow::standard().initial_status(),
             Rank::FIRST,

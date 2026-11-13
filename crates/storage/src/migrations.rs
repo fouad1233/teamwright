@@ -23,6 +23,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("schema/0011_notices.sql"),
     include_str!("schema/0012_sync.sql"),
     include_str!("schema/0013_views.sql"),
+    include_str!("schema/0014_areas.sql"),
 ];
 
 /// Applies the migrations a database has not seen yet. Each one runs in its
@@ -580,6 +581,104 @@ mod tests {
             )
             .unwrap();
         assert_eq!(merged, 6);
+    }
+
+    /// The case `demoAreas.test.ts` calls "gives "General" to a project
+    /// that was kept before it had areas, with all its tasks in it": here a
+    /// migration gives it.
+    #[test]
+    fn gives_general_to_a_project_that_was_kept_before_it_had_areas_with_all_its_tasks_in_it() {
+        let mut connection = Connection::open_in_memory().unwrap();
+        for migration in &MIGRATIONS[..13] {
+            connection.execute_batch(migration).unwrap();
+        }
+        connection.pragma_update(None, "user_version", 13).unwrap();
+        let device = "0196f3a2-7c1e-7d53-9b6f-2f1a4c8e9d10";
+        let project = "0196f3a2-8000-7abc-9def-0123456789ab";
+        let earlier = format!("1762851600000-00004-{device}");
+        connection
+            .execute(
+                "INSERT INTO meta (key, value) VALUES ('device_id', ?1)",
+                [device],
+            )
+            .unwrap();
+        connection
+            .execute_batch(&format!(
+                "INSERT INTO projects (id, key, name, description, next_task_number, created_at)
+                 VALUES ('{project}', 'AQN', 'Air quality node', '', 3,
+                         '2026-11-11T09:00:00.000Z');
+                 INSERT INTO statuses (id, project_id, position, name, category, color)
+                 VALUES ('0196f3a2-8000-7abc-9def-0000000000a1', '{project}', 0, 'To do',
+                         'todo', 'slate');
+                 INSERT INTO tasks (
+                     id, project_id, number, title, description, status_id, priority,
+                     assignee_kind, assignee_member_id, parent_id, estimate_minutes,
+                     start_on, due_on, rank, created_at, updated_at, completed_at
+                 )
+                 VALUES (
+                     '0196f3a2-8000-7abc-9def-0000000000b1', '{project}', 1,
+                     'Choose the sensors', '', '0196f3a2-8000-7abc-9def-0000000000a1',
+                     'normal', NULL, NULL, NULL, NULL, NULL, NULL, 0.0,
+                     '2026-11-11T09:00:00.000Z', '2026-11-11T09:00:00.000Z', NULL
+                 ),
+                 (
+                     '0196f3a2-8000-7abc-9def-0000000000b2', '{project}', 2,
+                     'Draw the schematic', '', '0196f3a2-8000-7abc-9def-0000000000a1',
+                     'normal', NULL, NULL, NULL, NULL, NULL, NULL, 1024.0,
+                     '2026-11-11T09:00:00.000Z', '2026-11-11T09:00:00.000Z', NULL
+                 );"
+            ))
+            .unwrap();
+        connection
+            .execute(
+                "INSERT INTO operations (
+                     device_id, device_sequence, stamp, entity, entity_id, kind, payload
+                 )
+                 VALUES (?1, 7, ?2, 'project', ?3, 'upsert', '{}')",
+                rusqlite::params![device, earlier, project],
+            )
+            .unwrap();
+
+        migrate(&mut connection).unwrap();
+
+        let project_id: teamwright_domain::ProjectId = project.parse().unwrap();
+        let areas = crate::areas::areas_of_project(&connection, project).unwrap();
+        assert_eq!(areas, [teamwright_domain::Area::starting(project_id)]);
+        assert_eq!(areas[0].name().as_str(), "General");
+        assert_eq!(
+            areas[0].id().to_string(),
+            "0196f3a2-8000-0abc-9def-0123456789ab"
+        );
+        let tasks = crate::tasks::tasks_of_project(&connection, project).unwrap();
+        assert_eq!(tasks.len(), 2);
+        assert!(tasks.iter().all(|task| task.area_id() == areas[0].id()));
+
+        let logged: Vec<(i64, String, String)> = connection
+            .prepare(
+                "SELECT device_sequence, stamp, payload FROM operations
+                 WHERE entity = 'area' ORDER BY device_sequence",
+            )
+            .unwrap()
+            .query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap();
+        assert_eq!(logged.len(), 1);
+        assert!(logged[0].0 > 7);
+        assert!(logged[0].1 > earlier);
+        assert!(logged[0].1.ends_with(device));
+        let state: serde_json::Value = serde_json::from_str(&logged[0].2).unwrap();
+        assert_eq!(state["name"], "General");
+        assert_eq!(state["position"], 0);
+        assert_eq!(state["project_id"], project);
+        let merged: i64 = connection
+            .query_row(
+                "SELECT count(*) FROM merged_states WHERE entity = 'area'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(merged, 1);
     }
 
     #[test]

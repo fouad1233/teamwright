@@ -309,6 +309,66 @@ pub enum ApplicationError {
         name: String,
     },
 
+    /// An area was to get a name that another area of its project has,
+    /// whatever the capitals.
+    #[error("the project already has an area called \"{name}\"")]
+    AreaNameTaken {
+        /// The name that was requested, tidied.
+        name: String,
+    },
+
+    /// The one area a project has left was to be removed.
+    #[error("\"{name}\" is the last area of the project and cannot be removed")]
+    LastArea {
+        /// The name of the area.
+        name: String,
+    },
+
+    /// An area was to be removed while tasks are in it and no other area
+    /// was named for them.
+    #[error(
+        "the area \"{name}\" still has {}, which need another area to go to",
+        count_of_tasks(*.count)
+    )]
+    AreaInUse {
+        /// The name of the area.
+        name: String,
+        /// How many tasks are in it, subtasks included.
+        count: usize,
+    },
+
+    /// A task was to be put into an area of another project.
+    #[error("a task can only be put into an area of its own project")]
+    AreaOfAnotherProject,
+
+    /// The tasks of an area that is removed were to go to an area of
+    /// another project.
+    #[error("the tasks of an area can only go to another area of the same project")]
+    TasksToAreaOfAnotherProject,
+
+    /// A subtask was to be moved into another area by itself. It goes
+    /// where the task it is a part of goes.
+    #[error("{task} is a part of {parent} and goes where it goes")]
+    SubtaskMovedAlone {
+        /// The subtask, as the manager knows it (`IOT-4`).
+        task: String,
+        /// The task it is a part of.
+        parent: String,
+    },
+
+    /// A new subtask was to go into another area than the task it is a
+    /// part of.
+    #[error("a subtask is in the area of the task it is a part of, {parent}")]
+    SubtaskInAnotherArea {
+        /// The task it is a part of, as the manager knows it (`IOT-4`).
+        parent: String,
+    },
+
+    /// A project was found without areas, which only damaged data can
+    /// leave behind: every project has at least one.
+    #[error("the project has no areas")]
+    ProjectWithoutAreas,
+
     /// A file to copy was named by a path that has no file name, such as
     /// the root of a drive.
     #[error("a file to copy has no name")]
@@ -351,13 +411,17 @@ impl ApplicationError {
             | Self::WorkFolderInsideReference { .. }
             | Self::FileWithoutName
             | Self::OwnerNotThere { .. }
-            | Self::UnfinishedStayInSprint => "rule_broken",
+            | Self::UnfinishedStayInSprint
+            | Self::SubtaskInAnotherArea { .. }
+            | Self::ProjectWithoutAreas => "rule_broken",
             Self::FolderNotFound { .. } => "folder_not_found",
             Self::NotFound { .. } => "not_found",
             Self::ProjectKeyTaken { .. } => "project_key_taken",
             Self::DifferentProjects
             | Self::SprintOfAnotherProject
-            | Self::UnfinishedToAnotherProject => "different_projects",
+            | Self::UnfinishedToAnotherProject
+            | Self::AreaOfAnotherProject
+            | Self::TasksToAreaOfAnotherProject => "different_projects",
             Self::AnotherSprintActive { .. } => "another_sprint_active",
             Self::SprintEmpty { .. } => "sprint_empty",
             Self::SubtaskPlannedAlone { .. } => "subtask_planned_alone",
@@ -365,6 +429,10 @@ impl ApplicationError {
             Self::ViewKindTaken { .. } => "view_kind_taken",
             Self::MemberNotOnTeam => "member_not_on_team",
             Self::LastView { .. } => "last_view",
+            Self::AreaNameTaken { .. } => "area_name_taken",
+            Self::LastArea { .. } => "last_area",
+            Self::AreaInUse { .. } => "area_in_use",
+            Self::SubtaskMovedAlone { .. } => "subtask_moved_alone",
             Self::DependencyCycle { .. } => "dependency_cycle",
             Self::MemberNameTaken { .. } => "member_name_taken",
             Self::AssigneeFromAnotherTeam => "assignee_from_another_team",

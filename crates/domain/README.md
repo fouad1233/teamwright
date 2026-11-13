@@ -71,7 +71,8 @@ done with them. It does no input or output.
   area, "General", whose identifier follows from the project, so that two
   computers that each give a project its starting area give it the same
   one. A project left with no areas by two computers gets "General" again,
-  with an identifier that also follows from the project.
+  with an identifier that also follows from the project. Every task is in
+  exactly one area; putting it into another keeps its status and its place.
 - The history of a task is not recorded as such. It is read off the versions
   the task has had: that it was opened, and then what differs from one
   version to the next. A move up or down within a status is not a change.

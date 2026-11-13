@@ -8,8 +8,8 @@ use std::error::Error;
 use std::path::{Path, PathBuf};
 
 use teamwright_domain::{
-    CalendarDate, ComputerId, Conversation, ConversationId, Member, MemberId, Project, ProjectId,
-    Sprint, SprintId, Task, TaskId, Timestamp, Turn, View, ViewId,
+    Area, AreaId, CalendarDate, ComputerId, Conversation, ConversationId, Member, MemberId,
+    Project, ProjectId, Sprint, SprintId, Task, TaskId, Timestamp, Turn, View, ViewId,
 };
 
 use crate::places::ChosenPlaces;
@@ -215,6 +215,40 @@ pub trait ViewRepository: Send + Sync {
     ///
     /// Returns an error if the view could not be removed.
     fn delete(&self, id: ViewId) -> Result<(), StorageError>;
+}
+
+/// Stores the areas of the projects.
+pub trait AreaRepository: Send + Sync {
+    /// Stores areas, replacing stored areas with the same identifiers.
+    /// Either all of them are stored or none is.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the areas could not be written.
+    fn save_all(&self, areas: &[Area]) -> Result<(), StorageError>;
+
+    /// Finds an area by its identifier.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if stored data could not be read.
+    fn find(&self, id: AreaId) -> Result<Option<Area>, StorageError>;
+
+    /// Lists the areas of a project in no particular order.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if stored data could not be read.
+    fn list_for_project(&self, project_id: ProjectId) -> Result<Vec<Area>, StorageError>;
+
+    /// Removes an area. The identifier of an area that is not stored is
+    /// ignored. The tasks that were in it are expected to be in another
+    /// area first.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the area could not be removed.
+    fn delete(&self, id: AreaId) -> Result<(), StorageError>;
 }
 
 /// Stores the members of the teams.

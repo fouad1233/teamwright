@@ -4,14 +4,14 @@ use std::cmp::Reverse;
 use std::sync::Arc;
 
 use teamwright_domain::{
-    Color, Project, ProjectId, ProjectKey, ProjectName, Rank, Status, StatusCategory, StatusId,
-    StatusName, Task, View, Workflow,
+    Area, Color, Project, ProjectId, ProjectKey, ProjectName, Rank, Status, StatusCategory,
+    StatusId, StatusName, Task, View, Workflow,
 };
 
 use crate::error::ApplicationError;
 use crate::ports::{
-    Clock, ConversationRepository, MemberRepository, PlacesRepository, ProjectRepository,
-    SprintRepository, TaskRepository, ViewRepository,
+    AreaRepository, Clock, ConversationRepository, MemberRepository, PlacesRepository,
+    ProjectRepository, SprintRepository, TaskRepository, ViewRepository,
 };
 use crate::work::WorkInProgress;
 
@@ -72,6 +72,7 @@ pub struct ProjectService {
     places: Arc<dyn PlacesRepository>,
     sprints: Arc<dyn SprintRepository>,
     views: Arc<dyn ViewRepository>,
+    areas: Arc<dyn AreaRepository>,
     clock: Arc<dyn Clock>,
 }
 
@@ -80,8 +81,8 @@ impl ProjectService {
     /// folders, the sprints and the views are needed because removing a
     /// project removes them too, changing the workflow can move or complete
     /// tasks, and a project in which a specialist works is neither put away
-    /// nor removed. The views are also needed because a new project starts
-    /// with six of them.
+    /// nor removed. The views and the areas are also needed because a new
+    /// project starts with six views and the area "General".
     #[must_use]
     #[expect(
         clippy::too_many_arguments,
@@ -95,6 +96,7 @@ impl ProjectService {
         places: Arc<dyn PlacesRepository>,
         sprints: Arc<dyn SprintRepository>,
         views: Arc<dyn ViewRepository>,
+        areas: Arc<dyn AreaRepository>,
         clock: Arc<dyn Clock>,
     ) -> Self {
         Self {
@@ -105,12 +107,14 @@ impl ProjectService {
             places,
             sprints,
             views,
+            areas,
             clock,
         }
     }
 
     /// Starts a project with the six views every project starts with:
-    /// board, backlog, list, Gantt chart, calendar and dashboard.
+    /// board, backlog, list, Gantt chart, calendar and dashboard, and with
+    /// one area, "General".
     ///
     /// # Errors
     ///
@@ -148,6 +152,7 @@ impl ProjectService {
         // The project is stored first: its views refer to it.
         self.projects.save(&project)?;
         self.views.save_all(&View::starting(project.id()))?;
+        self.areas.save_all(&[Area::starting(project.id())])?;
         Ok(project)
     }
 
@@ -251,7 +256,7 @@ impl ProjectService {
     }
 
     /// Removes a project for good, with its tasks, its sprints, its views,
-    /// its team, the conversations with its specialists and what it knew
+    /// its areas, its team, the conversations with its specialists and what it knew
     /// about its folders. The folders themselves stay where they are. Its
     /// key is free for a new project afterwards.
     ///
@@ -281,6 +286,10 @@ impl ProjectService {
         }
         for view in self.views.list_for_project(project.id())? {
             self.views.delete(view.id())?;
+        }
+        // The areas go after the tasks that are in them.
+        for area in self.areas.list_for_project(project.id())? {
+            self.areas.delete(area.id())?;
         }
         for member in self.members.list_for_project(project.id())? {
             self.members.delete(member.id())?;
@@ -521,6 +530,7 @@ mod tests {
         let tasks = Arc::new(InMemoryTaskRepository::default());
         let members = Arc::new(InMemoryMemberRepository::default());
         let conversations = Arc::new(InMemoryConversationRepository::default());
+        let area_store = Arc::new(crate::in_memory::InMemoryAreaRepository::default());
         let clock = Arc::new(ManualClock::starting_at(start_of_day()));
         Workspace {
             projects: ProjectService::new(
@@ -531,6 +541,7 @@ mod tests {
                 Arc::new(InMemoryPlacesRepository::default()),
                 Arc::new(InMemorySprintRepository::new(tasks.clone())),
                 Arc::new(crate::in_memory::InMemoryViewRepository::default()),
+                area_store.clone(),
                 clock.clone(),
             ),
             tasks: TaskService::new(
@@ -539,6 +550,7 @@ mod tests {
                 members.clone(),
                 conversations.clone(),
                 Arc::new(InMemorySprintRepository::new(tasks.clone())),
+                area_store.clone(),
                 clock.clone(),
             ),
             team: TeamService::new(

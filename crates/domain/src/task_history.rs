@@ -172,7 +172,7 @@ mod tests {
     use chrono::TimeZone;
 
     use super::*;
-    use crate::ids::ProjectId;
+    use crate::ids::{AreaId, ProjectId};
     use crate::task::{Rank, TaskDraft};
     use crate::time::CalendarDate;
     use crate::workflow::{StatusCategory, Workflow};
@@ -194,6 +194,7 @@ mod tests {
     fn task_in(workflow: &Workflow) -> Task {
         Task::create(
             ProjectId::generate(),
+            AreaId::generate(),
             1,
             workflow.initial_status(),
             Rank::FIRST,

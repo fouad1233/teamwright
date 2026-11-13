@@ -473,6 +473,7 @@ mod tests {
             chrono::Utc.with_ymd_and_hms(2026, 11, 12, 9, 0, 0).unwrap(),
         ));
 
+        let area_store = Arc::new(crate::in_memory::InMemoryAreaRepository::default());
         let project_service = ProjectService::new(
             projects.clone(),
             tasks.clone(),
@@ -481,6 +482,7 @@ mod tests {
             places.clone(),
             Arc::new(InMemorySprintRepository::new(tasks.clone())),
             Arc::new(crate::in_memory::InMemoryViewRepository::default()),
+            area_store.clone(),
             clock.clone(),
         );
         let project = project_service
@@ -506,6 +508,7 @@ mod tests {
                 members.clone(),
                 conversations.clone(),
                 Arc::new(InMemorySprintRepository::new(tasks.clone())),
+                area_store.clone(),
                 clock.clone(),
             ),
             team: TeamService::new(
@@ -525,6 +528,7 @@ mod tests {
                 )),
                 projects,
                 tasks,
+                areas: area_store,
                 members,
                 conversations,
                 folders,

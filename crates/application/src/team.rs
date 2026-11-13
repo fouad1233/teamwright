@@ -346,6 +346,7 @@ mod tests {
         let tasks = Arc::new(InMemoryTaskRepository::default());
         let conversations = Arc::new(InMemoryConversationRepository::default());
         let start_of_day = chrono::Utc.with_ymd_and_hms(2026, 11, 12, 9, 0, 0).unwrap();
+        let area_store = Arc::new(crate::in_memory::InMemoryAreaRepository::default());
         let clock = Arc::new(ManualClock::starting_at(start_of_day));
         Workspace {
             projects: ProjectService::new(
@@ -356,6 +357,7 @@ mod tests {
                 Arc::new(InMemoryPlacesRepository::default()),
                 Arc::new(InMemorySprintRepository::new(tasks.clone())),
                 Arc::new(crate::in_memory::InMemoryViewRepository::default()),
+                area_store.clone(),
                 clock.clone(),
             ),
             team: TeamService::new(
@@ -372,6 +374,7 @@ mod tests {
                 members,
                 conversations,
                 Arc::new(InMemorySprintRepository::new(tasks.clone())),
+                area_store.clone(),
                 clock.clone(),
             ),
             clock,

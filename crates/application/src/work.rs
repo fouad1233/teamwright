@@ -28,7 +28,7 @@ use crate::agent_runtime::{
 use crate::error::ApplicationError;
 use crate::places::{PlacesService, REFERENCES_FOLDER};
 use crate::ports::{
-    Clock, ConversationRepository, FileSystem, MemberRepository, PlacesRepository,
+    AreaRepository, Clock, ConversationRepository, FileSystem, MemberRepository, PlacesRepository,
     PlanningRepository, ProjectFolders, ProjectRepository, TaskRepository, WorkListener,
 };
 
@@ -137,6 +137,9 @@ pub struct WorkPorts {
     pub projects: Arc<dyn ProjectRepository>,
     /// Where tasks are stored.
     pub tasks: Arc<dyn TaskRepository>,
+    /// Where the areas of the projects are stored. The tasks of an
+    /// approved plan go into the first area of their project.
+    pub areas: Arc<dyn AreaRepository>,
     /// Where the members of the teams are stored.
     pub members: Arc<dyn MemberRepository>,
     /// Where conversations and their turns are stored.
@@ -1537,6 +1540,7 @@ mod tests {
     struct Ports {
         projects: Arc<InMemoryProjectRepository>,
         tasks: Arc<InMemoryTaskRepository>,
+        areas: Arc<crate::in_memory::InMemoryAreaRepository>,
         members: Arc<InMemoryMemberRepository>,
         conversations: Arc<InMemoryConversationRepository>,
         places: Arc<InMemoryPlacesRepository>,
@@ -1552,6 +1556,7 @@ mod tests {
             WorkService::new(WorkPorts {
                 projects: self.projects.clone(),
                 tasks: self.tasks.clone(),
+                areas: self.areas.clone(),
                 members: self.members.clone(),
                 conversations: self.conversations.clone(),
                 planning: Arc::new(InMemoryPlanningRepository::new(
@@ -1591,6 +1596,7 @@ mod tests {
         let ports = Ports {
             projects: Arc::new(InMemoryProjectRepository::default()),
             tasks: Arc::new(InMemoryTaskRepository::default()),
+            areas: Arc::new(crate::in_memory::InMemoryAreaRepository::default()),
             members: Arc::new(InMemoryMemberRepository::default()),
             conversations: Arc::new(InMemoryConversationRepository::default()),
             places: Arc::new(InMemoryPlacesRepository::default()),
@@ -1608,6 +1614,7 @@ mod tests {
             ports.places.clone(),
             Arc::new(InMemorySprintRepository::new(ports.tasks.clone())),
             Arc::new(crate::in_memory::InMemoryViewRepository::default()),
+            ports.areas.clone(),
             ports.clock.clone(),
         );
         let tasks = TaskService::new(
@@ -1616,6 +1623,7 @@ mod tests {
             ports.members.clone(),
             ports.conversations.clone(),
             Arc::new(InMemorySprintRepository::new(ports.tasks.clone())),
+            ports.areas.clone(),
             ports.clock.clone(),
         );
         let team = TeamService::new(

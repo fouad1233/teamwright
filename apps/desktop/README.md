@@ -42,6 +42,17 @@ whole number as the interface's arrays would cut it. A database with
 projects from before views gives each of them the six views a new project
 starts with when it is opened.
 
+**The areas of a project**
+([decision 0022](../../docs/decisions/0022-areas-inside-a-project.md))
+are in the contract and only partly in the shell. A task on the wire
+carries its `areaId`, and a new task may name one. `TauriBackend` calls
+`list_areas`, `add_area`, `rename_area`, `move_area`, `remove_area` and
+`move_task_to_area`, which the shell does not serve yet.
+`demoAreas.test.ts` says what the shell is to do, case by case, with the
+exact code and message of every refusal. A database with projects from
+before areas gives each of them the area "General", with all its tasks in
+it.
+
 ### The work of the specialists
 
 The shell is where the work of an AI specialist meets the outside world

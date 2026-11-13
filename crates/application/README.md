@@ -11,15 +11,16 @@ window or agent runtime.
 | `tasks` | `TaskService`: open, change, plan into a sprint, give points, move, connect and remove tasks, and tell the history of one from the versions storage has kept |
 | `sprints` | `SprintService`: list, plan, change, delete, start and complete the sprints of a project, and the report for the burndown chart of one (`SprintReport`) |
 | `views` | `ViewService`: list, add, rename, filter, move and remove the views of a project |
+| `areas` | `AreaService`: list, add, rename, move and remove the areas of a project, and move a task with its subtasks into another area |
 | `team` | `TeamService`: put members on the team of a project, change them, take them off |
 | `places` | `PlacesService`: the folders of a project: choose its work folder, add and take away reference folders, copy reference files into it |
 | `work` | `WorkService`: let AI specialists work: start on a task, ask, reply, answer a specialist's question, list what waits for the manager, stop, follow every event, open a session in the desktop app, recover after a restart; `brief_for` and `instructions_for`. Its part `advisor`: plan a project with the Advisor (`advise`, `answer_interview`, `approve_proposal`); `ApprovedProposal`, `answers_in_words` and `instructions_for_advisor` |
 | `sync` | `SyncService`: keep several computers of one manager in step through a folder the manager owns (`round`, `choose_folder`, `stop`, `rename_this_computer`, `accept`, `ignore`, `notices`, `dismiss`, `new_identity`); the ports `SyncFolder` and `SyncLedger`, and the operations that travel between computers |
-| `ports` | The interfaces the services need: `ProjectRepository`, `TaskRepository`, `MemberRepository`, `ConversationRepository`, `PlanningRepository`, `PlacesRepository`, `SprintRepository`, `ViewRepository`, `ProjectFolders`, `FileSystem`, `WorkListener`, `Clock` (which also tells the day a moment falls on) |
+| `ports` | The interfaces the services need: `ProjectRepository`, `TaskRepository`, `MemberRepository`, `ConversationRepository`, `PlanningRepository`, `PlacesRepository`, `SprintRepository`, `ViewRepository`, `AreaRepository`, `ProjectFolders`, `FileSystem`, `WorkListener`, `Clock` (which also tells the day a moment falls on) |
 | `agent_runtime` | `AgentRuntime`: the interface to the program that runs a team member's session, and the data it speaks |
 | `error` | `ApplicationError`, with a stable `code()` for interfaces |
 | `clock` | `SystemClock`, the real clock |
-| `in_memory` | In-memory repositories (`InMemoryPlanningRepository` stores an approved plan into the others, `InMemorySprintRepository` stores the tasks that change with a sprint into the task repository, `InMemoryViewRepository`), fixed project folders, a pretended file system, a listener that records, a scripted agent runtime and a settable clock, for tests and demos |
+| `in_memory` | In-memory repositories (`InMemoryPlanningRepository` stores an approved plan into the others, `InMemorySprintRepository` stores the tasks that change with a sprint into the task repository, `InMemoryViewRepository`, `InMemoryAreaRepository`), fixed project folders, a pretended file system, a listener that records, a scripted agent runtime and a settable clock, for tests and demos |
 
 ## How a use case is built
 
@@ -50,7 +51,7 @@ project, two members of one team cannot have the same name.
   of a deleted project is free again.
 - Archived projects are listed with the one put away last first. Restoring
   one brings it back with its tasks and its team.
-- Deleting a project deletes its tasks, its sprints, its views, its team
+- Deleting a project deletes its tasks, its sprints, its views, its areas, its team
   and what it knew about its folders; the folders on disk stay. The project itself goes last, so a deletion that fails half-way can simply be repeated.
 - Changing a status between "done" and not done completes or reopens every
   task in it, subtasks included.
@@ -149,6 +150,41 @@ storage crate.
 - `TeamService::remove` makes every view that showed only the tasks of the
   member who leaves show everybody's again, and keeps it hiding finished
   tasks if it did.
+
+## The areas of a project
+
+`AreaService` carries out
+[decision 0022](../../docs/decisions/0022-areas-inside-a-project.md). The
+demo backend of the interface (`demoAreas.test.ts`) is the specification;
+`areas/tests.rs` mirrors its cases under the same names, with the same
+codes and messages. Two of them are tested in the storage crate: a project
+kept before it had areas gets "General" from a migration of the database,
+and a task whose area the project does not have can only come from another
+computer, so that case is tested where storage takes in what another
+computer did.
+
+- `ProjectService::create` gives a new project one area, "General".
+  `ProjectService::delete` removes the areas after the tasks.
+- A name is tidied and has at most 40 characters (`rule_broken`). Two areas
+  of a project do not share a name, whatever the capitals
+  (`area_name_taken`); an area may change the capitals of its own.
+- Every task is in exactly one area. `TaskService::create` puts a new task
+  into the area it names, or into the first area of the project; a subtask
+  goes into the area of its task, and naming another is refused
+  (`rule_broken`). An area of another project is refused
+  (`different_projects`). The tasks of an approved plan of the Advisor go
+  into the first area.
+- `move_to` puts a place past either end at that end, stores only the areas
+  whose place changed, and answers with all the areas in their new order.
+- `remove` refuses the last area of a project (`last_area`), checked first.
+  An area that holds tasks, subtasks counted, is removed only when another
+  area of the same project is named for them (`area_in_use`,
+  `different_projects`); they keep their status and their place. An area
+  without tasks is removed whatever is named.
+- `move_task` moves a task with its subtasks and answers with the task; a
+  subtask is not moved by itself (`subtask_moved_alone`), and a task that is
+  in the area already is not changed. Moving a task is a change of the task,
+  but, as in the demo, it is not part of its history.
 
 ## The folders of a project
 

@@ -2,7 +2,7 @@
 //!
 //! This crate implements the storage interfaces that the application crate
 //! declares. It keeps the current state of projects, tasks, sprints, views,
-//! teams, the folders of the projects and the conversations with specialists
+//! areas, teams, the folders of the projects and the conversations with specialists
 //! in a
 //! SQLite database, and it appends every change to an operation log in the same
 //! transaction. The log records which computer made each change and in what
@@ -21,6 +21,7 @@
 //! ```
 
 mod apply;
+mod areas;
 mod codec;
 mod conversations;
 mod database;
@@ -40,6 +41,7 @@ mod take_in;
 mod tasks;
 mod views;
 
+pub use areas::SqliteAreaRepository;
 pub use conversations::SqliteConversationRepository;
 pub use database::Database;
 pub use folder::FolderOfComputers;

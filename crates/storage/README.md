@@ -1,12 +1,12 @@
 # teamwright-storage
 
-Stores Teamwright's projects, tasks, sprints, views, teams, the folders of
+Stores Teamwright's projects, tasks, sprints, views, areas, teams, the folders of
 the projects and the conversations with specialists in SQLite, and appends every change to an
 operation log.
 
 It implements the interfaces `ProjectRepository`, `TaskRepository`,
 `MemberRepository`, `ConversationRepository`, `PlanningRepository`,
-`PlacesRepository`, `SprintRepository` and `ViewRepository` that the
+`PlacesRepository`, `SprintRepository`, `ViewRepository` and `AreaRepository` that the
 application crate declares. Nothing outside this crate knows that SQLite is
 involved.
 
@@ -21,6 +21,7 @@ involved.
 | `tasks` | `SqliteTaskRepository` |
 | `sprints` | `SqliteSprintRepository`: the sprints of the projects, each saved or deleted together with the tasks that change with it |
 | `views` | `SqliteViewRepository`: the views of the projects |
+| `areas` | `SqliteAreaRepository`: the areas of the projects |
 | `members` | `SqliteMemberRepository` |
 | `conversations` | `SqliteConversationRepository`: conversations, their turns, the steps of the turns and the questions they asked the manager |
 | `planning` | The interviews and the proposals of the Advisor, as parts of their turns; `SqlitePlanningRepository`, which stores an approved plan |
@@ -42,7 +43,8 @@ involved.
   `turn_decisions`, `turn_decision_options`, `project_places`,
   `project_reference_folders`, `turn_interviews`, `turn_interview_questions`,
   `turn_interview_options`, `turn_proposals`, `turn_proposal_members`,
-  `turn_proposal_tasks`, `turn_proposal_task_waits`, `sprints`, `views`.
+  `turn_proposal_tasks`, `turn_proposal_task_waits`, `sprints`, `views`,
+  `areas`.
   The schema with its conventions is in
   [`schema/0001_initial.sql`](src/schema/0001_initial.sql); later files in
   that folder add to it.
@@ -141,6 +143,19 @@ involved.
   (`View::starting_id`), as those of a new project do: two computers that
   both had a project before version 13 give it the same six views, which
   merge into one set.
+- **Areas** (version 14) have a row each in `areas`: the name and the
+  place (`position`). An area is logged as the entity `area` with its whole
+  state. A task has the column `area_id`, and its logged state gains
+  `area_id`. No reference is enforced from a task to its area: the use case
+  that removes an area moves its tasks first. Deleting a project deletes and logs its
+  areas after its views. Migration 14 gives every project of an earlier
+  version the area "General", logged as a change of this computer like the
+  views of migration 13, with an identifier that follows from the project
+  (`Area::starting_id`), so that two computers that both had the project
+  give it one area. It puts every task of the project into it without
+  logging that: a task state logged before version 14 has no `area_id` and
+  is read as a task in the area its project started with, which is the
+  same on every computer.
 - **An approved plan is one transaction.** `SqlitePlanningRepository`
   writes the project (with its next task number), every new member, every
   new task with what it waits for, and the turn with its approved proposal,

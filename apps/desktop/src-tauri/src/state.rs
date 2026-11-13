@@ -17,9 +17,10 @@ use teamwright_application::{
 use teamwright_domain::{ComputerId, Conversation, Project, Turn};
 use teamwright_runtime::ClaudeCode;
 use teamwright_storage::{
-    Database, FolderOfComputers, SqliteConversationRepository, SqliteMemberRepository,
-    SqlitePlacesRepository, SqlitePlanningRepository, SqliteProjectRepository,
-    SqliteSprintRepository, SqliteSyncLedger, SqliteTaskRepository, SqliteViewRepository,
+    Database, FolderOfComputers, SqliteAreaRepository, SqliteConversationRepository,
+    SqliteMemberRepository, SqlitePlacesRepository, SqlitePlanningRepository,
+    SqliteProjectRepository, SqliteSprintRepository, SqliteSyncLedger, SqliteTaskRepository,
+    SqliteViewRepository,
 };
 
 use crate::dto::{ConversationDto, DataChangedDto, SyncStateDto};
@@ -149,6 +150,7 @@ impl AppState {
         let places_repository = Arc::new(SqlitePlacesRepository::new(database.clone()));
         let sprint_repository = Arc::new(SqliteSprintRepository::new(database.clone()));
         let view_repository = Arc::new(SqliteViewRepository::new(database.clone()));
+        let area_repository = Arc::new(SqliteAreaRepository::new(database.clone()));
         let conversation_repository = Arc::new(SqliteConversationRepository::new(database.clone()));
         let planning_repository = Arc::new(SqlitePlanningRepository::new(database));
         let runtime: Arc<dyn AgentRuntime> = Arc::new(agent_program());
@@ -169,6 +171,7 @@ impl AppState {
         let work = WorkService::new(WorkPorts {
             projects: project_repository.clone(),
             tasks: task_repository.clone(),
+            areas: area_repository.clone(),
             members: member_repository.clone(),
             conversations: conversation_repository.clone(),
             planning: planning_repository,
@@ -194,6 +197,7 @@ impl AppState {
                 places_repository.clone(),
                 sprint_repository.clone(),
                 view_repository.clone(),
+                area_repository.clone(),
                 clock.clone(),
             ),
             places: PlacesService::new(
@@ -211,6 +215,7 @@ impl AppState {
                 member_repository.clone(),
                 conversation_repository.clone(),
                 sprint_repository.clone(),
+                area_repository.clone(),
                 clock.clone(),
             ),
             sprints: SprintService::new(

@@ -72,6 +72,9 @@ impl Computer {
         let conversations = Arc::new(SqliteConversationRepository::new(database.clone()));
         let sprints = Arc::new(SqliteSprintRepository::new(database.clone()));
         let views = Arc::new(SqliteViewRepository::new(database.clone()));
+        let area_store = Arc::new(teamwright_storage::SqliteAreaRepository::new(
+            database.clone(),
+        ));
         let clock = Arc::new(SystemClock);
         let sync = SyncService::new(SyncPorts {
             ledger: Arc::new(SqliteSyncLedger::new(database.clone())),
@@ -90,9 +93,18 @@ impl Computer {
                 Arc::new(SqlitePlacesRepository::new(database.clone())),
                 sprints.clone(),
                 views.clone(),
+                area_store.clone(),
                 clock.clone(),
             ),
-            tasks: TaskService::new(projects, tasks, members, conversations, sprints, clock),
+            tasks: TaskService::new(
+                projects,
+                tasks,
+                members,
+                conversations,
+                sprints,
+                area_store,
+                clock,
+            ),
             sync,
             database,
             data,

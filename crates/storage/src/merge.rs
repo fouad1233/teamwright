@@ -99,6 +99,7 @@ const TASK_FIELDS: &[Field] = &[
     later("schedule", &["start_on", "due_on"]),
     later("rank", &["rank"]),
     later("sprint", &["sprint_id"]),
+    later("area", &["area_id"]),
     later("points", &["points"]),
     later("number", &["number"]),
     // The moment of the last change goes with the later change. A larger
@@ -133,6 +134,8 @@ const VIEW_FIELDS: &[Field] = &[
     later("position", &["position"]),
 ];
 
+const AREA_FIELDS: &[Field] = &[later("name", &["name"]), later("position", &["position"])];
+
 const CONVERSATION_FIELDS: &[Field] = &[
     later("member", &["member_id"]),
     later("task", &["task_id"]),
@@ -153,6 +156,7 @@ pub(crate) const fn merging_of(entity: Entity) -> Merging {
         Entity::Member => Merging::ByField(MEMBER_FIELDS),
         Entity::Sprint => Merging::ByField(SPRINT_FIELDS),
         Entity::View => Merging::ByField(VIEW_FIELDS),
+        Entity::Area => Merging::ByField(AREA_FIELDS),
         Entity::Conversation => Merging::ByField(CONVERSATION_FIELDS),
         Entity::Turn
         | Entity::TurnStep
