@@ -169,7 +169,7 @@ until the founder said in so many words to run it.
 - [0019: Put people in the office, drawn as pixel characters](../decisions/0019-people-in-the-office.md)
 - [0020: Work the dashboard out by rules, and have nothing written for it](../decisions/0020-a-dashboard-worked-out-not-written.md)
 - [0021: Views the manager can add](../decisions/0021-views-the-manager-can-add.md)
-- [0022: Areas inside a project](../decisions/0022-areas-inside-a-project.md)
+- [0022: Cut a project into areas, one for each job inside it](../decisions/0022-areas-inside-a-project.md)
 
 ## Storyboard beats
 
