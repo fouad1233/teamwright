@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="Teamwright">
+  <!-- The Teamwright mark: a letter T laid out of five blocks on a graphite
+       tile. The block that holds the others together, the keystone, is
+       brass. See docs/design. -->
+  <rect width="1024" height="1024" rx="208" fill="#181715" />
+  <rect x="212" y="212" width="184" height="184" rx="28" fill="#f0ede5" />
+  <rect x="420" y="212" width="184" height="184" rx="28" fill="#d3a43d" />
+  <rect x="628" y="212" width="184" height="184" rx="28" fill="#f0ede5" />
+  <rect x="420" y="420" width="184" height="184" rx="28" fill="#f0ede5" />
+  <rect x="420" y="628" width="184" height="184" rx="28" fill="#f0ede5" />
+</svg>
