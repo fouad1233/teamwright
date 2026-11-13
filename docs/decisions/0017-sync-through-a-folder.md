@@ -396,3 +396,22 @@ Run so far: two copies of the built program on one computer, each on data
 of its own, through one folder. Not run: two real computers, and a real
 program that keeps the folder in step, with its delays and half-copied
 files.
+
+## Note of 13 November 2026, later: what the interface found
+
+Building the interface on the Rust side showed six rough spots, which are
+mended:
+
+- The state of syncing carries a code for its problem beside the words, so
+  that the interface does not have to read sentences.
+- Stopping does not hide that the program has to be started again after a
+  new identity.
+- A project that two computers together left without any view gets a board
+  again, the same one on every computer.
+- A counter of task or sprint numbers is never stored lower than it stands,
+  which closes the gap of a project saved after a take-in.
+- A question asked on another computer is listed among what waits for the
+  manager; it can be read here and answered there.
+- The history of a task names the computer that made each change, which
+  the note above listed as not built.
+

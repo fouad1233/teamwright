@@ -137,6 +137,7 @@ try {
     deskState.phase === 'in_step' &&
       deskState.computerName === 'Desk' &&
       deskState.problem === null &&
+      deskState.problemCode === null &&
       readdirSync(folder).length > 0,
     JSON.stringify(deskState),
   );
@@ -200,6 +201,13 @@ try {
       'Write the firmware for the board' &&
       deskTasks.find((task) => task.id === enclosure.id)?.title === 'Design the enclosure',
     JSON.stringify(deskTasks.map((task) => task.title)),
+  );
+  const history = await onDesk('list_task_history', { taskId: firmware.id });
+  check(
+    'the history of the task names the computer that changed it',
+    history.some((change) => change.computer === 'Laptop') &&
+      history.some((change) => change.computer === undefined),
+    JSON.stringify(history.map((change) => [change.kind, change.computer])),
   );
   check(
     'the task the laptop created has a number of its own on both computers',

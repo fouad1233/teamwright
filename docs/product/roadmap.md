@@ -175,8 +175,8 @@ Several specialists working together with the manager in the loop.
   hold; a deletion is final, and the computer whose change was dropped is
   told in a notice; a task number or a project key used twice and two
   running sprints are repaired. Seen with two copies of the program for a
-  task; the repairs only in tests. The computer beside each version in
-  the history of a task is not shown yet
+  task; the repairs only in tests. The history of a task names the
+  computer that made each change, when it was another one
 - 🚧 View a project that is running on another computer: a conversation
   knows the computer it runs on, is read there and continued only on that
   computer, which is named where the reply box would be. Seen on demo
