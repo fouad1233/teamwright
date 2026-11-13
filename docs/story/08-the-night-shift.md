@@ -169,6 +169,7 @@ until the founder said in so many words to run it.
 - [0019: Put people in the office, drawn as pixel characters](../decisions/0019-people-in-the-office.md)
 - [0020: Work the dashboard out by rules, and have nothing written for it](../decisions/0020-a-dashboard-worked-out-not-written.md)
 - [0021: Views the manager can add](../decisions/0021-views-the-manager-can-add.md)
+- [0022: Areas inside a project](../decisions/0022-areas-inside-a-project.md)
 
 ## Storyboard beats
 
@@ -192,3 +193,15 @@ until the founder said in so many words to run it.
 7. A gauge runs to its end and two people stop in the middle of a step,
    one with a camera raised, one with a pen on paper. The gauge fills
    again. Both finish the step.
+
+## Note of 13 November 2026, before morning
+
+This chapter was written while two pieces were still on their way. Both
+landed before the founder woke. The six rough spots that the interface had
+found in the Rust side of syncing were mended; one of them had been listed
+as not built at all: the history of a task now names the computer that
+made each change. And the lists of the tracker became areas: a project can
+be cut into the jobs inside it, with a name of their own because
+Teamwright already has a view called List. Folders that group projects
+were left for a manager who has more projects than fit on a screen.
+
