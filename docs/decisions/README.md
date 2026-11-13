@@ -38,6 +38,7 @@ was considered.
 | [0020](0020-a-dashboard-worked-out-not-written.md) | Work the dashboard out by rules, and have nothing written for it | Accepted |
 | [0021](0021-views-the-manager-can-add.md) | Let the manager add, name, filter, order and remove the views of a project | Accepted |
 | [0022](0022-areas-inside-a-project.md) | Cut a project into areas, one for each job inside it | Accepted |
+| [0023](0023-a-website-without-a-framework.md) | Make the website one static page, with the film drawn from frames | Accepted |
 
 ## Template
 

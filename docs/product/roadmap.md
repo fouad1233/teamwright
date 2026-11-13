@@ -197,6 +197,11 @@ Several specialists working together with the manager in the loop.
 - ⬜ Installer and updates
 - ⬜ User manual
 - ⬜ Public demo in the browser
+- 🚧 A website on GitHub Pages that explains the project, with the film
+  run by scrolling ([decision 0023](../decisions/0023-a-website-without-a-framework.md)).
+  Built and seen in a headless Edge on this computer, at a desktop and a
+  phone size, with the film as it stood; not yet published, not seen in
+  other browsers or on a real phone
 
 ## Later
 

@@ -199,6 +199,7 @@ the installed application left behind.
 | `crates/runtime` | The adapter for Claude Code, the program that runs the specialists. |
 | `apps/desktop/src-tauri` | The desktop shell: commands that wrap the use cases. |
 | `apps/desktop/src` | The interface: React and TypeScript. |
+| `website` | The public website, with the film. Its [README](../../website/README.md) says how to run, check and publish it. |
 | `docs` | Product, architecture, decisions, design, story, screenshots. |
 | `tools` | Scripts for development: the key visual, the smoke test, the screenshots. |
 
