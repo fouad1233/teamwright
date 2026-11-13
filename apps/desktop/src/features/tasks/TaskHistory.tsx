@@ -63,6 +63,11 @@ export function TaskHistory({ project, task, tasks }: TaskHistoryProps) {
             <span className={styles.what} data-selectable>
               {changeInWords(change, { project, tasks, members })}
             </span>
+            {change.computer !== undefined && (
+              // Only a change made on another computer says where: the
+              // manager knows which computer they are sitting at.
+              <span className={styles.where}>on {change.computer}</span>
+            )}
           </li>
         ))}
       </ol>

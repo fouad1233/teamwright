@@ -21,13 +21,22 @@
   gap: var(--space-3);
 }
 
-.when {
+.when,
+.where {
   flex: none;
-  width: 132px;
   color: var(--ink-faint);
   font-family: var(--font-mono);
   font-size: 11px;
   letter-spacing: 0.02em;
+}
+
+.when {
+  width: 132px;
+}
+
+/* The computer a change was made on, at the end of its line. */
+.where {
+  margin-left: auto;
 }
 
 .what {
