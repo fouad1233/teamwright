@@ -17,6 +17,11 @@ dist-ssr/
 /apps/desktop/src-tauri/target/
 /apps/desktop/src-tauri/gen/schemas/
 
+# The film's frames and video for the website: made by
+# website/tools/prepare-film.py, published from a release (website/README.md).
+/website/media/
+/website-film.zip
+
 # Local data and secrets
 *.sqlite
 *.sqlite-wal
