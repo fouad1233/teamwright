@@ -44,14 +44,16 @@ starts with when it is opened.
 
 **The areas of a project**
 ([decision 0022](../../docs/decisions/0022-areas-inside-a-project.md))
-are in the contract and only partly in the shell. A task on the wire
-carries its `areaId`, and a new task may name one. `TauriBackend` calls
-`list_areas`, `add_area`, `rename_area`, `move_area`, `remove_area` and
-`move_task_to_area`, which the shell does not serve yet.
-`demoAreas.test.ts` says what the shell is to do, case by case, with the
-exact code and message of every refusal. A database with projects from
-before areas gives each of them the area "General", with all its tasks in
-it.
+are the commands in `commands/areas.rs`: `list_areas`, `add_area`,
+`rename_area`, `move_area`, `remove_area` and `move_task_to_area`, which
+the shell serves through `AreaService`. An area on the wire has its `id`,
+its `projectId` and its `name`; a task carries its `areaId`, and a new
+task may name one. `move_area` reads the place as any number, cut to a
+whole number as the interface's arrays would cut it; `remove_area` takes
+`moveTasksTo`, or null. `demoAreas.test.ts` is the specification, and the
+application crate mirrors its cases with the same codes and messages. A
+database with projects from before areas gives each of them the area
+"General", with all its tasks in it, when it is opened.
 
 ### The work of the specialists
 

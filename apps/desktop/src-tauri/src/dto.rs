@@ -16,7 +16,7 @@ use teamwright_application::{
     SyncState, WorkflowTemplate,
 };
 use teamwright_domain::{
-    Assignee, CalendarDate, Color, ComputerId, Conversation, DecisionOption, DecisionRequest,
+    Area, Assignee, CalendarDate, Color, ComputerId, Conversation, DecisionOption, DecisionRequest,
     DomainError, Effort, Interview, InterviewAnswer, Member, MemberKind, Priority, Project,
     Proposal, ProposedOwner, Schedule, Sprint, SprintSummary, Status, StatusCategory, Step,
     StepContent, StoryPoints, Task, TaskChange, TaskChangeKind, Timestamp, TokenCounts, Turn, View,
@@ -245,6 +245,25 @@ impl From<&View> for ViewDto {
             kind: view.kind().as_str(),
             name: view.name().to_string(),
             filter: ViewFilterDto::from(view.filter()),
+        }
+    }
+}
+
+/// An area of a project as the interface sees it.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AreaDto {
+    id: String,
+    project_id: String,
+    name: String,
+}
+
+impl From<&Area> for AreaDto {
+    fn from(area: &Area) -> Self {
+        Self {
+            id: area.id().to_string(),
+            project_id: area.project_id().to_string(),
+            name: area.name().to_string(),
         }
     }
 }

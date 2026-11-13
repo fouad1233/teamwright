@@ -10,9 +10,9 @@ use std::{env, fs, thread};
 use chrono::Utc;
 use tauri::{AppHandle, Emitter, Manager};
 use teamwright_application::{
-    AgentRuntime, ApplicationError, FileSystem, PlacesService, ProjectFolders, ProjectService,
-    RoundReport, SprintService, StorageError, SyncPorts, SyncService, SystemClock, TaskService,
-    TeamService, ViewService, WorkListener, WorkPorts, WorkService,
+    AgentRuntime, ApplicationError, AreaService, FileSystem, PlacesService, ProjectFolders,
+    ProjectService, RoundReport, SprintService, StorageError, SyncPorts, SyncService, SystemClock,
+    TaskService, TeamService, ViewService, WorkListener, WorkPorts, WorkService,
 };
 use teamwright_domain::{ComputerId, Conversation, Project, Turn};
 use teamwright_runtime::ClaudeCode;
@@ -116,6 +116,8 @@ pub struct AppState {
     pub sprints: SprintService,
     /// The use cases for the views of a project.
     pub views: ViewService,
+    /// The use cases for the areas of a project.
+    pub areas: AreaService,
     /// The use cases for the team of a project.
     pub team: TeamService,
     /// The use cases for the folders of a project.
@@ -222,6 +224,12 @@ impl AppState {
                 project_repository.clone(),
                 task_repository.clone(),
                 sprint_repository,
+                clock.clone(),
+            ),
+            areas: AreaService::new(
+                project_repository.clone(),
+                task_repository.clone(),
+                area_repository,
                 clock.clone(),
             ),
             views: ViewService::new(

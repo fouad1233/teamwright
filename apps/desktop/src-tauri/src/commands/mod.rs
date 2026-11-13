@@ -4,6 +4,7 @@
 //! case, turn the result into data for the interface. Anything more belongs
 //! in the application crate.
 
+pub mod areas;
 pub mod places;
 pub mod projects;
 pub mod sprints;
