@@ -6,6 +6,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev", "--workspace", "@teamwright/desktop"],
       "port": 1420
+    },
+    {
+      "name": "teamwright-website",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["website/tools/serve.mjs", "4321"],
+      "port": 4321
     }
   ]
 }

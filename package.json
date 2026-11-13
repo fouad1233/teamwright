@@ -10,6 +10,7 @@
     "dev": "npm run dev --workspace @teamwright/desktop",
     "app": "npm run tauri --workspace @teamwright/desktop -- dev",
     "build": "npm run build --workspace @teamwright/desktop",
-    "check": "node website/tools/check.mjs && npm run check --workspace @teamwright/desktop"
+    "check": "node website/tools/check.mjs && npm run check --workspace @teamwright/desktop",
+    "website": "node website/tools/serve.mjs"
   }
 }
