@@ -564,9 +564,11 @@
 
   function openFilm() {
     if (!video.src) video.src = mediaBase + videoFile;
+    // The video begins where the reader is in the film, or at the beginning
+    // from the end card, where there is nothing left to watch.
     const time = scrubbing() ? timeAt(window.scrollY) : 0;
     try {
-      video.currentTime = time < duration - 1 ? time : 0;
+      video.currentTime = time < chapters[chapters.length - 1].start ? time : 0;
     } catch {
       // Before the video has loaded, the browser may not take a time yet.
     }

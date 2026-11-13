@@ -393,6 +393,24 @@ code {
   background: var(--ground-sunken);
 }
 
+/* Without scrubbing the stage is the head of the page: the title, the
+   picture of the program, and the chapters. */
+html:not(.scrub) .stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+html:not(.scrub) .stage > * {
+  width: 100%;
+  max-width: var(--sheet-width);
+}
+
+html:not(.scrub) .stage canvas,
+html:not(.scrub) .lines {
+  display: none;
+}
+
 .stage-still {
   width: 100%;
   border: var(--hairline) solid var(--rule);
@@ -400,11 +418,12 @@ code {
 }
 
 .stage-title {
-  max-width: 640px;
-  margin-top: var(--space-6);
+  order: -1;
+  margin-bottom: var(--space-7);
 }
 
 .stage-title h1 {
+  max-width: 760px;
   margin-top: var(--space-2);
   font-family: var(--font-serif);
   font-size: clamp(var(--text-display), 5vw, var(--text-poster));

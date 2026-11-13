@@ -217,7 +217,7 @@ try {
     .split(',');
   mkdirSync(folder, { recursive: true });
   for (const place of places) {
-    const scrollTo = place.startsWith('t')
+    const scrollTo = /^t[0-9.]+$/.test(place)
       ? `(() => { const c = [...document.querySelectorAll('[data-chapter]')]; const first = c[0].getBoundingClientRect(); const last = c[c.length - 1].getBoundingClientRect(); const end = Number(c[c.length - 1].dataset.end); return Math.ceil(first.top + scrollY + ${Number(place.slice(1))} / end * (last.bottom - first.top)); })()`
       : place === 'top'
         ? '0'
