@@ -1,0 +1,1219 @@
+/*
+ * The website of Teamwright.
+ *
+ * It speaks the visual language of the program (docs/design): the dark,
+ * warm room, ink on night, hairline rules instead of shadows, one gold for
+ * the point of attention, and three typefaces. The tokens below are the
+ * program's own (apps/desktop/src/shared/styles/tokens.css), at night, with
+ * a few of the site's own added where a page that is read needs more than
+ * an application does: larger text for reading, a measure, wider margins.
+ * Everything below the tokens refers to them by name.
+ */
+
+@font-face {
+  font-family: 'Instrument Sans Variable';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('../fonts/instrument-sans-latin-wght-normal.woff2') format('woff2-variations');
+}
+
+@font-face {
+  font-family: 'Instrument Serif';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('../fonts/instrument-serif-latin-400-normal.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Instrument Serif';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url('../fonts/instrument-serif-latin-400-italic.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('../fonts/ibm-plex-mono-latin-400-normal.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('../fonts/ibm-plex-mono-latin-500-normal.woff2') format('woff2');
+}
+
+/*
+ * Until a typeface has arrived, a common one stands in for it, scaled so
+ * that a line of it is as long and as high as a line of the real one. The
+ * text is shown at once and does not move when the real face replaces it.
+ * The numbers were measured with Pillow on a sentence of this page.
+ */
+@font-face {
+  font-family: 'Instrument Sans Fallback';
+  src: local('Arial'), local('Liberation Sans'), local('Helvetica');
+  size-adjust: 101.7%;
+  ascent-override: 95.4%;
+  descent-override: 24.6%;
+  line-gap-override: 0%;
+}
+
+@font-face {
+  font-family: 'Instrument Serif Fallback';
+  src: local('Times New Roman'), local('Liberation Serif'), local('Times');
+  size-adjust: 83.5%;
+  ascent-override: 118.6%;
+  descent-override: 37.1%;
+  line-gap-override: 0%;
+}
+
+@font-face {
+  font-family: 'IBM Plex Mono Fallback';
+  src: local('Courier New'), local('Liberation Mono'), local('Courier');
+  size-adjust: 100%;
+  ascent-override: 102.5%;
+  descent-override: 27.5%;
+  line-gap-override: 0%;
+}
+
+:root {
+  color-scheme: dark;
+
+  /* The program's type, and its sizes. */
+  --font-sans: 'Instrument Sans Variable', 'Instrument Sans Fallback', sans-serif;
+  --font-serif: 'Instrument Serif', 'Instrument Serif Fallback', serif;
+  --font-mono: 'IBM Plex Mono', 'IBM Plex Mono Fallback', monospace;
+  --text-label: 10.5px;
+  --text-small: 12px;
+  --text-body: 13.5px;
+  --text-strong: 15px;
+  --text-title: 21px;
+  --text-display: 34px;
+  /* The site's own: text that is read, a lead, and the one large gesture. */
+  --text-read: 17px;
+  --text-lead: 21px;
+  --text-poster: 52px;
+  --text-section: 44px;
+  --leading-read: 1.62;
+  --measure: 64ch;
+
+  /* Space: the program's module of 8, and the site's wider steps. */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+  --space-9: 96px;
+  --space-10: 144px;
+  --gutter: clamp(16px, 4vw, 48px);
+  --sheet-width: 1200px;
+  --masthead-height: 56px;
+  --index-column: 220px;
+
+  /* Shape */
+  --radius-control: 5px;
+  --radius-card: 6px;
+  --radius-overlay: 8px;
+  --control-height: 32px;
+  --hairline: 1px;
+
+  /* Night */
+  --ground: #12100e;
+  --ground-sunken: #0d0c0a;
+  --surface: #1a1714;
+  --surface-raised: #221d19;
+  --rule: rgb(232 224 208 / 9%);
+  --rule-strong: rgb(232 224 208 / 18%);
+  --hover: rgb(232 224 208 / 5%);
+  --pressed: rgb(232 224 208 / 10%);
+  --backdrop: rgb(10 9 8 / 86%);
+  /* Ground laid under a label that stands on the film. */
+  --veil: rgb(18 16 14 / 72%);
+  /* The faint dark halo under the lines of the film (lines.py). */
+  --halo: 0 0 14px rgb(8 7 6 / 70%), 0 0 3px rgb(8 7 6 / 60%);
+
+  /* Ink */
+  --ink: #e8e0d0;
+  --ink-soft: #b9af9d;
+  --ink-faint: #9a907f;
+  --ink-inverse: #12100e;
+
+  /* Gold, the one metal. */
+  --brass: #c9a96e;
+  --brass-text: #c9a96e;
+  --brass-soft: rgb(201 169 110 / 16%);
+  --primary-hover: #f4eee3;
+
+  /* Motion: arriving slows down, leaving speeds up, nothing bounces. */
+  --ease-settle: cubic-bezier(0.2, 0, 0, 1);
+  --ease-arrive: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-leave: cubic-bezier(0.4, 0, 1, 1);
+  --duration-quick: 120ms;
+  --duration-settle: 200ms;
+  --duration-arrive: 240ms;
+
+  /* How far the page scrolls for one second of the film. */
+  --film-pace: 34svh;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: var(--text-read);
+  line-height: var(--leading-read);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  font-kerning: normal;
+}
+
+h1,
+h2,
+h3,
+p,
+ol,
+ul,
+dl,
+dd,
+figure {
+  margin: 0;
+}
+
+ol,
+ul {
+  padding: 0;
+  list-style: none;
+}
+
+img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+a {
+  color: inherit;
+  text-decoration-color: var(--rule-strong);
+  text-decoration-thickness: var(--hairline);
+  text-underline-offset: 0.2em;
+  transition: text-decoration-color var(--duration-quick) var(--ease-settle);
+}
+
+a:hover {
+  text-decoration-color: var(--brass);
+}
+
+:focus {
+  outline: none;
+}
+
+:focus-visible {
+  outline: 2px solid var(--brass);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: var(--brass-soft);
+}
+
+code {
+  font-family: var(--font-mono);
+  font-size: 0.86em;
+}
+
+.label {
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.skip {
+  position: absolute;
+  z-index: 30;
+  top: var(--space-2);
+  left: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-control);
+  background: var(--ink);
+  color: var(--ink-inverse);
+  font-size: var(--text-body);
+  transform: translateY(-200%);
+}
+
+.skip:focus-visible {
+  transform: none;
+}
+
+/* Buttons: the primary is ink, as in the program; the quiet one is a rule. */
+.button {
+  display: inline-flex;
+  align-items: center;
+  height: var(--control-height);
+  padding: 0 var(--space-3);
+  border: var(--hairline) solid transparent;
+  border-radius: var(--radius-control);
+  background: var(--ink);
+  color: var(--ink-inverse);
+  font: 500 var(--text-body) / 1 var(--font-sans);
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color var(--duration-quick) var(--ease-settle);
+}
+
+.button:hover {
+  background: var(--primary-hover);
+}
+
+.button-quiet {
+  border-color: var(--rule-strong);
+  background: var(--veil);
+  color: var(--ink);
+}
+
+.button-quiet:hover {
+  background: var(--surface-raised);
+}
+
+.button[hidden] {
+  display: none;
+}
+
+/* The masthead lies over the top of the film and scrolls away with it. */
+.masthead {
+  position: absolute;
+  z-index: 20;
+  top: 0;
+  right: 0;
+  left: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  height: var(--masthead-height);
+  padding: 0 var(--gutter);
+  padding-top: env(safe-area-inset-top);
+  font-size: var(--text-body);
+}
+
+.masthead-name {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-strong);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  text-decoration: none;
+}
+
+.masthead-nav {
+  display: flex;
+  gap: var(--space-5);
+  color: var(--ink-soft);
+}
+
+.masthead-nav a {
+  text-decoration: none;
+  text-shadow: var(--halo);
+}
+
+.masthead-nav a:hover {
+  color: var(--ink);
+}
+
+.masthead-actions {
+  display: flex;
+  gap: var(--space-2);
+  margin-left: auto;
+}
+
+@media (max-width: 920px) {
+  .masthead-nav {
+    display: none;
+  }
+}
+
+@media (max-width: 420px) {
+  .masthead-actions .button:not(.button-quiet) {
+    display: none;
+  }
+}
+
+/*
+ * The film.
+ *
+ * Without scripts, and with motion turned down, it is a sequence of
+ * chapters: a still and its text, one under the other. With scripts the
+ * stage stays in place and fills the window while the chapters, tall and
+ * empty to the eye, scroll under it; film.js draws the frame of the
+ * moment the reader has scrolled to.
+ */
+.film {
+  position: relative;
+}
+
+.stage {
+  position: relative;
+  overflow: hidden;
+  padding: calc(var(--masthead-height) + var(--space-7)) var(--gutter) var(--space-7);
+  background: var(--ground-sunken);
+}
+
+.stage-still {
+  width: 100%;
+  border: var(--hairline) solid var(--rule);
+  border-radius: var(--radius-card);
+}
+
+.stage-title {
+  max-width: 640px;
+  margin-top: var(--space-6);
+}
+
+.stage-title h1 {
+  margin-top: var(--space-2);
+  font-family: var(--font-serif);
+  font-size: clamp(var(--text-display), 5vw, var(--text-poster));
+  font-weight: 400;
+  line-height: 1.04;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+
+.stage-hint {
+  display: none;
+}
+
+.film-heading {
+  max-width: var(--sheet-width);
+  margin: var(--space-9) auto var(--space-5);
+  padding: 0 var(--gutter);
+  font-family: var(--font-serif);
+  font-size: var(--text-section);
+  font-weight: 400;
+  line-height: 1.1;
+}
+
+.rail ol {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-5);
+  margin-top: var(--space-6);
+}
+
+.rail a {
+  color: var(--ink-soft);
+  font-size: var(--text-body);
+  text-decoration: none;
+}
+
+.rail-number {
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: var(--text-small);
+}
+
+.chapter {
+  display: grid;
+  gap: var(--space-5);
+  max-width: var(--sheet-width);
+  margin: 0 auto;
+  padding: var(--space-6) var(--gutter);
+  border-top: var(--hairline) solid var(--rule);
+}
+
+.chapter-still img {
+  width: 100%;
+  border: var(--hairline) solid var(--rule);
+  border-radius: var(--radius-card);
+}
+
+.chapter-still img[src$='.svg'] {
+  width: 160px;
+  border: 0;
+}
+
+.chapter-title {
+  font-family: var(--font-serif);
+  font-size: var(--text-display);
+  font-weight: 400;
+  line-height: 1.1;
+}
+
+.chapter-title .label {
+  display: block;
+  margin-bottom: var(--space-2);
+}
+
+.chapter-seen {
+  max-width: var(--measure);
+  margin-top: var(--space-3);
+  color: var(--ink-soft);
+}
+
+.chapter-lines {
+  margin-top: var(--space-4);
+  padding-left: var(--space-4);
+  border-left: 2px solid var(--brass);
+}
+
+.chapter-lines li + li {
+  margin-top: var(--space-1);
+}
+
+/* The still of the first chapter is the one the stage shows above it. */
+.film > section.chapter:first-of-type .chapter-still {
+  display: none;
+}
+
+@media (min-width: 900px) {
+  .chapter {
+    grid-template-columns: 3fr 2fr;
+    align-items: start;
+  }
+
+  .film > section.chapter:first-of-type .chapter-text {
+    grid-column: 1 / -1;
+  }
+}
+
+/* With scripts and motion: the stage stays and the chapters scroll under it. */
+.scrub .stage {
+  position: sticky;
+  z-index: 1;
+  top: 0;
+  height: 100vh;
+  height: 100svh;
+  padding: 0;
+  touch-action: pan-y;
+}
+
+/* The chapters begin where the stage begins, under it. (A negative margin
+   on the stage itself would let it stick past the end of the film.) */
+.scrub .film > section.chapter:first-of-type {
+  margin-top: -100vh;
+  margin-top: -100svh;
+}
+
+.scrub .stage canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* Before a frame of the film is in, a picture of the program stands for
+   the chapter: framed, as a plate on the dark ground, not as the film. */
+.scrub .stage-still {
+  position: absolute;
+  top: calc(var(--masthead-height) + var(--space-5));
+  left: 50%;
+  width: min(
+    calc(100% - 2 * var(--gutter) - 2 * var(--space-10)),
+    calc((100svh - var(--masthead-height) - var(--space-5) - 36svh) * 1600 / 935)
+  );
+  height: auto;
+  aspect-ratio: 1600 / 935;
+  border: var(--hairline) solid var(--rule-strong);
+  border-radius: var(--radius-card);
+  object-fit: cover;
+  transform: translateX(-50%);
+}
+
+.scrub .stage-still[src$='.svg'] {
+  top: 18svh;
+  width: min(30svh, 40%);
+  aspect-ratio: 1;
+  border: 0;
+}
+
+@media (max-width: 719px) {
+  .scrub .stage-still:not([src$='.svg']) {
+    top: var(--picture-y, 72px);
+    width: calc(100% - 2 * var(--gutter));
+  }
+}
+
+/* A still taken from the film itself fills the window, as the film does. */
+.scrub .stage-still[data-kind='film'] {
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  aspect-ratio: auto;
+  border: 0;
+  border-radius: 0;
+  transform: none;
+}
+
+.scrub .stage[data-fit='contain'] .stage-still[data-kind='film'] {
+  top: var(--picture-y, 0);
+  height: var(--picture-height, 100%);
+  object-fit: contain;
+}
+
+.scrub .stage canvas {
+  opacity: 0;
+}
+
+.scrub .stage[data-drawing] canvas {
+  opacity: 1;
+}
+
+.scrub .stage-title {
+  position: absolute;
+  z-index: 3;
+  bottom: calc(var(--space-9) + env(safe-area-inset-bottom));
+  left: var(--gutter);
+  max-width: min(600px, calc(100% - 2 * var(--gutter)));
+  margin: 0;
+  padding: var(--space-5) var(--space-5) var(--space-4);
+  border: var(--hairline) solid var(--rule-strong);
+  border-radius: var(--radius-card);
+  background: var(--veil);
+}
+
+.scrub .stage-hint {
+  display: block;
+  margin-top: var(--space-4);
+  padding-top: var(--space-3);
+  border-top: var(--hairline) solid var(--rule);
+  color: var(--brass-text);
+}
+
+.scrub .stage[data-fit='contain'] .stage-title {
+  top: calc(var(--picture-y) + var(--picture-height) + var(--space-5));
+  bottom: auto;
+}
+
+.scrub .film-heading {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.scrub .chapter {
+  display: block;
+  max-width: none;
+  height: calc(var(--seconds) * var(--film-pace));
+  padding: 0;
+  border: 0;
+}
+
+.scrub .chapter-still {
+  display: none;
+}
+
+.scrub .chapter-text {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* The film ends when its last frame reaches the top of the window. */
+.scrub .film::after {
+  display: block;
+  height: 100vh;
+  height: 100svh;
+  content: '';
+}
+
+/* The lines of the film, laid over the picture (aria-hidden: the chapters
+   carry the same words for those who listen). */
+.lines {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  pointer-events: none;
+}
+
+.line {
+  position: absolute;
+  margin: 0;
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-weight: 500;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  text-align: center;
+  text-shadow: var(--halo);
+  text-wrap: balance;
+  transform: translateY(-50%);
+}
+
+.line[data-place='saying'],
+.line[data-place='invitation'] {
+  color: var(--ink-soft);
+  font-family: var(--font-serif);
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+.line[data-place='address'] {
+  color: var(--brass-text);
+  font-family: var(--font-mono);
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+.word {
+  display: inline-block;
+  opacity: 0;
+  will-change: opacity, transform;
+}
+
+/* The rail: the chapters, where the reader is, and a way to go there. */
+.scrub .rail {
+  position: absolute;
+  z-index: 4;
+  top: 50%;
+  right: var(--gutter);
+  transform: translateY(-50%);
+}
+
+.scrub .rail ol {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  justify-items: end;
+}
+
+.scrub .rail a {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) 0 var(--space-1) var(--space-2);
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.scrub .rail a::after {
+  width: var(--space-4);
+  height: var(--hairline);
+  background: var(--rule-strong);
+  content: '';
+  transition: width var(--duration-settle) var(--ease-settle);
+}
+
+.scrub .rail-number,
+.scrub .rail-name {
+  padding: 2px var(--space-1);
+  border-radius: 2px;
+  background: var(--veil);
+  font-size: var(--text-label);
+}
+
+.scrub .rail-name {
+  display: none;
+}
+
+.scrub .rail:hover .rail-name,
+.scrub .rail:focus-within .rail-name,
+.scrub .rail a[aria-current] .rail-name {
+  display: inline;
+}
+
+.scrub .rail a[aria-current] {
+  color: var(--ink);
+}
+
+.scrub .rail a[aria-current]::after {
+  width: var(--space-6);
+  height: 2px;
+  background: var(--brass);
+}
+
+.scrub .rail a:hover {
+  color: var(--ink);
+}
+
+/* In a low window, such as a phone held sideways, the rail is ticks only,
+   and the name of the chapter one is in. */
+@media (min-width: 720px) and (max-height: 560px) {
+  .scrub .rail ol {
+    gap: 0;
+  }
+
+  .scrub .rail a {
+    padding-block: 3px;
+  }
+
+  .scrub .rail-number {
+    display: none;
+  }
+
+  .scrub .rail:hover .rail-name,
+  .scrub .rail:focus-within .rail-name {
+    display: none;
+  }
+
+  .scrub .rail a[aria-current] .rail-name {
+    display: inline;
+  }
+}
+
+@media (max-width: 719px) {
+  .scrub .rail {
+    top: auto;
+    right: var(--gutter);
+    bottom: calc(var(--space-4) + env(safe-area-inset-bottom));
+    left: var(--gutter);
+    transform: none;
+  }
+
+  .scrub .rail ol {
+    display: flex;
+    gap: 3px;
+  }
+
+  .scrub .rail li {
+    flex: 1;
+  }
+
+  .scrub .rail a {
+    position: relative;
+    justify-content: center;
+    height: 28px;
+    padding: 0;
+  }
+
+  .scrub .rail a::after,
+  .scrub .rail a[aria-current]::after {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    width: auto;
+  }
+
+  .scrub .rail-number,
+  .scrub .rail:hover .rail-name,
+  .scrub .rail:focus-within .rail-name {
+    display: none;
+  }
+
+  .scrub .rail a[aria-current] .rail-name {
+    position: absolute;
+    bottom: 34px;
+    left: 0;
+    display: inline;
+    white-space: nowrap;
+  }
+
+  .scrub .rail li:nth-child(n + 6) a[aria-current] .rail-name {
+    right: 0;
+    left: auto;
+  }
+}
+
+/* "Watch the film": the film as an ordinary video, with sound. On the
+   stage a second control stands where the masthead's was, once the
+   masthead has scrolled away. */
+.stage-watch {
+  position: absolute;
+  z-index: 5;
+  top: var(--space-3);
+  right: var(--gutter);
+}
+
+html:not(.scrub) .stage-watch {
+  display: none;
+}
+
+.watch {
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  max-height: none;
+  margin: 0;
+  padding: var(--gutter);
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+}
+
+.watch::backdrop {
+  background: var(--backdrop);
+}
+
+.watch[open] {
+  display: grid;
+  place-items: center;
+}
+
+.watch-frame {
+  display: grid;
+  gap: var(--space-3);
+  justify-items: end;
+  width: min(100%, 1280px);
+}
+
+.watch video {
+  width: 100%;
+  max-height: calc(100vh - 2 * var(--gutter) - var(--control-height) - var(--space-3));
+  border: var(--hairline) solid var(--rule-strong);
+  border-radius: var(--radius-card);
+  background: var(--ground-sunken);
+}
+
+/*
+ * The sheet: what the project is, after the film. Set like a book: a
+ * measure for the text, a column at the left for the number and the name
+ * of each part, and the pictures of the program large.
+ */
+.sheet {
+  max-width: calc(var(--sheet-width) + 2 * var(--gutter));
+  margin: 0 auto;
+  padding: 0 var(--gutter);
+}
+
+.part {
+  display: grid;
+  grid-template-columns: var(--index-column) minmax(0, 1fr);
+  column-gap: var(--space-7);
+  row-gap: var(--space-6);
+  padding: var(--space-9) 0;
+  border-top: var(--hairline) solid var(--rule-strong);
+  scroll-margin-top: var(--space-4);
+}
+
+.part:first-child {
+  border-top-color: var(--rule);
+}
+
+.part > * {
+  grid-column: 2;
+}
+
+.part-number {
+  grid-column: 1;
+  grid-row: 1;
+  padding-top: var(--space-3);
+  color: var(--brass-text);
+}
+
+.part > h2 {
+  font-family: var(--font-serif);
+  font-size: var(--text-section);
+  font-weight: 400;
+  line-height: 1.05;
+  letter-spacing: -0.005em;
+}
+
+.prose {
+  display: grid;
+  gap: var(--space-4);
+  max-width: var(--measure);
+}
+
+.lead {
+  font-size: var(--text-lead);
+  line-height: 1.45;
+  letter-spacing: -0.005em;
+}
+
+.prose .lead + p {
+  margin-top: var(--space-2);
+}
+
+.note {
+  padding-left: var(--space-4);
+  border-left: 2px solid var(--brass);
+  color: var(--ink-soft);
+}
+
+.note strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.steps {
+  display: grid;
+  max-width: var(--measure);
+  counter-reset: step;
+}
+
+.steps li {
+  display: grid;
+  grid-template-columns: var(--space-8) minmax(0, 1fr);
+  padding: var(--space-4) 0;
+  border-top: var(--hairline) solid var(--rule);
+  counter-increment: step;
+}
+
+.steps li::before {
+  grid-row: span 2;
+  padding-top: 5px;
+  color: var(--brass-text);
+  font-family: var(--font-mono);
+  font-size: var(--text-small);
+  content: counter(step, decimal-leading-zero);
+}
+
+.steps h3 {
+  font-size: var(--text-read);
+  font-weight: 600;
+  line-height: var(--leading-read);
+}
+
+.steps p {
+  color: var(--ink-soft);
+}
+
+.schedule {
+  max-width: 880px;
+  border-bottom: var(--hairline) solid var(--rule);
+}
+
+.schedule > div {
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr);
+  column-gap: var(--space-5);
+  padding: var(--space-4) 0;
+  border-top: var(--hairline) solid var(--rule);
+}
+
+.schedule dt {
+  padding-top: 5px;
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: var(--text-small);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.schedule dd {
+  max-width: var(--measure);
+  color: var(--ink-soft);
+}
+
+.schedule em {
+  color: var(--brass-text);
+  font-style: normal;
+}
+
+.schedule-narrow {
+  max-width: var(--measure);
+}
+
+.schedule-narrow > div {
+  grid-template-columns: 160px minmax(0, 1fr);
+}
+
+figure img {
+  width: 100%;
+  border: var(--hairline) solid var(--rule-strong);
+  border-radius: var(--radius-card);
+  background: var(--ground-sunken);
+}
+
+figcaption {
+  max-width: var(--measure);
+  margin-top: var(--space-3);
+  color: var(--ink-soft);
+  font-size: var(--text-body);
+  line-height: 1.5;
+}
+
+figcaption .label {
+  margin-right: var(--space-2);
+  color: var(--brass-text);
+}
+
+.part > .figure-wide {
+  grid-column: 1 / -1;
+}
+
+.figures {
+  display: grid;
+  gap: var(--space-7) var(--space-5);
+}
+
+.part > .figures {
+  grid-column: 1 / -1;
+}
+
+@media (min-width: 760px) {
+  .figures-two {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.code {
+  overflow-x: auto;
+  margin: 0;
+  padding: var(--space-4) var(--space-5);
+  border: var(--hairline) solid var(--rule-strong);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.code code {
+  font-size: inherit;
+}
+
+.questions {
+  display: grid;
+  max-width: 880px;
+  border-bottom: var(--hairline) solid var(--rule);
+}
+
+.question {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+  column-gap: var(--space-6);
+  padding: var(--space-5) 0;
+  border-top: var(--hairline) solid var(--rule);
+}
+
+.question h3 {
+  font-size: var(--text-read);
+  font-weight: 600;
+  line-height: var(--leading-read);
+}
+
+.answer {
+  color: var(--ink-soft);
+}
+
+/* The colophon: a title block at the foot of the sheet. */
+.colophon {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-5) var(--space-7);
+  max-width: calc(var(--sheet-width) + 2 * var(--gutter));
+  margin: var(--space-9) auto 0;
+  padding: var(--space-7) var(--gutter) var(--space-8);
+  border-top: var(--hairline) solid var(--rule-strong);
+  font-size: var(--text-body);
+}
+
+.colophon-name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+  font-size: var(--text-strong);
+  font-weight: 600;
+}
+
+.colophon-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-5);
+  justify-content: end;
+  color: var(--ink-soft);
+}
+
+.colophon-note {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 899px) {
+  .part {
+    grid-template-columns: minmax(0, 1fr);
+    padding: var(--space-8) 0;
+  }
+
+  .part > *,
+  .part-number {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
+  .part-number {
+    padding-top: 0;
+    margin-bottom: calc(-1 * var(--space-4));
+  }
+}
+
+@media (max-width: 599px) {
+  :root {
+    --text-read: 16px;
+    --text-lead: 19px;
+    --text-section: 34px;
+  }
+
+  .schedule > div,
+  .schedule-narrow > div,
+  .question {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: var(--space-1);
+  }
+
+  .steps li {
+    grid-template-columns: var(--space-6) minmax(0, 1fr);
+  }
+
+  .colophon {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .colophon-links {
+    justify-content: start;
+  }
+}
+
+/* The page that answers an address that does not exist. */
+.missing-heading {
+  font-family: var(--font-serif);
+  font-size: var(--text-section);
+  font-weight: 400;
+  line-height: 1.05;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+  }
+}

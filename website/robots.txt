@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://fouad1233.github.io/teamwright/sitemap.xml

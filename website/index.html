@@ -1,0 +1,665 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Teamwright: run a project with a team of AI specialists</title>
+<meta name="description" content="An open-source desktop app. Describe a project, an Advisor proposes a team of AI specialists and a plan, and you manage the work. Runs on your own Claude Code.">
+<link rel="canonical" href="https://fouad1233.github.io/teamwright/">
+<meta name="theme-color" content="#12100e">
+<meta name="color-scheme" content="dark">
+<!-- Google Search Console: the owner's verification tag goes on the line below. See website/README.md. -->
+
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Teamwright">
+<meta property="og:title" content="Teamwright: run a project with a team of AI specialists">
+<meta property="og:description" content="You manage. A right-sized team of AI specialists does the work. An open-source desktop app that runs on your own Claude Code.">
+<meta property="og:url" content="https://fouad1233.github.io/teamwright/">
+<meta property="og:image" content="https://fouad1233.github.io/teamwright/images/share.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="The key visual of Teamwright, a plan drawn as bars on a scale, beside the board of a sample project in the program.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Teamwright: run a project with a team of AI specialists">
+<meta name="twitter:description" content="You manage. A right-sized team of AI specialists does the work. An open-source desktop app that runs on your own Claude Code.">
+<meta name="twitter:image" content="https://fouad1233.github.io/teamwright/images/share.png">
+
+<link rel="icon" href="favicon.ico" sizes="32x32">
+<link rel="icon" href="images/icons/mark.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="images/icons/apple-touch-icon.png">
+<link rel="manifest" href="site.webmanifest">
+
+<link rel="preload" href="fonts/instrument-sans-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/instrument-serif-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/ibm-plex-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" as="image" href="images/first-run-960.webp" imagesrcset="images/first-run-960.webp 960w, images/first-run-1600.webp 1600w" imagesizes="100vw" fetchpriority="high">
+<link rel="stylesheet" href="styles/site.css">
+<!-- film:media:begin -->
+<meta name="teamwright-film-media" content="media/film/manifest.json">
+<!-- film:media:end -->
+<script>
+  // Decided before the page is drawn, so that nothing moves once it is
+  // there: the film scrubs unless the reader asked the browser to reduce
+  // motion. Without scripts the chapters are stills with their text.
+  if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    document.documentElement.classList.add('scrub');
+  }
+</script>
+<script src="scripts/film.js" defer></script>
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "SoftwareApplication",
+      "@id": "https://fouad1233.github.io/teamwright/#application",
+      "name": "Teamwright",
+      "description": "A desktop app in which one person runs a project as the manager of a small team of AI specialists. An Advisor proposes the team and a plan, the manager approves, and the specialists work on their tasks through the Claude Code installed on the manager's computer.",
+      "url": "https://fouad1233.github.io/teamwright/",
+      "applicationCategory": "BusinessApplication",
+      "operatingSystem": "Windows, Linux",
+      "isAccessibleForFree": true,
+      "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+      "license": "https://www.apache.org/licenses/LICENSE-2.0",
+      "image": "https://fouad1233.github.io/teamwright/images/board-1600.webp",
+      "screenshot": [
+        "https://fouad1233.github.io/teamwright/images/board-1600.webp",
+        "https://fouad1233.github.io/teamwright/images/backlog-1600.webp",
+        "https://fouad1233.github.io/teamwright/images/advisor-proposal-1600.webp"
+      ],
+      "sameAs": "https://github.com/fouad1233/teamwright"
+    },
+    {
+      "@type": "SoftwareSourceCode",
+      "@id": "https://fouad1233.github.io/teamwright/#source",
+      "name": "Teamwright",
+      "codeRepository": "https://github.com/fouad1233/teamwright",
+      "programmingLanguage": ["Rust", "TypeScript"],
+      "license": "https://www.apache.org/licenses/LICENSE-2.0",
+      "targetProduct": { "@id": "https://fouad1233.github.io/teamwright/#application" }
+    }
+  ]
+}
+</script>
+<!-- film:video-object:begin -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "VideoObject",
+  "name": "I wish I could build it",
+  "description": "A film of 72 seconds about Teamwright. Somebody wants to build a small sensor hub, a board, its firmware and a case, and runs the project as the manager of a team of AI specialists. The interface in the film is the real program on a sample project; the board, the parts and the case are modelled for the film.",
+  "thumbnailUrl": [
+    "https://fouad1233.github.io/teamwright/images/share.png"
+  ],
+  "uploadDate": "2026-11-13",
+  "duration": "PT1M12S",
+  "contentUrl": "https://fouad1233.github.io/teamwright/media/film/teamwright-film.mp4",
+  "width": 1920,
+  "height": 1080,
+  "inLanguage": "en",
+  "transcript": "I want to build a sensor hub. A board. Firmware. A case. I wish I could. Teamwright exists. Tell the Advisor what you want. It proposes a team and a plan. Four days into the first sprint. Sprints, a backlog, story points, a burndown. The same plan as a list, a Gantt chart, a calendar. A dashboard says where the project stands. Add the views you need. Specialists do the work, each on its task. Schematic. Layout. When a choice is yours, it waits for you. Board, firmware, enclosure. One plan. You decide. You build it. Teamwright You manage. Your team does the work. This is just the beginning. Changing how projects are managed, and what one developer can build. Open source. Runs on your own Claude Code. Contribute, and star it if you like it. github.com/fouad1233/teamwright",
+  "hasPart": [
+    {
+      "@type": "Clip",
+      "name": "The wish",
+      "startOffset": 0,
+      "endOffset": 11,
+      "url": "https://fouad1233.github.io/teamwright/#wish"
+    },
+    {
+      "@type": "Clip",
+      "name": "Tell the Advisor",
+      "startOffset": 11,
+      "endOffset": 16,
+      "url": "https://fouad1233.github.io/teamwright/#advisor"
+    },
+    {
+      "@type": "Clip",
+      "name": "One plan, every view",
+      "startOffset": 16,
+      "endOffset": 34,
+      "url": "https://fouad1233.github.io/teamwright/#views"
+    },
+    {
+      "@type": "Clip",
+      "name": "The team at work",
+      "startOffset": 34,
+      "endOffset": 39,
+      "url": "https://fouad1233.github.io/teamwright/#team"
+    },
+    {
+      "@type": "Clip",
+      "name": "Schematic becomes board",
+      "startOffset": 39,
+      "endOffset": 45,
+      "url": "https://fouad1233.github.io/teamwright/#schematic"
+    },
+    {
+      "@type": "Clip",
+      "name": "A choice waits for you",
+      "startOffset": 45,
+      "endOffset": 50,
+      "url": "https://fouad1233.github.io/teamwright/#parts"
+    },
+    {
+      "@type": "Clip",
+      "name": "The case comes down",
+      "startOffset": 50,
+      "endOffset": 56,
+      "url": "https://fouad1233.github.io/teamwright/#case"
+    },
+    {
+      "@type": "Clip",
+      "name": "It lives",
+      "startOffset": 56,
+      "endOffset": 60,
+      "url": "https://fouad1233.github.io/teamwright/#lives"
+    },
+    {
+      "@type": "Clip",
+      "name": "Teamwright",
+      "startOffset": 60,
+      "endOffset": 72,
+      "url": "https://fouad1233.github.io/teamwright/#end"
+    }
+  ]
+}
+</script>
+<!-- film:video-object:end -->
+<!-- page:questions-data:begin -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "Is Teamwright free?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Yes. It is open source under the Apache License 2.0. The work of the Advisor and the specialists runs on your own Claude Code and uses your own plan there."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Can I download it?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Not yet. There is no installer. You build it from the source code with Rust and Node.js, as the section above shows."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Do I need Claude Code?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "For the Advisor and the specialists, yes: installed on your computer and signed in by you. Projects, tasks and every view work without it."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Where is my data?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "In a database file on your own disk. What the specialists make is files in the folder of the project. There is no account, no server and no telemetry."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "What can a specialist touch?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "It reads and writes files in the folder of its project and reads the folders and files you give it for reference. It cannot reach anything else. When a choice is yours, it stops and asks."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Do the specialists work together on their own?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Not yet. Today each specialist works on the task you start for it. Handing results to each other, and a coordinator that starts tasks when the work they wait for is done, are the next steps on the roadmap."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Which systems does it run on?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "It has been run on Windows. Its code is built and tested on Windows and Linux. macOS is not among the systems it is checked on yet."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Did Teamwright make the device in the film?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "No. The interface in the film is the real program on a sample project, and the plan in it was proposed by a real Advisor. The board, the parts and the case are modelled for the film. The film shows what Teamwright is for, not a record of a finished device."
+      }
+    }
+  ]
+}
+</script>
+<!-- page:questions-data:end -->
+</head>
+<body>
+<a class="skip" href="#what">Skip the film</a>
+
+<header class="masthead">
+  <a class="masthead-name" href="./" aria-label="Teamwright, to the top of the page">
+    <img src="images/icons/mark.svg" width="24" height="24" alt="">
+    <span>Teamwright</span>
+  </a>
+  <nav class="masthead-nav" aria-label="The page">
+    <a href="#what">What it is</a>
+    <a href="#how">How it works</a>
+    <a href="#today">What is in it</a>
+    <a href="#get">Get it</a>
+    <a href="#questions">Questions</a>
+  </nav>
+  <div class="masthead-actions">
+    <button class="button button-quiet" type="button" data-watch hidden>Watch the film</button>
+    <a class="button" href="https://github.com/fouad1233/teamwright">Source code</a>
+  </div>
+</header>
+
+<main>
+<section class="film" id="film" aria-labelledby="film-heading" data-film>
+  <div class="stage" data-stage>
+    <img class="stage-still" data-stage-still src="images/first-run-960.webp" srcset="images/first-run-960.webp 960w, images/first-run-1600.webp 1600w" sizes="100vw" width="1600" height="935" alt="" fetchpriority="high">
+    <div class="stage-title" data-stage-title>
+      <p class="label">A desktop app · Open source</p>
+      <h1>You manage. A right-sized team of AI&nbsp;specialists does the work.</h1>
+      <p class="stage-hint label" aria-hidden="true">Scroll to run the film</p>
+    </div>
+    <nav class="rail" aria-label="Chapters of the film" data-rail>
+<!-- film:rail:begin -->
+    <ol>
+      <li><a href="#wish" data-rail-link><span class="rail-number">01</span> <span class="rail-name">The wish</span></a></li>
+      <li><a href="#advisor" data-rail-link><span class="rail-number">02</span> <span class="rail-name">Tell the Advisor</span></a></li>
+      <li><a href="#views" data-rail-link><span class="rail-number">03</span> <span class="rail-name">One plan, every view</span></a></li>
+      <li><a href="#team" data-rail-link><span class="rail-number">04</span> <span class="rail-name">The team at work</span></a></li>
+      <li><a href="#schematic" data-rail-link><span class="rail-number">05</span> <span class="rail-name">Schematic becomes board</span></a></li>
+      <li><a href="#parts" data-rail-link><span class="rail-number">06</span> <span class="rail-name">A choice waits for you</span></a></li>
+      <li><a href="#case" data-rail-link><span class="rail-number">07</span> <span class="rail-name">The case comes down</span></a></li>
+      <li><a href="#lives" data-rail-link><span class="rail-number">08</span> <span class="rail-name">It lives</span></a></li>
+      <li><a href="#end" data-rail-link><span class="rail-number">09</span> <span class="rail-name">Teamwright</span></a></li>
+    </ol>
+<!-- film:rail:end -->
+    </nav>
+  </div>
+  <h2 class="film-heading" id="film-heading">The film, in nine chapters</h2>
+<!-- film:chapters:begin -->
+<section class="chapter" id="wish" aria-labelledby="wish-title" data-chapter data-start="0" data-end="11" data-still="images/first-run-960.webp 960w, images/first-run-1600.webp 1600w" style="--seconds: 11">
+  <figure class="chapter-still">
+    <img src="images/first-run-960.webp" srcset="images/first-run-960.webp 960w, images/first-run-1600.webp 1600w, images/first-run-2400.webp 2400w" sizes="(min-width: 1200px) 1100px, 100vw" width="1600" height="935" alt="The first screen of Teamwright after it is installed: no project yet, and a button to start one." decoding="async">
+  </figure>
+  <div class="chapter-text">
+    <h3 class="chapter-title" id="wish-title"><span class="label">01 · 0 to 11 s</span> The wish</h3>
+    <p class="chapter-seen">A desk at night under one lamp. A notebook holds a pencil sketch of a small box with a screen. A board, firmware and a case are too much for one person. Then the laptop opens on Teamwright.</p>
+    <ol class="chapter-lines" aria-label="Lines of the film">
+      <li data-start="0.7" data-end="3.45" data-place="caption">I want to build a sensor hub.</li>
+      <li data-start="4.25" data-end="5.75" data-place="caption">A board. Firmware. A case.</li>
+      <li data-start="6.15" data-end="7.15" data-place="caption">I wish I could.</li>
+      <li data-start="8.1" data-end="10.55" data-place="caption">Teamwright exists.</li>
+    </ol>
+  </div>
+</section>
+<section class="chapter" id="advisor" aria-labelledby="advisor-title" data-chapter data-start="11" data-end="16" data-still="images/advisor-proposal-960.webp 960w, images/advisor-proposal-1600.webp 1600w" style="--seconds: 5">
+  <figure class="chapter-still">
+    <img src="images/advisor-proposal-960.webp" srcset="images/advisor-proposal-960.webp 960w, images/advisor-proposal-1600.webp 1600w, images/advisor-proposal-2400.webp 2400w" sizes="(min-width: 1200px) 1100px, 100vw" width="1600" height="935" alt="The proposal of the Advisor: the project in its words, a team of three specialists with a model and an effort for each, and a plan of fourteen tasks with their owners and what each waits for." loading="lazy" decoding="async">
+  </figure>
+  <div class="chapter-text">
+    <h3 class="chapter-title" id="advisor-title"><span class="label">02 · 11 to 16 s</span> Tell the Advisor</h3>
+    <p class="chapter-seen">The real program. The brief is typed, the Advisor asks its questions, then proposes three specialists and a plan of fourteen tasks. The manager approves.</p>
+    <ol class="chapter-lines" aria-label="Lines of the film">
+      <li data-start="11.35" data-end="15.55" data-place="caption">Tell the Advisor what you want. It proposes a team and a plan.</li>
+    </ol>
+  </div>
+</section>
+<section class="chapter" id="views" aria-labelledby="views-title" data-chapter data-start="16" data-end="34" data-still="images/backlog-960.webp 960w, images/backlog-1600.webp 1600w" style="--seconds: 18">
+  <figure class="chapter-still">
+    <img src="images/backlog-960.webp" srcset="images/backlog-960.webp 960w, images/backlog-1600.webp 1600w, images/backlog-2400.webp 2400w" sizes="(min-width: 1200px) 1100px, 100vw" width="1600" height="935" alt="The Backlog view: the sprint that runs, with its dates, its story points and its burndown, the planned sprint, and the backlog under them." loading="lazy" decoding="async">
+  </figure>
+  <div class="chapter-text">
+    <h3 class="chapter-title" id="views-title"><span class="label">03 · 16 to 34 s</span> One plan, every view</h3>
+    <p class="chapter-seen">The same project four days into its first sprint: the board of the sprint, the backlog with its sprints, story points and burndown, the list, the Gantt chart, the calendar and the dashboard. Then the chooser that adds a view, and the office with two specialists at work.</p>
+    <ol class="chapter-lines" aria-label="Lines of the film">
+      <li data-start="16.55" data-end="18.25" data-place="caption">Four days into the first sprint.</li>
+      <li data-start="18.85" data-end="21.7" data-place="caption">Sprints, a backlog, story points, a burndown.</li>
+      <li data-start="22.35" data-end="26.75" data-place="caption">The same plan as a list, a Gantt chart, a calendar.</li>
+      <li data-start="27.35" data-end="29.25" data-place="caption">A dashboard says where the project stands.</li>
+      <li data-start="29.8" data-end="30.8" data-place="caption">Add the views you need.</li>
+      <li data-start="31.25" data-end="33.95" data-place="caption">Specialists do the work, each on its task.</li>
+    </ol>
+  </div>
+</section>
+<section class="chapter" id="team" aria-labelledby="team-title" data-chapter data-start="34" data-end="39" data-still="images/specialist-office-960.webp 960w, images/specialist-office-1600.webp 1600w" style="--seconds: 5">
+  <figure class="chapter-still">
+    <img src="images/specialist-office-960.webp" srcset="images/specialist-office-960.webp 960w, images/specialist-office-1600.webp 1600w, images/specialist-office-2400.webp 2400w" sizes="(min-width: 1200px) 1100px, 100vw" width="1600" height="935" alt="The office while a specialist works: a plan of a workshop with a bench for every member of the team, and the lamp over the working one lit." loading="lazy" decoding="async">
+  </figure>
+  <div class="chapter-text">
+    <h3 class="chapter-title" id="team-title"><span class="label">04 · 34 to 39 s</span> The team at work</h3>
+    <p class="chapter-seen">From a lamp of the office into a workshop: three benches, a lamp over each, one for each specialist.</p>
+    <ol class="chapter-lines" aria-label="Lines of the film">
+
+    </ol>
+  </div>
+</section>
+<section class="chapter" id="schematic" aria-labelledby="schematic-title" data-chapter data-start="39" data-end="45" data-still="images/specialist-working-960.webp 960w, images/specialist-working-1600.webp 1600w" style="--seconds: 6">
+  <figure class="chapter-still">
+    <img src="images/specialist-working-960.webp" srcset="images/specialist-working-960.webp 960w, images/specialist-working-1600.webp 1600w, images/specialist-working-2400.webp 2400w" sizes="(min-width: 1200px) 1100px, 100vw" width="1600" height="935" alt="A specialist at work on a task: the panel of the task shows every step it takes as it happens." loading="lazy" decoding="async">
+  </figure>
+  <div class="chapter-text">
+    <h3 class="chapter-title" id="schematic-title"><span class="label">05 · 39 to 45 s</span> Schematic becomes board</h3>
+    <p class="chapter-seen">On the bench of the hardware engineer a schematic draws itself in gold, and its lines sink into a bare board.</p>
+    <ol class="chapter-lines" aria-label="Lines of the film">
+      <li data-start="39.6" data-end="44.45" data-place="caption">Schematic. Layout.</li>
+    </ol>
+  </div>
+</section>
+<section class="chapter" id="parts" aria-labelledby="parts-title" data-chapter data-start="45" data-end="50" data-still="images/specialist-inbox-960.webp 960w, images/specialist-inbox-1600.webp 1600w" style="--seconds: 5">
+  <figure class="chapter-still">
+    <img src="images/specialist-inbox-960.webp" srcset="images/specialist-inbox-960.webp 960w, images/specialist-inbox-1600.webp 1600w, images/specialist-inbox-2400.webp 2400w" sizes="(min-width: 1200px) 1100px, 100vw" width="1600" height="935" alt="The inbox of the manager: a question from a specialist, with the options, what each leads to, and the one it recommends." loading="lazy" decoding="async">
+  </figure>
+  <div class="chapter-text">
+    <h3 class="chapter-title" id="parts-title"><span class="label">06 · 45 to 50 s</span> A choice waits for you</h3>
+    <p class="chapter-seen">The parts land on the board. The task that is the manager's, ordering the boards and parts, waits for the manager.</p>
+    <ol class="chapter-lines" aria-label="Lines of the film">
+      <li data-start="45.55" data-end="49.5" data-place="caption">When a choice is yours, it waits for you.</li>
+    </ol>
+  </div>
+</section>
+<section class="chapter" id="case" aria-labelledby="case-title" data-chapter data-start="50" data-end="56" data-still="images/board-960.webp 960w, images/board-1600.webp 1600w" style="--seconds: 6">
+  <figure class="chapter-still">
+    <img src="images/board-960.webp" srcset="images/board-960.webp 960w, images/board-1600.webp 1600w, images/board-2400.webp 2400w" sizes="(min-width: 1200px) 1100px, 100vw" width="1600" height="935" alt="The board of a sample project cut into three areas, Electronics, Firmware and Enclosure: its tasks in five statuses from To do to Done." loading="lazy" decoding="async">
+  </figure>
+  <div class="chapter-text">
+    <h3 class="chapter-title" id="case-title"><span class="label">07 · 50 to 56 s</span> The case comes down</h3>
+    <p class="chapter-seen">On the bench of the mechanical designer the case closes round the board.</p>
+    <ol class="chapter-lines" aria-label="Lines of the film">
+      <li data-start="50.6" data-end="55.45" data-place="caption">Board, firmware, enclosure. One plan.</li>
+    </ol>
+  </div>
+</section>
+<section class="chapter" id="lives" aria-labelledby="lives-title" data-chapter data-start="56" data-end="60" data-still="images/specialist-report-960.webp 960w, images/specialist-report-1600.webp 1600w" style="--seconds: 4">
+  <figure class="chapter-still">
+    <img src="images/specialist-report-960.webp" srcset="images/specialist-report-960.webp 960w, images/specialist-report-1600.webp 1600w, images/specialist-report-2400.webp 2400w" sizes="(min-width: 1200px) 1100px, 100vw" width="1600" height="935" alt="A specialist has finished a task: the steps it took, its report, and the model, the tokens and the time the work took." loading="lazy" decoding="async">
+  </figure>
+  <div class="chapter-text">
+    <h3 class="chapter-title" id="lives-title"><span class="label">08 · 56 to 60 s</span> It lives</h3>
+    <p class="chapter-seen">The device stands on the desk and its screen shows three readings.</p>
+    <ol class="chapter-lines" aria-label="Lines of the film">
+      <li data-start="56.55" data-end="59.55" data-place="caption">You decide. You build it.</li>
+    </ol>
+  </div>
+</section>
+<section class="chapter" id="end" aria-labelledby="end-title" data-chapter data-start="60" data-end="72" data-still="images/icons/mark.svg" style="--seconds: 12">
+  <figure class="chapter-still">
+    <img src="images/icons/mark.svg" width="1024" height="1024" alt="The mark of Teamwright: a letter T laid out of five blocks, the one that holds the others in gold." loading="lazy" decoding="async">
+  </figure>
+  <div class="chapter-text">
+    <h3 class="chapter-title" id="end-title"><span class="label">09 · 60 to 72 s</span> Teamwright</h3>
+    <p class="chapter-seen">The mark of Teamwright, and where to find it.</p>
+    <ol class="chapter-lines" aria-label="Lines of the film">
+      <li data-start="60.55" data-end="" data-place="picture">Teamwright</li>
+      <li data-start="61.6" data-end="63.4" data-place="saying">You manage. Your team does the work.</li>
+      <li data-start="64" data-end="65.6" data-place="saying">This is just the beginning.</li>
+      <li data-start="66" data-end="68.1" data-place="saying">Changing how projects are managed, and what one developer can build.</li>
+      <li data-start="68.6" data-end="" data-place="statement">Open source. Runs on your own Claude Code.</li>
+      <li data-start="68.62" data-end="" data-place="invitation">Contribute, and star it if you like it.</li>
+      <li data-start="68.9" data-end="" data-place="address">github.com/fouad1233/teamwright</li>
+    </ol>
+  </div>
+</section>
+<!-- film:chapters:end -->
+</section>
+
+<div class="sheet">
+
+<section class="part" id="what" aria-labelledby="what-heading">
+  <p class="part-number label">01</p>
+  <h2 id="what-heading">What it is</h2>
+  <div class="prose">
+    <p class="lead">Teamwright is a desktop app for running a project the way a manager runs a team. The team members are AI specialists. You are the manager.</p>
+    <p>It is made for one person with a project bigger than one conversation: an engineer, a maker or a founder who knows what the result should be and can judge whether it is right, but cannot be the hardware designer, the firmware developer, the mechanical designer and the project manager at the same time.</p>
+    <p>An AI agent is good at a task. A project is more than a pile of tasks: its parts depend on each other, and some choices are only yours. People solved this long ago with boards, timelines, sprints and a manager who makes the calls. Teamwright gives a team of AI specialists the same structure and keeps you in the manager's chair.</p>
+    <p class="note">Teamwright is young. It started on 11 November 2026 and is built in the open, one small commit at a time. This page says what it does today, and says plainly what is not built yet.</p>
+  </div>
+</section>
+
+<section class="part" id="how" aria-labelledby="how-heading">
+  <p class="part-number label">02</p>
+  <h2 id="how-heading">How it works</h2>
+  <ol class="steps">
+    <li>
+      <h3>You say what you want</h3>
+      <p>Tell the Advisor, in your own words, what you want to build. The Advisor is an AI agent that works as your chief of staff.</p>
+    </li>
+    <li>
+      <h3>The Advisor asks, then proposes</h3>
+      <p>It asks what it needs to know, with questions you can answer by a click. Then it proposes the smallest team that can do the job, with a reason, a model and an effort for each specialist, and a plan: tasks, owners, what each task waits for, and estimates.</p>
+    </li>
+    <li>
+      <h3>You approve</h3>
+      <p>Nothing is created before you approve. You can take a specialist or a task out of the proposal first. A later round adds to the team and the plan you have.</p>
+    </li>
+    <li>
+      <h3>Specialists work on their tasks</h3>
+      <p>You start a task that is given to a specialist. It gets a brief, works in the folder of the project, shows every step as it happens, and reports. You can answer it and it goes on.</p>
+    </li>
+    <li>
+      <h3>What is yours to decide waits for you</h3>
+      <p>When a choice is yours, the specialist stops and asks. The question waits in your inbox with the options and what each one leads to.</p>
+    </li>
+  </ol>
+  <div class="figures figures-two">
+    <figure>
+      <img src="images/advisor-interview-960.webp" srcset="images/advisor-interview-960.webp 960w, images/advisor-interview-1600.webp 1600w, images/advisor-interview-2400.webp 2400w" sizes="(min-width: 1200px) 560px, (min-width: 760px) 46vw, 100vw" width="1600" height="935" alt="The Advisor of a project asks its questions: each one with answers to choose by a click, and room for one of your own." loading="lazy" decoding="async">
+      <figcaption><span class="label">Fig. 1</span> The Advisor asks what it needs to know.</figcaption>
+    </figure>
+    <figure>
+      <img src="images/specialist-inbox-960.webp" srcset="images/specialist-inbox-960.webp 960w, images/specialist-inbox-1600.webp 1600w, images/specialist-inbox-2400.webp 2400w" sizes="(min-width: 1200px) 560px, (min-width: 760px) 46vw, 100vw" width="1600" height="935" alt="The inbox of the manager: a question from a specialist, with the options, what each leads to, and the one it recommends." loading="lazy" decoding="async">
+      <figcaption><span class="label">Fig. 2</span> A question of a specialist, in your inbox.</figcaption>
+    </figure>
+  </div>
+  <div class="prose">
+    <p class="note"><strong>Not built yet:</strong> specialists that hand their results to each other, and a coordinator that starts a task by itself when the work it waits for is done. Today you start each task. Both are next on the <a href="https://github.com/fouad1233/teamwright/blob/main/docs/product/roadmap.md">roadmap</a>.</p>
+  </div>
+</section>
+
+<section class="part" id="today" aria-labelledby="today-heading">
+  <p class="part-number label">03</p>
+  <h2 id="today-heading">What is in it today</h2>
+  <div class="prose">
+    <p class="lead">Every project is a place to plan and follow the work, with the views a project-management tool gives a team of people.</p>
+  </div>
+
+  <figure class="figure-wide">
+    <img src="images/board-960.webp" srcset="images/board-960.webp 960w, images/board-1600.webp 1600w, images/board-2400.webp 2400w" sizes="(min-width: 1360px) 1200px, 92vw" width="1600" height="935" alt="The board of a sample project: tasks in five statuses from To do to Done, each card with its number, what it waits for, its due date, its estimate and who it is given to." loading="lazy" decoding="async">
+    <figcaption><span class="label">Fig. 3</span> The board. These are pictures of the real program, taken by a tool from the built app.</figcaption>
+  </figure>
+
+  <dl class="schedule">
+    <div>
+      <dt>Board</dt>
+      <dd>Tasks in the statuses of your workflow, moved by drag and drop, with subtasks behind a fold. You name, color and order the statuses yourself.</dd>
+    </div>
+    <div>
+      <dt>Backlog and sprints</dt>
+      <dd>Plan, fill, start and complete sprints, with story points and a burndown. A completed sprint opens with its burndown and its tasks.</dd>
+    </div>
+    <div>
+      <dt>List, Gantt, calendar</dt>
+      <dd>The same tasks as a table, as bars against the days with lines from each task to the tasks that wait for it, and by month. On the Gantt chart a bar is dragged to change the dates.</dd>
+    </div>
+    <div>
+      <dt>Dashboard</dt>
+      <dd>Where the project stands, in sentences worked out by rules: the numbers, the work by status and by member, this week, the sprint, the tokens used, and a note of your own.</dd>
+    </div>
+    <div>
+      <dt>Views you add</dt>
+      <dd>Add a view, name it, filter it, order the tabs, and remove it again.</dd>
+    </div>
+    <div>
+      <dt>Areas</dt>
+      <dd>Cut a project into the jobs inside it, such as electronics, firmware and enclosure. An area shows only its tasks, in every view.</dd>
+    </div>
+    <div>
+      <dt>The office</dt>
+      <dd>The team drawn as a workshop in plan: a bench and a desk for everybody, a lamp lit where work goes on, and people who work, wait with a hand raised, or walk the aisles.</dd>
+    </div>
+    <div>
+      <dt>History</dt>
+      <dd>Every change is written into a log of operations. The history of a task is read from it, and when another computer made a change, it names that computer.</dd>
+    </div>
+    <div>
+      <dt>Syncing</dt>
+      <dd>Keep two computers in step through a folder you own, such as a cloud drive. <em>Being built:</em> it has run with two copies of the program on one computer, not yet between two real computers.</dd>
+    </div>
+  </dl>
+
+  <div class="figures figures-two">
+    <figure>
+      <img src="images/backlog-960.webp" srcset="images/backlog-960.webp 960w, images/backlog-1600.webp 1600w, images/backlog-2400.webp 2400w" sizes="(min-width: 1200px) 560px, (min-width: 760px) 46vw, 100vw" width="1600" height="935" alt="The Backlog view: the sprint that runs, with its dates, its story points and its burndown, the planned sprint, and the backlog under them." loading="lazy" decoding="async">
+      <figcaption><span class="label">Fig. 4</span> Sprints and the backlog, with story points and a burndown.</figcaption>
+    </figure>
+    <figure>
+      <img src="images/gantt-960.webp" srcset="images/gantt-960.webp 960w, images/gantt-1600.webp 1600w, images/gantt-2400.webp 2400w" sizes="(min-width: 1200px) 560px, (min-width: 760px) 46vw, 100vw" width="1600" height="935" alt="The Gantt chart of a sample project: a bar for every task against the days, with lines from each task to the tasks that wait for it." loading="lazy" decoding="async">
+      <figcaption><span class="label">Fig. 5</span> The Gantt chart, with what each task waits for.</figcaption>
+    </figure>
+    <figure>
+      <img src="images/dashboard-960.webp" srcset="images/dashboard-960.webp 960w, images/dashboard-1600.webp 1600w, images/dashboard-2400.webp 2400w" sizes="(min-width: 1200px) 560px, (min-width: 760px) 46vw, 100vw" width="1600" height="935" alt="The dashboard of a sample project: a sentence on where it stands, the counts, the work by status and by member, this week and the sprint." loading="lazy" decoding="async">
+      <figcaption><span class="label">Fig. 6</span> The dashboard, worked out by rules.</figcaption>
+    </figure>
+    <figure>
+      <img src="images/office-960.webp" srcset="images/office-960.webp 960w, images/office-1600.webp 1600w, images/office-2400.webp 2400w" sizes="(min-width: 1200px) 560px, (min-width: 760px) 46vw, 100vw" width="1600" height="935" alt="The office of a sample project: a workshop drawn in plan, with a bench and a person at a desk for every member of the team." loading="lazy" decoding="async">
+      <figcaption><span class="label">Fig. 7</span> The office, while nobody works.</figcaption>
+    </figure>
+  </div>
+
+  <figure class="figure-wide">
+    <img src="images/specialist-report-960.webp" srcset="images/specialist-report-960.webp 960w, images/specialist-report-1600.webp 1600w, images/specialist-report-2400.webp 2400w" sizes="(min-width: 1360px) 1200px, 92vw" width="1600" height="935" alt="A specialist has finished a task: the panel of the task shows the steps it took, its report in four points, and the model, the tokens and the time the work took." loading="lazy" decoding="async">
+    <figcaption><span class="label">Fig. 8</span> A specialist's report. The specialist here was real: a session of Claude Code that wrote the file it reports on.</figcaption>
+  </figure>
+</section>
+
+<section class="part" id="runs-on" aria-labelledby="runs-on-heading">
+  <p class="part-number label">04</p>
+  <h2 id="runs-on-heading">What it runs on</h2>
+  <div class="prose">
+    <p class="lead">Teamwright runs on your own Claude Code, on your own computer.</p>
+    <p>It does not ship a model and does not ask for a password. It starts the Claude Code that is already installed on your computer, and that you signed in to yourself, and talks to it through its documented headless mode. Every specialist is a session of its own. It can read and write files in the folder of its project, read the folders you give it for reference, and nothing else.</p>
+    <p>Your data stays in a file on your disk: a local database. What the specialists make is ordinary files in the folder of the project. There is no account, no server and no telemetry. The tokens every turn uses are counted and shown, and a specialist with nothing to do is not running.</p>
+    <p>The program has been run on Windows. The build server builds and tests its code on Windows and on Linux. macOS is not among the systems it is checked on yet.</p>
+  </div>
+</section>
+
+<section class="part" id="open-source" aria-labelledby="open-source-heading">
+  <p class="part-number label">05</p>
+  <h2 id="open-source-heading">Open source</h2>
+  <div class="prose">
+    <p>Teamwright is free and open source, under the <a href="https://github.com/fouad1233/teamwright/blob/main/LICENSE">Apache License 2.0</a>. The code, the design, every decision and the story of how it was made are in <a href="https://github.com/fouad1233/teamwright">the repository</a>.</p>
+  </div>
+</section>
+
+<section class="part" id="get" aria-labelledby="get-heading">
+  <p class="part-number label">06</p>
+  <h2 id="get-heading">Get it and build it</h2>
+  <div class="prose">
+    <p class="lead">There is no installer yet. You build Teamwright from its source code.</p>
+    <p>You need:</p>
+  </div>
+  <dl class="schedule schedule-narrow">
+    <div><dt>Rust</dt><dd>Stable. <code>rustup</code> reads the version from the repository.</dd></div>
+    <div><dt>A C compiler</dt><dd>On Windows the Microsoft C++ Build Tools, or <a href="https://github.com/fouad1233/teamwright/blob/main/docs/development/windows-without-admin.md">a setup without administrator rights</a>.</dd></div>
+    <div><dt>Node.js</dt><dd>22 or later.</dd></div>
+    <div><dt>WebView2</dt><dd>Windows only, and part of Windows 11. On Linux and macOS the <a href="https://tauri.app/start/prerequisites/">prerequisites of Tauri</a> apply.</dd></div>
+    <div><dt>Claude Code</dt><dd>Installed and signed in, for the Advisor and the specialists. Projects, tasks and every view work without it.</dd></div>
+  </dl>
+  <div class="prose">
+    <p>Then, in a terminal:</p>
+<pre class="code"><code>git clone https://github.com/fouad1233/teamwright.git
+cd teamwright
+npm install
+npm run app</code></pre>
+    <p><code>npm run app</code> builds and opens the desktop app. To build it once, without opening it:</p>
+<pre class="code"><code>npm run tauri --workspace @teamwright/desktop -- build --debug --no-bundle</code></pre>
+    <p>On Windows that gives <code>target/debug/teamwright-desktop.exe</code>. To see only the interface in a browser, on made-up data and without Rust, run <code>npm run dev</code> and open <code>http://localhost:1420</code>.</p>
+    <p>The <a href="https://github.com/fouad1233/teamwright/blob/main/docs/development/README.md">development guide</a> has the details, the checks and the tests.</p>
+  </div>
+</section>
+
+<section class="part" id="contribute" aria-labelledby="contribute-heading">
+  <p class="part-number label">07</p>
+  <h2 id="contribute-heading">Contribute</h2>
+  <div class="prose">
+    <p>Issues and ideas are welcome now. The project is young and its foundations still move, so before a large change, open an issue and say what you want to do.</p>
+    <p>The <a href="https://github.com/fouad1233/teamwright/blob/main/CONTRIBUTING.md">contributing guide</a> explains how the code is organized and the standards it follows: small commits, code that explains itself, documents that move with the code, and a written record of every lasting decision. It applies to people and to AI agents alike.</p>
+  </div>
+</section>
+
+<section class="part" id="questions" aria-labelledby="questions-heading">
+  <p class="part-number label">08</p>
+  <h2 id="questions-heading">Questions</h2>
+  <div class="questions">
+    <div class="question">
+      <h3>Is Teamwright free?</h3>
+      <div class="answer"><p>Yes. It is open source under the Apache License 2.0. The work of the Advisor and the specialists runs on your own Claude Code and uses your own plan there.</p></div>
+    </div>
+    <div class="question">
+      <h3>Can I download it?</h3>
+      <div class="answer"><p>Not yet. There is no installer. You build it from the source code with Rust and Node.js, as the section above shows.</p></div>
+    </div>
+    <div class="question">
+      <h3>Do I need Claude Code?</h3>
+      <div class="answer"><p>For the Advisor and the specialists, yes: installed on your computer and signed in by you. Projects, tasks and every view work without it.</p></div>
+    </div>
+    <div class="question">
+      <h3>Where is my data?</h3>
+      <div class="answer"><p>In a database file on your own disk. What the specialists make is files in the folder of the project. There is no account, no server and no telemetry.</p></div>
+    </div>
+    <div class="question">
+      <h3>What can a specialist touch?</h3>
+      <div class="answer"><p>It reads and writes files in the folder of its project and reads the folders and files you give it for reference. It cannot reach anything else. When a choice is yours, it stops and asks.</p></div>
+    </div>
+    <div class="question">
+      <h3>Do the specialists work together on their own?</h3>
+      <div class="answer"><p>Not yet. Today each specialist works on the task you start for it. Handing results to each other, and a coordinator that starts tasks when the work they wait for is done, are the next steps on the roadmap.</p></div>
+    </div>
+    <div class="question">
+      <h3>Which systems does it run on?</h3>
+      <div class="answer"><p>It has been run on Windows. Its code is built and tested on Windows and Linux. macOS is not among the systems it is checked on yet.</p></div>
+    </div>
+    <div class="question">
+      <h3>Did Teamwright make the device in the film?</h3>
+      <div class="answer"><p>No. The interface in the film is the real program on a sample project, and the plan in it was proposed by a real Advisor. The board, the parts and the case are modelled for the film. The film shows what Teamwright is for, not a record of a finished device.</p></div>
+    </div>
+  </div>
+</section>
+
+</div>
+</main>
+
+<footer class="colophon">
+  <div class="colophon-block">
+    <p class="colophon-name"><img src="images/icons/mark.svg" width="20" height="20" alt=""> Teamwright</p>
+    <p class="label">Open source · Apache License 2.0</p>
+  </div>
+  <ul class="colophon-links">
+    <li><a href="https://github.com/fouad1233/teamwright">Repository</a></li>
+    <li><a href="https://github.com/fouad1233/teamwright/blob/main/docs/product/roadmap.md">Roadmap</a></li>
+    <li><a href="https://github.com/fouad1233/teamwright/tree/main/docs/decisions">Decisions</a></li>
+    <li><a href="https://github.com/fouad1233/teamwright/tree/main/docs/story">Story</a></li>
+  </ul>
+  <p class="colophon-note label">This page sets no cookies and loads nothing from anywhere else.</p>
+</footer>
+
+<dialog class="watch" data-watch-dialog aria-label="The film">
+  <div class="watch-frame">
+    <video controls playsinline preload="none" data-watch-video></video>
+    <button class="button button-quiet watch-close" type="button" data-watch-close>Close</button>
+  </div>
+</dialog>
+</body>
+</html>

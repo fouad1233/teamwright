@@ -1,0 +1,125 @@
+{
+  "film": {
+    "name": "I wish I could build it",
+    "description": "A film of 72 seconds about Teamwright. Somebody wants to build a small sensor hub, a board, its firmware and a case, and runs the project as the manager of a team of AI specialists. The interface in the film is the real program on a sample project; the board, the parts and the case are modelled for the film.",
+    "seconds": 72,
+    "framesPerSecond": 24,
+    "width": 1920,
+    "height": 1080,
+    "published": "2026-11-13",
+    "video": "teamwright-film.mp4",
+    "smallVideo": "teamwright-film-small.mp4",
+    "thumbnail": "images/share.png"
+  },
+  "site": {
+    "address": "https://fouad1233.github.io/teamwright/",
+    "repository": "https://github.com/fouad1233/teamwright"
+  },
+  "chapters": [
+    {
+      "id": "wish",
+      "title": "The wish",
+      "start": 0,
+      "end": 11,
+      "stillAt": 2.5,
+      "seen": "A desk at night under one lamp. A notebook holds a pencil sketch of a small box with a screen. A board, firmware and a case are too much for one person. Then the laptop opens on Teamwright.",
+      "still": { "picture": "first-run", "alt": "The first screen of Teamwright after it is installed: no project yet, and a button to start one." }
+    },
+    {
+      "id": "advisor",
+      "title": "Tell the Advisor",
+      "start": 11,
+      "end": 16,
+      "stillAt": 15.4,
+      "seen": "The real program. The brief is typed, the Advisor asks its questions, then proposes three specialists and a plan of fourteen tasks. The manager approves.",
+      "still": { "picture": "advisor-proposal", "alt": "The proposal of the Advisor: the project in its words, a team of three specialists with a model and an effort for each, and a plan of fourteen tasks with their owners and what each waits for." }
+    },
+    {
+      "id": "views",
+      "title": "One plan, every view",
+      "start": 16,
+      "end": 34,
+      "stillAt": 19.5,
+      "seen": "The same project four days into its first sprint: the board of the sprint, the backlog with its sprints, story points and burndown, the list, the Gantt chart, the calendar and the dashboard. Then the chooser that adds a view, and the office with two specialists at work.",
+      "still": { "picture": "backlog", "alt": "The Backlog view: the sprint that runs, with its dates, its story points and its burndown, the planned sprint, and the backlog under them." }
+    },
+    {
+      "id": "team",
+      "title": "The team at work",
+      "start": 34,
+      "end": 39,
+      "stillAt": 36.5,
+      "seen": "From a lamp of the office into a workshop: three benches, a lamp over each, one for each specialist.",
+      "still": { "picture": "specialist-office", "alt": "The office while a specialist works: a plan of a workshop with a bench for every member of the team, and the lamp over the working one lit." }
+    },
+    {
+      "id": "schematic",
+      "title": "Schematic becomes board",
+      "start": 39,
+      "end": 45,
+      "stillAt": 43,
+      "seen": "On the bench of the hardware engineer a schematic draws itself in gold, and its lines sink into a bare board.",
+      "still": { "picture": "specialist-working", "alt": "A specialist at work on a task: the panel of the task shows every step it takes as it happens." }
+    },
+    {
+      "id": "parts",
+      "title": "A choice waits for you",
+      "start": 45,
+      "end": 50,
+      "stillAt": 48,
+      "seen": "The parts land on the board. The task that is the manager's, ordering the boards and parts, waits for the manager.",
+      "still": { "picture": "specialist-inbox", "alt": "The inbox of the manager: a question from a specialist, with the options, what each leads to, and the one it recommends." }
+    },
+    {
+      "id": "case",
+      "title": "The case comes down",
+      "start": 50,
+      "end": 56,
+      "stillAt": 54,
+      "seen": "On the bench of the mechanical designer the case closes round the board.",
+      "still": { "picture": "board", "alt": "The board of a sample project cut into three areas, Electronics, Firmware and Enclosure: its tasks in five statuses from To do to Done." }
+    },
+    {
+      "id": "lives",
+      "title": "It lives",
+      "start": 56,
+      "end": 60,
+      "stillAt": 58.5,
+      "seen": "The device stands on the desk and its screen shows three readings.",
+      "still": { "picture": "specialist-report", "alt": "A specialist has finished a task: the steps it took, its report, and the model, the tokens and the time the work took." }
+    },
+    {
+      "id": "end",
+      "title": "Teamwright",
+      "start": 60,
+      "end": 72,
+      "stillAt": 70.5,
+      "seen": "The mark of Teamwright, and where to find it.",
+      "still": { "picture": "mark", "alt": "The mark of Teamwright: a letter T laid out of five blocks, the one that holds the others in gold." }
+    }
+  ],
+  "lines": [
+    { "text": "I want to build a sensor hub.", "start": 0.7, "end": 3.45, "place": "caption" },
+    { "text": "A board. Firmware. A case.", "start": 4.25, "end": 5.75, "place": "caption" },
+    { "text": "I wish I could.", "start": 6.15, "end": 7.15, "place": "caption" },
+    { "text": "Teamwright exists.", "start": 8.1, "end": 10.55, "place": "caption" },
+    { "text": "Tell the Advisor what you want. It proposes a team and a plan.", "start": 11.35, "end": 15.55, "place": "caption" },
+    { "text": "Four days into the first sprint.", "start": 16.55, "end": 18.25, "place": "caption" },
+    { "text": "Sprints, a backlog, story points, a burndown.", "start": 18.85, "end": 21.7, "place": "caption" },
+    { "text": "The same plan as a list, a Gantt chart, a calendar.", "start": 22.35, "end": 26.75, "place": "caption" },
+    { "text": "A dashboard says where the project stands.", "start": 27.35, "end": 29.25, "place": "caption" },
+    { "text": "Add the views you need.", "start": 29.8, "end": 30.8, "place": "caption" },
+    { "text": "Specialists do the work, each on its task.", "start": 31.25, "end": 33.95, "place": "caption" },
+    { "text": "Schematic. Layout.", "start": 39.6, "end": 44.45, "place": "caption" },
+    { "text": "When a choice is yours, it waits for you.", "start": 45.55, "end": 49.5, "place": "caption" },
+    { "text": "Board, firmware, enclosure. One plan.", "start": 50.6, "end": 55.45, "place": "caption" },
+    { "text": "You decide. You build it.", "start": 56.55, "end": 59.55, "place": "caption" },
+    { "text": "Teamwright", "start": 60.55, "end": null, "place": "picture" },
+    { "text": "You manage. Your team does the work.", "start": 61.6, "end": 63.4, "place": "saying" },
+    { "text": "This is just the beginning.", "start": 64, "end": 65.6, "place": "saying" },
+    { "text": "Changing how projects are managed, and what one developer can build.", "start": 66, "end": 68.1, "place": "saying" },
+    { "text": "Open source. Runs on your own Claude Code.", "start": 68.6, "end": null, "place": "statement" },
+    { "text": "Contribute, and star it if you like it.", "start": 68.62, "end": null, "place": "invitation" },
+    { "text": "github.com/fouad1233/teamwright", "start": 68.9, "end": null, "place": "address" }
+  ]
+}
