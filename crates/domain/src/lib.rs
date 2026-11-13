@@ -15,6 +15,7 @@
 
 mod macros;
 
+pub mod area;
 pub mod color;
 pub mod conversation;
 pub mod dependencies;
@@ -31,6 +32,7 @@ pub mod time;
 pub mod view;
 pub mod workflow;
 
+pub use area::{Area, AreaSnapshot};
 pub use color::Color;
 pub use conversation::{
     Conversation, ConversationSnapshot, DecisionAnswer, DecisionOption, DecisionRequest,
@@ -40,7 +42,8 @@ pub use conversation::{
 pub use dependencies::DependencyGraph;
 pub use error::DomainError;
 pub use ids::{
-    ComputerId, ConversationId, MemberId, ProjectId, SprintId, StatusId, TaskId, TurnId, ViewId,
+    AreaId, ComputerId, ConversationId, MemberId, ProjectId, SprintId, StatusId, TaskId, TurnId,
+    ViewId,
 };
 pub use member::{Effort, Member, MemberKind, MemberProfile, MemberSnapshot};
 pub use planning::{
@@ -55,7 +58,8 @@ pub use sprint::{
 pub use task::{Assignee, Priority, Rank, Schedule, Task, TaskDraft, TaskSnapshot};
 pub use task_history::{TaskChange, TaskChangeKind, changes_between, history_of};
 pub use text::{
-    ComputerName, MemberName, ModelName, ProjectName, SprintName, StatusName, TaskTitle, ViewName,
+    AreaName, ComputerName, MemberName, ModelName, ProjectName, SprintName, StatusName, TaskTitle,
+    ViewName,
 };
 pub use time::{CalendarDate, Timestamp};
 pub use view::{View, ViewAssignee, ViewFilter, ViewKind, ViewSnapshot};

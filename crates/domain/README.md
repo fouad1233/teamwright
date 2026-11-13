@@ -9,14 +9,15 @@ done with them. It does no input or output.
 
 | Module | Concepts |
 |---|---|
-| `ids` | `ProjectId`, `StatusId`, `TaskId`, `SprintId`, `ViewId`, `MemberId`, `ConversationId`, `TurnId`: one identifier type per kind of thing |
-| `text` | `ProjectName`, `StatusName`, `TaskTitle`, `SprintName`, `ViewName`, `MemberName`: names that are never empty, never multi-line, never too long; `ModelName`: the name of a model |
+| `ids` | `ProjectId`, `StatusId`, `TaskId`, `SprintId`, `ViewId`, `AreaId`, `MemberId`, `ConversationId`, `TurnId`: one identifier type per kind of thing |
+| `text` | `ProjectName`, `StatusName`, `TaskTitle`, `SprintName`, `ViewName`, `AreaName`, `MemberName`: names that are never empty, never multi-line, never too long; `ModelName`: the name of a model |
 | `color` | `Color`: the named colors a status or a team member can have |
 | `workflow` | `Workflow`, `Status`, `StatusCategory` |
 | `project` | `Project`, `ProjectKey` |
 | `task` | `Task`, `TaskDraft`, `Priority`, `Assignee`, `Schedule`, `Rank` |
 | `sprint` | `Sprint`, `SprintState`, `SprintDates`, `SprintSummary`, `SprintUnit`: a stretch of time in which the team works on a part of the backlog; `StoryPoints`: how big a task is; `CountedTask`: a task as a sprint counts its work |
 | `view` | `View`, `ViewKind`, `ViewFilter`, `ViewAssignee`: one way of looking at the tasks of a project, with a name, a filter and a place among the views of the project |
+| `area` | `Area`: a part of a project with a job of its own, such as its firmware, with a name and a place among the areas of the project |
 | `task_history` | `TaskChange`, `history_of`: what changed from one version of a task to the next |
 | `dependencies` | `DependencyGraph`: which task waits for which |
 | `member` | `Member`, `MemberKind`: an AI agent or a person on the team of a project; `MemberProfile`, `Effort`: the model and the effort of a specialist |
@@ -66,6 +67,11 @@ done with them. It does no input or output.
   identifiers of these six follow from the project and the kind, so that
   two computers that each give a project its starting views give it the
   same ones.
+- An area's name has at most 40 characters. A new project starts with one
+  area, "General", whose identifier follows from the project, so that two
+  computers that each give a project its starting area give it the same
+  one. A project left with no areas by two computers gets "General" again,
+  with an identifier that also follows from the project.
 - The history of a task is not recorded as such. It is read off the versions
   the task has had: that it was opened, and then what differs from one
   version to the next. A move up or down within a status is not a change.

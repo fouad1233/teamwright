@@ -97,6 +97,12 @@ define_id!(
 );
 
 define_id!(
+    /// Identifies an area of a project: a part of it with a job of its own.
+    AreaId,
+    kind = "area identifier"
+);
+
+define_id!(
     /// Identifies a conversation with an AI specialist.
     ConversationId,
     kind = "conversation identifier"

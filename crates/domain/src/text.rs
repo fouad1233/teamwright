@@ -154,6 +154,22 @@ impl ViewName {
     }
 }
 
+define_text!(
+    /// The name of an area of a project, such as "Firmware" or "Enclosure".
+    AreaName,
+    field = "area name",
+    max_length = 40
+);
+
+impl AreaName {
+    /// Whether two names are the same, whatever the capitals. Two areas of
+    /// a project never have the same name in this sense.
+    #[must_use]
+    pub fn is_same_as(&self, other: &str) -> bool {
+        self.0.to_lowercase() == other.to_lowercase()
+    }
+}
+
 /// The name of a model, as the program that runs the specialists
 /// understands it: a short name for the latest model of a family, such as
 /// `sonnet`, or the full name of a model.
