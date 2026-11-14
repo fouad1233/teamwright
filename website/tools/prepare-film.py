@@ -26,7 +26,7 @@ With FRAMES it writes into the output folder, which git ignores:
 
 - manifest.json: what the page needs to know about everything below;
 - large/pack-NN.bin and small/pack-NN.bin: every second frame of the film
-  (12 a second) as WebP pictures, 1280 and 640 pixels wide, laid end to end
+  (12 a second) as WebP pictures, 1920 and 1280 pixels wide, laid end to end
   in a few dozen files. The manifest says where each picture starts and
   how long it is. The first packs hold every sixteenth frame of the film,
   so that the page can scrub through the whole film once they are in;
@@ -55,9 +55,13 @@ STEP = 2
 # The levels of detail, as the step between pictures of the page's own
 # numbering (12 a second): every 8th is every 16th frame of the film.
 LEVELS = (8, 4, 2, 1)
+# The large set is as wide as the film itself, so that nothing is lost on a
+# wide screen; the small one is for phones, whose screens have about 1200
+# pixels across, and for readers who save data. (They were 1280 and 640
+# until the owner found the film soft on the site.)
 SETS = {
-    'large': {'width': 1280, 'quality': 72},
-    'small': {'width': 640, 'quality': 70},
+    'large': {'width': 1920, 'quality': 80},
+    'small': {'width': 1280, 'quality': 76},
 }
 # A pack is closed when it holds this many bytes.
 PACK_BYTES = 1_500_000
@@ -247,8 +251,9 @@ def main():
         if not os.path.isfile(path):
             continue
         image = Image.open(path).convert('RGB')
-        image = image.resize((1280, round(image.height * 1280 / image.width)), Image.LANCZOS)
-        image.save(os.path.join(stills, f'{chapter["id"]}.webp'), 'WEBP', quality=78, method=6)
+        if image.width > 1920:
+            image = image.resize((1920, round(image.height * 1920 / image.width)), Image.LANCZOS)
+        image.save(os.path.join(stills, f'{chapter["id"]}.webp'), 'WEBP', quality=84, method=6)
         manifest['stills'][chapter['id']] = f'stills/{chapter["id"]}.webp'
 
     for key, source in (('large', arguments.video), ('small', arguments.small_video)):

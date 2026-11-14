@@ -181,7 +181,8 @@
       this.decoding = new Map();
       this.wanted = 0;
       this.loading = 0;
-      this.limit = setName === 'small' ? 72 : 28;
+      // A decoded picture is 8 MB at 1920 pixels and under 4 MB at 1280.
+      this.limit = setName === 'small' ? 24 : 16;
       this.bytes = 0;
       this.loadedCount = 0;
     }
@@ -541,7 +542,9 @@
   function prepareWatching(manifest) {
     const files = manifest.video || {};
     const connection = navigator.connection;
-    const small = (connection && connection.saveData) || Math.min(window.screen.width, window.screen.height) < 700;
+    // Everybody gets the film at its full size; only a reader whose browser
+    // asks to save data gets the small one.
+    const small = Boolean(connection && connection.saveData);
     videoFile = (small && files.small) || files.large || files.small || '';
     if (!videoFile || !dialog || typeof dialog.showModal !== 'function') return;
     watchReady = true;

@@ -137,7 +137,7 @@ their type, size and place from `web.json`. The name on the end card is
 part of the picture, and is not a line. From the frames the tool writes:
 
 - `manifest.json`, which the page reads first;
-- `large/pack-NN.bin` (1280 pixels wide) and `small/pack-NN.bin` (640):
+- `large/pack-NN.bin` (1920 pixels wide) and `small/pack-NN.bin` (1280):
   every second frame (12 a second) as WebP, laid end to end in packs of
   about 1.5 MB. The first packs hold every sixteenth frame of the film;
   the later ones fill in between;
@@ -200,11 +200,15 @@ second to a second and a half, so the film runs there.
   files rather than one request each. The manifest says where each picture begins.
 - **Kept compressed.** The pictures are kept as they came. Only those near
   the reader are decoded, with `createImageBitmap`, off the main thread: at
-  most 28 at 1280 pixels (about 100 MB) or 72 at 640 (about 66 MB). The
+  most 16 at 1920 pixels (about 130 MB) or 24 at 1280 (about 90 MB). The
   farthest are let go first.
-- **Small for phones.** A screen narrower than 700 pixels, or a reader
-  whose browser asks to save data, gets the 640-pixel set and the smaller
-  video.
+- **Sharp everywhere.** The large set is as wide as the film itself. A
+  screen narrower than 700 pixels, or a reader whose browser asks to save
+  data, gets the 1280-pixel set, which is still wider than a phone's
+  screen. The video is the film at its full size for everybody; only a
+  reader who saves data gets the small one. (Until 14 November 2026 the
+  sets were 1280 and 640 pixels and phones got the small video; the owner
+  found that soft.)
 - **Never in the way of the first picture.** The frames are asked for only
   after the page has loaded. Until a frame is there, each chapter shows a
   still: a picture of the program, framed, or with the film's media, the
@@ -242,6 +246,10 @@ take the times as rough:
 
 A first paint above a second on a local server is slow; it was not looked
 into further. The computer was rendering the film at the same time.
+
+These numbers are of the sets as they were then, 1280 and 640 pixels
+wide. The sets are 1920 and 1280 now and weigh about three times as much;
+the times were not measured again.
 
 The script memory does not count decoded pictures; their upper bound is
 the one computed above. A frame of the interface shots weighs 26 kB at
