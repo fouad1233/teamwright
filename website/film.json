@@ -3,15 +3,15 @@
   "film": {
     "name": "I wish I could build it",
     "description": "A short film about Teamwright. Somebody wants to build a small sensor hub, a board, its firmware and a case, and runs the project as the manager of a team of AI specialists. The interface in the film is the real program on a sample project; the board, the parts and the case are modelled for the film.",
-    "seconds": 72,
+    "seconds": 82,
     "framesPerSecond": 24,
     "width": 1920,
     "height": 1080,
-    "published": "2026-11-13",
+    "published": "2026-11-14",
     "video": "teamwright-film.mp4",
     "smallVideo": "teamwright-film-small.mp4",
     "thumbnail": "images/share.png",
-    "frames": 1728
+    "frames": 1968
   },
   "site": {
     "address": "https://fouad1233.github.io/teamwright/",
@@ -76,8 +76,8 @@
       "fromShot": "6",
       "stillAfter": 4,
       "start": 39,
-      "end": 45,
-      "seen": "On the bench of the hardware engineer a schematic draws itself in gold, and its lines sink into a bare board.",
+      "end": 50,
+      "seen": "On the bench of the hardware engineer a schematic draws itself in gold, and its lines sink into a bare board. Then the view glides low over the finished board: its pads, its tracks, its vias and its print.",
       "still": {
         "picture": "specialist-working",
         "alt": "A specialist at work on a task: the panel of the task shows every step it takes as it happens."
@@ -88,8 +88,8 @@
       "title": "A choice waits for you",
       "fromShot": "7",
       "stillAfter": 3,
-      "start": 45,
-      "end": 50,
+      "start": 50,
+      "end": 55,
       "seen": "The parts land on the board. The task that is the manager's, ordering the boards and parts, waits for the manager.",
       "still": {
         "picture": "specialist-inbox",
@@ -101,8 +101,8 @@
       "title": "The case comes down",
       "fromShot": "8",
       "stillAfter": 4,
-      "start": 50,
-      "end": 56,
+      "start": 55,
+      "end": 61,
       "seen": "On the bench of the mechanical designer the case closes round the board.",
       "still": {
         "picture": "board",
@@ -114,9 +114,9 @@
       "title": "It lives",
       "fromShot": "9",
       "stillAfter": 2.5,
-      "start": 56,
-      "end": 60,
-      "seen": "The device stands on the desk and its screen shows three readings.",
+      "start": 61,
+      "end": 70,
+      "seen": "The closed device lands on the desk. A hand pushes a USB-C plug in, and the screen comes on with its readings: carbon dioxide, temperature and humidity. The person at the desk looks at it and is glad.",
       "still": {
         "picture": "specialist-report",
         "alt": "A specialist has finished a task: the steps it took, its report, and the model, the tokens and the time the work took."
@@ -127,8 +127,8 @@
       "title": "Teamwright",
       "fromShot": "10",
       "stillAfter": 10.5,
-      "start": 60,
-      "end": 72,
+      "start": 70,
+      "end": 82,
       "seen": "The mark of Teamwright, and where to find it.",
       "still": {
         "picture": "mark",
@@ -259,8 +259,8 @@
     },
     {
       "text": "When a choice is yours, it waits for you.",
-      "start": 45.55,
-      "end": 49.5,
+      "start": 50.55,
+      "end": 54.5,
       "type": "sans",
       "weight": 500,
       "size": 0.043,
@@ -269,8 +269,8 @@
     },
     {
       "text": "Board, firmware, enclosure. One plan.",
-      "start": 50.6,
-      "end": 55.45,
+      "start": 55.6,
+      "end": 60.45,
       "type": "sans",
       "weight": 500,
       "size": 0.043,
@@ -279,8 +279,8 @@
     },
     {
       "text": "You decide. You build it.",
-      "start": 56.55,
-      "end": 59.55,
+      "start": 64,
+      "end": 66.35,
       "type": "sans",
       "weight": 500,
       "size": 0.043,
@@ -289,8 +289,8 @@
     },
     {
       "text": "You manage. Your team does the work.",
-      "start": 61.6,
-      "end": 63.4,
+      "start": 71.6,
+      "end": 73.4,
       "type": "serif",
       "weight": 400,
       "size": 0.047,
@@ -299,8 +299,8 @@
     },
     {
       "text": "This is just the beginning.",
-      "start": 64,
-      "end": 65.6,
+      "start": 74,
+      "end": 75.6,
       "type": "serif",
       "weight": 400,
       "size": 0.047,
@@ -309,8 +309,8 @@
     },
     {
       "text": "Changing how projects are managed, and what one developer can build.",
-      "start": 66,
-      "end": 68.1,
+      "start": 76,
+      "end": 78.1,
       "type": "serif",
       "weight": 400,
       "size": 0.047,
@@ -319,7 +319,7 @@
     },
     {
       "text": "Open source. Runs on your own Claude Code.",
-      "start": 68.6,
+      "start": 78.6,
       "end": null,
       "type": "sans",
       "weight": 500,
@@ -329,7 +329,7 @@
     },
     {
       "text": "Contribute, and star it if you like it.",
-      "start": 68.62,
+      "start": 78.62,
       "end": null,
       "type": "serif",
       "weight": 400,
@@ -339,7 +339,7 @@
     },
     {
       "text": "github.com/fouad1233/teamwright",
-      "start": 68.9,
+      "start": 78.9,
       "end": null,
       "type": "mono",
       "weight": 400,
