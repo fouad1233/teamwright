@@ -259,7 +259,12 @@ its first pass about 4 MB, and the small set about 12 MB and its first
 pass about 1.4 MB. Measure again with the finished film.
 
 Not measured: other browsers than Edge, a real phone, a real slow network,
-the memory of decoded pictures, and the published site.
+and the memory of decoded pictures.
+
+The published site was looked at once, on 14 November 2026, the evening it
+went up, with `look.mjs` at 1600 by 900 and at a phone's size: nothing
+reported by the browser, the first frame after about 4 s and the film
+ready to scrub after about 5 s, with 8 MB of it loaded by then.
 
 ## Search engines
 

@@ -197,11 +197,12 @@ Several specialists working together with the manager in the loop.
 - ⬜ Installer and updates
 - ⬜ User manual
 - ⬜ Public demo in the browser
-- 🚧 A website on GitHub Pages that explains the project, with the film
-  run by scrolling ([decision 0023](../decisions/0023-a-website-without-a-framework.md)).
-  Built and seen in a headless Edge on this computer, at a desktop and a
-  phone size, with the film as it stood; not yet published, not seen in
-  other browsers or on a real phone
+- ✅ A website on GitHub Pages that explains the project, with the film
+  run by scrolling ([decision 0023](../decisions/0023-a-website-without-a-framework.md)):
+  <https://fouad1233.github.io/teamwright/>, published on 14 November
+  2026 with the film of 107 seconds. Seen from GitHub in a headless Edge
+  at a desktop and a phone size; not seen in other browsers or on a real
+  phone, and not yet known to any search engine
 
 ## Later
 

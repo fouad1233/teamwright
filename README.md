@@ -8,6 +8,9 @@ Teamwright is an open-source desktop app for running a project the way a
 manager runs a team, where the team members are AI agents working through
 [Claude Code](https://code.claude.com/docs) on your own computer.
 
+The website shows it in a film of under two minutes that runs as you scroll:
+<https://fouad1233.github.io/teamwright/>.
+
 You explain what you want to build. An **Advisor** interviews you, proposes the
 smallest team that can do the job together with a dependency-ordered plan, and
 waits for your approval. Then the specialists start working. They move their
