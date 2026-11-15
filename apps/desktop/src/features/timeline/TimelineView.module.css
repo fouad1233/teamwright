@@ -1,0 +1,429 @@
+/*
+ * The timeline is a sheet of days like the Gantt chart, and its head is the
+ * chart's (see DayScale.tsx). Where the chart has a row for every task, the
+ * timeline has a row for every person, as high as the lines of bars in it.
+ *
+ * The width of a day, the height of a line and of a bar, and the space
+ * around the lines are set by the component, because its arithmetic uses
+ * the same numbers.
+ */
+.timeline {
+  --outline: 296px;
+  --head: 56px;
+
+  height: 100%;
+  overflow: auto;
+  /* The sheet must not scroll on while a bar is dragged past its edge. */
+  overscroll-behavior: contain;
+}
+
+.sheet {
+  display: flex;
+  flex-direction: column;
+  width: max-content;
+  min-width: 100%;
+  min-height: 100%;
+}
+
+/* The control of the rows sits on the line of the Today button. */
+.grouping {
+  margin-bottom: -8px;
+  color: var(--ink-soft);
+  font-size: var(--text-small);
+  font-weight: 550;
+}
+
+.grouping:hover,
+.grouping[data-state='open'] {
+  color: var(--ink);
+}
+
+.grouping svg {
+  width: 12px;
+  height: 12px;
+  color: var(--ink-faint);
+}
+
+.body {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+}
+
+.row {
+  display: flex;
+  flex: none;
+}
+
+/* Who the row is for. It lies over the bars that scroll under it, so its
+   ground is solid. */
+.names {
+  position: sticky;
+  left: 0;
+  z-index: 3;
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  width: var(--outline);
+  padding: var(--row-padding) var(--space-3) var(--space-3) var(--space-5);
+  border-right: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+  background: var(--ground);
+}
+
+/* The name stands on the line of the first bars of the row. */
+.subject {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: var(--lane);
+}
+
+.subjectName {
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.quiet {
+  color: var(--ink-soft);
+  font-weight: 500;
+}
+
+.statusMark {
+  display: inline-flex;
+  flex: none;
+}
+
+.count {
+  margin-left: auto;
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+
+/* What the person is on the team for, under the name, set from the edge of
+   the name rather than the picture. */
+.subjectLine {
+  margin: -6px 0 0 28px;
+  overflow: hidden;
+  color: var(--ink-faint);
+  font-size: var(--text-small);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The tasks of the row that have no dates. */
+.undated {
+  display: flex;
+  flex-direction: column;
+  margin-top: var(--space-3);
+}
+
+.undatedLabel {
+  padding-bottom: var(--space-1);
+}
+
+.undatedList {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.undatedTask {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: calc(100% + var(--space-2));
+  height: 24px;
+  padding: 0 var(--space-1);
+  margin-left: calc(-1 * var(--space-1));
+  border-radius: var(--radius-control);
+  font-size: var(--text-small);
+  text-align: left;
+}
+
+.undatedTask:hover {
+  background: var(--hover);
+}
+
+.undatedTask:focus-visible {
+  outline-offset: -1px;
+}
+
+.undatedTask[data-progress='done'] .undatedTitle {
+  color: var(--ink-faint);
+}
+
+.undatedTitle {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.more {
+  align-self: flex-start;
+  height: 22px;
+  padding: 0 var(--space-1);
+  margin-left: calc(-1 * var(--space-1));
+  border-radius: var(--radius-control);
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+
+.more:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+
+.reference {
+  flex: none;
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+
+.track {
+  position: relative;
+  flex: none;
+  border-bottom: 1px solid var(--rule);
+}
+
+.rest {
+  display: flex;
+  flex: 1;
+}
+
+.restOfNames {
+  position: sticky;
+  left: 0;
+  z-index: 3;
+  flex: none;
+  width: var(--outline);
+  border-right: 1px solid var(--rule);
+  background: var(--ground);
+}
+
+/*
+ * A bar is the piece of the calendar drawn out over the days of its task:
+ * a wash of the pigment of its status, with its mark, key and title. It is
+ * hollow while the work has not started, and its words go quiet once it is
+ * done. The grounds are mixed, not see-through, so the lines of the weeks
+ * do not show through.
+ */
+.bar {
+  position: absolute;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: var(--bar);
+  padding: 0 7px 0 6px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: linear-gradient(var(--tone-wash), var(--tone-wash)), var(--ground);
+  box-shadow: inset 2px 0 0 var(--tone);
+  color: var(--ink);
+  font-size: var(--text-small);
+  white-space: nowrap;
+  cursor: grab;
+  touch-action: none;
+  transition: box-shadow 100ms ease;
+}
+
+.bar[data-progress='todo'] {
+  background: var(--ground);
+  box-shadow: inset 0 0 0 1px var(--rule-strong);
+}
+
+.bar[data-progress='done'] {
+  color: var(--ink-faint);
+  box-shadow: none;
+}
+
+.bar:hover {
+  box-shadow:
+    inset 2px 0 0 var(--tone),
+    inset 0 0 0 1px var(--rule-strong);
+}
+
+.bar[data-progress='todo']:hover {
+  box-shadow: inset 0 0 0 1px var(--ink-faint);
+}
+
+.bar:focus-visible,
+.point:focus-visible {
+  outline-offset: 2px;
+}
+
+.barMark {
+  display: inline-flex;
+  flex: none;
+}
+
+.barTitle {
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 500;
+  text-overflow: ellipsis;
+}
+
+/* A task that should have been finished ends in a red edge, as on the calendar. */
+.bar.late,
+.bar.late:hover {
+  box-shadow:
+    inset 2px 0 0 var(--tone),
+    inset -2px 0 0 var(--danger);
+}
+
+.bar[data-progress='todo'].late {
+  box-shadow:
+    inset 0 0 0 1px var(--rule-strong),
+    inset -2px 0 0 var(--danger);
+}
+
+/* The task open in the panel at the side carries a hairline of ink. */
+.bar.isOpen,
+.bar.isOpen:hover {
+  box-shadow:
+    inset 2px 0 0 var(--tone),
+    inset 0 0 0 1px var(--ink-soft);
+}
+
+/*
+ * A task with only one date is a mark on its day, with its key beside it:
+ * a square on its corner for a due date, as in the Gantt chart, and a short
+ * stroke that fades for a start.
+ */
+.point {
+  position: absolute;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: var(--bar);
+  padding-left: calc((var(--day) - 10px) / 2);
+  border-radius: 3px;
+  cursor: grab;
+  touch-action: none;
+}
+
+.point:hover,
+.point.isOpen {
+  background: var(--hover);
+}
+
+.pointMark {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  background: var(--tone);
+  transform: rotate(45deg) scale(0.82);
+}
+
+.point[data-progress='todo'] .pointMark {
+  border: 1px solid var(--ink-faint);
+  background: linear-gradient(var(--tone-wash), var(--tone-wash)), var(--ground);
+}
+
+.point[data-progress='done'] .pointMark {
+  background: color-mix(in srgb, var(--tone) 45%, var(--ground));
+}
+
+.point[data-kind='open'] .pointMark {
+  width: calc(var(--day) - 4px);
+  height: 6px;
+  margin-left: calc((10px - var(--day)) / 2 + 2px);
+  border: none;
+  border-radius: 2px;
+  background: var(--tone);
+  transform: none;
+  mask-image: linear-gradient(to right, #000 40%, transparent);
+}
+
+.point.late .reference {
+  color: var(--danger);
+}
+
+.dragged {
+  z-index: 2;
+  box-shadow: var(--shadow-lifted);
+  cursor: grabbing;
+}
+
+/* The ends of a bar are held to change one date. They show nothing until the
+   pointer is over the bar. */
+.startGrip,
+.endGrip {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 7px;
+  cursor: ew-resize;
+}
+
+.startGrip {
+  left: 0;
+}
+
+.endGrip {
+  right: 0;
+}
+
+.bar:hover > .startGrip::after,
+.bar:hover > .endGrip::after,
+.dragged > .startGrip::after,
+.dragged > .endGrip::after {
+  position: absolute;
+  top: 5px;
+  bottom: 5px;
+  left: 3px;
+  width: 1px;
+  background: var(--ink-faint);
+  content: '';
+}
+
+/* The dates of a bar while it is dragged, set over it like a dimension. */
+.dragDates {
+  position: absolute;
+  z-index: 4;
+  padding: 1px 6px;
+  pointer-events: none;
+  border: 1px solid var(--rule-strong);
+  border-radius: 3px;
+  background: var(--surface-raised);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  white-space: nowrap;
+  transform: translateY(calc(-100% - 4px));
+}
+
+/* Before there is anything to lay along the days. */
+.empty {
+  max-width: 60ch;
+  padding: var(--space-6) var(--space-5);
+}
+
+.emptyLead {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-strong);
+  font-weight: 600;
+}
+
+.emptyNote {
+  margin: 0;
+  color: var(--ink-soft);
+  line-height: 1.55;
+}
