@@ -112,14 +112,14 @@ impl ViewService {
         Ok(view)
     }
 
-    /// Replaces the filter of a view. Only a board, a list, a Gantt chart
-    /// and a calendar can be filtered, and only by a member of the team of
-    /// the project.
+    /// Replaces the filter of a view. Only the kinds that show some of the
+    /// tasks can be filtered ([`ViewKind::can_be_filtered`]), and only by a
+    /// member of the team of the project.
     ///
     /// # Errors
     ///
-    /// Returns an error if there is no such view, if it is a backlog or a
-    /// dashboard, if the filter names a member who is not on the team
+    /// Returns an error if there is no such view, if its kind cannot be
+    /// filtered, if the filter names a member who is not on the team
     /// (`member_not_on_team`), or if storage fails.
     pub fn set_filter(&self, id: ViewId, filter: ViewFilter) -> Result<View, ApplicationError> {
         let mut view = self.require_view(id)?;

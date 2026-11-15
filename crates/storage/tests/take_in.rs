@@ -1029,7 +1029,7 @@ fn a_project_whose_views_were_all_removed_on_two_computers_gets_a_board_again() 
     let views = desk.views.list_for_project(project.id()).unwrap();
     assert!(views.len() >= 2);
     let (desk_removes, laptop_removes) = views.split_at(views.len() / 2);
-    let starting_board = View::starting_id(project.id(), ViewKind::Board);
+    let starting_board = View::starting_id(project.id(), ViewKind::Board).unwrap();
     assert!(desk_removes.iter().any(|view| view.id() == starting_board));
     for view in desk_removes {
         desk.views.remove(view.id()).unwrap();

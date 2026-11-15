@@ -37,7 +37,7 @@ pub async fn rename_view(
     Ok(ViewDto::from(&view))
 }
 
-/// Replaces the filter of a board, a list, a Gantt chart or a calendar.
+/// Replaces the filter of a view of a kind that shows some of the tasks.
 #[tauri::command]
 pub async fn set_view_filter(
     state: State<'_, AppState>,

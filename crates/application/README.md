@@ -141,9 +141,13 @@ storage crate.
   (`view_name_taken`); a view may change the capitals of its own. A view
   added without a name, or with an empty one, is named after its kind, with
   the first free number from 2 on if that name is taken.
-- Only a board, a list, a Gantt chart and a calendar can be filtered
-  (`rule_broken`), and a filter can only name a member of the team of the
-  project (`member_not_on_team`).
+- A view of any other kind can be added as often as the manager likes.
+  None of the fourteen newer kinds (timeline to report) is given to a new
+  project.
+- Only the kinds that show some of the tasks can be filtered
+  (`ViewKind::can_be_filtered`; `rule_broken` for the others), and a
+  filter can only name a member of the team of the project
+  (`member_not_on_team`).
 - `move_to` puts a place past either end at that end, stores only the views
   whose place changed, and answers with all the views in their new order.
 - The last view of a project cannot be removed (`last_view`).

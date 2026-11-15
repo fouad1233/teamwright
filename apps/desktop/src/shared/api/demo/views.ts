@@ -7,7 +7,7 @@ import type { Id, View, ViewFilter, ViewKind } from '../types';
  * crate.
  */
 
-/** The kinds of view, in the order a new project gets them. */
+/** The kinds of view a new project gets, in the order it gets them. */
 export const VIEW_KINDS: readonly ViewKind[] = [
   'board',
   'backlog',
@@ -25,13 +25,39 @@ const NAME_OF_KIND: Record<ViewKind, string> = {
   gantt: 'Gantt',
   calendar: 'Calendar',
   dashboard: 'Dashboard',
+  timeline: 'Timeline',
+  table: 'Table',
+  workload: 'Workload',
+  team: 'Team',
+  activity: 'Activity',
+  mind_map: 'Mind map',
+  map: 'Map',
+  whiteboard: 'Whiteboard',
+  chat: 'Chat',
+  doc: 'Doc',
+  embed: 'Embed',
+  form: 'Form',
+  gallery: 'Gallery',
+  report: 'Report',
 };
 
 /** The kinds of which a project has at most one view. */
 const SINGLE_KINDS: readonly ViewKind[] = ['backlog', 'dashboard'];
 
-/** The kinds of view that can be filtered. */
-const FILTERED_KINDS: readonly ViewKind[] = ['board', 'list', 'gantt', 'calendar'];
+/** The kinds of view that can be filtered: those that show some of the tasks. */
+const FILTERED_KINDS: readonly ViewKind[] = [
+  'board',
+  'list',
+  'gantt',
+  'calendar',
+  'timeline',
+  'table',
+  'workload',
+  'team',
+  'mind_map',
+  'map',
+  'gallery',
+];
 
 /** The most characters the name of a view can have. */
 const VIEW_NAME_MAX_LENGTH = 40;
@@ -109,12 +135,12 @@ export function refuseSecondOfKind(views: readonly View[], kind: ViewKind): void
   }
 }
 
-/** Refuses to filter a backlog or a dashboard: they show every task. */
+/** Refuses to filter a view of a kind that does not show some of the tasks. */
 export function refuseFilterOf(view: View): void {
   if (!FILTERED_KINDS.includes(view.kind)) {
     throw new BackendError(
       'rule_broken',
-      `"${view.name}" is a ${view.kind}, which shows every task and cannot be filtered`,
+      `"${view.name}" is a ${view.kind}, which cannot be filtered`,
     );
   }
 }

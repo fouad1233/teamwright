@@ -270,7 +270,10 @@ Rules of the interface:
   identifier; when it is gone, the project opens on its first view.
 - **Views are drawn through one table of kinds.** `views/viewKinds.tsx`
   gives each kind its label, what it is for, its mark and the component
-  that draws it; a new kind is one entry. The filter of a view is applied
+  that draws it; a new kind is one entry. The wire knows twenty kinds; the
+  chooser offers only those with an entry, and a view of a kind without
+  one, which another computer or a newer program may have added, is drawn
+  as a board. The filter of a view is applied
   in the workspace, where the tasks are handed to the view
   (`views/viewModel.ts`), so a view draws fewer tasks without knowing why.
   The board alone keeps every task and is told which ones get a card,

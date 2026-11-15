@@ -218,6 +218,15 @@ describe('views in the DemoBackend', () => {
       expect((await views()).at(-1)?.kind).toBe('backlog');
     });
 
+    it('adds several views of a newer kind, each named after it', async () => {
+      const first = await backend.addView({ projectId: project.id, kind: 'mind_map' });
+      const second = await backend.addView({ projectId: project.id, kind: 'mind_map' });
+
+      expect(first.name).toBe('Mind map');
+      expect(second.name).toBe('Mind map 2');
+      expect(await views()).toHaveLength(8);
+    });
+
     it('refuses a view for a project that does not exist', async () => {
       const error = await refusal(backend.addView({ projectId: 'nowhere', kind: 'board' }));
 
@@ -325,9 +334,7 @@ describe('views in the DemoBackend', () => {
       );
 
       expect(error.code).toBe('rule_broken');
-      expect(error.message).toBe(
-        '"Backlog" is a backlog, which shows every task and cannot be filtered',
-      );
+      expect(error.message).toBe('"Backlog" is a backlog, which cannot be filtered');
     });
 
     it('refuses to filter a dashboard', async () => {
@@ -339,9 +346,20 @@ describe('views in the DemoBackend', () => {
       );
 
       expect(error.code).toBe('rule_broken');
-      expect(error.message).toBe(
-        '"Dashboard" is a dashboard, which shows every task and cannot be filtered',
-      );
+      expect(error.message).toBe('"Dashboard" is a dashboard, which cannot be filtered');
+    });
+
+    it('refuses to filter a doc, and filters a gallery', async () => {
+      const doc = await backend.addView({ projectId: project.id, kind: 'doc' });
+      const gallery = await backend.addView({ projectId: project.id, kind: 'gallery' });
+      const manager = { assignee: { kind: 'manager' }, hidesFinished: false } as const;
+
+      const error = await refusal(backend.setViewFilter(doc.id, manager));
+      const filtered = await backend.setViewFilter(gallery.id, manager);
+
+      expect(error.code).toBe('rule_broken');
+      expect(error.message).toBe('"Doc" is a doc, which cannot be filtered');
+      expect(filtered.filter.assignee).toEqual({ kind: 'manager' });
     });
 
     it('refuses a member of the team of another project', async () => {

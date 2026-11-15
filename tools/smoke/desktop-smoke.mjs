@@ -702,7 +702,7 @@ try {
       filteredView.ok.filter.hidesFinished === true &&
       filteredBacklog.refused?.code === 'rule_broken' &&
       filteredBacklog.refused.message ===
-        '"Backlog" is a backlog, which shows every task and cannot be filtered',
+        '"Backlog" is a backlog, which cannot be filtered',
     JSON.stringify([renamedView, filteredView, filteredBacklog]),
   );
   const movedViews = await window.command('move_view', { viewId: secondBoard.ok.id, index: 0 });

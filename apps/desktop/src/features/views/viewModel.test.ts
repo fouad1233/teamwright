@@ -175,11 +175,15 @@ describe('the kinds and the views', () => {
     ]);
   });
 
-  it('filters boards, lists, Gantt charts and calendars only', () => {
+  it('filters only the kinds that show some of the tasks', () => {
     expect(isFilterable('board')).toBe(true);
     expect(isFilterable('calendar')).toBe(true);
+    expect(isFilterable('mind_map')).toBe(true);
+    expect(isFilterable('gallery')).toBe(true);
     expect(isFilterable('backlog')).toBe(false);
     expect(isFilterable('dashboard')).toBe(false);
+    expect(isFilterable('doc')).toBe(false);
+    expect(isFilterable('activity')).toBe(false);
   });
 
   it('tells a filter that leaves something out', () => {

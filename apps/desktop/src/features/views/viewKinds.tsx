@@ -105,7 +105,8 @@ export const KINDS: readonly Kind[] = [
 
 /** The entry of a kind in the table. */
 export function kindOf(kind: ViewKind): Kind {
-  // The table has an entry for every kind; the board stands in for one
-  // that a newer backend might know and this interface does not.
+  // The board stands in for a kind that has no entry yet: one whose
+  // interface is still to be built, or one a newer backend knows and this
+  // interface does not.
   return KINDS.find((entry) => entry.kind === kind) ?? (KINDS[0] as Kind);
 }

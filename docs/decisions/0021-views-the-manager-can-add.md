@@ -99,3 +99,27 @@ panel of twenty settings for each view.
 - **Filter inside each view.** Every view would have to learn about
   filters. Handing a view fewer tasks keeps them as they are; only the
   board needs to know what it does not show.
+
+## Note of 15 November 2026: fourteen more kinds
+
+The owner asked for every kind of view the tool they use has. The kinds
+are now twenty: board, backlog, list, gantt, calendar and dashboard, as
+above, and timeline, table, workload, team, activity, mind_map, map,
+whiteboard, chat, doc, embed, form, gallery and report. The domain, the
+storage, both halves of the wire and the demo backend know all twenty.
+
+- A project still starts with the six views above. None of the newer
+  kinds is given to a new project.
+- Only the backlog and the dashboard are single. A project may have
+  several views of every other kind.
+- Whether a kind can be filtered is now a rule of its own, no longer
+  "not single": the kinds that show some of the tasks can be (board,
+  list, gantt, calendar, timeline, table, workload, team, mind_map, map
+  and gallery); the others cannot (backlog, dashboard, activity,
+  whiteboard, chat, doc, embed, form and report). The message of the
+  refusal no longer says that such a view "shows every task", which is
+  not true of a document.
+- Each newer kind gets its interface in a commit of its own, as one more
+  entry in the table of kinds. Until a kind has its entry, the chooser
+  does not offer it, and a view of that kind that arrives from elsewhere
+  is drawn as a board.

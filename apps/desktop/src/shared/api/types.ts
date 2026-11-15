@@ -244,11 +244,31 @@ export interface SprintReport {
 }
 
 /**
- * The ways the tasks of a project can be shown. A project can have several
- * views of the kinds board, list, gantt and calendar, and at most one
- * backlog and one dashboard.
+ * The ways the tasks of a project can be shown. A project can have at most
+ * one backlog and one dashboard, and several views of every other kind. A
+ * new project starts with one view of each of the first six.
  */
-export type ViewKind = 'board' | 'backlog' | 'list' | 'gantt' | 'calendar' | 'dashboard';
+export type ViewKind =
+  | 'board'
+  | 'backlog'
+  | 'list'
+  | 'gantt'
+  | 'calendar'
+  | 'dashboard'
+  | 'timeline'
+  | 'table'
+  | 'workload'
+  | 'team'
+  | 'activity'
+  | 'mind_map'
+  | 'map'
+  | 'whiteboard'
+  | 'chat'
+  | 'doc'
+  | 'embed'
+  | 'form'
+  | 'gallery'
+  | 'report';
 
 /**
  * Whose tasks a view shows: everybody's, the manager's, those of one member
@@ -260,7 +280,8 @@ export type ViewAssignee =
 /**
  * Which tasks a view shows. A task is shown if it passes the filter or one
  * of its subtasks does; its subtasks are shown with it. Only views of the
- * kinds board, list, gantt and calendar can be filtered.
+ * kinds that show some of the tasks can be filtered: board, list, gantt,
+ * calendar, timeline, table, workload, team, mind_map, map and gallery.
  */
 export interface ViewFilter {
   assignee: ViewAssignee;

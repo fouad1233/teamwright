@@ -421,6 +421,18 @@ mod adding_a_view {
     }
 
     #[test]
+    fn adds_several_views_of_a_newer_kind_each_named_after_it() {
+        let workspace = workspace();
+
+        let first = workspace.add(ViewKind::MindMap, None).unwrap();
+        let second = workspace.add(ViewKind::MindMap, None).unwrap();
+
+        assert_eq!(first.name().as_str(), "Mind map");
+        assert_eq!(second.name().as_str(), "Mind map 2");
+        assert_eq!(workspace.views().len(), 8);
+    }
+
+    #[test]
     fn refuses_a_view_for_a_project_that_does_not_exist() {
         let workspace = workspace();
         let nowhere = ProjectId::generate();
@@ -596,7 +608,7 @@ mod filtering_a_view {
         assert_eq!(error.code(), "rule_broken");
         assert_eq!(
             error.to_string(),
-            "\"Backlog\" is a backlog, which shows every task and cannot be filtered"
+            "\"Backlog\" is a backlog, which cannot be filtered"
         );
     }
 
@@ -615,8 +627,31 @@ mod filtering_a_view {
         assert_eq!(error.code(), "rule_broken");
         assert_eq!(
             error.to_string(),
-            "\"Dashboard\" is a dashboard, which shows every task and cannot be filtered"
+            "\"Dashboard\" is a dashboard, which cannot be filtered"
         );
+    }
+
+    #[test]
+    fn refuses_to_filter_a_doc_and_filters_a_gallery() {
+        let workspace = workspace();
+        let doc = workspace.add(ViewKind::Doc, None).unwrap();
+        let gallery = workspace.add(ViewKind::Gallery, None).unwrap();
+
+        let error = workspace
+            .views
+            .set_filter(doc.id(), filter(ViewAssignee::Manager, false))
+            .unwrap_err();
+        let filtered = workspace
+            .views
+            .set_filter(gallery.id(), filter(ViewAssignee::Manager, false))
+            .unwrap();
+
+        assert_eq!(error.code(), "rule_broken");
+        assert_eq!(
+            error.to_string(),
+            "\"Doc\" is a doc, which cannot be filtered"
+        );
+        assert_eq!(filtered.filter().assignee, ViewAssignee::Manager);
     }
 
     #[test]

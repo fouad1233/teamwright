@@ -158,6 +158,36 @@ fn every_change_to_a_view_is_stored_and_logged() {
 }
 
 #[test]
+fn a_view_of_every_kind_is_stored_and_read_back_with_its_kind() {
+    let workspace = workspace();
+
+    let added: Vec<View> = ViewKind::ALL
+        .iter()
+        .filter(|kind| !kind.is_single())
+        .map(|kind| {
+            workspace
+                .views
+                .add(NewView {
+                    project_id: workspace.project.id(),
+                    kind: *kind,
+                    name: None,
+                })
+                .unwrap()
+        })
+        .collect();
+
+    let repository = SqliteViewRepository::new(workspace.database.clone());
+    for view in &added {
+        assert_eq!(repository.find(view.id()).unwrap().as_ref(), Some(view));
+    }
+    let mind_map = added
+        .iter()
+        .find(|view| view.kind() == ViewKind::MindMap)
+        .unwrap();
+    assert_eq!(mind_map.name().as_str(), "Mind map");
+}
+
+#[test]
 fn a_member_who_leaves_is_forgotten_by_the_stored_views() {
     let workspace = workspace();
     let engineer = workspace

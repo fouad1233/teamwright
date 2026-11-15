@@ -16,7 +16,19 @@ import type {
  */
 
 /** The kinds of view that can be filtered. The backend refuses a filter on the others. */
-const FILTERABLE_KINDS: readonly ViewKind[] = ['board', 'list', 'gantt', 'calendar'];
+const FILTERABLE_KINDS: readonly ViewKind[] = [
+  'board',
+  'list',
+  'gantt',
+  'calendar',
+  'timeline',
+  'table',
+  'workload',
+  'team',
+  'mind_map',
+  'map',
+  'gallery',
+];
 
 /** The kinds of which a project has at most one view. The backend refuses a second. */
 const SINGLE_KINDS: readonly ViewKind[] = ['backlog', 'dashboard'];

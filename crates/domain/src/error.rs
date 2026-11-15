@@ -272,13 +272,13 @@ pub enum DomainError {
         name: String,
     },
 
-    /// A backlog or a dashboard was to be given a filter. They show every
-    /// task.
-    #[error("\"{name}\" is a {kind}, which shows every task and cannot be filtered")]
+    /// A view of a kind that cannot be filtered, such as a backlog or a
+    /// document, was to be given a filter.
+    #[error("\"{name}\" is a {kind}, which cannot be filtered")]
     ViewNotFiltered {
         /// The name of the view.
         name: String,
-        /// Its kind, as text: "backlog" or "dashboard".
+        /// Its kind, as text: "backlog", "dashboard", "doc" and so on.
         kind: &'static str,
     },
 }

@@ -29,6 +29,34 @@ pub enum ViewKind {
     Calendar,
     /// Figures about the whole project. A project has at most one.
     Dashboard,
+    /// The tasks as bars on a line of time, in groups.
+    Timeline,
+    /// The tasks in a table with a column for every field.
+    Table,
+    /// How much work each member of the team has, day by day.
+    Workload,
+    /// The tasks by the members they are given to.
+    Team,
+    /// Everything that happened in the project, newest first.
+    Activity,
+    /// The tasks as a tree of ideas.
+    MindMap,
+    /// The tasks as pins on a map.
+    Map,
+    /// Notes and arrows on an open surface.
+    Whiteboard,
+    /// A conversation about the project.
+    Chat,
+    /// A page of text.
+    Doc,
+    /// Another page shown inside the project.
+    Embed,
+    /// Questions whose answers become tasks.
+    Form,
+    /// The tasks as pictures.
+    Gallery,
+    /// Figures and charts the manager chooses.
+    Report,
 }
 
 text_enum!(ViewKind, kind = "view kind", {
@@ -38,6 +66,20 @@ text_enum!(ViewKind, kind = "view kind", {
     Gantt => "gantt",
     Calendar => "calendar",
     Dashboard => "dashboard",
+    Timeline => "timeline",
+    Table => "table",
+    Workload => "workload",
+    Team => "team",
+    Activity => "activity",
+    MindMap => "mind_map",
+    Map => "map",
+    Whiteboard => "whiteboard",
+    Chat => "chat",
+    Doc => "doc",
+    Embed => "embed",
+    Form => "form",
+    Gallery => "gallery",
+    Report => "report",
 });
 
 impl ViewKind {
@@ -51,8 +93,32 @@ impl ViewKind {
             Self::Gantt => "Gantt",
             Self::Calendar => "Calendar",
             Self::Dashboard => "Dashboard",
+            Self::Timeline => "Timeline",
+            Self::Table => "Table",
+            Self::Workload => "Workload",
+            Self::Team => "Team",
+            Self::Activity => "Activity",
+            Self::MindMap => "Mind map",
+            Self::Map => "Map",
+            Self::Whiteboard => "Whiteboard",
+            Self::Chat => "Chat",
+            Self::Doc => "Doc",
+            Self::Embed => "Embed",
+            Self::Form => "Form",
+            Self::Gallery => "Gallery",
+            Self::Report => "Report",
         })
     }
+
+    /// The kinds a new project gets one view of, in their order.
+    pub const STARTING: [Self; 6] = [
+        Self::Board,
+        Self::Backlog,
+        Self::List,
+        Self::Gantt,
+        Self::Calendar,
+        Self::Dashboard,
+    ];
 
     /// Whether a project has at most one view of this kind: a backlog and a
     /// dashboard.
@@ -61,23 +127,47 @@ impl ViewKind {
         matches!(self, Self::Backlog | Self::Dashboard)
     }
 
-    /// Whether a view of this kind can be filtered. A backlog and a
-    /// dashboard show every task.
+    /// Whether a view of this kind can be filtered: one that shows some of
+    /// the tasks of the project. A backlog and a dashboard show every task;
+    /// an activity, a whiteboard, a chat, a document, an embedded page, a
+    /// form and a report are not a set of tasks at all.
     #[must_use]
     pub const fn can_be_filtered(self) -> bool {
-        !self.is_single()
+        match self {
+            Self::Board
+            | Self::List
+            | Self::Gantt
+            | Self::Calendar
+            | Self::Timeline
+            | Self::Table
+            | Self::Workload
+            | Self::Team
+            | Self::MindMap
+            | Self::Map
+            | Self::Gallery => true,
+            Self::Backlog
+            | Self::Dashboard
+            | Self::Activity
+            | Self::Whiteboard
+            | Self::Chat
+            | Self::Doc
+            | Self::Embed
+            | Self::Form
+            | Self::Report => false,
+        }
     }
 
-    /// A digit of its own for each kind, used in the identifiers of the
-    /// views a project starts with.
-    const fn digit(self) -> u8 {
+    /// A digit of its own for each kind a project starts with, used in the
+    /// identifiers of its starting views. Nothing for the other kinds.
+    const fn starting_digit(self) -> Option<u8> {
         match self {
-            Self::Board => 1,
-            Self::Backlog => 2,
-            Self::List => 3,
-            Self::Gantt => 4,
-            Self::Calendar => 5,
-            Self::Dashboard => 6,
+            Self::Board => Some(1),
+            Self::Backlog => Some(2),
+            Self::List => Some(3),
+            Self::Gantt => Some(4),
+            Self::Calendar => Some(5),
+            Self::Dashboard => Some(6),
+            _ => None,
         }
     }
 }
@@ -97,8 +187,8 @@ pub enum ViewAssignee {
 }
 
 /// Which tasks a view shows. A task is shown if it passes the filter or one
-/// of its subtasks does. Only a board, a list, a Gantt chart and a calendar
-/// can be filtered.
+/// of its subtasks does. Only the kinds that show some of the tasks can be
+/// filtered (see [`ViewKind::can_be_filtered`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub struct ViewFilter {
     /// Whose tasks are shown.
@@ -146,9 +236,9 @@ pub struct View {
 }
 
 impl View {
-    /// The six views a new project starts with: one of each kind, in the
-    /// order of [`ViewKind::ALL`], each named after its kind and showing
-    /// every task.
+    /// The six views a new project starts with: one of each kind in
+    /// [`ViewKind::STARTING`], in that order, each named after its kind and
+    /// showing every task.
     ///
     /// Their identifiers follow from the project and the kind (see
     /// [`View::starting_id`]), so two computers that each give a project its
@@ -156,29 +246,38 @@ impl View {
     #[must_use]
     pub fn starting(project_id: ProjectId) -> Vec<Self> {
         (0_u32..)
-            .zip(ViewKind::ALL)
-            .map(|(position, kind)| Self {
-                id: Self::starting_id(project_id, *kind),
-                project_id,
-                kind: *kind,
-                name: kind.default_name(),
-                filter: ViewFilter::EVERY_TASK,
-                position,
+            .zip(ViewKind::STARTING)
+            .filter_map(|(position, kind)| {
+                Some(Self {
+                    id: Self::starting_id(project_id, kind)?,
+                    project_id,
+                    kind,
+                    name: kind.default_name(),
+                    filter: ViewFilter::EVERY_TASK,
+                    position,
+                })
             })
             .collect()
     }
 
     /// The identifier of the starting view of a kind in a project: the
     /// identifier of the project with its version digit replaced by a digit
-    /// of the kind, from 1 to 6.
+    /// of the kind, from 1 to 6. Nothing for a kind a project does not
+    /// start with.
     ///
     /// Identifiers the program generates have the version digit 7, so a
     /// starting identifier never equals one of them, and two projects never
     /// share one.
     #[must_use]
-    pub fn starting_id(project_id: ProjectId, kind: ViewKind) -> ViewId {
+    pub fn starting_id(project_id: ProjectId, kind: ViewKind) -> Option<ViewId> {
+        kind.starting_digit()
+            .map(|digit| Self::id_with_digit(project_id, digit))
+    }
+
+    /// The identifier of the project with its version digit replaced.
+    fn id_with_digit(project_id: ProjectId, digit: u8) -> ViewId {
         let mut bytes = *project_id.as_uuid().as_bytes();
-        bytes[6] = (bytes[6] & 0x0f) | (kind.digit() << 4);
+        bytes[6] = (bytes[6] & 0x0f) | (digit << 4);
         ViewId::from_uuid(Uuid::from_bytes(bytes))
     }
 
@@ -195,12 +294,9 @@ impl View {
     #[must_use]
     pub fn board_again(project_id: ProjectId, attempt: u8) -> Option<Self> {
         let id = match attempt {
-            0 => Self::starting_id(project_id, ViewKind::Board),
-            1..=Self::LAST_BOARD_ATTEMPT => {
-                let mut bytes = *project_id.as_uuid().as_bytes();
-                bytes[6] = (bytes[6] & 0x0f) | ((7 + attempt) << 4);
-                ViewId::from_uuid(Uuid::from_bytes(bytes))
-            }
+            // The identifier of the starting board.
+            0 => Self::id_with_digit(project_id, 1),
+            1..=Self::LAST_BOARD_ATTEMPT => Self::id_with_digit(project_id, 7 + attempt),
             _ => return None,
         };
         Some(Self {
@@ -284,8 +380,8 @@ impl View {
     ///
     /// # Errors
     ///
-    /// Returns [`DomainError::ViewNotFiltered`] for a backlog or a
-    /// dashboard, which show every task. Nothing changes then.
+    /// Returns [`DomainError::ViewNotFiltered`] for a kind that cannot be
+    /// filtered, such as a backlog or a document. Nothing changes then.
     pub fn set_filter(&mut self, filter: ViewFilter) -> Result<(), DomainError> {
         if !self.kind.can_be_filtered() {
             return Err(DomainError::ViewNotFiltered {
@@ -371,7 +467,8 @@ mod tests {
         for kind in ViewKind::ALL {
             assert_eq!(kind.as_str().parse::<ViewKind>().unwrap(), *kind);
         }
-        assert!("timeline".parse::<ViewKind>().is_err());
+        assert_eq!("mind_map".parse::<ViewKind>().unwrap(), ViewKind::MindMap);
+        assert!("mindmap".parse::<ViewKind>().is_err());
     }
 
     #[test]
@@ -422,7 +519,7 @@ mod tests {
             .collect();
 
         assert_eq!(ids.len(), 9);
-        assert_eq!(ids[0], View::starting_id(project, ViewKind::Board));
+        assert_eq!(Some(ids[0]), View::starting_id(project, ViewKind::Board));
         let mut distinct = ids.clone();
         distinct.sort();
         distinct.dedup();
@@ -444,7 +541,73 @@ mod tests {
 
         let id = View::starting_id(project, ViewKind::Gantt);
 
-        assert_eq!(id.to_string(), "0196f3a2-7c1e-4d53-9b6f-2f1a4c8e9d10");
+        assert_eq!(
+            id.map(|id| id.to_string()).as_deref(),
+            Some("0196f3a2-7c1e-4d53-9b6f-2f1a4c8e9d10")
+        );
+        assert_eq!(View::starting_id(project, ViewKind::Timeline), None);
+    }
+
+    #[test]
+    fn a_new_project_starts_with_none_of_the_newer_kinds() {
+        let kinds: Vec<ViewKind> = View::starting(ProjectId::generate())
+            .iter()
+            .map(View::kind)
+            .collect();
+
+        assert_eq!(kinds, ViewKind::STARTING);
+    }
+
+    #[test]
+    fn only_a_backlog_and_a_dashboard_are_single() {
+        let single: Vec<ViewKind> = ViewKind::ALL
+            .iter()
+            .copied()
+            .filter(|kind| kind.is_single())
+            .collect();
+
+        assert_eq!(single, [ViewKind::Backlog, ViewKind::Dashboard]);
+    }
+
+    #[test]
+    fn the_kinds_that_show_some_of_the_tasks_can_be_filtered() {
+        let filtered: Vec<&str> = ViewKind::ALL
+            .iter()
+            .filter(|kind| kind.can_be_filtered())
+            .map(ViewKind::as_str)
+            .collect();
+
+        assert_eq!(
+            filtered,
+            [
+                "board", "list", "gantt", "calendar", "timeline", "table", "workload", "team",
+                "mind_map", "map", "gallery"
+            ]
+        );
+    }
+
+    #[test]
+    fn a_document_cannot_be_filtered() {
+        let mut doc = View::add(
+            ProjectId::generate(),
+            ViewKind::Doc,
+            ViewKind::Doc.default_name(),
+            6,
+        );
+
+        let result = doc.set_filter(ViewFilter {
+            assignee: ViewAssignee::Nobody,
+            hides_finished: false,
+        });
+
+        assert_eq!(result.unwrap_err().code(), "rule_broken");
+        assert_eq!(doc.filter(), ViewFilter::EVERY_TASK);
+    }
+
+    #[test]
+    fn a_mind_map_is_named_with_a_space_and_written_with_a_line() {
+        assert_eq!(ViewKind::MindMap.default_name().as_str(), "Mind map");
+        assert_eq!(ViewKind::MindMap.as_str(), "mind_map");
     }
 
     #[test]

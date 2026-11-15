@@ -58,15 +58,20 @@ done with them. It does no input or output.
   The refusals about the state of a sprint have codes of their own
   (`DomainError::code`): `sprint_completed`, `sprint_active`,
   `sprint_not_active`.
-- A view is a board, a backlog, a list, a Gantt chart, a calendar or a
-  dashboard. Its name has at most 40 characters; a view named after its
+- A view is of one of twenty kinds (`ViewKind`): board, backlog, list,
+  Gantt chart, calendar, dashboard, timeline, table, workload, team,
+  activity, mind map, map, whiteboard, chat, doc, embed, form, gallery and
+  report. A project has at most one backlog and one dashboard
+  (`is_single`). Its name has at most 40 characters; a view named after its
   kind whose name is taken gets the first free number from 2 on, whatever
-  the capitals. Only a board, a list, a Gantt chart and a calendar can be
-  filtered, by whose tasks they show and whether finished tasks are hidden.
-  A new project starts with one view of each kind, in that order, and the
-  identifiers of these six follow from the project and the kind, so that
-  two computers that each give a project its starting views give it the
-  same ones.
+  the capitals. Only the kinds that show some of the tasks can be filtered
+  (`can_be_filtered`: board, list, Gantt chart, calendar, timeline, table,
+  workload, team, mind map, map and gallery), by whose tasks they show and
+  whether finished tasks are hidden. A new project starts with one view of
+  each of the first six kinds (`ViewKind::STARTING`), in that order, and
+  the identifiers of these six follow from the project and the kind, so
+  that two computers that each give a project its starting views give it
+  the same ones.
 - An area's name has at most 40 characters. A new project starts with one
   area, "General", whose identifier follows from the project, so that two
   computers that each give a project its starting area give it the same

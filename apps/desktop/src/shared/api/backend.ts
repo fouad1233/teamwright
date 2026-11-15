@@ -210,9 +210,9 @@ export interface Backend {
   /** Renames a view, by the same rules as a name given when it is added. */
   renameView(viewId: Id, name: string): Promise<View>;
   /**
-   * Replaces the filter of a view. Only a board, a list, a Gantt chart and a
-   * calendar can be filtered, and a member named by the filter is on the
-   * team of the project.
+   * Replaces the filter of a view. Only the kinds that show some of the tasks
+   * can be filtered (see `ViewFilter`), and a member named by the filter is
+   * on the team of the project.
    */
   setViewFilter(viewId: Id, filter: ViewFilter): Promise<View>;
   /**
