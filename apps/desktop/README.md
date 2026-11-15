@@ -33,9 +33,12 @@ the rule it breaks.
 **The views of a project**
 ([decision 0021](../../docs/decisions/0021-views-the-manager-can-add.md))
 are the commands in `commands/views.rs`: `list_views`, `add_view`,
-`rename_view`, `set_view_filter`, `move_view` and `remove_view`, which the
-shell serves through `ViewService`. A view on the wire has its `kind`, its
-`name` and its `filter`, whose `assignee` is `{"kind": "anyone"}`,
+`rename_view`, `set_view_filter`, `set_view_content`, `move_view` and
+`remove_view`, which the shell serves through `ViewService`. A view on the
+wire has its `kind`, its `name`, its `content` (text the interface wrote,
+or null;
+[decision 0024](../../docs/decisions/0024-a-view-keeps-content-of-its-own.md))
+and its `filter`, whose `assignee` is `{"kind": "anyone"}`,
 `{"kind": "manager"}`, `{"kind": "member", "memberId": "…"}` or
 `{"kind": "nobody"}`. `move_view` reads the place as any number, cut to a
 whole number as the interface's arrays would cut it. A database with
@@ -227,7 +230,8 @@ Rules of the interface:
 - **One way to the backend.** Components use `useBackend()` or the hooks
   built on it (`useProjects`, `useTasks`, `useTaskCommands`, `useTeam`,
   `useTeamCommands`, `useConversations`, `useWorkCommands`, `useSprints`,
-  `useSprintCommands`, `useViews`, `useViewCommands`, `useAreas`,
+  `useSprintCommands`, `useViews`, `useViewCommands`, `useSetViewContent`,
+  `useAreas`,
   `useAreaCommands`). Nothing calls
   Tauri directly except `shared/api/tauriBackend.ts`.
 - **The team of the open project is known everywhere.** `TeamProvider` puts
@@ -273,7 +277,11 @@ Rules of the interface:
   that draws it; a new kind is one entry. The wire knows twenty kinds; the
   chooser offers only those with an entry, and a view of a kind without
   one, which another computer or a newer program may have added, is drawn
-  as a board. The filter of a view is applied
+  as a board. Each kind's component gets the view itself (`KindProps.view`);
+  a kind that is a page reads `view.content` and writes it with
+  `useSetViewContent` (`views/viewQueries.ts`), which shows the new content
+  at once and writes the content of one view in order, at most about once
+  a second. The filter of a view is applied
   in the workspace, where the tasks are handed to the view
   (`views/viewModel.ts`), so a view draws fewer tasks without knowing why.
   The board alone keeps every task and is told which ones get a card,

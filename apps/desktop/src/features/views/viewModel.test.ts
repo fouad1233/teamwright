@@ -13,6 +13,7 @@ import {
   splitRow,
   viewToShow,
   withMovedView,
+  withViewContent,
 } from './viewModel';
 
 const STATUSES: Status[] = [
@@ -47,7 +48,7 @@ function task(id: string, more: Partial<Task> = {}): Task {
 }
 
 function view(id: string, kind: View['kind'], name = id): View {
-  return { id, projectId: 'p', kind, name, filter: EVERY_TASK };
+  return { id, projectId: 'p', kind, name, filter: EVERY_TASK, content: null };
 }
 
 const ENGINEER = { kind: 'member', memberId: 'engineer' } as const;
@@ -205,6 +206,16 @@ describe('the kinds and the views', () => {
 
     expect(withMovedView(views, 'c', 0).map((moved) => moved.id)).toEqual(['c', 'a', 'b']);
     expect(withMovedView(views, 'a', 9).map((moved) => moved.id)).toEqual(['b', 'c', 'a']);
+  });
+
+  it('shows new content of one view at once and leaves the others as they were', () => {
+    const views = [view('a', 'doc'), view('b', 'whiteboard')];
+
+    const changed = withViewContent(views, 'a', '{"text":"Notes"}');
+
+    expect(changed.map((each) => each.content)).toEqual(['{"text":"Notes"}', null]);
+    expect(changed[1]).toBe(views[1]);
+    expect(withViewContent(changed, 'a', null)[0]?.content).toBeNull();
   });
 });
 

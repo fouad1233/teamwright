@@ -73,7 +73,25 @@ export function startingViews(projectId: Id, newId: () => Id): View[] {
     kind,
     name: NAME_OF_KIND[kind],
     filter: structuredClone(EVERY_TASK),
+    content: null,
   }));
+}
+
+/** The most bytes the content of a view may have, counted in UTF-8: 2 MiB. */
+const VIEW_CONTENT_MAX_BYTES = 2 * 1024 * 1024;
+
+/** Refuses content longer than a view may keep. */
+export function refuseLongViewContent(content: string | null): void {
+  if (content === null) {
+    return;
+  }
+  const bytes = new TextEncoder().encode(content).length;
+  if (bytes > VIEW_CONTENT_MAX_BYTES) {
+    throw new BackendError(
+      'rule_broken',
+      `the content of a view can have at most ${VIEW_CONTENT_MAX_BYTES.toString()} bytes, but this one has ${bytes.toString()}`,
+    );
+  }
 }
 
 /** Tidies the name of a view: trimmed and on one line, not empty and not too long. */

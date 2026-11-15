@@ -221,10 +221,13 @@ pub struct ViewSnapshot {
     /// Its place among the views of its project. Views are listed by it,
     /// the smallest first.
     pub position: u32,
+    /// What it keeps of its own, if anything (see [`View::content`]).
+    pub content: Option<String>,
 }
 
 /// One way the manager looks at the tasks of a project: a kind with a name
-/// and a filter of its own.
+/// and a filter of its own, and content of its own for a kind that is a
+/// page rather than a look at the tasks.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct View {
     id: ViewId,
@@ -233,6 +236,7 @@ pub struct View {
     name: ViewName,
     filter: ViewFilter,
     position: u32,
+    content: Option<String>,
 }
 
 impl View {
@@ -255,10 +259,14 @@ impl View {
                     name: kind.default_name(),
                     filter: ViewFilter::EVERY_TASK,
                     position,
+                    content: None,
                 })
             })
             .collect()
     }
+
+    /// The most bytes the content of a view may have: 2 MiB.
+    pub const MAX_CONTENT_BYTES: usize = 2 * 1024 * 1024;
 
     /// The identifier of the starting view of a kind in a project: the
     /// identifier of the project with its version digit replaced by a digit
@@ -306,6 +314,7 @@ impl View {
             name: ViewKind::Board.default_name(),
             filter: ViewFilter::EVERY_TASK,
             position: 0,
+            content: None,
         })
     }
 
@@ -319,20 +328,28 @@ impl View {
             name,
             filter: ViewFilter::EVERY_TASK,
             position,
+            content: None,
         }
     }
 
-    /// Recreates a view from stored data.
-    #[must_use]
-    pub fn restore(snapshot: ViewSnapshot) -> Self {
-        Self {
+    /// Recreates a view from stored data, checking its content against the
+    /// rule of [`View::set_content`].
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DomainError::ViewContentTooLong`] if the content is longer
+    /// than a view may keep.
+    pub fn restore(snapshot: ViewSnapshot) -> Result<Self, DomainError> {
+        check_content(snapshot.content.as_deref())?;
+        Ok(Self {
             id: snapshot.id,
             project_id: snapshot.project_id,
             kind: snapshot.kind,
             name: snapshot.name,
             filter: snapshot.filter,
             position: snapshot.position,
-        }
+            content: snapshot.content,
+        })
     }
 
     /// The identifier of the view.
@@ -369,6 +386,27 @@ impl View {
     #[must_use]
     pub const fn position(&self) -> u32 {
         self.position
+    }
+
+    /// What the view keeps of its own: the text of a document, the notes of
+    /// a whiteboard, the fields of a form, and so on. The interface of each
+    /// kind writes it and reads it back; the domain does not read it.
+    /// Nothing for a view that never had any.
+    #[must_use]
+    pub fn content(&self) -> Option<&str> {
+        self.content.as_deref()
+    }
+
+    /// Replaces the content of the view, or clears it with nothing.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DomainError::ViewContentTooLong`] if the content has more
+    /// than [`View::MAX_CONTENT_BYTES`] bytes. Nothing changes then.
+    pub fn set_content(&mut self, content: Option<String>) -> Result<(), DomainError> {
+        check_content(content.as_deref())?;
+        self.content = content;
+        Ok(())
     }
 
     /// Gives the view another name.
@@ -409,6 +447,18 @@ impl View {
             false
         }
     }
+}
+
+/// Refuses content longer than a view may keep.
+fn check_content(content: Option<&str>) -> Result<(), DomainError> {
+    let actual_bytes = content.map_or(0, str::len);
+    if actual_bytes > View::MAX_CONTENT_BYTES {
+        return Err(DomainError::ViewContentTooLong {
+            max_bytes: View::MAX_CONTENT_BYTES,
+            actual_bytes,
+        });
+    }
+    Ok(())
 }
 
 impl ViewName {
@@ -602,6 +652,68 @@ mod tests {
 
         assert_eq!(result.unwrap_err().code(), "rule_broken");
         assert_eq!(doc.filter(), ViewFilter::EVERY_TASK);
+    }
+
+    #[test]
+    fn a_view_starts_without_content_and_keeps_what_it_is_given() {
+        let mut doc = View::add(
+            ProjectId::generate(),
+            ViewKind::Doc,
+            ViewKind::Doc.default_name(),
+            6,
+        );
+        assert_eq!(doc.content(), None);
+
+        doc.set_content(Some("{\"text\":\"Notes\"}".to_owned()))
+            .unwrap();
+        assert_eq!(doc.content(), Some("{\"text\":\"Notes\"}"));
+
+        doc.set_content(None).unwrap();
+        assert_eq!(doc.content(), None);
+    }
+
+    #[test]
+    fn the_content_of_a_view_has_at_most_two_mebibytes() {
+        let mut doc = View::add(
+            ProjectId::generate(),
+            ViewKind::Doc,
+            ViewKind::Doc.default_name(),
+            6,
+        );
+
+        doc.set_content(Some("x".repeat(View::MAX_CONTENT_BYTES)))
+            .unwrap();
+        let error = doc
+            .set_content(Some("y".repeat(View::MAX_CONTENT_BYTES + 1)))
+            .unwrap_err();
+
+        assert_eq!(error.code(), "rule_broken");
+        assert_eq!(
+            error.to_string(),
+            "the content of a view can have at most 2097152 bytes, but this one has 2097153"
+        );
+        assert_eq!(doc.content().map(str::len), Some(View::MAX_CONTENT_BYTES));
+    }
+
+    #[test]
+    fn a_view_with_too_much_content_is_not_restored() {
+        let doc = View::add(
+            ProjectId::generate(),
+            ViewKind::Doc,
+            ViewKind::Doc.default_name(),
+            6,
+        );
+        let snapshot = ViewSnapshot {
+            id: doc.id(),
+            project_id: doc.project_id(),
+            kind: doc.kind(),
+            name: doc.name().clone(),
+            filter: doc.filter(),
+            position: doc.position(),
+            content: Some("z".repeat(View::MAX_CONTENT_BYTES + 1)),
+        };
+
+        assert!(View::restore(snapshot).is_err());
     }
 
     #[test]

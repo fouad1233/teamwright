@@ -216,6 +216,11 @@ export interface Backend {
    */
   setViewFilter(viewId: Id, filter: ViewFilter): Promise<View>;
   /**
+   * Replaces what a view keeps of its own, or clears it with null. Any kind
+   * of view may keep content; it has at most 2 MiB, counted in UTF-8 bytes.
+   */
+  setViewContent(viewId: Id, content: string | null): Promise<View>;
+  /**
    * Moves a view to another place among the views of its project. Index 0
    * is the first place; an index past the end means the last. Answers with
    * all the views of the project in their new order.

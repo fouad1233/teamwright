@@ -132,6 +132,10 @@ const VIEW_FIELDS: &[Field] = &[
     later("assignee", &["assignee_kind", "assignee_member_id"]),
     later("hides_finished", &["hides_finished"]),
     later("position", &["position"]),
+    // What the view keeps of its own merges whole, like the name: the
+    // later content wins. The domain does not read it, so nothing inside
+    // it can be merged.
+    later("content", &["content"]),
 ];
 
 const AREA_FIELDS: &[Field] = &[later("name", &["name"]), later("position", &["position"])];

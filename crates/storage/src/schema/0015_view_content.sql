@@ -1,0 +1,13 @@
+-- Teamwright database, version 15: what a view keeps of its own.
+--
+-- The conventions of version 1 hold.
+--
+-- A view may keep content of its own: the text of a document, the notes of
+-- a whiteboard, the fields of a form (decision 0024). The interface writes
+-- it as JSON; the database and the domain do not read it. It has at most
+-- 2 MiB, a rule of the domain.
+--
+-- Nothing is logged here: every view of an earlier version has no content,
+-- and a logged state of a view without `content` is read as a view without
+-- any, on every computer.
+ALTER TABLE views ADD COLUMN content TEXT;

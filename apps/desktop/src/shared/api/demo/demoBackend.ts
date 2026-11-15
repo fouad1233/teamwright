@@ -83,6 +83,7 @@ import {
 import {
   nameForNewView,
   refuseFilterOf,
+  refuseLongViewContent,
   refuseRemovingLast,
   refuseSecondOfKind,
   refuseViewNameInUse,
@@ -1987,6 +1988,7 @@ export class DemoBackend implements Backend {
         kind: newView.kind,
         name,
         filter: { assignee: { kind: 'anyone' }, hidesFinished: false },
+        content: null,
       };
       views.push(view);
       return view;
@@ -2021,6 +2023,15 @@ export class DemoBackend implements Backend {
         }
       }
       view.filter = tidyFilter(filter);
+      return view;
+    });
+  }
+
+  setViewContent(viewId: Id, content: string | null): Promise<View> {
+    return this.answer(() => {
+      const view = this.requireView(viewId);
+      refuseLongViewContent(content);
+      view.content = content;
       return view;
     });
   }

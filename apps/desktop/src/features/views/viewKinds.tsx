@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import type { ComponentType } from 'react';
 
-import type { Assignee, Project, Task, ViewKind } from '@/shared/api/types';
+import type { Assignee, Project, Task, View, ViewKind } from '@/shared/api/types';
 
 import { CalendarView } from '../calendar/CalendarView';
 import { DashboardView } from '../dashboard/DashboardView';
@@ -20,6 +20,12 @@ import { TaskListView } from '../tasks/TaskListView';
 
 /** What a view of any kind is drawn with. */
 export interface KindProps {
+  /**
+   * The view being drawn: its id, its name, and the content it keeps of its
+   * own, which a kind that is a page reads here and writes with
+   * `useSetViewContent`.
+   */
+  view: View;
   project: Project;
   /** The tasks the filter of the view lets through, subtasks with their task. */
   tasks: Task[];

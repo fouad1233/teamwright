@@ -188,6 +188,42 @@ fn a_view_of_every_kind_is_stored_and_read_back_with_its_kind() {
 }
 
 #[test]
+fn the_content_of_a_view_is_stored_logged_and_cleared() {
+    let workspace = workspace();
+    let doc = workspace
+        .views
+        .add(NewView {
+            project_id: workspace.project.id(),
+            kind: ViewKind::Doc,
+            name: None,
+        })
+        .unwrap();
+    let before = workspace.database.operations().unwrap().len();
+    let repository = SqliteViewRepository::new(workspace.database.clone());
+
+    workspace
+        .views
+        .set_content(doc.id(), Some("{\"text\":\"Pin map\"}".to_owned()))
+        .unwrap();
+
+    let found = repository.find(doc.id()).unwrap().unwrap();
+    assert_eq!(found.content(), Some("{\"text\":\"Pin map\"}"));
+    let operations = workspace.database.operations().unwrap();
+    assert_eq!(
+        workspace.logged_since(before),
+        [("view".to_owned(), "upsert".to_owned())]
+    );
+    let state: serde_json::Value =
+        serde_json::from_str(operations[before].payload.as_deref().unwrap()).unwrap();
+    assert_eq!(state["content"], "{\"text\":\"Pin map\"}");
+
+    workspace.views.set_content(doc.id(), None).unwrap();
+
+    assert_eq!(repository.find(doc.id()).unwrap().unwrap().content(), None);
+    assert_eq!(workspace.logged_since(before).len(), 2);
+}
+
+#[test]
 fn a_member_who_leaves_is_forgotten_by_the_stored_views() {
     let workspace = workspace();
     let engineer = workspace

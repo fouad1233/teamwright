@@ -1,11 +1,11 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 
 import { useBackend } from '@/shared/api/BackendProvider';
 import type { Id, View, ViewFilter, ViewKind } from '@/shared/api/types';
 import { describeFailure, useNotifier } from '@/shared/ui/Toast';
 
-import { withMovedView } from './viewModel';
+import { withMovedView, withViewContent } from './viewModel';
 
 /** The name under which the views of a project are cached. */
 export function viewsKey(projectId: Id) {
@@ -19,6 +19,60 @@ export function useViews(projectId: Id) {
     queryKey: viewsKey(projectId),
     queryFn: () => backend.listViews(projectId),
   });
+}
+
+/**
+ * The write of content each view is waiting for, so that the writes of one
+ * view reach the backend in the order they were made and the last one
+ * stays.
+ */
+const contentWrites = new Map<Id, Promise<unknown>>();
+
+/**
+ * Writes what a view keeps of its own (`View.content`), for the kinds that
+ * are pages: a doc, a whiteboard, a form and so on. The cached view shows
+ * the new content at once, so nothing flickers while the backend writes;
+ * the writes of one view go to the backend one after the other, in order.
+ * A refusal is shown as a message and the views are loaded again.
+ *
+ * Callers should not write more often than about once a second: save while
+ * the manager types or drags, but gather the changes of the last second
+ * into one write. Every write is kept in the log and travels to the
+ * manager's other computers.
+ *
+ * Resolves to whether the backend kept the content.
+ */
+export function useSetViewContent(): (view: View, content: string | null) => Promise<boolean> {
+  const backend = useBackend();
+  const queryClient = useQueryClient();
+  const notifier = useNotifier();
+
+  return useCallback(
+    async (view: View, content: string | null) => {
+      const key = viewsKey(view.projectId);
+      queryClient.setQueryData<View[]>(key, (views) =>
+        views === undefined ? views : withViewContent(views, view.id, content),
+      );
+      const before = contentWrites.get(view.id) ?? Promise.resolve();
+      const write = before
+        .catch(() => undefined)
+        .then(() => backend.setViewContent(view.id, content));
+      contentWrites.set(view.id, write);
+      try {
+        await write;
+        return true;
+      } catch (failure) {
+        notifier.showError(describeFailure(failure));
+        await queryClient.invalidateQueries({ queryKey: key });
+        return false;
+      } finally {
+        if (contentWrites.get(view.id) === write) {
+          contentWrites.delete(view.id);
+        }
+      }
+    },
+    [backend, queryClient, notifier],
+  );
 }
 
 /**

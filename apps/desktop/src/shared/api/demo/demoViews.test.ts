@@ -284,6 +284,47 @@ describe('views in the DemoBackend', () => {
     });
   });
 
+  describe('giving a view content', () => {
+    it('keeps the content and leaves the rest of the view as it was', async () => {
+      const doc = await backend.addView({ projectId: project.id, kind: 'doc' });
+
+      const given = await backend.setViewContent(doc.id, '{"text":"Pin map"}');
+
+      expect(given).toEqual({ ...doc, content: '{"text":"Pin map"}' });
+      expect(await viewNamed('Doc')).toEqual(given);
+    });
+
+    it('starts every view without content and clears it with nothing', async () => {
+      expect((await views()).every((view) => view.content === null)).toBe(true);
+      const board = await viewNamed('Board');
+      await backend.setViewContent(board.id, '{}');
+
+      const cleared = await backend.setViewContent(board.id, null);
+
+      expect(cleared.content).toBeNull();
+      expect((await viewNamed('Board')).content).toBeNull();
+    });
+
+    it('refuses content of more than two mebibytes', async () => {
+      const doc = await backend.addView({ projectId: project.id, kind: 'doc' });
+
+      const error = await refusal(backend.setViewContent(doc.id, 'x'.repeat(2 * 1024 * 1024 + 1)));
+
+      expect(error.code).toBe('rule_broken');
+      expect(error.message).toBe(
+        'the content of a view can have at most 2097152 bytes, but this one has 2097153',
+      );
+      expect((await viewNamed('Doc')).content).toBeNull();
+    });
+
+    it('refuses a view that does not exist', async () => {
+      const error = await refusal(backend.setViewContent('nowhere', null));
+
+      expect(error.code).toBe('not_found');
+      expect(error.message).toBe('there is no view with the identifier nowhere');
+    });
+  });
+
   describe('filtering a view', () => {
     it('shows the tasks of one member of the team, and can hide the finished ones', async () => {
       const engineer = await member('Firmware engineer');

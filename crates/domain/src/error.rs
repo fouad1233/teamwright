@@ -281,6 +281,17 @@ pub enum DomainError {
         /// Its kind, as text: "backlog", "dashboard", "doc" and so on.
         kind: &'static str,
     },
+
+    /// The content of a view was longer than a view may keep.
+    #[error(
+        "the content of a view can have at most {max_bytes} bytes, but this one has {actual_bytes}"
+    )]
+    ViewContentTooLong {
+        /// The largest number of bytes allowed.
+        max_bytes: usize,
+        /// The number of bytes that were given.
+        actual_bytes: usize,
+    },
 }
 
 impl DomainError {

@@ -1,5 +1,5 @@
 //! Use cases for the views of a project: listing, adding, renaming,
-//! filtering, moving and removing them
+//! filtering, giving content to, moving and removing them
 //! ([decision 0021](../../../docs/decisions/0021-views-the-manager-can-add.md)).
 //!
 //! A new project gets its six views from
@@ -135,6 +135,26 @@ impl ViewService {
                 return Err(ApplicationError::MemberNotOnTeam);
             }
         }
+        self.views.save_all(std::slice::from_ref(&view))?;
+        Ok(view)
+    }
+
+    /// Replaces what a view keeps of its own, or clears it with nothing
+    /// ([decision 0024](../../../docs/decisions/0024-a-view-keeps-content-of-its-own.md)).
+    /// The content is text the interface of the kind writes and reads; it
+    /// is not read here. Any kind of view may keep content.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if there is no such view, if the content has more
+    /// than 2 MiB (`rule_broken`), or if storage fails.
+    pub fn set_content(
+        &self,
+        id: ViewId,
+        content: Option<String>,
+    ) -> Result<View, ApplicationError> {
+        let mut view = self.require_view(id)?;
+        view.set_content(content)?;
         self.views.save_all(std::slice::from_ref(&view))?;
         Ok(view)
     }

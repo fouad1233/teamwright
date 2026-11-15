@@ -268,6 +268,7 @@ function ShownView({ view, project, area, tasks, everyTask, onClearFilter }: Sho
       <FilterLine view={{ ...view, filter }} onClear={onClearFilter} />
       <div className={styles.viewBody}>
         <Component
+          view={view}
           project={project}
           tasks={shownTasks}
           everyTask={everyTask}

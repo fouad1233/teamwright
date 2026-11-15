@@ -71,7 +71,10 @@ done with them. It does no input or output.
   each of the first six kinds (`ViewKind::STARTING`), in that order, and
   the identifiers of these six follow from the project and the kind, so
   that two computers that each give a project its starting views give it
-  the same ones.
+  the same ones. A view may keep content of its own (`View::content`):
+  text the interface writes and the domain does not read, at most 2 MiB
+  (`ViewContentTooLong`;
+  [decision 0024](../../docs/decisions/0024-a-view-keeps-content-of-its-own.md)).
 - An area's name has at most 40 characters. A new project starts with one
   area, "General", whose identifier follows from the project, so that two
   computers that each give a project its starting area give it the same

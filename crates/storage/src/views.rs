@@ -17,16 +17,18 @@ use crate::operations::{Entity, OperationRecorder};
 
 /// The columns of the `views` table that every query reads.
 const VIEW_COLUMNS: &str =
-    "id, project_id, kind, name, assignee_kind, assignee_member_id, hides_finished, position";
+    "id, project_id, kind, name, assignee_kind, assignee_member_id, hides_finished, position,
+     content";
 
 // The row is updated in place, never replaced.
 const UPSERT_VIEW: &str = "
     INSERT INTO views (
-        id, project_id, kind, name, assignee_kind, assignee_member_id, hides_finished, position
+        id, project_id, kind, name, assignee_kind, assignee_member_id, hides_finished, position,
+        content
     )
     VALUES (
         :id, :project_id, :kind, :name, :assignee_kind, :assignee_member_id, :hides_finished,
-        :position
+        :position, :content
     )
     ON CONFLICT (id) DO UPDATE SET
         project_id = excluded.project_id,
@@ -35,7 +37,8 @@ const UPSERT_VIEW: &str = "
         assignee_kind = excluded.assignee_kind,
         assignee_member_id = excluded.assignee_member_id,
         hides_finished = excluded.hides_finished,
-        position = excluded.position";
+        position = excluded.position,
+        content = excluded.content";
 
 /// A view as the database and the operation log keep it: plain text,
 /// numbers and a flag.
@@ -49,6 +52,10 @@ struct ViewRecord {
     assignee_member_id: Option<String>,
     hides_finished: bool,
     position: u32,
+    /// What the view keeps of its own. A state logged before views had
+    /// content has no such key, and is read as a view without any.
+    #[serde(default)]
+    content: Option<String>,
 }
 
 impl ViewRecord {
@@ -70,6 +77,7 @@ impl ViewRecord {
             assignee_member_id,
             hides_finished: filter.hides_finished,
             position: view.position(),
+            content: view.content().map(str::to_owned),
         }
     }
 
@@ -84,6 +92,7 @@ impl ViewRecord {
             assignee_member_id: row.get("assignee_member_id")?,
             hides_finished: row.get::<_, i64>("hides_finished")? != 0,
             position: row.get("position")?,
+            content: row.get("content")?,
         })
     }
 
@@ -102,17 +111,20 @@ impl ViewRecord {
                 )));
             }
         };
-        Ok(View::restore(ViewSnapshot {
+        let name = ViewName::parse(&self.name).map_err(broken)?;
+        let snapshot = ViewSnapshot {
             id: codec::parse(&self.id)?,
             project_id: codec::parse(&self.project_id)?,
             kind: codec::parse(&self.kind)?,
-            name: ViewName::parse(&self.name).map_err(broken)?,
+            name,
             filter: ViewFilter {
                 assignee,
                 hides_finished: self.hides_finished,
             },
             position: self.position,
-        }))
+            content: self.content.clone(),
+        };
+        View::restore(snapshot).map_err(broken)
     }
 }
 
@@ -270,7 +282,53 @@ fn write_rows(transaction: &Transaction<'_>, record: &ViewRecord) -> Result<(), 
             ":assignee_member_id": record.assignee_member_id,
             ":hides_finished": i64::from(record.hides_finished),
             ":position": record.position,
+            ":content": record.content,
         },
     )?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use teamwright_domain::{ProjectId, ViewKind};
+
+    use super::*;
+
+    fn state_of(view: &View) -> Map<String, Value> {
+        match serde_json::to_value(ViewRecord::of(view)) {
+            Ok(Value::Object(state)) => state,
+            other => panic!("a view is stored as an object, not {other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_state_logged_before_views_had_content_is_a_view_without_any() {
+        let view = View::add(
+            ProjectId::generate(),
+            ViewKind::Board,
+            ViewKind::Board.default_name(),
+            0,
+        );
+        let mut state = state_of(&view);
+        state.remove("content");
+
+        assert_eq!(view_from_state(&state).unwrap(), view);
+    }
+
+    #[test]
+    fn a_state_with_too_much_content_is_refused() {
+        let view = View::add(
+            ProjectId::generate(),
+            ViewKind::Doc,
+            ViewKind::Doc.default_name(),
+            0,
+        );
+        let mut state = state_of(&view);
+        state.insert(
+            "content".to_owned(),
+            Value::String("x".repeat(View::MAX_CONTENT_BYTES + 1)),
+        );
+
+        assert!(view_from_state(&state).is_err());
+    }
 }

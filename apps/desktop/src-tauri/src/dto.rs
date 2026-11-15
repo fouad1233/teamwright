@@ -235,6 +235,9 @@ pub struct ViewDto {
     kind: &'static str,
     name: String,
     filter: ViewFilterDto,
+    /// What the view keeps of its own, as the interface wrote it; `null`
+    /// for a view that has none.
+    content: Option<String>,
 }
 
 impl From<&View> for ViewDto {
@@ -245,6 +248,7 @@ impl From<&View> for ViewDto {
             kind: view.kind().as_str(),
             name: view.name().to_string(),
             filter: ViewFilterDto::from(view.filter()),
+            content: view.content().map(str::to_owned),
         }
     }
 }

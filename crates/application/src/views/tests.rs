@@ -542,6 +542,79 @@ mod renaming_a_view {
     }
 }
 
+mod giving_a_view_content {
+    use super::*;
+
+    #[test]
+    fn keeps_the_content_and_leaves_the_rest_of_the_view_as_it_was() {
+        let workspace = workspace();
+        let doc = workspace.add(ViewKind::Doc, None).unwrap();
+
+        let given = workspace
+            .views
+            .set_content(doc.id(), Some("{\"text\":\"Pin map\"}".to_owned()))
+            .unwrap();
+
+        assert_eq!(given.content(), Some("{\"text\":\"Pin map\"}"));
+        assert_eq!(given.name(), doc.name());
+        assert_eq!(given.position(), doc.position());
+        assert_eq!(workspace.view_named("Doc"), given);
+    }
+
+    #[test]
+    fn starts_every_view_without_content_and_clears_it_with_nothing() {
+        let workspace = workspace();
+        assert!(
+            workspace
+                .views()
+                .iter()
+                .all(|view| view.content().is_none())
+        );
+        let board = workspace.view_named("Board");
+        workspace
+            .views
+            .set_content(board.id(), Some("{}".to_owned()))
+            .unwrap();
+
+        let cleared = workspace.views.set_content(board.id(), None).unwrap();
+
+        assert_eq!(cleared.content(), None);
+        assert_eq!(workspace.view_named("Board").content(), None);
+    }
+
+    #[test]
+    fn refuses_content_of_more_than_two_mebibytes() {
+        let workspace = workspace();
+        let doc = workspace.add(ViewKind::Doc, None).unwrap();
+
+        let error = workspace
+            .views
+            .set_content(doc.id(), Some("x".repeat(2 * 1024 * 1024 + 1)))
+            .unwrap_err();
+
+        assert_eq!(error.code(), "rule_broken");
+        assert_eq!(
+            error.to_string(),
+            "the content of a view can have at most 2097152 bytes, but this one has 2097153"
+        );
+        assert_eq!(workspace.view_named("Doc").content(), None);
+    }
+
+    #[test]
+    fn refuses_a_view_that_does_not_exist() {
+        let workspace = workspace();
+        let nowhere = ViewId::generate();
+
+        let error = workspace.views.set_content(nowhere, None).unwrap_err();
+
+        assert_eq!(error.code(), "not_found");
+        assert_eq!(
+            error.to_string(),
+            format!("there is no view with the identifier {nowhere}")
+        );
+    }
+}
+
 mod filtering_a_view {
     use super::*;
 

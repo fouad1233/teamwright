@@ -200,6 +200,10 @@ export class TauriBackend implements Backend {
     return call('set_view_filter', { viewId, filter });
   }
 
+  setViewContent(viewId: Id, content: string | null): Promise<View> {
+    return call('set_view_content', { viewId, content });
+  }
+
   moveView(viewId: Id, index: number): Promise<View[]> {
     return call('move_view', { viewId, index });
   }

@@ -171,6 +171,15 @@ export function withMovedView(views: readonly View[], viewId: Id, index: number)
   return others;
 }
 
+/** The views as they are once one of them keeps other content. The others stay as they were. */
+export function withViewContent(
+  views: readonly View[],
+  viewId: Id,
+  content: string | null,
+): View[] {
+  return views.map((view) => (view.id === viewId ? { ...view, content } : view));
+}
+
 /** What is known about the row of view tabs when it is laid out. */
 export interface RowMeasures {
   /** The width of the tab of every view, in the order of the views. */

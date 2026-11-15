@@ -750,6 +750,61 @@ fn a_view_renamed_on_one_computer_and_moved_on_the_other_keeps_both_changes() {
 }
 
 #[test]
+fn the_content_of_a_view_reaches_the_other_computer_and_keeps_a_rename_made_there() {
+    let (desk, laptop, project, _) = desk_and_laptop();
+    let doc = add_view(&desk, &project, ViewKind::Doc, Some("Notes"));
+    keep_in_step(&desk, &laptop);
+    desk.views
+        .set_content(doc.id(), Some("{\"text\":\"Two layers\"}".to_owned()))
+        .unwrap();
+    laptop.views.rename(doc.id(), "Board notes").unwrap();
+
+    keep_in_step(&desk, &laptop);
+
+    let on_laptop = view_named(&laptop, &project, "Board notes");
+    assert_eq!(on_laptop.content(), Some("{\"text\":\"Two layers\"}"));
+    assert_eq!(laptop.everything(), desk.everything());
+}
+
+#[test]
+fn of_two_contents_given_to_one_view_at_once_the_later_one_is_kept_on_both() {
+    let (desk, laptop, project, _) = desk_and_laptop();
+    let board = view_named(&desk, &project, "Board");
+    desk.views
+        .set_content(board.id(), Some("{\"from\":\"desk\"}".to_owned()))
+        .unwrap();
+    let_the_clock_move_on();
+    laptop
+        .views
+        .set_content(board.id(), Some("{\"from\":\"laptop\"}".to_owned()))
+        .unwrap();
+
+    keep_in_step(&desk, &laptop);
+
+    assert_eq!(
+        view_named(&desk, &project, "Board").content(),
+        Some("{\"from\":\"laptop\"}")
+    );
+    assert_eq!(laptop.everything(), desk.everything());
+}
+
+#[test]
+fn content_cleared_on_one_computer_is_cleared_on_the_other() {
+    let (desk, laptop, project, _) = desk_and_laptop();
+    let board = view_named(&desk, &project, "Board");
+    desk.views
+        .set_content(board.id(), Some("{}".to_owned()))
+        .unwrap();
+    keep_in_step(&desk, &laptop);
+    assert_eq!(view_named(&laptop, &project, "Board").content(), Some("{}"));
+
+    laptop.views.set_content(board.id(), None).unwrap();
+    keep_in_step(&desk, &laptop);
+
+    assert_eq!(view_named(&desk, &project, "Board").content(), None);
+}
+
+#[test]
 fn a_view_added_to_a_project_deleted_elsewhere_goes_with_it() {
     let (desk, laptop, project, _) = desk_and_laptop();
     let added = add_view(&laptop, &project, ViewKind::Board, Some("Firmware only"));

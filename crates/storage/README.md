@@ -158,6 +158,13 @@ involved.
   logging that: a task state logged before version 14 has no `area_id` and
   is read as a task in the area its project started with, which is the
   same on every computer.
+- **The content of a view** (version 15) is the column `content` of
+  `views`, text or null, and the key `content` of its logged state
+  ([decision 0024](../../docs/decisions/0024-a-view-keeps-content-of-its-own.md)).
+  It merges as a field of its own: the later content wins whole. Nothing
+  is logged by the migration: a view state logged before version 15 has no
+  `content` and is read as a view without any. A state whose content has
+  more than 2 MiB breaks a rule of the domain and is refused.
 - **An approved plan is one transaction.** `SqlitePlanningRepository`
   writes the project (with its next task number), every new member, every
   new task with what it waits for, and the turn with its approved proposal,

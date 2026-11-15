@@ -50,6 +50,18 @@ pub async fn set_view_filter(
     Ok(ViewDto::from(&view))
 }
 
+/// Replaces what a view keeps of its own, or clears it with `null`. The
+/// interface writes the content as JSON; the backend does not read it.
+#[tauri::command]
+pub async fn set_view_content(
+    state: State<'_, AppState>,
+    view_id: String,
+    content: Option<String>,
+) -> Result<ViewDto, CommandError> {
+    let view = state.views.set_content(parse_id(&view_id)?, content)?;
+    Ok(ViewDto::from(&view))
+}
+
 /// Moves a view to another place among the views of its project, and
 /// answers with all of them in their new order.
 #[tauri::command]

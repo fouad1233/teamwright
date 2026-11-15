@@ -10,7 +10,7 @@ window or agent runtime.
 | `projects` | `ProjectService`: start, find, list, rename, describe, archive, restore and delete projects; add, change, move and remove the statuses of their workflows |
 | `tasks` | `TaskService`: open, change, plan into a sprint, give points, move, connect and remove tasks, and tell the history of one from the versions storage has kept |
 | `sprints` | `SprintService`: list, plan, change, delete, start and complete the sprints of a project, and the report for the burndown chart of one (`SprintReport`) |
-| `views` | `ViewService`: list, add, rename, filter, move and remove the views of a project |
+| `views` | `ViewService`: list, add, rename, filter, give content to, move and remove the views of a project |
 | `areas` | `AreaService`: list, add, rename, move and remove the areas of a project, and move a task with its subtasks into another area |
 | `team` | `TeamService`: put members on the team of a project, change them, take them off |
 | `places` | `PlacesService`: the folders of a project: choose its work folder, add and take away reference folders, copy reference files into it |
@@ -148,6 +148,9 @@ storage crate.
   (`ViewKind::can_be_filtered`; `rule_broken` for the others), and a
   filter can only name a member of the team of the project
   (`member_not_on_team`).
+- `set_content` replaces what a view keeps of its own, or clears it with
+  nothing ([decision 0024](../../docs/decisions/0024-a-view-keeps-content-of-its-own.md)).
+  Any kind may keep content; more than 2 MiB is `rule_broken`.
 - `move_to` puts a place past either end at that end, stores only the views
   whose place changed, and answers with all the views in their new order.
 - The last view of a project cannot be removed (`last_view`).

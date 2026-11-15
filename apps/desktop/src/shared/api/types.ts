@@ -301,6 +301,13 @@ export interface View {
   /** Unique within the project, whatever the capitals. */
   name: string;
   filter: ViewFilter;
+  /**
+   * What the view keeps of its own, such as the text of a doc or the notes
+   * of a whiteboard: JSON the interface of its kind writes and reads back.
+   * The backend does not read it. At most 2 MiB. Null for a view that has
+   * none.
+   */
+  content: string | null;
 }
 
 export interface NewView {
