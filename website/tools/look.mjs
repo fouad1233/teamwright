@@ -88,6 +88,7 @@ class Browser {
           await browser.#connect(page.webSocketDebuggerUrl);
           browser.child = child;
           browser.profile = profile;
+          browser.port = port;
           return browser;
         }
       } catch {
@@ -140,6 +141,21 @@ class Browser {
 
   async stop() {
     this.#socket.close();
+    // On Windows the process that was started hands over to another one and
+    // ends, so stopping it stops nothing, and a browser stayed behind after
+    // every run. Edge is therefore asked to close itself, through the
+    // address that speaks for the whole browser.
+    try {
+      const whole = await (await fetch(`http://127.0.0.1:${this.port}/json/version`)).json();
+      const socket = new WebSocket(whole.webSocketDebuggerUrl);
+      await new Promise((resolve, reject) => {
+        socket.onopen = resolve;
+        socket.onerror = reject;
+      });
+      socket.send(JSON.stringify({ id: 1, method: 'Browser.close' }));
+    } catch {
+      // It is gone already.
+    }
     this.child.kill();
     await sleep(500);
     try {
