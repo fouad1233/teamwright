@@ -14,10 +14,14 @@ interface ViewChooserProps {
   onChoose: (kind: ViewKind) => void;
 }
 
+/** What the chooser calls the two groups of kinds. */
+const HEADINGS = { tasks: 'Looks at the tasks', pages: 'Pages' } as const;
+
 /**
- * The "+" at the end of the views. It offers one line for each kind that can
- * be added, with what the kind is for. A backlog or a dashboard that the
- * project has already is not offered.
+ * The "+" at the end of the views. It offers every kind that can be added,
+ * with what the kind is for, under two headings: the looks at the tasks, and
+ * the pages a view keeps. A backlog or a dashboard that the project has
+ * already is not offered.
  */
 export function ViewChooser({ views, onChoose }: ViewChooserProps) {
   const offered = kindsToOffer(
@@ -28,6 +32,7 @@ export function ViewChooser({ views, onChoose }: ViewChooserProps) {
     label: entry.label,
     detail: entry.purpose,
     icon: createElement(entry.icon),
+    group: HEADINGS[entry.group],
     onSelect: () => {
       onChoose(entry.kind);
     },

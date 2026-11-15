@@ -79,7 +79,29 @@ export interface Action {
   isDisabled?: boolean;
   /** Shows the action in the color of danger, for something that destroys. */
   isDestructive?: boolean;
+  /**
+   * The heading the action stands under. Actions that name the same heading
+   * are laid in two columns under it, in the order they are given, so that a
+   * long menu stays short. Actions without one come first, one to a line.
+   */
+  group?: string;
   onSelect: () => void;
+}
+
+/** The actions of a menu under their headings, in the order the headings first appear. */
+function underHeadings(
+  actions: readonly Action[],
+): { heading: string | undefined; actions: Action[] }[] {
+  const groups: { heading: string | undefined; actions: Action[] }[] = [];
+  for (const action of actions) {
+    const group = groups.find((other) => other.heading === action.group);
+    if (group) {
+      group.actions.push(action);
+    } else {
+      groups.push({ heading: action.group, actions: [action] });
+    }
+  }
+  return groups.sort((a, b) => Number(a.heading !== undefined) - Number(b.heading !== undefined));
 }
 
 interface ActionMenuProps {
@@ -120,28 +142,38 @@ export function ActionMenu({
             }
           }}
         >
-          {actions.map((action) => (
-            <DropdownMenu.Item
-              key={action.label}
-              className={classNames(
-                styles.item,
-                action.isDestructive && styles.destructive,
-                action.detail !== undefined && styles.withDetail,
-              )}
-              disabled={action.isDisabled}
-              onSelect={action.onSelect}
-            >
-              {action.icon !== undefined && <span className={styles.icon}>{action.icon}</span>}
-              {action.detail === undefined ? (
-                <span className={styles.label}>{action.label}</span>
-              ) : (
-                <span className={styles.label}>
-                  {action.label}
-                  <span className={styles.detail}>{action.detail}</span>
-                </span>
-              )}
-            </DropdownMenu.Item>
-          ))}
+          {underHeadings(actions).map((group) => {
+            const items = group.actions.map((action) => (
+              <DropdownMenu.Item
+                key={action.label}
+                className={classNames(
+                  styles.item,
+                  action.isDestructive && styles.destructive,
+                  action.detail !== undefined && styles.withDetail,
+                )}
+                disabled={action.isDisabled}
+                onSelect={action.onSelect}
+              >
+                {action.icon !== undefined && <span className={styles.icon}>{action.icon}</span>}
+                {action.detail === undefined ? (
+                  <span className={styles.label}>{action.label}</span>
+                ) : (
+                  <span className={styles.label}>
+                    {action.label}
+                    <span className={styles.detail}>{action.detail}</span>
+                  </span>
+                )}
+              </DropdownMenu.Item>
+            ));
+            return group.heading === undefined ? (
+              items
+            ) : (
+              <DropdownMenu.Group key={group.heading} className={styles.group}>
+                <DropdownMenu.Label className={styles.heading}>{group.heading}</DropdownMenu.Label>
+                <div className={styles.columns}>{items}</div>
+              </DropdownMenu.Group>
+            );
+          })}
         </DropdownMenu.Content>
       </DropdownMenu.Portal>
     </DropdownMenu.Root>

@@ -38,6 +38,10 @@ export interface Kind {
   /** What the kind is for, in a few words, for the chooser. */
   purpose: string;
   icon: LucideIcon;
+  /** Whether it is a look at the tasks, or a page that the view keeps. */
+  group: 'tasks' | 'pages';
+  /** Its place in the chooser: the kinds are offered from the smallest on. */
+  order: number;
   component: ComponentType<KindProps>;
 }
 
@@ -57,13 +61,15 @@ function FilteredBoard({ project, everyTask, shows, assigneeOfNewTasks }: KindPr
   );
 }
 
-/** The kinds of view, in the order of the chooser. A new kind is one more entry. */
-export const KINDS: readonly Kind[] = [
+/** The six kinds the program began with. */
+const FIRST_KINDS: readonly Kind[] = [
   {
     kind: 'board',
     label: 'Board',
     purpose: 'A lane for every status',
     icon: SquareKanban,
+    group: 'tasks',
+    order: 10,
     component: FilteredBoard,
   },
   {
@@ -71,6 +77,8 @@ export const KINDS: readonly Kind[] = [
     label: 'Backlog',
     purpose: 'Sprints and the work that waits',
     icon: ListOrdered,
+    group: 'tasks',
+    order: 12,
     component: BacklogView,
   },
   {
@@ -78,6 +86,8 @@ export const KINDS: readonly Kind[] = [
     label: 'List',
     purpose: 'Every task in one table',
     icon: Rows3,
+    group: 'tasks',
+    order: 15,
     component: TaskListView,
   },
   {
@@ -85,6 +95,8 @@ export const KINDS: readonly Kind[] = [
     label: 'Gantt',
     purpose: 'The plan against the days',
     icon: ChartGantt,
+    group: 'tasks',
+    order: 40,
     component: GanttView,
   },
   {
@@ -92,6 +104,8 @@ export const KINDS: readonly Kind[] = [
     label: 'Calendar',
     purpose: 'A month with the tasks on their days',
     icon: CalendarDays,
+    group: 'tasks',
+    order: 45,
     component: CalendarView,
   },
   {
@@ -99,14 +113,30 @@ export const KINDS: readonly Kind[] = [
     label: 'Dashboard',
     purpose: 'The state of the project at a glance',
     icon: LayoutDashboard,
+    group: 'tasks',
+    order: 115,
     component: DashboardView,
   },
 ];
+
+/**
+ * Every other kind lives in a folder of its own, `features/<kind>/kind.tsx`,
+ * whose default export is its entry. They are found here by where they lie:
+ * a new kind is one more folder, and no shared file changes for it.
+ */
+const FOUND_KINDS = Object.values(
+  import.meta.glob<{ default: Kind }>('../*/kind.tsx', { eager: true }),
+).map((found) => found.default);
+
+/** The kinds of view that have an interface, in the order of the chooser. */
+export const KINDS: readonly Kind[] = [...FIRST_KINDS, ...FOUND_KINDS].sort(
+  (a, b) => a.order - b.order,
+);
 
 /** The entry of a kind in the table. */
 export function kindOf(kind: ViewKind): Kind {
   // The board stands in for a kind that has no entry yet: one whose
   // interface is still to be built, or one a newer backend knows and this
   // interface does not.
-  return KINDS.find((entry) => entry.kind === kind) ?? (KINDS[0] as Kind);
+  return KINDS.find((entry) => entry.kind === kind) ?? (FIRST_KINDS[0] as Kind);
 }
