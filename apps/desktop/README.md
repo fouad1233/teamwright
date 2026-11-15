@@ -214,7 +214,7 @@ src/
   main.tsx            Starts the interface and provides what every part needs
   app/                The window as a whole, and where the user is in it
   features/
-    projects/         Sidebar, project header, creating a project, first run
+    projects/         Sidebar, project header, its menu, creating a project, first run, export to Excel
     board/            The board: lanes, cards, drag and drop
     gantt/            The Gantt chart: bars against days, lines of dependencies
     calendar/         The calendar: a month of weeks with the tasks on their days
@@ -242,6 +242,12 @@ Rules of the interface:
 - **No business rules.** The interface asks the backend and shows the answer.
   Where it shows a change before the backend has answered (moving a card), it
   repeats the backend's arithmetic and corrects itself if the answer differs.
+- **News and failures come in the corner.** `useNotifier()` shows a short
+  message at the bottom right that goes by itself: `showError` with a rule
+  in the colour of danger, `showNotice` with a plain rule and at most one
+  thing to do about it. Exporting a project to Excel
+  (`projects/workbookExport.ts`, from the menu of the project) says where
+  the file went and offers "Show in folder".
 - **One way to the backend.** Components use `useBackend()` or the hooks
   built on it (`useProjects`, `useTasks`, `useTaskCommands`, `useTeam`,
   `useTeamCommands`, `useConversations`, `useWorkCommands`, `useSprints`,

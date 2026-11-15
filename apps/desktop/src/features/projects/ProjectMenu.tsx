@@ -1,4 +1,13 @@
-import { Archive, Columns3, Ellipsis, Folder, Layers, Pencil, Trash2 } from 'lucide-react';
+import {
+  Archive,
+  Columns3,
+  Ellipsis,
+  FileSpreadsheet,
+  Folder,
+  Layers,
+  Pencil,
+  Trash2,
+} from 'lucide-react';
 import { useState } from 'react';
 
 import type { Project } from '@/shared/api/types';
@@ -14,6 +23,7 @@ import { ProjectDetailsDialog } from './ProjectDetailsDialog';
 import styles from './ProjectMenu.module.css';
 import { StatusesDialog } from './StatusesDialog';
 import { useProjectCommands } from './projectQueries';
+import { useWorkbookExport } from './workbookExport';
 
 /** The dialogs the menu can open. One at a time. */
 type OpenDialog = 'details' | 'statuses' | 'areas' | 'folders' | 'removal';
@@ -26,11 +36,12 @@ interface ProjectMenuProps {
 
 /**
  * The menu of a project: change its name and description, edit its
- * statuses and its areas, say where its specialists work, put it away, or
- * delete it.
+ * statuses and its areas, say where its specialists work, export it to
+ * Excel, put it away, or delete it.
  */
 export function ProjectMenu({ project, taskCount }: ProjectMenuProps) {
   const commands = useProjectCommands();
+  const exportWorkbook = useWorkbookExport();
   const memberCount = useTeamMembers().length;
   const [openDialog, setOpenDialog] = useState<OpenDialog | null>(null);
 
@@ -74,6 +85,13 @@ export function ProjectMenu({ project, taskCount }: ProjectMenuProps) {
             icon: <Folder />,
             onSelect: () => {
               setOpenDialog('folders');
+            },
+          },
+          {
+            label: 'Export to Excel…',
+            icon: <FileSpreadsheet />,
+            onSelect: () => {
+              void exportWorkbook(project);
             },
           },
           {
