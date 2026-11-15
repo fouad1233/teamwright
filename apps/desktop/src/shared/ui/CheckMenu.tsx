@@ -2,6 +2,7 @@ import { Check } from 'lucide-react';
 import { DropdownMenu } from 'radix-ui';
 import type { ReactElement } from 'react';
 
+import { EDGE_GAP } from './edgeGap';
 import styles from './Menu.module.css';
 
 /** One thing a check menu turns on or off. */
@@ -44,6 +45,7 @@ export function CheckMenu<Value extends string>({
           className={styles.menu}
           align={align}
           sideOffset={4}
+          collisionPadding={EDGE_GAP}
           aria-label={label}
         >
           {items.map((item) => (

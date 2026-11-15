@@ -4,6 +4,7 @@ import type { ReactElement, ReactNode } from 'react';
 
 import { classNames } from '@/shared/lib/classNames';
 
+import { EDGE_GAP } from './edgeGap';
 import styles from './Menu.module.css';
 
 /** One of the values a choice menu offers. */
@@ -41,6 +42,7 @@ export function ChoiceMenu<Value extends string>({
           className={styles.menu}
           align="start"
           sideOffset={4}
+          collisionPadding={EDGE_GAP}
           aria-label={label}
         >
           <DropdownMenu.RadioGroup
@@ -135,6 +137,7 @@ export function ActionMenu({
           className={styles.menu}
           align={align}
           sideOffset={4}
+          collisionPadding={EDGE_GAP}
           aria-label={label}
           onCloseAutoFocus={(event) => {
             if (leavesFocus) {
