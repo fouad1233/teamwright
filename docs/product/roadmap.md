@@ -136,6 +136,23 @@ Several specialists working together with the manager in the loop.
   travel to another computer. Dragging a tab to another place and the
   "N more" of a narrow window were seen on demo data only. A view cannot
   be grouped by anything but status yet
+- 🚧 Every kind of view the tracker the owner uses has, asked for on
+  15 November 2026. The model knows twenty kinds, a view may keep content
+  of its own
+  ([decision 0024](../decisions/0024-a-view-keeps-content-of-its-own.md)),
+  and the interface finds a kind by its folder, so a kind is one more
+  folder. Built so far: Timeline (a row for every person along the days),
+  Table (every field a column, changed in place), Workload (the hours on
+  each person week by week) and People (the kind `team`: a column for
+  every person). To come: Activity, Mind map, Map, Gallery, Doc,
+  Whiteboard, Form, Embed, Chat, Report and Files. Each was seen in a
+  browser on demo data only; none in the built program, and what a view
+  keeps was never written through the real storage by its interface
+- ✅ A project as an Excel workbook, from the menu of the project
+  ([decision 0025](../decisions/0025-the-project-as-a-workbook.md)):
+  the sheets Summary, Tasks, Sprints and Team. The file the program's
+  own code wrote was opened in Excel; the dialog of the built program
+  that asks where to save was not tried
 - ✅ Areas: a project cut into the jobs inside it, shown at the side
   under the project, each showing only its tasks in every view
   ([decision 0022](../decisions/0022-areas-inside-a-project.md)).
