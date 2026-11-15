@@ -3,7 +3,7 @@
 
 use std::io::{self, ErrorKind};
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use std::{env, fs, thread};
 
@@ -12,7 +12,8 @@ use tauri::{AppHandle, Emitter, Manager};
 use teamwright_application::{
     AgentRuntime, ApplicationError, AreaService, FileSystem, PlacesService, ProjectFolders,
     ProjectService, RoundReport, SprintService, StorageError, SyncPorts, SyncService, SystemClock,
-    TaskService, TeamService, ViewService, WorkListener, WorkPorts, WorkService,
+    TaskService, TeamService, ViewService, WorkListener, WorkPorts, WorkService, WorkbookPorts,
+    WorkbookService,
 };
 use teamwright_domain::{ComputerId, Conversation, Project, Turn};
 use teamwright_runtime::ClaudeCode;
@@ -127,6 +128,11 @@ pub struct AppState {
     /// The use cases for keeping this computer in step with the manager's
     /// other computers.
     pub sync: SyncService,
+    /// The use case that gathers a project into an Excel workbook.
+    pub workbook: WorkbookService,
+    /// The workbooks written since the program started. Only these can be
+    /// shown in their folder.
+    pub exported_workbooks: Mutex<Vec<PathBuf>>,
     /// The identity of this computer, which tells a conversation that runs
     /// here from one that runs on another computer.
     pub this_computer: ComputerId,
@@ -189,6 +195,15 @@ impl AppState {
             this_computer,
         });
         work.recover()?;
+        let workbook = WorkbookService::new(WorkbookPorts {
+            projects: project_repository.clone(),
+            tasks: task_repository.clone(),
+            sprints: sprint_repository.clone(),
+            areas: area_repository.clone(),
+            members: member_repository.clone(),
+            conversations: conversation_repository.clone(),
+            clock: clock.clone(),
+        });
 
         Ok(Self {
             projects: ProjectService::new(
@@ -247,6 +262,8 @@ impl AppState {
             ),
             work,
             sync,
+            workbook,
+            exported_workbooks: Mutex::new(Vec::new()),
             this_computer,
         })
     }
@@ -263,7 +280,7 @@ pub fn sync_state_dto(state: &AppState) -> Result<SyncStateDto, CommandError> {
 
 /// The name the operating system gives this computer, if it says. It is
 /// offered as the name of the computer, never used without the manager.
-fn suggested_computer_name() -> Option<String> {
+pub fn suggested_computer_name() -> Option<String> {
     ["COMPUTERNAME", "HOSTNAME"]
         .into_iter()
         .filter_map(|variable| env::var(variable).ok())

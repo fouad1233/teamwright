@@ -99,6 +99,25 @@ export interface Backend {
   showWorkFolder(projectId: Id): Promise<void>;
 
   /**
+   * Lets the manager choose where to save a workbook of this computer,
+   * suggesting a name. Resolves to the path, or to nothing if the manager
+   * changed their mind.
+   */
+  chooseWorkbookFile(suggestedName: string): Promise<string | null>;
+  /**
+   * Writes a project as an Excel workbook to a file (decision 0025): a
+   * summary, the tasks, the sprints and the team. Resolves to the path of
+   * the file. A file that is open in another program, a full disk or a
+   * folder that is gone is refused with the reason in words.
+   */
+  exportWorkbook(projectId: Id, path: string): Promise<string>;
+  /**
+   * Shows a workbook in its folder in the file manager of this computer.
+   * Only a file the program wrote since it started can be shown.
+   */
+  showExportedWorkbook(path: string): Promise<void>;
+
+  /**
    * Adds a status to the workflow of a project. It goes behind the last
    * status that is as far along in the course of the work, or less far.
    */

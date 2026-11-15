@@ -3688,6 +3688,7 @@ dependencies = [
  "teamwright-domain",
  "teamwright-runtime",
  "teamwright-storage",
+ "teamwright-workbook",
  "thiserror 2.0.21",
 ]
 

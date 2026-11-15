@@ -34,6 +34,17 @@ impl CommandError {
     }
 }
 
+impl CommandError {
+    /// A file could not be written, for the reason the message gives: it
+    /// is open in another program, the disk is full, its folder is gone.
+    pub fn not_written(message: impl Into<String>) -> Self {
+        Self {
+            code: "file_not_written",
+            message: message.into(),
+        }
+    }
+}
+
 impl From<ApplicationError> for CommandError {
     fn from(error: ApplicationError) -> Self {
         Self {

@@ -496,6 +496,29 @@ export class DemoBackend implements Backend {
     });
   }
 
+  chooseWorkbookFile(suggestedName: string): Promise<string | null> {
+    return this.answer(() => `C:\\Users\\you\\Documents\\${suggestedName}`);
+  }
+
+  exportWorkbook(projectId: Id, path: string): Promise<string> {
+    return this.answer(() => {
+      this.requireProject(projectId);
+      throw new BackendError(
+        'not_available',
+        `the demo has no files, so ${nameOf(path)} could not be written`,
+      );
+    });
+  }
+
+  showExportedWorkbook(path: string): Promise<void> {
+    return this.answer(() => {
+      throw new BackendError(
+        'not_available',
+        `the demo has no file manager to show ${nameOf(path)} in`,
+      );
+    });
+  }
+
   /** What the manager has chosen for a project, kept from the first time it is asked for. */
   private chosenPlacesOf(projectId: Id): ChosenPlaces {
     let chosen = this.places.get(projectId);

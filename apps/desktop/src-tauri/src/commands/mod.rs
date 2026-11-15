@@ -13,3 +13,4 @@ pub mod tasks;
 pub mod team;
 pub mod views;
 pub mod work;
+pub mod workbook;

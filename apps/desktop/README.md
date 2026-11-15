@@ -58,6 +58,21 @@ application crate mirrors its cases with the same codes and messages. A
 database with projects from before areas gives each of them the area
 "General", with all its tasks in it, when it is opened.
 
+**The project as an Excel workbook**
+([decision 0025](../../docs/decisions/0025-the-project-as-a-workbook.md))
+is two commands in `commands/workbook.rs`. `export_workbook` takes the
+project and the path the manager chose in the save window of the dialog
+plugin (`dialog:allow-save` in `capabilities/default.json`), gathers the
+workbook with `WorkbookService`, has `teamwright-workbook` write it, and
+answers with the path. The summary names the computer by the name it has
+for syncing, or else the one the operating system gives it. A file that
+could not be written is refused with the code `file_not_written` and the
+reason in words. `show_exported_workbook` shows the file chosen in its
+folder (Explorer, Finder; on Linux the folder is opened), but only a path
+`export_workbook` wrote since the program started: the shell keeps them in
+`AppState`, so the interface cannot make it open any other place. In the
+demo the save window suggests a path and writing is `not_available`.
+
 ### The work of the specialists
 
 The shell is where the work of an AI specialist meets the outside world

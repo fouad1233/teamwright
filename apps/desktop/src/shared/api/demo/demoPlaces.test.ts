@@ -186,6 +186,15 @@ describe('the folders of a project in the DemoBackend', () => {
   it('has no file manager to show a folder in', async () => {
     expect((await refusal(backend.showWorkFolder(project.id))).code).toBe('not_available');
   });
+
+  it('suggests where a workbook goes, and has no files to write it into', async () => {
+    const path = await backend.chooseWorkbookFile(`${project.name}.xlsx`);
+    expect(path).toBe(`C:\\Users\\you\\Documents\\${project.name}.xlsx`);
+
+    const failure = await refusal(backend.exportWorkbook(project.id, path ?? ''));
+    expect(failure.code).toBe('not_available');
+    expect((await refusal(backend.showExportedWorkbook(path ?? ''))).code).toBe('not_available');
+  });
 });
 
 describe('folders as the demo compares them', () => {

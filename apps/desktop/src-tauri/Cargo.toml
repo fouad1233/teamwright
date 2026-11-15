@@ -14,6 +14,7 @@ teamwright-application.workspace = true
 teamwright-domain.workspace = true
 teamwright-runtime.workspace = true
 teamwright-storage.workspace = true
+teamwright-workbook.workspace = true
 
 chrono.workspace = true
 serde.workspace = true

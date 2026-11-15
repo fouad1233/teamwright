@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import { open } from '@tauri-apps/plugin-dialog';
+import { open, save } from '@tauri-apps/plugin-dialog';
 
 import { BackendError, type Backend } from './backend';
 import type {
@@ -269,6 +269,24 @@ export class TauriBackend implements Backend {
 
   showWorkFolder(projectId: Id): Promise<void> {
     return call('show_work_folder', { projectId });
+  }
+
+  async chooseWorkbookFile(suggestedName: string): Promise<string | null> {
+    // The window of the operating system for saving a file. It answers
+    // with nothing when the manager closes it without choosing.
+    return save({
+      title: 'Export to Excel',
+      defaultPath: suggestedName,
+      filters: [{ name: 'Excel workbook', extensions: ['xlsx'] }],
+    });
+  }
+
+  exportWorkbook(projectId: Id, path: string): Promise<string> {
+    return call('export_workbook', { projectId, path });
+  }
+
+  showExportedWorkbook(path: string): Promise<void> {
+    return call('show_exported_workbook', { path });
   }
 
   listMembers(projectId: Id): Promise<Member[]> {

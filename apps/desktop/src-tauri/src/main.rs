@@ -56,6 +56,8 @@ fn main() -> ExitCode {
             commands::places::remove_reference_folder,
             commands::places::add_reference_files,
             commands::places::show_work_folder,
+            commands::workbook::export_workbook,
+            commands::workbook::show_exported_workbook,
             commands::tasks::list_tasks,
             commands::tasks::create_task,
             commands::tasks::rename_task,
