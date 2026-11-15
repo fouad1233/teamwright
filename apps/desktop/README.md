@@ -224,6 +224,7 @@ src/
     gantt/            The Gantt chart: bars against days, lines of dependencies
     calendar/         The calendar: a month of weeks with the tasks on their days
     timeline/         The timeline: a row for every person, with their tasks along the days
+    table/            The table: one task a row, every field a column changed in place, sums at its foot
     tasks/            The task panel, the list, badges, the fold of subtasks, task logic
     team/             The team: avatars, the Team view, adding and changing a member
     office/           The office: the team at work, drawn as a workshop in plan

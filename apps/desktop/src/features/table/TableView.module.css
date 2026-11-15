@@ -1,0 +1,473 @@
+/*
+ * The table is a ruled sheet that scrolls both ways. Its head stays at the
+ * top, its foot at the bottom, and the task and its title at the left, the
+ * way the parts list of a drawing stays beside the figures it describes.
+ * Every row has the same height, so that the eye can run along it.
+ *
+ * The component sets `--reference` (the width of the first column), `--fixed`
+ * (the width of the two that stay) and `--sheet` (the width of all shown).
+ */
+.table {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* The line above the sheet: how the rows are ordered, and the columns. */
+.bar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  height: 40px;
+  padding: 0 var(--space-3) 0 var(--space-5);
+}
+
+.order {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.orderNote {
+  overflow: hidden;
+  color: var(--ink-faint);
+  font-size: var(--text-small);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.orderValue {
+  color: var(--ink-soft);
+}
+
+.barButton {
+  height: 26px;
+  padding: 0 var(--space-2);
+  font-size: var(--text-small);
+}
+
+.barButton svg {
+  width: 13px;
+  height: 13px;
+}
+
+.count {
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.scroller {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  /* A cell brought into view with the keyboard is not left under the parts
+     that stay. */
+  scroll-padding: 36px 0 36px var(--fixed);
+}
+
+.grid {
+  width: max(100%, var(--sheet));
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: fixed;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The head. */
+.grid thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  height: 36px;
+  padding: 0;
+  border-bottom: 1px solid var(--rule-strong);
+  background: var(--ground);
+  font-weight: 400;
+  text-align: left;
+}
+
+.sortButton {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  height: 100%;
+  padding: 0 var(--space-3);
+  color: var(--ink-faint);
+  transition: color 100ms ease;
+}
+
+.sortButton:focus-visible {
+  outline-offset: -2px;
+}
+
+.sortButton:hover :global(.label),
+.sorted :global(.label) {
+  color: var(--ink);
+}
+
+.sortButton svg {
+  width: 12px;
+  height: 12px;
+  color: var(--brass);
+  stroke-width: 2;
+}
+
+.figureColumn .sortButton {
+  justify-content: flex-end;
+}
+
+/* The task and its title stay at the left while the rest scrolls under
+   them, so their ground is solid. */
+.fixed {
+  position: sticky;
+  z-index: 1;
+  background: var(--ground);
+}
+
+.fixed:first-child {
+  left: 0;
+}
+
+.fixed:nth-child(2) {
+  left: var(--reference);
+}
+
+.grid thead th.fixed,
+.grid tfoot td.fixed {
+  z-index: 3;
+}
+
+/* The edge of the part that stays. */
+.lastFixed {
+  border-right: 1px solid var(--rule);
+}
+
+/* The rows. */
+.cell {
+  height: 36px;
+  padding: 0 var(--space-3);
+  overflow: hidden;
+  border-bottom: 1px solid var(--rule);
+  color: var(--ink-soft);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+/* The cell the keyboard stands on is ringed whole, whether the cell itself
+   or the control in it has the focus. */
+.cell:focus-visible,
+.cell:has(:focus-visible) {
+  outline: 2px solid var(--brass);
+  outline-offset: -2px;
+}
+
+/* The first column, head and foot included, keeps the margin of the view. */
+.grid tr > :first-child {
+  padding-left: var(--space-5);
+}
+
+.grid thead th:first-child {
+  padding-left: calc(var(--space-5) - var(--space-3));
+}
+
+/* So does the last, at the right. */
+.grid tr > :last-child {
+  padding-right: var(--space-5);
+}
+
+.grid thead th:last-child {
+  padding-right: calc(var(--space-5) - var(--space-3));
+}
+
+.row:hover > .cell,
+.openRow > .cell {
+  background: linear-gradient(var(--hover), var(--hover)), var(--ground);
+}
+
+/* The task open in the panel is held by a gilt edge, where the row begins. */
+.openRow > .cell:first-child {
+  box-shadow: inset 2px 0 var(--brass);
+}
+
+.figureColumn {
+  text-align: right;
+}
+
+.reference {
+  height: 28px;
+  margin-left: -4px;
+  padding: 0 4px;
+  border-radius: var(--radius-control);
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  transition:
+    background-color 100ms ease,
+    color 100ms ease;
+}
+
+.reference:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+
+.reference:focus-visible,
+.cellButton:focus-visible {
+  outline: none;
+}
+
+/* A subtask is set in one step for every task it is part of, behind a
+   small elbow that joins it to the row above. */
+.titleLine {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  padding-left: calc(var(--depth) * var(--space-5));
+}
+
+.subtask::before {
+  flex: none;
+  width: 9px;
+  height: 10px;
+  margin: -10px 7px 0 -16px;
+  border-bottom: 1px solid var(--rule-strong);
+  border-left: 1px solid var(--rule-strong);
+  border-bottom-left-radius: 2px;
+  content: '';
+}
+
+.titleText {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink);
+  font-weight: 500;
+  text-overflow: ellipsis;
+}
+
+.finishedRow .titleText {
+  color: var(--ink-soft);
+}
+
+.cellButton {
+  max-width: calc(100% + var(--space-2));
+  overflow: hidden;
+}
+
+.clipped {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* A sprint that runs: a small gilt block, the light of work going on. */
+.activeMark {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 1px;
+  background: var(--brass);
+}
+
+.figure {
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: var(--text-small);
+}
+
+.empty {
+  color: var(--ink-faint);
+}
+
+.inherited {
+  color: var(--ink-faint);
+  cursor: default;
+}
+
+/* A date is the calendar field of the program, quieter in a row: no mark
+   of a calendar in every cell, and an empty one is a dash like the rest. */
+.date :global(button) {
+  color: var(--ink-soft);
+}
+
+.date :global(button svg) {
+  display: none;
+}
+
+.noDate :global(button) {
+  font-size: 0;
+}
+
+.noDate :global(button)::after {
+  color: var(--ink-faint);
+  font-size: var(--text-body);
+  content: '\2013';
+}
+
+.late :global(button) {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.references {
+  min-width: 0;
+  overflow: hidden;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  text-overflow: ellipsis;
+  word-spacing: 2px;
+}
+
+.finished {
+  color: var(--ink-faint);
+}
+
+/* A cell being typed into. */
+.editing {
+  padding-right: var(--space-2);
+}
+
+.field {
+  width: calc(100% + var(--space-2));
+  height: 28px;
+  margin-left: calc(-1 * var(--space-2));
+  padding: 0 var(--space-2);
+  border: none;
+  border-radius: var(--radius-control);
+  outline: 2px solid var(--brass-soft);
+  outline-offset: 0;
+  background: var(--ground);
+  color: var(--ink);
+}
+
+.field:focus-visible {
+  outline: 2px solid var(--brass-soft);
+  outline-offset: 0;
+}
+
+.figureField {
+  font-family: var(--font-mono);
+  font-size: var(--text-small);
+  text-align: right;
+}
+
+.notUnderstood,
+.notUnderstood:focus-visible {
+  outline-color: var(--danger);
+}
+
+/* The foot: the tally of what the rows hold. */
+.grid tfoot td {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  height: 36px;
+  padding: 0 var(--space-3);
+  border-top: 1px solid var(--rule-strong);
+  background: var(--ground);
+  white-space: nowrap;
+}
+
+.footCount {
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.footFigure {
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: var(--text-small);
+  font-weight: 500;
+}
+
+.emptyState {
+  padding: var(--space-7) var(--space-5);
+}
+
+.note {
+  max-width: 52ch;
+  color: var(--ink-soft);
+  white-space: normal;
+}
+
+/* The sheet of what a task waits for, laid over the table like a menu. */
+.sheet {
+  z-index: 150;
+  width: 360px;
+  padding: var(--space-1);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius-overlay);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-overlay);
+  animation: appear 110ms ease-out;
+}
+
+@keyframes appear {
+  from {
+    transform: translateY(-3px);
+    opacity: 0;
+  }
+}
+
+.sheetHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 30px;
+  padding: 0 var(--space-1) 0 var(--space-2);
+}
+
+.sheetNote {
+  padding: var(--space-1) var(--space-2) var(--space-2);
+  color: var(--ink-faint);
+  font-size: var(--text-small);
+}
+
+.blocker {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.blockerLink {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  height: 30px;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-control);
+  text-align: left;
+}
+
+.blockerLink:hover {
+  background: var(--pressed);
+}
+
+.blockerReference {
+  flex: none;
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.blockerTitle {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
