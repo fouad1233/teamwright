@@ -5,7 +5,8 @@
 //! sprint, put someone on the team, choose the folders of a project, let an
 //! AI specialist work on a task. Each use case is a method of a service
 //! ([`ProjectService`], [`TaskService`], [`SprintService`], [`ViewService`],
-//! [`AreaService`], [`TeamService`], [`PlacesService`], [`WorkService`])
+//! [`AreaService`], [`TeamService`], [`PlacesService`], [`WorkService`],
+//! [`WorkbookService`])
 //! that loads what it
 //! needs, lets the
 //! domain apply its rules, and stores the result.
@@ -29,6 +30,7 @@ pub mod tasks;
 pub mod team;
 pub mod views;
 pub mod work;
+pub mod workbook;
 
 pub use agent_runtime::{
     AgentEvent, AgentRuntime, AgentRuntimeError, Effort, Installation, InterviewQuestionAsked,
@@ -62,4 +64,7 @@ pub use work::{
     AgentProgram, AgentProgramState, ApprovedMember, ApprovedOwner, ApprovedProposal, ApprovedTask,
     ConversationWithTurns, WorkPorts, WorkService, answers_in_words, brief_for, instructions_for,
     instructions_for_advisor,
+};
+pub use workbook::{
+    Cell, Column, Section, Sheet, SheetContent, Table, Workbook, WorkbookPorts, WorkbookService,
 };

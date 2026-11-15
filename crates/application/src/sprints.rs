@@ -442,7 +442,7 @@ impl SprintService {
 
 /// Whether a task is finished: in a status of the category done. A status
 /// the workflow no longer has counts as not done.
-fn is_finished(project: &Project, task: &Task) -> bool {
+pub(crate) fn is_finished(project: &Project, task: &Task) -> bool {
     project
         .workflow()
         .status(task.status_id())
@@ -450,7 +450,7 @@ fn is_finished(project: &Project, task: &Task) -> bool {
 }
 
 /// A task as a sprint counts it.
-fn counted(project: &Project, task: &Task) -> CountedTask {
+pub(crate) fn counted(project: &Project, task: &Task) -> CountedTask {
     CountedTask {
         points: task.points(),
         completed_at: task.completed_at(),
@@ -460,7 +460,7 @@ fn counted(project: &Project, task: &Task) -> CountedTask {
 
 /// Orders sprints the way they are listed: the active one, the planned ones
 /// as they were planned, the completed ones, the one completed last first.
-fn as_listed(first: &Sprint, second: &Sprint) -> Ordering {
+pub(crate) fn as_listed(first: &Sprint, second: &Sprint) -> Ordering {
     let place = |sprint: &Sprint| match sprint.state() {
         SprintState::Active => 0,
         SprintState::Planned => 1,

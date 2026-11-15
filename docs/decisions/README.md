@@ -40,6 +40,7 @@ was considered.
 | [0022](0022-areas-inside-a-project.md) | Cut a project into areas, one for each job inside it | Accepted |
 | [0023](0023-a-website-without-a-framework.md) | Make the website one static page, with the film drawn from frames | Accepted |
 | [0024](0024-a-view-keeps-content-of-its-own.md) | Let a view keep content of its own, as text the domain does not read | Accepted |
+| [0025](0025-the-project-as-a-workbook.md) | Give the manager the project as an Excel workbook, gathered in Rust and written by a crate of its own | Accepted |
 
 ## Template
 

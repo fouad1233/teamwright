@@ -500,6 +500,17 @@ pub struct TokenCounts {
     pub cache_written: u64,
 }
 
+impl TokenCounts {
+    /// Every token the counts hold, whatever its kind.
+    #[must_use]
+    pub const fn all(&self) -> u64 {
+        self.input
+            .saturating_add(self.output)
+            .saturating_add(self.cache_read)
+            .saturating_add(self.cache_written)
+    }
+}
+
 /// The plain data of a turn, used to recreate one that was stored.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TurnSnapshot {
@@ -1071,6 +1082,12 @@ mod tests {
             cache_read: 21_500,
             cache_written: 6400,
         }
+    }
+
+    #[test]
+    fn all_the_tokens_are_every_kind_together() {
+        assert_eq!(tokens().all(), 42 + 880 + 21_500 + 6400);
+        assert_eq!(TokenCounts::default().all(), 0);
     }
 
     fn running_turn() -> Turn {

@@ -16,6 +16,7 @@ window or agent runtime.
 | `places` | `PlacesService`: the folders of a project: choose its work folder, add and take away reference folders, copy reference files into it |
 | `work` | `WorkService`: let AI specialists work: start on a task, ask, reply, answer a specialist's question, list what waits for the manager, stop, follow every event, open a session in the desktop app, recover after a restart; `brief_for` and `instructions_for`. Its part `advisor`: plan a project with the Advisor (`advise`, `answer_interview`, `approve_proposal`); `ApprovedProposal`, `answers_in_words` and `instructions_for_advisor` |
 | `sync` | `SyncService`: keep several computers of one manager in step through a folder the manager owns (`round`, `choose_folder`, `stop`, `rename_this_computer`, `accept`, `ignore`, `notices`, `dismiss`, `new_identity`); the ports `SyncFolder` and `SyncLedger`, and the operations that travel between computers |
+| `workbook` | `WorkbookService`: gather a project into a workbook of four sheets (summary, tasks, sprints, team) as plain data: `Workbook`, `Sheet`, `SheetContent`, `Section`, `Table`, `Column` and `Cell`, whose kind says whether it is text, a whole number, hours, a date or a status. Writing the file is done outside this crate ([decision 0025](../../docs/decisions/0025-the-project-as-a-workbook.md)) |
 | `ports` | The interfaces the services need: `ProjectRepository`, `TaskRepository`, `MemberRepository`, `ConversationRepository`, `PlanningRepository`, `PlacesRepository`, `SprintRepository`, `ViewRepository`, `AreaRepository`, `ProjectFolders`, `FileSystem`, `WorkListener`, `Clock` (which also tells the day a moment falls on) |
 | `agent_runtime` | `AgentRuntime`: the interface to the program that runs a team member's session, and the data it speaks |
 | `error` | `ApplicationError`, with a stable `code()` for interfaces |
@@ -441,6 +442,34 @@ never looks inside the state an operation carries; storage merges.
   the computer that made each change (`HistoryEntry`), from
   `TaskRepository::computers_of_versions`. Storage that does not know the
   computers answers with none, and the entries then name none.
+
+## The project as a workbook
+
+`WorkbookService::workbook_of` carries out
+[decision 0025](../../docs/decisions/0025-the-project-as-a-workbook.md).
+It reads a project and returns what its workbook holds; it writes nothing.
+`workbook/tests.rs` checks every sheet on a project in memory.
+
+- Four sheets, in this order: Summary, Tasks, Sprints, Team.
+- The summary is an overview: the name of the project as its title, then
+  sections of facts (the key, the description, the day of the export and
+  the computer it was made on; the tasks open, finished and in all; the
+  tasks of every status in the order of the workflow; the running sprint).
+  A project without sprints has no sprint section; one with sprints and
+  none running says so.
+- Finished means a status of the category done, the rule sprints use. The
+  figures the dashboard works out in the interface alone (in work, late,
+  given to nobody) are left out, so that no rule is written twice.
+- The days a sprint has left are its end date less today; past its end
+  they are below zero. Its work is counted as a sprint counts it: its main
+  tasks, in points if any has points, and otherwise in tasks. A completed
+  sprint keeps the summary it was completed with.
+- The tasks come in the order of an outline: the main tasks by number, each
+  followed by its subtasks, set in one level deeper, which name it under
+  "Part of". Dates are days where the program runs (`Clock::day_of`).
+- The team is the manager ("You"), the members in the order they joined,
+  and the Advisor if the project has spoken with it. Tokens are counted for
+  AI specialists and the Advisor, every kind together (`TokenCounts::all`).
 
 ## Adding a use case
 
