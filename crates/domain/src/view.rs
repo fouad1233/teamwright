@@ -35,7 +35,8 @@ pub enum ViewKind {
     Table,
     /// How much work each member of the team has, day by day.
     Workload,
-    /// The tasks by the members they are given to.
+    /// The tasks by the people they are given to. Such a view is named
+    /// "People": "Team" is the place of a project where its members are kept.
     Team,
     /// Everything that happened in the project, newest first.
     Activity,
@@ -96,7 +97,7 @@ impl ViewKind {
             Self::Timeline => "Timeline",
             Self::Table => "Table",
             Self::Workload => "Workload",
-            Self::Team => "Team",
+            Self::Team => "People",
             Self::Activity => "Activity",
             Self::MindMap => "Mind map",
             Self::Map => "Map",
@@ -720,6 +721,12 @@ mod tests {
     fn a_mind_map_is_named_with_a_space_and_written_with_a_line() {
         assert_eq!(ViewKind::MindMap.default_name().as_str(), "Mind map");
         assert_eq!(ViewKind::MindMap.as_str(), "mind_map");
+    }
+
+    #[test]
+    fn a_view_of_the_people_is_not_named_like_the_place_of_the_team() {
+        assert_eq!(ViewKind::Team.default_name().as_str(), "People");
+        assert_eq!(ViewKind::Team.as_str(), "team");
     }
 
     #[test]

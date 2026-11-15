@@ -227,6 +227,12 @@ describe('views in the DemoBackend', () => {
       expect(await views()).toHaveLength(8);
     });
 
+    it('names a view of the people "People", not like the place of the team', async () => {
+      const added = await backend.addView({ projectId: project.id, kind: 'team' });
+
+      expect(added.name).toBe('People');
+    });
+
     it('refuses a view for a project that does not exist', async () => {
       const error = await refusal(backend.addView({ projectId: 'nowhere', kind: 'board' }));
 

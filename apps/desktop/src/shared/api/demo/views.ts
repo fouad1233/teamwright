@@ -28,7 +28,8 @@ const NAME_OF_KIND: Record<ViewKind, string> = {
   timeline: 'Timeline',
   table: 'Table',
   workload: 'Workload',
-  team: 'Team',
+  // "Team" is the place of a project where its members are kept.
+  team: 'People',
   activity: 'Activity',
   mind_map: 'Mind map',
   map: 'Map',

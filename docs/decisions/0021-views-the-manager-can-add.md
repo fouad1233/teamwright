@@ -119,7 +119,11 @@ storage, both halves of the wire and the demo backend know all twenty.
   whiteboard, chat, doc, embed, form and report). The message of the
   refusal no longer says that such a view "shows every task", which is
   not true of a document.
-- Each newer kind gets its interface in a commit of its own, as one more
-  entry in the table of kinds. Until a kind has its entry, the chooser
+- Each newer kind gets its interface in a commit of its own, in a folder
+  of its own that the interface finds by where it lies
+  (`features/<kind>/kind.tsx`). Until a kind has its folder, the chooser
   does not offer it, and a view of that kind that arrives from elsewhere
   is drawn as a board.
+- A view of the kind `team` is named "People". A project already has a
+  place called Team, where its members are kept, and two tabs with one
+  name and two meanings would mislead. The word on the wire stays `team`.
