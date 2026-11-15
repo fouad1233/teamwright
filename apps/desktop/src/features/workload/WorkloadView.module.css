@@ -1,0 +1,520 @@
+/*
+ * The workload is a sheet of figures: a column of names at the left, a
+ * column for every week (or day), and the totals at the right, all on the
+ * hairlines of the Gantt chart and the timeline. The names and the head stay
+ * while the rest scrolls.
+ */
+.workload {
+  --names: 264px;
+  --column: 104px;
+  --total-width: 112px;
+  --row-height: 64px;
+
+  height: 100%;
+  overflow: auto;
+}
+
+.workload[data-scale='days'] {
+  --column: 40px;
+  --row-height: 56px;
+}
+
+.sheet {
+  display: grid;
+  grid-template-columns:
+    var(--names) repeat(var(--columns), minmax(var(--column), 1fr))
+    var(--total-width);
+  width: max-content;
+  min-width: 100%;
+}
+
+/* A row is only a way of reading the sheet: its cells sit on the grid. */
+.head,
+.row {
+  display: contents;
+}
+
+/* The head, as high as the chart's. */
+.corner,
+.columnHead {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  height: 56px;
+  border-bottom: 1px solid var(--rule);
+  background: var(--ground);
+}
+
+.corner {
+  left: 0;
+  z-index: 4;
+  display: flex;
+  align-items: flex-end;
+  padding: 0 var(--space-3) 10px var(--space-5);
+  border-right: 1px solid var(--rule);
+}
+
+/* The control of the columns sits on the line of the dates. */
+.scale {
+  margin-bottom: -6px;
+  color: var(--ink-soft);
+  font-size: var(--text-small);
+  font-weight: 550;
+}
+
+.scale:hover,
+.scale[data-state='open'] {
+  color: var(--ink);
+}
+
+.scale svg {
+  width: 12px;
+  height: 12px;
+  color: var(--ink-faint);
+}
+
+.columnHead {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 2px;
+  padding: 0 var(--space-3) 9px;
+  border-left: 1px solid var(--rule);
+}
+
+.columnHead:nth-child(2) {
+  border-left-color: transparent;
+}
+
+.dates {
+  color: var(--ink-soft);
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Today's column is the one point of attention, so it gets the brass, with
+   a short rule under its head like the mark where a measure is taken. */
+.columnHead.holdsToday :global(.label),
+.columnHead.holdsToday .dates {
+  color: var(--brass-text);
+}
+
+.columnHead.holdsToday::after {
+  position: absolute;
+  right: var(--space-3);
+  bottom: -1px;
+  left: var(--space-3);
+  height: 1px;
+  background: var(--brass);
+  content: '';
+}
+
+.totalHead {
+  align-items: flex-end;
+  border-left-color: var(--rule-strong);
+}
+
+/* A day is narrow: its head is a letter over a number, set in the middle. */
+.workload[data-scale='days'] .columnHead {
+  align-items: center;
+  padding: 0 0 9px;
+}
+
+.workload[data-scale='days'] .columnHead:not(.weekStart, .totalHead),
+.workload[data-scale='days'] .cell:not(.weekStart) {
+  border-left-color: transparent;
+}
+
+.workload[data-scale='days'] .columnHead.holdsToday::after {
+  right: 8px;
+  left: 8px;
+}
+
+.workload[data-scale='days'] .totalHead {
+  align-items: flex-end;
+  padding-right: var(--space-3);
+}
+
+.columnHead.restDay,
+.columnHead.past {
+  opacity: 0.55;
+}
+
+/* Who the row is for. It lies over the cells that scroll under it. */
+.names {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  min-width: 0;
+  height: var(--row-height);
+  padding: 0 var(--space-3) 0 var(--space-5);
+  border-right: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+  background: var(--ground);
+}
+
+.subject {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.subjectName {
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.quiet {
+  color: var(--ink-soft);
+  font-weight: 500;
+}
+
+/* What the person is on the team for, or the hours a day they can work, set
+   from the edge of the name rather than the picture. */
+.subjectLine {
+  margin: 0 0 0 28px;
+  overflow: hidden;
+  color: var(--ink-faint);
+  font-size: var(--text-small);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hoursButton {
+  align-self: flex-start;
+  height: 22px;
+  margin-left: calc(28px - var(--space-2));
+  color: var(--ink-faint);
+  font-size: var(--text-small);
+}
+
+.hoursButton:hover {
+  color: var(--ink);
+}
+
+.hoursLine {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-left: 28px;
+}
+
+.hoursInput {
+  width: 6ch;
+  min-height: 22px;
+  height: 22px;
+  padding: 0 var(--space-1);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-align: right;
+}
+
+.hoursInput[aria-invalid='true'] {
+  border-color: var(--danger);
+}
+
+.hoursUnit {
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+/*
+ * A cell: the hours that fall into it over what the person can take, and a
+ * hairline bar at its foot. The figures are counted, so they are set in the
+ * monospace.
+ */
+.cell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 9px;
+  min-width: 0;
+  height: var(--row-height);
+  padding: 0 var(--space-3);
+  border-left: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+  text-align: left;
+  transition: background-color var(--duration-quick) ease;
+}
+
+.row > .cell:nth-child(2) {
+  border-left-color: transparent;
+}
+
+.cell:hover {
+  background: var(--hover);
+}
+
+.cell:focus-visible {
+  outline-offset: -2px;
+}
+
+.cell.isChosen {
+  background: var(--hover);
+  box-shadow: inset 0 0 0 1px var(--ink-soft);
+}
+
+.cell.restDay {
+  background: var(--ground-sunken);
+}
+
+.cell.past {
+  opacity: 0.45;
+}
+
+.cellFigures {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.figure {
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.capacity {
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.cell.isOver .figure {
+  color: var(--danger);
+}
+
+/* A day holds a small figure, centred. */
+.workload[data-scale='days'] .cell {
+  align-items: center;
+  padding: 0 6px;
+}
+
+.workload[data-scale='days'] .figure {
+  font-size: 11px;
+}
+
+/* Against a limit, the bar is the limit as a hollow part, filled with ink
+   as far as the hours go, like the bars of the dashboard. */
+.bar {
+  position: relative;
+  width: 100%;
+  height: 4px;
+  border-radius: 1px;
+}
+
+.bounded {
+  box-shadow: inset 0 0 0 1px var(--rule-strong);
+}
+
+.fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  border-radius: 1px;
+  background: var(--ink-soft);
+}
+
+.cell.isOver .fill {
+  background: var(--danger);
+}
+
+/* Without a limit, only the hours show, measured against the fullest cell. */
+.unbounded .fill {
+  background: var(--ink-faint);
+}
+
+.total {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 2px;
+  height: var(--row-height);
+  padding: 0 var(--space-3);
+  border-left: 1px solid var(--rule-strong);
+  border-bottom: 1px solid var(--rule);
+}
+
+/* The tasks behind the chosen cell. */
+.account {
+  position: sticky;
+  left: 0;
+  max-width: 920px;
+  margin: var(--space-6) var(--space-5) 0;
+}
+
+.accountHead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 0 0 var(--space-2) var(--space-2);
+  border-bottom: 1px solid var(--rule-strong);
+}
+
+.accountTitle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--ink-soft);
+}
+
+/* Name and time are parted by a short upright rule, as the facts of a sprint are. */
+.accountSeparator {
+  width: 1px;
+  height: 9px;
+  background: var(--rule-strong);
+}
+
+.accountFigures {
+  margin-left: auto;
+  color: var(--ink-soft);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.accountEmpty {
+  margin: 0;
+  padding: var(--space-3) var(--space-2);
+  border-bottom: 1px solid var(--rule);
+  color: var(--ink-faint);
+}
+
+.lines {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* A line is a row of the sheet on a hairline, like a line of the dashboard. */
+.line {
+  display: grid;
+  grid-template-columns: 16px auto minmax(0, 1fr) 104px 148px;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  height: 34px;
+  padding: 0 var(--space-2);
+  border-bottom: 1px solid var(--rule);
+  text-align: left;
+  transition: background-color var(--duration-quick) ease;
+}
+
+.line:hover {
+  background: var(--hover);
+}
+
+.line:focus-visible {
+  outline-offset: -2px;
+}
+
+.lineMark {
+  display: inline-flex;
+}
+
+.reference,
+.lineHours,
+.lineFact {
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.lineTitle {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lineHours {
+  color: var(--ink);
+  text-align: right;
+}
+
+.lineOf {
+  color: var(--ink-faint);
+}
+
+.lineFact {
+  text-align: right;
+}
+
+.late {
+  color: var(--danger);
+}
+
+/* The quiet lines under the table. */
+.notes {
+  position: sticky;
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-width: 920px;
+  margin: var(--space-5) var(--space-5) var(--space-6);
+}
+
+.note {
+  margin: 0;
+  color: var(--ink-faint);
+  font-size: var(--text-small);
+}
+
+.toggle {
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-control);
+  color: var(--ink-soft);
+  text-decoration: underline;
+  text-decoration-color: var(--rule-strong);
+  text-underline-offset: 3px;
+}
+
+.toggle:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+
+.unlaid {
+  margin-top: var(--space-1);
+  border-top: 1px solid var(--rule-strong);
+}
+
+/* Before there is anything to weigh. */
+.empty {
+  max-width: 60ch;
+  padding: var(--space-6) var(--space-5);
+}
+
+.emptyLead {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-strong);
+  font-weight: 600;
+}
+
+.emptyNote {
+  margin: 0;
+  color: var(--ink-soft);
+  line-height: 1.55;
+}
