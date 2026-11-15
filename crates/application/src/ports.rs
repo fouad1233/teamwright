@@ -142,6 +142,21 @@ pub trait TaskRepository: Send + Sync {
         let _ = id;
         Ok(Vec::new())
     }
+
+    /// The identifiers of every task a project has had, those deleted since
+    /// included, in no particular order. Storage that forgets deleted tasks
+    /// answers with the tasks the project has now.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if stored data could not be read.
+    fn ids_ever_in_project(&self, project_id: ProjectId) -> Result<Vec<TaskId>, StorageError> {
+        Ok(self
+            .list_for_project(project_id)?
+            .iter()
+            .map(Task::id)
+            .collect())
+    }
 }
 
 /// Stores the sprints of the projects.

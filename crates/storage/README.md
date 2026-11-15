@@ -56,7 +56,10 @@ involved.
 - **The log is also the history.** Because it keeps the complete state of a
   task after every write, the versions of a task are read straight from it
   (`TaskRepository::versions_of`), in the order of their stamps. The history
-  a manager sees needs no table of its own.
+  a manager sees needs no table of its own. The tasks a project has had,
+  deleted ones included, are the tasks whose logged states name it
+  (`TaskRepository::ids_ever_in_project`), which the history of a project
+  reads.
 - **Each database file has the identity of its computer** (a `ComputerId` of
   the domain), created when the file is first opened and stored in `meta`
   under `device_id`. `Database::device_id` returns it.

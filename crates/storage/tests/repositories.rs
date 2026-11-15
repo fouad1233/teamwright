@@ -613,6 +613,25 @@ fn every_version_a_task_was_stored_in_can_be_read_back_the_oldest_first() {
 }
 
 #[test]
+fn the_log_knows_every_task_a_project_has_had_the_deleted_ones_too() {
+    let store = Store::in_memory();
+    let project = store.project("Smart sensor node");
+    let other = store.project("Weather station");
+    let kept = store.task(&project, 1, "Choose the microcontroller");
+    let deleted = store.task(&project, 2, "Draw the schematic");
+    store.task(&other, 1, "Pick a sensor");
+    store.tasks.delete(&[deleted.id()]).unwrap();
+
+    let mut ids = store.tasks.ids_ever_in_project(project.id()).unwrap();
+    ids.sort();
+    let mut expected = vec![kept.id(), deleted.id()];
+    expected.sort();
+
+    assert_eq!(ids, expected);
+    assert_eq!(store.tasks.versions_of(deleted.id()).unwrap(), [deleted]);
+}
+
+#[test]
 fn a_task_that_was_never_stored_has_no_versions() {
     let store = Store::in_memory();
 

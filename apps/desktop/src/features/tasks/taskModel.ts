@@ -1,10 +1,22 @@
-import type { Id, Project, Status, Task } from '@/shared/api/types';
+import type { Id, Moment, Project, ProjectChange, Status, Task } from '@/shared/api/types';
 import { rankBetween } from '@/shared/lib/rank';
 
 /**
  * Pure functions over lists of tasks. They hold no state and call no
  * backend, which makes them easy to test and safe to use while rendering.
  */
+
+/**
+ * Where the next page of the history of a project starts: before the last
+ * change of the page just loaded. Nothing once a page came back shorter
+ * than was asked for, which means it was the last.
+ */
+export function nextHistoryPage(
+  page: readonly ProjectChange[],
+  pageSize: number,
+): Moment | undefined {
+  return page.length < pageSize ? undefined : page.at(-1)?.at;
+}
 
 /** Sorts tasks the way the manager arranged them: by rank, then by number. */
 export function asArranged(first: Task, second: Task): number {

@@ -640,6 +640,15 @@ export type TaskChange = {
   | { kind: 'no_longer_waits_for'; taskId: Id }
 );
 
+/**
+ * One change in the history of a project: a change of one of its tasks, as
+ * the history of the task tells it, with the task it is about. A task
+ * deleted since keeps the number and the title it had, and is `gone`.
+ */
+export type ProjectChange = TaskChange & {
+  task: { id: Id; number: number; title: string; gone: boolean };
+};
+
 export interface NewProject {
   name: string;
   /** If it is left out, the backend derives a key from the name. */

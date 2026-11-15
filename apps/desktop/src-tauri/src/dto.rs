@@ -12,8 +12,8 @@ use serde::{Deserialize, Serialize};
 use teamwright_application::{
     Acceptance, AgentProgram, ApprovedMember, ApprovedOwner, ApprovedProposal, ApprovedTask,
     ConversationWithTurns, KnownComputer, NewMember, NewProject, NewSprint, NewTask, NewView,
-    ProjectPlaces, SprintChanges, SprintReport, SprintStart, StatusProperties, SyncNotice,
-    SyncState, WorkflowTemplate,
+    ProjectChange, ProjectPlaces, SprintChanges, SprintReport, SprintStart, StatusProperties,
+    SyncNotice, SyncState, WorkflowTemplate,
 };
 use teamwright_domain::{
     Area, Assignee, CalendarDate, Color, ComputerId, Conversation, DecisionOption, DecisionRequest,
@@ -491,6 +491,40 @@ impl From<&TaskChange> for TaskChangeDto {
             at: moment_to_text(change.at),
             computer: None,
             change: kind,
+        }
+    }
+}
+
+/// One change in the history of a project: a change of a task, as
+/// [`TaskChangeDto`] has it, with the task it is about under `task`.
+#[derive(Debug, Serialize)]
+pub struct ProjectChangeDto {
+    #[serde(flatten)]
+    change: TaskChangeDto,
+    task: HistoryTaskDto,
+}
+
+/// The task a change in the history of a project is about. A task deleted
+/// since keeps its number and title and is `gone`.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HistoryTaskDto {
+    id: String,
+    number: u32,
+    title: String,
+    gone: bool,
+}
+
+impl From<&ProjectChange> for ProjectChangeDto {
+    fn from(change: &ProjectChange) -> Self {
+        Self {
+            change: TaskChangeDto::from(&change.change),
+            task: HistoryTaskDto {
+                id: change.task_id.to_string(),
+                number: change.task_number,
+                title: change.task_title.to_string(),
+                gone: change.task_gone,
+            },
         }
     }
 }
@@ -1453,6 +1487,13 @@ pub fn parse_date(text: &str) -> Result<CalendarDate, CommandError> {
     })
 }
 
+/// Reads a moment the interface sent, in RFC 3339, as it writes them.
+pub fn parse_moment(text: &str) -> Result<Timestamp, CommandError> {
+    chrono::DateTime::parse_from_rfc3339(text)
+        .map(|moment| moment.with_timezone(&chrono::Utc))
+        .map_err(|_| CommandError::invalid_request(format!("'{text}' is not a moment")))
+}
+
 /// Writes a moment the way the interface expects it: UTC, RFC 3339, with
 /// milliseconds.
 fn moment_to_text(moment: Timestamp) -> String {
@@ -1655,5 +1696,37 @@ mod tests {
         assert_eq!(elsewhere["computer"], "Laptop");
         assert_eq!(elsewhere["kind"], "created");
         assert!(here.get("computer").is_none());
+    }
+
+    #[test]
+    fn a_change_of_a_project_names_its_task_beside_the_change() {
+        let task_id = teamwright_domain::TaskId::generate();
+        let change = ProjectChange {
+            change: TaskChange {
+                at: chrono::Utc.with_ymd_and_hms(2026, 11, 12, 9, 0, 0).unwrap(),
+                kind: TaskChangeKind::Created,
+            },
+            task_id,
+            task_number: 7,
+            task_title: teamwright_domain::TaskTitle::parse("Route the board").unwrap(),
+            task_gone: true,
+        };
+
+        let sent = serde_json::to_value(ProjectChangeDto::from(&change)).unwrap();
+
+        assert_eq!(sent["at"], "2026-11-12T09:00:00.000Z");
+        assert_eq!(sent["kind"], "created");
+        assert_eq!(sent["task"]["id"], task_id.to_string());
+        assert_eq!(sent["task"]["number"], 7);
+        assert_eq!(sent["task"]["title"], "Route the board");
+        assert_eq!(sent["task"]["gone"], true);
+    }
+
+    #[test]
+    fn a_moment_is_read_as_the_interface_writes_it() {
+        let moment = parse_moment("2026-11-12T09:00:00.250Z").unwrap();
+
+        assert_eq!(moment.timestamp_millis() % 1000, 250);
+        assert!(parse_moment("yesterday").is_err());
     }
 }

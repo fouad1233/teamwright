@@ -108,6 +108,20 @@ impl TaskRepository for InMemoryTaskRepository {
     fn versions_of(&self, id: TaskId) -> Result<Vec<Task>, StorageError> {
         Ok(lock(&self.versions).get(&id).cloned().unwrap_or_default())
     }
+
+    fn ids_ever_in_project(&self, project_id: ProjectId) -> Result<Vec<TaskId>, StorageError> {
+        // The versions outlive a deleted task, as the log of real storage
+        // does.
+        Ok(lock(&self.versions)
+            .iter()
+            .filter(|(_, versions)| {
+                versions
+                    .iter()
+                    .any(|version| version.project_id() == project_id)
+            })
+            .map(|(id, _)| *id)
+            .collect())
+    }
 }
 
 /// Keeps sprints in memory, and stores the tasks that change with them in

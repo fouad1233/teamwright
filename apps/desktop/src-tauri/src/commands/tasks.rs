@@ -4,8 +4,8 @@ use tauri::State;
 use teamwright_domain::{Assignee, ComputerId};
 
 use crate::dto::{
-    AssigneeDto, NewTaskInput, TaskChangeDto, TaskDto, parse_id, parse_optional_date,
-    parse_priority,
+    AssigneeDto, NewTaskInput, ProjectChangeDto, TaskChangeDto, TaskDto, parse_id, parse_moment,
+    parse_optional_date, parse_priority,
 };
 use crate::error::CommandError;
 use crate::state::AppState;
@@ -149,6 +149,24 @@ pub async fn remove_task_dependency(
 pub async fn delete_task(state: State<'_, AppState>, task_id: String) -> Result<(), CommandError> {
     state.tasks.delete(parse_id(&task_id)?)?;
     Ok(())
+}
+
+/// Tells what happened to the tasks of a project, the newest change first:
+/// at most `limit` changes (never more than 200) older than the moment
+/// `before`, or the newest of all without it.
+#[tauri::command]
+pub async fn list_project_history(
+    state: State<'_, AppState>,
+    project_id: String,
+    limit: u32,
+    before: Option<String>,
+) -> Result<Vec<ProjectChangeDto>, CommandError> {
+    let before = before.as_deref().map(parse_moment).transpose()?;
+    let limit = usize::try_from(limit).unwrap_or(usize::MAX);
+    let history = state
+        .tasks
+        .project_history(parse_id(&project_id)?, limit, before)?;
+    Ok(history.iter().map(ProjectChangeDto::from).collect())
 }
 
 /// Tells the history of a task, the oldest change first.

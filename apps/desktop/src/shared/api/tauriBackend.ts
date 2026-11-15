@@ -23,7 +23,9 @@ import type {
   NewTask,
   NewView,
   Priority,
+  Moment,
   Project,
+  ProjectChange,
   ProjectPlaces,
   Sprint,
   SprintChanges,
@@ -146,6 +148,10 @@ export class TauriBackend implements Backend {
 
   listTaskHistory(taskId: Id): Promise<TaskChange[]> {
     return call('list_task_history', { taskId });
+  }
+
+  listProjectHistory(projectId: Id, limit: number, before?: Moment): Promise<ProjectChange[]> {
+    return call('list_project_history', { projectId, limit, before: before ?? null });
   }
 
   listSprints(projectId: Id): Promise<Sprint[]> {

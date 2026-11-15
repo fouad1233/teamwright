@@ -18,7 +18,9 @@ import type {
   NewTask,
   NewView,
   Priority,
+  Moment,
   Project,
+  ProjectChange,
   ProjectPlaces,
   Sprint,
   SprintChanges,
@@ -169,6 +171,15 @@ export interface Backend {
   deleteTask(taskId: Id): Promise<void>;
   /** Lists what has happened to a task since it was opened, the oldest change first. */
   listTaskHistory(taskId: Id): Promise<TaskChange[]>;
+  /**
+   * Tells what happened to the tasks of a project, the newest change first:
+   * at most `limit` changes (never more than 200) older than the moment
+   * `before`, or the newest of all without it. Moments count to the
+   * millisecond, and a page never splits the changes of one millisecond: the
+   * next page asks with the `at` of the last change of this one. A page
+   * shorter than `limit` is the last.
+   */
+  listProjectHistory(projectId: Id, limit: number, before?: Moment): Promise<ProjectChange[]>;
 
   /**
    * Lists the sprints of a project: the active one first, then the planned

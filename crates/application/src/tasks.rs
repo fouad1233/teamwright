@@ -18,6 +18,27 @@ pub struct HistoryEntry {
     pub computer: Option<ComputerId>,
 }
 
+/// One change of a task in the history of its project: what the history
+/// of the task says, and which task it is about.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProjectChange {
+    /// What changed, and when.
+    pub change: TaskChange,
+    /// The task it is about.
+    pub task_id: TaskId,
+    /// The number of the task, as it is now or as it was when it was last
+    /// stored, if it is gone.
+    pub task_number: u32,
+    /// The title of the task, as it is now or as it was when it was last
+    /// stored, if it is gone.
+    pub task_title: TaskTitle,
+    /// Whether the task has been deleted since.
+    pub task_gone: bool,
+}
+
+/// The most changes one page of the history of a project has.
+pub const MOST_PROJECT_CHANGES: usize = 200;
+
 use crate::areas::area_for_new_task;
 use crate::error::ApplicationError;
 use crate::ports::{
@@ -273,6 +294,103 @@ impl TaskService {
             }));
         }
         Ok(history)
+    }
+
+    /// Tells what happened to the tasks of a project, the newest change
+    /// first: one page of at most `limit` changes (and never more than
+    /// [`MOST_PROJECT_CHANGES`]) that happened before the moment `before`,
+    /// or the newest of all without it. Each change is what the history of
+    /// its task says ([`Self::history`]), with the task it is about. A task
+    /// deleted since keeps the number and the title it had when it was last
+    /// stored, and is marked as gone.
+    ///
+    /// Moments are compared to the millisecond, as the interface sends
+    /// them. A page never splits the changes of one millisecond: if the
+    /// last ones would not all fit, they are left for the next page, whose
+    /// `before` is their moment. Only a page that would then be empty takes
+    /// them all, even beyond `limit`.
+    ///
+    /// Nothing is kept for the history itself: it is read off the versions
+    /// of every task the project has had, so a long history costs as much
+    /// to read as it is long.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if there is no such project or if storage fails.
+    pub fn project_history(
+        &self,
+        project_id: ProjectId,
+        limit: usize,
+        before: Option<Timestamp>,
+    ) -> Result<Vec<ProjectChange>, ApplicationError> {
+        let project = self.require_project(project_id)?;
+        let limit = limit.min(MOST_PROJECT_CHANGES);
+        if limit == 0 {
+            return Ok(Vec::new());
+        }
+        let before = before.map(|moment| moment.timestamp_millis());
+
+        // Each change with its place in the history of its task, so that
+        // the changes of one task at one moment keep their order, reversed.
+        let mut changes: Vec<(usize, ProjectChange)> = Vec::new();
+        for id in self.tasks.ids_ever_in_project(project.id())? {
+            let current = self.tasks.find(id)?;
+            let mut versions = self.tasks.versions_of(id)?;
+            if versions.is_empty() {
+                // Storage that kept no versions still knows the task as it
+                // is, if it is there.
+                versions.extend(current.clone());
+            }
+            let Some(latest) = current.as_ref().or_else(|| versions.last()) else {
+                continue;
+            };
+            let (task_number, task_title) = (latest.number(), latest.title().clone());
+            let task_gone = current.is_none();
+            changes.extend(
+                history_of(&versions)
+                    .into_iter()
+                    .enumerate()
+                    .filter(|(_, change)| {
+                        before.is_none_or(|before| change.at.timestamp_millis() < before)
+                    })
+                    .map(|(place, change)| {
+                        (
+                            place,
+                            ProjectChange {
+                                change,
+                                task_id: id,
+                                task_number,
+                                task_title: task_title.clone(),
+                                task_gone,
+                            },
+                        )
+                    }),
+            );
+        }
+        changes.sort_by(|(one_place, one), (other_place, other)| {
+            other
+                .change
+                .at
+                .cmp(&one.change.at)
+                .then_with(|| one.task_id.cmp(&other.task_id))
+                .then_with(|| other_place.cmp(one_place))
+        });
+
+        let mut changes: Vec<ProjectChange> =
+            changes.into_iter().map(|(_, change)| change).collect();
+        if let Some(first_left_out) = changes.get(limit) {
+            let cut = first_left_out.change.at.timestamp_millis();
+            let in_cut = |change: &ProjectChange| change.change.at.timestamp_millis() == cut;
+            let mut end = limit;
+            while end > 0 && changes.get(end - 1).is_some_and(in_cut) {
+                end -= 1;
+            }
+            if end == 0 {
+                end = changes.iter().take_while(|change| in_cut(change)).count();
+            }
+            changes.truncate(end);
+        }
+        Ok(changes)
     }
 
     /// Gives a task a new title.
@@ -1641,6 +1759,191 @@ mod tests {
         assert!(matches!(
             error,
             ApplicationError::NotFound { kind: "task", .. }
+        ));
+    }
+
+    /// The kind of each change of a project, with the title of its task.
+    fn titled_kinds(changes: &[ProjectChange]) -> Vec<(String, &'static str)> {
+        use teamwright_domain::TaskChangeKind;
+
+        changes
+            .iter()
+            .map(|change| {
+                let kind = match change.change.kind {
+                    TaskChangeKind::Created => "created",
+                    TaskChangeKind::Renamed { .. } => "renamed",
+                    TaskChangeKind::Prioritized { .. } => "prioritized",
+                    TaskChangeKind::Moved { .. } => "moved",
+                    _ => "other",
+                };
+                (change.task_title.to_string(), kind)
+            })
+            .collect()
+    }
+
+    #[test]
+    fn the_history_of_a_project_tells_what_happened_to_its_tasks_the_newest_first() {
+        let workspace = workspace();
+        let project = workspace.project("Smart sensor node");
+        let other = workspace.project("Weather station");
+        let schematic = workspace.task(&project, "Draw the schematic");
+        workspace.task(&other, "Pick a sensor");
+        workspace.clock.advance(TimeDelta::hours(1));
+        let board = workspace.task(&project, "Route the board");
+        workspace.clock.advance(TimeDelta::hours(1));
+        workspace
+            .tasks
+            .prioritize(schematic.id(), Priority::Urgent)
+            .unwrap();
+
+        let history = workspace
+            .tasks
+            .project_history(project.id(), 50, None)
+            .unwrap();
+
+        assert_eq!(
+            titled_kinds(&history),
+            [
+                ("Draw the schematic".to_owned(), "prioritized"),
+                ("Route the board".to_owned(), "created"),
+                ("Draw the schematic".to_owned(), "created"),
+            ]
+        );
+        assert_eq!(history[1].task_id, board.id());
+        assert_eq!(history[1].task_number, board.number());
+        assert!(history.iter().all(|change| !change.task_gone));
+    }
+
+    #[test]
+    fn a_task_deleted_since_keeps_its_number_and_title_and_is_marked_as_gone() {
+        let workspace = workspace();
+        let project = workspace.project("Smart sensor node");
+        let schematic = workspace.task(&project, "Draw the schematic");
+        workspace.clock.advance(TimeDelta::hours(1));
+        workspace
+            .tasks
+            .rename(schematic.id(), "Draw the schematic again")
+            .unwrap();
+        workspace.tasks.delete(schematic.id()).unwrap();
+
+        let history = workspace
+            .tasks
+            .project_history(project.id(), 50, None)
+            .unwrap();
+
+        assert_eq!(history.len(), 2);
+        assert!(history.iter().all(|change| change.task_gone));
+        assert!(history.iter().all(|change| {
+            change.task_number == schematic.number()
+                && change.task_title.as_str() == "Draw the schematic again"
+        }));
+    }
+
+    #[test]
+    fn the_history_of_a_project_is_read_a_page_at_a_time() {
+        let workspace = workspace();
+        let project = workspace.project("Smart sensor node");
+        for title in ["One", "Two", "Three", "Four", "Five"] {
+            workspace.task(&project, title);
+            workspace.clock.advance(TimeDelta::minutes(1));
+        }
+
+        let first = workspace
+            .tasks
+            .project_history(project.id(), 2, None)
+            .unwrap();
+        let before = first.last().map(|change| change.change.at);
+        let second = workspace
+            .tasks
+            .project_history(project.id(), 2, before)
+            .unwrap();
+        let before = second.last().map(|change| change.change.at);
+        let third = workspace
+            .tasks
+            .project_history(project.id(), 2, before)
+            .unwrap();
+
+        let titles = |page: &[ProjectChange]| -> Vec<String> {
+            page.iter()
+                .map(|change| change.task_title.to_string())
+                .collect()
+        };
+        assert_eq!(titles(&first), ["Five", "Four"]);
+        assert_eq!(titles(&second), ["Three", "Two"]);
+        assert_eq!(titles(&third), ["One"]);
+    }
+
+    #[test]
+    fn a_page_does_not_split_the_changes_of_one_moment() {
+        let workspace = workspace();
+        let project = workspace.project("Smart sensor node");
+        workspace.task(&project, "Early");
+        workspace.clock.advance(TimeDelta::minutes(1));
+        for title in ["One", "Two", "Three"] {
+            workspace.task(&project, title);
+        }
+
+        let page = workspace
+            .tasks
+            .project_history(project.id(), 2, None)
+            .unwrap();
+        let all_at_once = workspace
+            .tasks
+            .project_history(project.id(), 1, None)
+            .unwrap();
+
+        // The three made at one moment do not fit in a page of two: the page
+        // of two would be empty, so it takes all three.
+        assert_eq!(page.len(), 3);
+        assert_eq!(all_at_once.len(), 3);
+        let rest = workspace
+            .tasks
+            .project_history(project.id(), 2, page.last().map(|change| change.change.at))
+            .unwrap();
+        assert_eq!(titled_kinds(&rest), [("Early".to_owned(), "created")]);
+    }
+
+    #[test]
+    fn a_page_has_at_most_two_hundred_changes_and_none_when_none_are_asked_for() {
+        let workspace = workspace();
+        let project = workspace.project("Smart sensor node");
+        let task = workspace.task(&project, "Draw the schematic");
+        for minute in 0..210 {
+            workspace.clock.advance(TimeDelta::minutes(1));
+            let priority = if minute % 2 == 0 {
+                Priority::Urgent
+            } else {
+                Priority::Normal
+            };
+            workspace.tasks.prioritize(task.id(), priority).unwrap();
+        }
+
+        let page = workspace
+            .tasks
+            .project_history(project.id(), 1000, None)
+            .unwrap();
+        let none = workspace
+            .tasks
+            .project_history(project.id(), 0, None)
+            .unwrap();
+
+        assert_eq!(page.len(), MOST_PROJECT_CHANGES);
+        assert!(none.is_empty());
+    }
+
+    #[test]
+    fn the_history_of_a_project_that_does_not_exist_is_reported() {
+        let error = workspace()
+            .tasks
+            .project_history(ProjectId::generate(), 10, None)
+            .unwrap_err();
+
+        assert!(matches!(
+            error,
+            ApplicationError::NotFound {
+                kind: "project",
+                ..
+            }
         ));
     }
 }

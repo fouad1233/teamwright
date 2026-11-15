@@ -28,6 +28,7 @@ import type {
   NewView,
   Priority,
   Project,
+  ProjectChange,
   ProjectPlaces,
   ProposedMember,
   ProposedTask,
@@ -70,7 +71,7 @@ import {
   type CountedTask,
 } from './sprints';
 import { LAPTOP, PretendedSync, THIS_COMPUTER, type SyncTrouble } from './sync';
-import { historyOf } from './taskHistory';
+import { historyOf, pretendedPastOf, projectHistoryOf } from './taskHistory';
 import {
   SIMULATED_MODEL,
   scriptAfterDecision,
@@ -271,7 +272,17 @@ export class DemoBackend implements Backend {
     }
     for (const task of workspace?.tasks ?? []) {
       this.tasks.set(task.id, structuredClone(task));
-      this.versions.set(task.id, [structuredClone(task)]);
+      // A task of the sample workspace gets a believable past, so that the
+      // history of its task and of its project have something to tell.
+      const firstStatusId = this.projects
+        .get(task.projectId)
+        ?.statuses.find((status) => status.category === 'todo')?.id;
+      this.versions.set(
+        task.id,
+        firstStatusId === undefined
+          ? [structuredClone(task)]
+          : pretendedPastOf(task, firstStatusId, environment.now()),
+      );
       const next = Math.max(this.nextTaskNumbers.get(task.projectId) ?? 1, task.number + 1);
       this.nextTaskNumbers.set(task.projectId, next);
     }
@@ -1774,6 +1785,16 @@ export class DemoBackend implements Backend {
     });
   }
 
+  listProjectHistory(projectId: Id, limit: number, before?: Moment): Promise<ProjectChange[]> {
+    return this.answer(() => {
+      this.requireProject(projectId);
+      const tasks = [...this.versions.entries()]
+        .filter(([, versions]) => versions.at(-1)?.projectId === projectId)
+        .map(([taskId, versions]) => ({ versions, gone: !this.tasks.has(taskId) }));
+      return projectHistoryOf(tasks, limit, before);
+    });
+  }
+
   listSprints(projectId: Id): Promise<Sprint[]> {
     return this.answer(() => {
       this.requireProject(projectId);
@@ -2304,8 +2325,10 @@ export class DemoBackend implements Backend {
 
   /**
    * Notes the versions of the tasks that have changed since they were last
-   * noted, and forgets the versions of tasks that are gone. It runs after
-   * everything that can change a task.
+   * noted. It runs after everything that can change a task. The versions
+   * of a task that is gone are kept, as the log of the real application
+   * keeps them, for the history of its project; those of a project that is
+   * gone are forgotten.
    */
   private noteVersions(): void {
     for (const task of this.tasks.values()) {
@@ -2315,8 +2338,9 @@ export class DemoBackend implements Backend {
         this.versions.set(task.id, [...noted, structuredClone(task)]);
       }
     }
-    for (const taskId of this.versions.keys()) {
-      if (!this.tasks.has(taskId)) {
+    for (const [taskId, versions] of this.versions) {
+      const projectId = versions.at(-1)?.projectId;
+      if (projectId === undefined || !this.projects.has(projectId)) {
         this.versions.delete(taskId);
       }
     }

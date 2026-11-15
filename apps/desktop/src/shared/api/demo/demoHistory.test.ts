@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import type { Project, Task, TaskChange } from '../types';
+import type { Project, ProjectChange, Task, TaskChange } from '../types';
 import { DemoBackend, type DemoEnvironment } from './demoBackend';
+import { sampleWorkspace } from './sampleWorkspace';
 import { changesBetween, historyOf } from './taskHistory';
 
 /** An environment whose time and identifiers the test controls. */
@@ -138,6 +139,130 @@ describe('the history of a task in the DemoBackend', () => {
     await backend.deleteTask(task.id);
 
     await expect(backend.listTaskHistory(task.id)).rejects.toMatchObject({ code: 'not_found' });
+  });
+});
+
+describe('the history of a project in the DemoBackend', () => {
+  let environment: ReturnType<typeof testEnvironment>;
+  let backend: DemoBackend;
+  let project: Project;
+
+  beforeEach(async () => {
+    environment = testEnvironment();
+    backend = new DemoBackend(undefined, environment);
+    project = await backend.createProject({ name: 'Smart sensor node', workflow: 'engineering' });
+  });
+
+  function titledKinds(history: ProjectChange[]): string[] {
+    return history.map((change) => `${change.task.title}: ${change.kind}`);
+  }
+
+  it('tells what happened to its tasks, the newest first', async () => {
+    const other = await backend.createProject({ name: 'Weather station', workflow: 'standard' });
+    const schematic = await backend.createTask({
+      projectId: project.id,
+      title: 'Draw the schematic',
+    });
+    await backend.createTask({ projectId: other.id, title: 'Pick a sensor' });
+    environment.advanceHours(1);
+    const board = await backend.createTask({ projectId: project.id, title: 'Route the board' });
+    environment.advanceHours(1);
+    await backend.prioritizeTask(schematic.id, 'urgent');
+
+    const history = await backend.listProjectHistory(project.id, 50);
+
+    expect(titledKinds(history)).toEqual([
+      'Draw the schematic: prioritized',
+      'Route the board: created',
+      'Draw the schematic: created',
+    ]);
+    expect(history[1]?.task).toEqual({
+      id: board.id,
+      number: board.number,
+      title: 'Route the board',
+      gone: false,
+    });
+  });
+
+  it('keeps the number and title of a task deleted since and marks it as gone', async () => {
+    const schematic = await backend.createTask({
+      projectId: project.id,
+      title: 'Draw the schematic',
+    });
+    environment.advanceHours(1);
+    await backend.renameTask(schematic.id, 'Draw the schematic again');
+    await backend.deleteTask(schematic.id);
+
+    const history = await backend.listProjectHistory(project.id, 50);
+
+    expect(history).toHaveLength(2);
+    expect(history.every((change) => change.task.gone)).toBe(true);
+    expect(history.map((change) => change.task.title)).toEqual([
+      'Draw the schematic again',
+      'Draw the schematic again',
+    ]);
+    expect(history[0]?.task.number).toBe(schematic.number);
+  });
+
+  it('is read a page at a time', async () => {
+    for (const title of ['One', 'Two', 'Three', 'Four', 'Five']) {
+      await backend.createTask({ projectId: project.id, title });
+      environment.advanceHours(1);
+    }
+
+    const first = await backend.listProjectHistory(project.id, 2);
+    const second = await backend.listProjectHistory(project.id, 2, first.at(-1)?.at);
+    const third = await backend.listProjectHistory(project.id, 2, second.at(-1)?.at);
+
+    const titles = (page: ProjectChange[]) => page.map((change) => change.task.title);
+    expect(titles(first)).toEqual(['Five', 'Four']);
+    expect(titles(second)).toEqual(['Three', 'Two']);
+    expect(titles(third)).toEqual(['One']);
+  });
+
+  it('does not split the changes of one moment across two pages', async () => {
+    await backend.createTask({ projectId: project.id, title: 'Early' });
+    environment.advanceHours(1);
+    for (const title of ['One', 'Two', 'Three']) {
+      await backend.createTask({ projectId: project.id, title });
+    }
+
+    const page = await backend.listProjectHistory(project.id, 2);
+    const rest = await backend.listProjectHistory(project.id, 2, page.at(-1)?.at);
+
+    expect(page).toHaveLength(3);
+    expect(titledKinds(rest)).toEqual(['Early: created']);
+  });
+
+  it('has at most two hundred changes on a page, and none when none are asked for', async () => {
+    const task = await backend.createTask({ projectId: project.id, title: 'Draw the schematic' });
+    for (let hour = 0; hour < 210; hour += 1) {
+      environment.advanceHours(1);
+      await backend.prioritizeTask(task.id, hour % 2 === 0 ? 'urgent' : 'normal');
+    }
+
+    expect(await backend.listProjectHistory(project.id, 1000)).toHaveLength(200);
+    expect(await backend.listProjectHistory(project.id, 0)).toEqual([]);
+  });
+
+  it('refuses a project that does not exist', async () => {
+    await expect(backend.listProjectHistory('nowhere', 10)).rejects.toMatchObject({
+      code: 'not_found',
+    });
+  });
+
+  it('tells a believable past for the sample project', async () => {
+    const workspace = sampleWorkspace(new Date('2026-11-11T09:00:00.000Z'));
+    const sample = new DemoBackend(workspace, environment);
+    const [first] = workspace.projects;
+
+    const history = await sample.listProjectHistory(first?.id ?? '', 200);
+    const kindsSeen = new Set(history.map((change) => change.kind));
+
+    expect(kindsSeen).toEqual(new Set(['created', 'assigned', 'moved']));
+    expect(history.every((change) => change.at <= '2026-11-11T09:00:00.000Z')).toBe(true);
+    const moments = history.map((change) => change.at);
+    expect([...moments].sort().reverse()).toEqual(moments);
   });
 });
 

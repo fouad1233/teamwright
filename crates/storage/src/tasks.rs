@@ -307,6 +307,28 @@ impl TaskRepository for SqliteTaskRepository {
         })
     }
 
+    fn ids_ever_in_project(&self, project_id: ProjectId) -> Result<Vec<TaskId>, StorageError> {
+        self.database.read(|connection| {
+            // Every state of a task in the log names its project, so the
+            // log knows the tasks that were deleted since as well.
+            let mut statement = connection.prepare(
+                "SELECT DISTINCT entity_id FROM operations
+                 WHERE entity = :entity AND payload IS NOT NULL AND waiting IS NULL
+                   AND json_extract(payload, '$.project_id') = :project_id",
+            )?;
+            let ids: Vec<String> = statement
+                .query_map(
+                    named_params! {
+                        ":entity": Entity::Task.as_str(),
+                        ":project_id": project_id.to_string(),
+                    },
+                    |row| row.get(0),
+                )?
+                .collect::<Result<_, _>>()?;
+            ids.iter().map(|id| codec::parse(id)).collect()
+        })
+    }
+
     fn computers_of_versions(&self, id: TaskId) -> Result<Vec<ComputerId>, StorageError> {
         self.database.read(|connection| {
             operations::computers_of_states(connection, Entity::Task, &id.to_string())?

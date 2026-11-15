@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import type { Task } from '@/shared/api/types';
+import type { ProjectChange, Task } from '@/shared/api/types';
 
 import {
   indexById,
   indexSubtasks,
   mainTasksOfStatus,
+  nextHistoryPage,
   outlineRows,
   subtasksOf,
   tasksOfStatus,
@@ -43,6 +44,23 @@ function task(overrides: Partial<Task> & Pick<Task, 'id'>): Task {
 function ids(tasks: Task[]): string[] {
   return tasks.map((listed) => listed.id);
 }
+
+describe('nextHistoryPage', () => {
+  function created(at: string): ProjectChange {
+    return { at, kind: 'created', task: { id: 't', number: 1, title: 'T', gone: false } };
+  }
+
+  it('starts the next page before the last change of a full page', () => {
+    const page = [created('2026-11-11T10:00:00.000Z'), created('2026-11-11T09:00:00.000Z')];
+
+    expect(nextHistoryPage(page, 2)).toBe('2026-11-11T09:00:00.000Z');
+  });
+
+  it('stops after a page shorter than was asked for', () => {
+    expect(nextHistoryPage([created('2026-11-11T10:00:00.000Z')], 2)).toBeUndefined();
+    expect(nextHistoryPage([], 2)).toBeUndefined();
+  });
+});
 
 describe('tasksOfStatus', () => {
   it('returns the tasks of the status ordered by rank', () => {

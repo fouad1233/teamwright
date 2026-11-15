@@ -1,12 +1,20 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo } from 'react';
 
 import { useBackend } from '@/shared/api/BackendProvider';
-import type { Assignee, CalendarDate, Id, NewTask, Priority, Task } from '@/shared/api/types';
+import type {
+  Assignee,
+  CalendarDate,
+  Id,
+  Moment,
+  NewTask,
+  Priority,
+  Task,
+} from '@/shared/api/types';
 import { describeFailure, useNotifier } from '@/shared/ui/Toast';
 
 import { useOpenArea } from '../areas/AreaContext';
-import { withMovedTask, withTask } from './taskModel';
+import { nextHistoryPage, withMovedTask, withTask } from './taskModel';
 
 /** The name under which the tasks of a project are cached. */
 export function tasksKey(projectId: Id) {
@@ -28,6 +36,30 @@ export function useTaskHistory(task: Pick<Task, 'id' | 'updatedAt'>) {
   return useQuery({
     queryKey: ['task-history', task.id, task.updatedAt] as const,
     queryFn: () => backend.listTaskHistory(task.id),
+  });
+}
+
+/** How many changes one page of the history of a project asks for. */
+export const PROJECT_HISTORY_PAGE = 50;
+
+/**
+ * What has happened to the tasks of a project, the newest change first,
+ * one page of `PROJECT_HISTORY_PAGE` changes at a time. `data.pages` holds
+ * the pages loaded so far, in order; `fetchNextPage()` loads the next one,
+ * older, and `hasNextPage` is false once the oldest change is loaded. It is
+ * asked for again, every loaded page, whenever the tasks of the project
+ * have been loaded again, so a change made here or on another computer
+ * shows.
+ */
+export function useProjectHistory(projectId: Id) {
+  const backend = useBackend();
+  const tasksLoadedAt = useTasks(projectId).dataUpdatedAt;
+  return useInfiniteQuery({
+    queryKey: ['project-history', projectId, tasksLoadedAt] as const,
+    queryFn: ({ pageParam }) =>
+      backend.listProjectHistory(projectId, PROJECT_HISTORY_PAGE, pageParam),
+    initialPageParam: undefined as Moment | undefined,
+    getNextPageParam: (lastPage) => nextHistoryPage(lastPage, PROJECT_HISTORY_PAGE),
   });
 }
 

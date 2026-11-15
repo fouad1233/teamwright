@@ -190,7 +190,12 @@ with `id`, `name`, `version`, `acceptance` (`undecided`, `accepted`,
 `projectId`, `taskId` and `message`. An entry of the history of a task
 (`list_task_history`) has `computer`, the name of the computer that made
 the change, when it was another computer whose name is known; it is left
-out otherwise. The error codes are those of the
+out otherwise. The history of a project (`list_project_history`, with
+`projectId`, `limit` and an optional `before` moment) answers with such
+entries, newest first and without `computer`, each with `task`: its
+`id`, `number`, `title` and `gone`. The interface reads it with
+`useProjectHistory` (`features/tasks/taskQueries.ts`), a page of 50 at a
+time. The error codes are those of the
 application: `sync_off`, `sync_folder_unreachable`, `sync_folder_in_data`,
 `identity_in_use`, `folder_not_found`, `rule_broken` (also for an
 identifier that cannot be read, or an empty name), `not_found` and
@@ -251,7 +256,8 @@ Rules of the interface:
 - **One way to the backend.** Components use `useBackend()` or the hooks
   built on it (`useProjects`, `useTasks`, `useTaskCommands`, `useTeam`,
   `useTeamCommands`, `useConversations`, `useWorkCommands`, `useSprints`,
-  `useSprintCommands`, `useViews`, `useViewCommands`, `useSetViewContent`,
+  `useProjectHistory`, `useSprintCommands`, `useViews`, `useViewCommands`,
+  `useSetViewContent`,
   `useAreas`,
   `useAreaCommands`). Nothing calls
   Tauri directly except `shared/api/tauriBackend.ts`.

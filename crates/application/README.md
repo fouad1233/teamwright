@@ -8,7 +8,7 @@ window or agent runtime.
 | Module | Contents |
 |---|---|
 | `projects` | `ProjectService`: start, find, list, rename, describe, archive, restore and delete projects; add, change, move and remove the statuses of their workflows |
-| `tasks` | `TaskService`: open, change, plan into a sprint, give points, move, connect and remove tasks, and tell the history of one from the versions storage has kept |
+| `tasks` | `TaskService`: open, change, plan into a sprint, give points, move, connect and remove tasks, and tell the history of one, or of a whole project, from the versions storage has kept |
 | `sprints` | `SprintService`: list, plan, change, delete, start and complete the sprints of a project, and the report for the burndown chart of one (`SprintReport`) |
 | `views` | `ViewService`: list, add, rename, filter, give content to, move and remove the views of a project |
 | `areas` | `AreaService`: list, add, rename, move and remove the areas of a project, and move a task with its subtasks into another area |
@@ -442,6 +442,15 @@ never looks inside the state an operation carries; storage merges.
   the computer that made each change (`HistoryEntry`), from
   `TaskRepository::computers_of_versions`. Storage that does not know the
   computers answers with none, and the entries then name none.
+- `TaskService::project_history` tells what happened to the tasks of a
+  project, the newest change first, a page at a time (`ProjectChange`: the
+  change, and the task's id, number, title and whether it is gone). A page
+  has at most `limit` changes, never more than `MOST_PROJECT_CHANGES`
+  (200), older than `before`, compared to the millisecond, and never
+  splits the changes of one millisecond. It reads the versions of every
+  task the project has had, deleted ones too
+  (`TaskRepository::ids_ever_in_project`). Only tasks: that a task was
+  deleted, and what happened to sprints, views and members, is not in it.
 
 ## The project as a workbook
 
