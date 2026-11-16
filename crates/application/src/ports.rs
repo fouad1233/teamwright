@@ -13,6 +13,7 @@ use teamwright_domain::{
 };
 
 use crate::places::ChosenPlaces;
+use crate::project_events::ProjectEvent;
 
 /// A failure to read or write stored data.
 #[derive(Debug, thiserror::Error)]
@@ -461,6 +462,13 @@ pub trait WorkListener: Send + Sync {
     /// A conversation has changed. The turns are all of its turns, the
     /// oldest first.
     fn conversation_changed(&self, conversation: &Conversation, turns: &[Turn]);
+
+    /// Something happened in a project: a turn ended in a way worth telling
+    /// outside the window. It is called once for each event, after the
+    /// change it comes from was stored and told with
+    /// [`Self::conversation_changed`]. A listener that does not care leaves
+    /// it as it is.
+    fn happened(&self, _event: &ProjectEvent) {}
 }
 
 /// Tells the time.

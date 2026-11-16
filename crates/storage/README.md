@@ -33,6 +33,7 @@ involved.
 | `notices` | What syncing tells the manager, kept on this computer |
 | `folder` | `FolderOfComputers`: the files in the sync folder, which implements the port `SyncFolder` |
 | `ledger` | `SqliteSyncLedger`: the bookkeeping of syncing, which implements the port `SyncLedger` |
+| `notification_choice` | `SqliteNotificationChoice`: whether this computer shows notifications, and which, in the keys `notifications`, `notify_waiting`, `notify_finished` and `notify_stopped` of `meta`; not logged, so never synced |
 | `codec` | The text forms of moments, dates, identifiers and enumerations |
 | `error` | The crate's internal error type and its conversion to `StorageError` |
 

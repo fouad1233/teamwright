@@ -407,6 +407,32 @@ that reported one says: nothing while that conversation has not reported
 one, even if an older one did, because the latest is the session that goes
 on. Groups have no context.
 
+## What happened, and notifications
+
+`project_events.rs` says in plain data what happened in a project
+(`ProjectEvent`: the project, its name, when, and a `Happening`):
+`TaskFinished` (a specialist finished its work on a task), `WaitsForManager`
+(a decision, the Advisor's questions or its proposal; `WaitsFor`),
+`AgentStopped` (a turn failed), `SprintStarted` and `SprintCompleted`. An
+`Agent` is a specialist with its name, or the Advisor; a `TaskOfEvent` has
+the task's reference and title. The pure `event_of_ended_turn` finds the
+event of a turn that has just ended, or nothing (a turn the manager stopped,
+an answer to a question the manager asked); `event_of_started_sprint` and
+`event_of_completed_sprint` those of a sprint. `WorkService` calls
+`WorkListener::happened` once for each turn that ends with an event, after
+it told `conversation_changed`; a listener that does not care keeps the
+empty default.
+
+`notifications.rs` decides which events are worth a notification of the
+system and words them (`notification_of`, `notification_for`): someone
+waits ("Hardware engineer asks you to decide", with the question's first
+words), work is ready ("SH-4 is ready", with the task's title), someone
+stopped ("Firmware engineer stopped", with why). A sprint is worth none.
+`NotificationService` keeps the choice of this computer through the port
+`NotificationChoiceStore`: not asked, allowed or declined, and a switch for
+each `NotificationKind`. Nothing is sent until allowed
+([decision 0026](../../docs/decisions/0026-notifications.md)).
+
 ## Keeping computers in step
 
 `SyncService` keeps the computers of one manager in step through a folder

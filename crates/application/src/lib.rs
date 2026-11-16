@@ -21,8 +21,10 @@ pub mod areas;
 pub mod clock;
 pub mod error;
 pub mod in_memory;
+pub mod notifications;
 pub mod places;
 pub mod ports;
+pub mod project_events;
 pub mod projects;
 pub mod sprints;
 pub mod sync;
@@ -44,11 +46,19 @@ pub use agent_runtime::{
 pub use areas::AreaService;
 pub use clock::SystemClock;
 pub use error::ApplicationError;
+pub use notifications::{
+    Notification, NotificationChoice, NotificationChoiceStore, NotificationKind,
+    NotificationPermission, NotificationService, notification_for, notification_of,
+};
 pub use places::{ChosenPlaces, PlacesService, ProjectPlaces, REFERENCES_FOLDER};
 pub use ports::{
     ApprovedPlan, AreaRepository, Clock, ConversationRepository, FileSystem, MemberRepository,
     PlacesRepository, PlanningRepository, ProjectFolders, ProjectRepository, SprintRepository,
     StorageError, TaskRepository, ViewRepository, WorkListener,
+};
+pub use project_events::{
+    Agent, Happening, ProjectEvent, TaskOfEvent, WaitsFor, event_of_completed_sprint,
+    event_of_ended_turn, event_of_started_sprint,
 };
 pub use projects::{NewProject, ProjectService, StatusProperties, WorkflowTemplate};
 pub use sprints::{NewSprint, SprintChanges, SprintDay, SprintReport, SprintService, SprintStart};

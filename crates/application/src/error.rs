@@ -171,6 +171,11 @@ pub enum ApplicationError {
     #[error("no sync folder is chosen")]
     SyncOff,
 
+    /// A notification was to be sent to try them while the manager has not
+    /// allowed them on this computer.
+    #[error("notifications are not allowed on this computer")]
+    NotificationsOff,
+
     /// The sync folder could not be reached: it is gone, or a drive or a
     /// share is not there.
     #[error("the sync folder {folder} cannot be reached")]
@@ -452,6 +457,7 @@ impl ApplicationError {
             Self::SessionNotStarted => "session_not_started",
             Self::ConversationRunsElsewhere { .. } => "runs_elsewhere",
             Self::SyncOff => "sync_off",
+            Self::NotificationsOff => "notifications_off",
             Self::SyncFolderUnreachable { .. } => "sync_folder_unreachable",
             Self::SyncFolderInDataFolder { .. } => "sync_folder_in_data",
             Self::IdentityInUse => "identity_in_use",

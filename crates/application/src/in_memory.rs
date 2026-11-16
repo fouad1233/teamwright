@@ -19,18 +19,37 @@ use crate::agent_runtime::{
     AgentEvent, AgentRuntime, AgentRuntimeError, Installation, ProgramVersion, RunningTurn,
     SessionId, SignIn, TurnOutcome, TurnRequest,
 };
+use crate::notifications::{NotificationChoice, NotificationChoiceStore};
 use crate::places::ChosenPlaces;
 use crate::ports::{
     ApprovedPlan, AreaRepository, Clock, ConversationRepository, FileSystem, MemberRepository,
     PlacesRepository, PlanningRepository, ProjectFolders, ProjectRepository, SprintRepository,
     StorageError, TaskRepository, ViewRepository, WorkListener,
 };
+use crate::project_events::ProjectEvent;
 
 /// Locks a mutex, and keeps working even if another thread panicked while it
 /// held the lock. The values guarded here are valid after every single
 /// operation, so there is never anything to repair.
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
+/// Keeps the choice of this computer about notifications in memory.
+#[derive(Debug, Default)]
+pub struct InMemoryNotificationChoice {
+    choice: Mutex<Option<NotificationChoice>>,
+}
+
+impl NotificationChoiceStore for InMemoryNotificationChoice {
+    fn choice(&self) -> Result<NotificationChoice, StorageError> {
+        Ok(lock(&self.choice).unwrap_or_default())
+    }
+
+    fn set_choice(&self, choice: &NotificationChoice) -> Result<(), StorageError> {
+        *lock(&self.choice) = Some(*choice);
+        Ok(())
+    }
 }
 
 /// Keeps projects in memory.
@@ -532,9 +551,16 @@ impl FileSystem for PretendFileSystem {
 #[derive(Debug, Default)]
 pub struct RecordingWorkListener {
     changes: Mutex<Vec<(Conversation, Vec<Turn>)>>,
+    events: Mutex<Vec<ProjectEvent>>,
 }
 
 impl RecordingWorkListener {
+    /// Every event it was told about, in order.
+    #[must_use]
+    pub fn events(&self) -> Vec<ProjectEvent> {
+        lock(&self.events).clone()
+    }
+
     /// Every change it was told about, in order: the conversation and its
     /// turns as they were then.
     #[must_use]
@@ -551,6 +577,10 @@ impl RecordingWorkListener {
 impl WorkListener for RecordingWorkListener {
     fn conversation_changed(&self, conversation: &Conversation, turns: &[Turn]) {
         lock(&self.changes).push((conversation.clone(), turns.to_vec()));
+    }
+
+    fn happened(&self, event: &ProjectEvent) {
+        lock(&self.events).push(event.clone());
     }
 }
 

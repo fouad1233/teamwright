@@ -31,6 +31,7 @@ use crate::ports::{
     AreaRepository, Clock, ConversationRepository, FileSystem, MemberRepository, PlacesRepository,
     PlanningRepository, ProjectFolders, ProjectRepository, TaskRepository, WorkListener,
 };
+use crate::project_events::{ProjectEvent, event_of_ended_turn};
 use crate::usage::{ProjectUsage, usage_of};
 
 mod advisor;
@@ -904,7 +905,8 @@ impl Inner {
         event: AgentEvent,
     ) -> Result<(), ApplicationError> {
         let ports = &self.ports;
-        if matches!(event, AgentEvent::TurnEnded(_)) {
+        let ends_the_turn = matches!(event, AgentEvent::TurnEnded(_));
+        if ends_the_turn {
             lock(&self.running).remove(&turn_id);
         }
         let Some(mut conversation) = ports.conversations.find(conversation_id)? else {
@@ -970,7 +972,37 @@ impl Inner {
             self.move_task(task_id, &[StatusCategory::Active], StatusCategory::Review)?;
         }
         ports.listener.conversation_changed(&conversation, &turns);
+        // A turn ends once: events that arrive after its end are not
+        // recorded, so this tells every end at most once.
+        if ends_the_turn && let Some(event) = self.event_of_end(&conversation, &turns[index])? {
+            ports.listener.happened(&event);
+        }
         Ok(())
+    }
+
+    /// The event of a turn that has just ended, if its end is one.
+    fn event_of_end(
+        &self,
+        conversation: &Conversation,
+        turn: &Turn,
+    ) -> Result<Option<ProjectEvent>, ApplicationError> {
+        let ports = &self.ports;
+        let project = self.require_project(conversation.project_id())?;
+        let member = match conversation.member_id() {
+            Some(id) => ports.members.find(id)?,
+            None => None,
+        };
+        let task = match conversation.task_id() {
+            Some(id) => ports.tasks.find(id)?,
+            None => None,
+        };
+        Ok(event_of_ended_turn(
+            &project,
+            conversation,
+            turn,
+            member.as_ref(),
+            task.as_ref(),
+        ))
     }
 
     /// Moves a task whose status is of one of the categories `from` to the
@@ -2317,6 +2349,32 @@ mod tests {
             .filter(|content| content.kind() == StepKind::Text)
             .collect();
         assert_eq!(texts.len(), 1);
+    }
+
+    #[test]
+    fn the_end_of_a_turn_is_told_once_as_an_event_of_the_project() {
+        let workspace = workspace();
+        workspace.work.start_work(workspace.schematic.id()).unwrap();
+
+        workspace.play_whole_turn(0);
+        // An event that arrives after the end changes nothing and tells
+        // nothing.
+        workspace.deliver(0, ended(None, "Late."));
+
+        let events = workspace.ports.listener.events();
+        let [event] = events.as_slice() else {
+            panic!("{events:?}");
+        };
+        assert_eq!(event.project_id, workspace.project.id());
+        let crate::project_events::Happening::TaskFinished {
+            specialist, task, ..
+        } = &event.happening
+        else {
+            panic!("{event:?}");
+        };
+        assert_eq!(specialist.name(), "Hardware engineer");
+        assert_eq!(task.task_id, workspace.schematic.id());
+        assert_eq!(task.title, "Draw the schematic");
     }
 
     #[test]
