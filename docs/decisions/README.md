@@ -41,6 +41,7 @@ was considered.
 | [0023](0023-a-website-without-a-framework.md) | Make the website one static page, with the film drawn from frames | Accepted |
 | [0024](0024-a-view-keeps-content-of-its-own.md) | Let a view keep content of its own, as text the domain does not read | Accepted |
 | [0025](0025-the-project-as-a-workbook.md) | Give the manager the project as an Excel workbook, gathered in Rust and written by a crate of its own | Accepted |
+| [0026](0026-notifications.md) | Tell the manager through notifications of the system, off until allowed, worded by a rule in the application | Accepted |
 
 ## Template
 

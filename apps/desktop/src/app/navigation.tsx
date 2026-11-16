@@ -75,6 +75,8 @@ export interface Navigation extends Location {
   closeTask: () => void;
   /** Opens the conversation with a specialist. It takes the place of an open task. */
   openChat: (memberId: Id) => void;
+  /** Opens the conversation with a specialist of any project, for example from a notification. */
+  openChatOf: (projectId: Id, memberId: Id) => void;
   closeChat: () => void;
 }
 
@@ -228,6 +230,9 @@ export function NavigationProvider({ children }: { children: ReactNode }) {
       },
       openChat: (chatMemberId) => {
         go({ chatMemberId, taskId: null });
+      },
+      openChatOf: (projectId, chatMemberId) => {
+        enter(projectId, { chatMemberId, taskId: null });
       },
       closeChat: () => {
         go({ chatMemberId: null });

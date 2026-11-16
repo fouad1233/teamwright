@@ -1,0 +1,86 @@
+/* A line that turns something on or off: words on the left, the track on
+   the right, quiet until it is pressed. */
+.switch {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  width: 100%;
+  padding: var(--space-2) 0;
+  text-align: left;
+}
+
+.switch:disabled {
+  opacity: 0.4;
+}
+
+.words {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.label {
+  color: var(--ink);
+}
+
+.hint {
+  color: var(--ink-faint);
+  font-size: var(--text-small);
+  line-height: 1.45;
+}
+
+.track {
+  position: relative;
+  flex: none;
+  width: var(--switch-width);
+  height: var(--switch-height);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--switch-height);
+  background: var(--ground-sunken);
+  transition:
+    background-color var(--duration-quick) ease,
+    border-color var(--duration-quick) ease;
+}
+
+.knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: calc(var(--switch-height) - 6px);
+  height: calc(var(--switch-height) - 6px);
+  border-radius: 50%;
+  background: var(--ink-faint);
+  transition:
+    transform var(--duration-quick) var(--ease-settle),
+    background-color var(--duration-quick) ease;
+}
+
+/* On, the track takes the brass of what is lit, and the knob moves over. */
+.on {
+  border-color: var(--brass);
+  background: var(--brass-soft);
+}
+
+.on .knob {
+  background: var(--brass);
+  transform: translateX(calc(var(--switch-width) - var(--switch-height)));
+}
+
+.switch:hover:not(:disabled) .track {
+  border-color: var(--ink-faint);
+}
+
+.switch:hover:not(:disabled) .on {
+  border-color: var(--brass);
+}
+
+.switch:focus-visible {
+  outline: none;
+}
+
+.switch:focus-visible .track {
+  outline: 2px solid var(--brass);
+  outline-offset: 2px;
+}

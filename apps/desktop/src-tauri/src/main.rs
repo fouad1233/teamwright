@@ -12,6 +12,7 @@
 mod commands;
 mod dto;
 mod error;
+mod events;
 mod state;
 
 use std::ffi::OsStr;
@@ -31,9 +32,13 @@ fn main() -> ExitCode {
         // Lets the interface open the window of the operating system in
         // which the manager chooses a folder or files.
         .plugin(tauri_plugin_dialog::init())
+        // Lets the shell send the notifications of the operating system.
+        // The interface has no part of it: what is sent is decided here.
+        .plugin(tauri_plugin_notification::init())
         .setup(|app| {
             let state = AppState::open(app.handle())?;
             app.manage(state);
+            events::listen_for_presses(app.handle());
             state::start_syncing_in_the_background(app.handle().clone());
             Ok(())
         })
@@ -123,6 +128,11 @@ fn main() -> ExitCode {
             commands::sync::sync_notices,
             commands::sync::dismiss_sync_notice,
             commands::sync::give_this_computer_a_new_identity,
+            commands::notifications::notification_choice,
+            commands::notifications::allow_notifications,
+            commands::notifications::decline_notifications,
+            commands::notifications::set_notification_kind,
+            commands::notifications::send_test_notification,
         ])
         .build(tauri::generate_context!());
 

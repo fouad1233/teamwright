@@ -6,6 +6,7 @@ import { Button } from '@/shared/ui/Button';
 import { describeFailure } from '@/shared/ui/Toast';
 
 import { advisorWaitsFor } from '../advisor/advisorModel';
+import { AskToNotify } from '../notifications/AskToNotify';
 import { useComputerOf } from '../sync/RunsElsewhere';
 import { useTasks } from '../tasks/taskQueries';
 import { MemberAvatar } from '../team/Assignee';
@@ -58,6 +59,8 @@ export function Inbox({ projects }: InboxProps) {
           </p>
         </div>
       )}
+
+      {conversations.length > 0 && <AskToNotify />}
 
       {conversations.length > 0 && (
         <ol className={styles.items}>

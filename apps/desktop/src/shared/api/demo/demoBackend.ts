@@ -26,6 +26,8 @@ import type {
   NewSprint,
   NewTask,
   NewView,
+  NotificationChoice,
+  NotificationKind,
   Priority,
   Project,
   ProjectChange,
@@ -244,6 +246,13 @@ export class DemoBackend implements Backend {
   /** The areas of each project, in the order the manager gave them. */
   private readonly areas = new Map<Id, Area[]>();
   private sampleFoldersHandedOut = 0;
+  /** What the manager chose about notifications; off until allowed, as in the program. */
+  private notifications: NotificationChoice = {
+    permission: 'not_asked',
+    waiting: true,
+    finished: true,
+    stopped: true,
+  };
   /** The turns whose script is still being played. A turn that is stopped leaves this set. */
   private readonly playing = new Set<Id>();
   private readonly conversationListeners = new Set<(conversation: Conversation) => void>();
@@ -1425,6 +1434,47 @@ export class DemoBackend implements Backend {
     return () => {
       this.dataListeners.delete(listener);
     };
+  }
+
+  notificationChoice(): Promise<NotificationChoice> {
+    return this.answer(() => ({ ...this.notifications }));
+  }
+
+  allowNotifications(): Promise<NotificationChoice> {
+    return this.answer(() => this.changeNotifications({ permission: 'allowed' }));
+  }
+
+  declineNotifications(): Promise<NotificationChoice> {
+    return this.answer(() => this.changeNotifications({ permission: 'declined' }));
+  }
+
+  setNotificationKind(kind: NotificationKind, on: boolean): Promise<NotificationChoice> {
+    return this.answer(() => this.changeNotifications({ [kind]: on }));
+  }
+
+  sendTestNotification(): Promise<void> {
+    return this.answer(() => {
+      if (this.notifications.permission !== 'allowed') {
+        throw new BackendError(
+          'notifications_off',
+          'notifications are not allowed on this computer',
+        );
+      }
+      throw new BackendError(
+        'not_available',
+        'the demo has no notifications of the operating system to send',
+      );
+    });
+  }
+
+  onNotificationPressed(): () => void {
+    // The demo sends no notifications, so none is ever pressed.
+    return () => undefined;
+  }
+
+  private changeNotifications(change: Partial<NotificationChoice>): NotificationChoice {
+    this.notifications = { ...this.notifications, ...change };
+    return { ...this.notifications };
   }
 
   /**

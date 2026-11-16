@@ -57,6 +57,9 @@
   --dashboard-note-width: 320px;
   --dashboard-bar-height: 12px;
   --control-height: 30px;
+  /* A switch: a small track with a knob that slides from off to on. */
+  --switch-width: 26px;
+  --switch-height: 15px;
 
   /* Night: the ground, from the back of the window to the front. The rules
      and washes are the ink, thinned. */

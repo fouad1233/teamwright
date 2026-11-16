@@ -12,8 +12,9 @@ use serde::{Deserialize, Serialize};
 use teamwright_application::{
     Acceptance, AgentProgram, AgentUsage, ApprovedMember, ApprovedOwner, ApprovedProposal,
     ApprovedTask, ConversationWithTurns, KnownComputer, NewMember, NewProject, NewSprint, NewTask,
-    NewView, ProjectChange, ProjectPlaces, ProjectUsage, SprintChanges, SprintReport, SprintStart,
-    StatusProperties, SyncNotice, SyncState, WorkflowTemplate,
+    NewView, NotificationChoice, NotificationKind, NotificationPermission, ProjectChange,
+    ProjectPlaces, ProjectUsage, SprintChanges, SprintReport, SprintStart, StatusProperties,
+    SyncNotice, SyncState, WorkflowTemplate,
 };
 use teamwright_domain::{
     Area, Assignee, CalendarDate, Color, ComputerId, ContextUse, Conversation, DecisionOption,
@@ -1720,6 +1721,66 @@ impl From<&[teamwright_domain::ProjectId]> for DataChangedDto {
             project_ids: projects.iter().map(ToString::to_string).collect(),
         }
     }
+}
+
+/// What the manager chose about notifications on this computer, as the
+/// interface sees it.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NotificationChoiceDto {
+    /// `not_asked`, `allowed` or `declined`.
+    pub permission: &'static str,
+    /// Whether a notification is sent when someone waits for the manager.
+    pub waiting: bool,
+    /// Whether one is sent when work on a task is finished.
+    pub finished: bool,
+    /// Whether one is sent when someone could not go on.
+    pub stopped: bool,
+}
+
+impl From<NotificationChoice> for NotificationChoiceDto {
+    fn from(choice: NotificationChoice) -> Self {
+        Self {
+            permission: match choice.permission {
+                NotificationPermission::NotAsked => "not_asked",
+                NotificationPermission::Allowed => "allowed",
+                NotificationPermission::Declined => "declined",
+            },
+            waiting: choice.waiting,
+            finished: choice.finished,
+            stopped: choice.stopped,
+        }
+    }
+}
+
+/// Reads a kind of notification the interface names.
+pub fn parse_notification_kind(text: &str) -> Result<NotificationKind, CommandError> {
+    match text {
+        "waiting" => Ok(NotificationKind::Waiting),
+        "finished" => Ok(NotificationKind::Finished),
+        "stopped" => Ok(NotificationKind::Stopped),
+        other => Err(CommandError::invalid_request(format!(
+            "{other} is not a kind of notification"
+        ))),
+    }
+}
+
+/// What a notification the manager pressed was about, for the interface to
+/// open. A field the notification did not carry, or that the platform did
+/// not report, is nothing.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NotificationPressedDto {
+    /// `waiting`, `finished` or `stopped`.
+    pub kind: Option<String>,
+    /// The project.
+    pub project_id: Option<String>,
+    /// The task it was about, if any.
+    pub task_id: Option<String>,
+    /// The specialist it was about, if any.
+    pub member_id: Option<String>,
+    /// Whether it was about the Advisor.
+    pub is_with_advisor: bool,
 }
 
 #[cfg(test)]

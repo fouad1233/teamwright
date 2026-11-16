@@ -7,6 +7,7 @@ import { Button, ValueButton } from '@/shared/ui/Button';
 import { Field, TextInput } from '@/shared/ui/Field';
 import { describeFailure } from '@/shared/ui/Toast';
 
+import { NotificationSettings } from '../notifications/NotificationSettings';
 import { waitsForManager } from '../work/waitsForManager';
 import styles from './ComputersPlace.module.css';
 import { OtherComputers } from './OtherComputers';
@@ -46,6 +47,8 @@ export function ComputersPlace({ projects }: ComputersPlaceProps) {
         ) : (
           <InStep state={sync.data} projects={projects} />
         ))}
+
+      <NotificationSettings />
     </section>
   );
 }

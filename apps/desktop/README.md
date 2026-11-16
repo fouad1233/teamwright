@@ -118,6 +118,27 @@ The shell is where the work of an AI specialist meets the outside world
   interface asks for the usage again when a turn starts or ends; the demo
   backend stands in with `shared/api/demo/usage.ts`, which follows the
   same rules.
+- **What happened, and notifications**
+  ([decision 0026](../../docs/decisions/0026-notifications.md)). The work
+  of the specialists hands every event of a project
+  (`teamwright_application::ProjectEvent`) to `EventToInterface::happened`
+  in `state.rs`; the commands `start_sprint` and `complete_sprint` hand
+  theirs over after they succeeded. Both go to `events::tell` in
+  `src-tauri/src/events.rs`, the one place where events leave the window:
+  today it sends a notification of the system through
+  `tauri-plugin-notification`, if `NotificationService` says the event is
+  worth one with the choice of this computer and the window is not in
+  front. Pressing one brings the window to the front and sends the event
+  `notification-pressed` (`NotificationPressedDto`), which
+  `features/notifications` turns into a place to open. The commands in
+  `commands/notifications.rs` (`notification_choice`,
+  `allow_notifications`, `decline_notifications`, `set_notification_kind`,
+  `send_test_notification`) answer with the choice
+  (`NotificationChoiceDto`). The interface asks once, in the inbox
+  (`AskToNotify`), and keeps the switches on the page Computers
+  (`NotificationSettings`). The demo backend keeps the choice in memory and
+  refuses the test notification with `not_available`, as it does other
+  things only the desktop has.
 - **Planning with the Advisor.** The commands `advise`, `answer_interview`
   and `approve_proposal` in `commands/work.rs` carry it out; `reply` and
   `list_conversations_waiting` serve conversations with the Advisor too. In

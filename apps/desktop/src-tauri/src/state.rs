@@ -10,22 +10,23 @@ use std::{env, fs, thread};
 use chrono::Utc;
 use tauri::{AppHandle, Emitter, Manager};
 use teamwright_application::{
-    AgentRuntime, ApplicationError, AreaService, FileSystem, PlacesService, ProjectFolders,
-    ProjectService, RoundReport, SprintService, StorageError, SyncPorts, SyncService, SystemClock,
-    TaskService, TeamService, ViewService, WorkListener, WorkPorts, WorkService, WorkbookPorts,
-    WorkbookService,
+    AgentRuntime, ApplicationError, AreaService, FileSystem, NotificationService, PlacesService,
+    ProjectEvent, ProjectFolders, ProjectService, RoundReport, SprintService, StorageError,
+    SyncPorts, SyncService, SystemClock, TaskService, TeamService, ViewService, WorkListener,
+    WorkPorts, WorkService, WorkbookPorts, WorkbookService,
 };
 use teamwright_domain::{ComputerId, Conversation, Project, Turn};
 use teamwright_runtime::ClaudeCode;
 use teamwright_storage::{
     Database, FolderOfComputers, SqliteAreaRepository, SqliteConversationRepository,
-    SqliteMemberRepository, SqlitePlacesRepository, SqlitePlanningRepository,
-    SqliteProjectRepository, SqliteSprintRepository, SqliteSyncLedger, SqliteTaskRepository,
-    SqliteViewRepository,
+    SqliteMemberRepository, SqliteNotificationChoice, SqlitePlacesRepository,
+    SqlitePlanningRepository, SqliteProjectRepository, SqliteSprintRepository, SqliteSyncLedger,
+    SqliteTaskRepository, SqliteViewRepository,
 };
 
 use crate::dto::{ConversationDto, DataChangedDto, SyncStateDto};
 use crate::error::CommandError;
+use crate::events;
 
 /// The name of the database file inside the application's data directory.
 const DATABASE_FILE_NAME: &str = "teamwright.db";
@@ -130,6 +131,9 @@ pub struct AppState {
     pub sync: SyncService,
     /// The use case that gathers a project into an Excel workbook.
     pub workbook: WorkbookService,
+    /// The choice of this computer about notifications, and what an event
+    /// is worth with it.
+    pub notifications: NotificationService,
     /// The workbooks written since the program started. Only these can be
     /// shown in their folder.
     pub exported_workbooks: Mutex<Vec<PathBuf>>,
@@ -160,13 +164,15 @@ impl AppState {
         let view_repository = Arc::new(SqliteViewRepository::new(database.clone()));
         let area_repository = Arc::new(SqliteAreaRepository::new(database.clone()));
         let conversation_repository = Arc::new(SqliteConversationRepository::new(database.clone()));
-        let planning_repository = Arc::new(SqlitePlanningRepository::new(database));
+        let planning_repository = Arc::new(SqlitePlanningRepository::new(database.clone()));
         let runtime: Arc<dyn AgentRuntime> = Arc::new(agent_program());
         let clock = Arc::new(SystemClock);
         let folders: Arc<dyn ProjectFolders> = Arc::new(FoldersOfProjects {
             root: projects_directory(app).map_err(|error| error.to_string()),
         });
         let file_system: Arc<dyn FileSystem> = Arc::new(LocalFileSystem);
+        let notifications =
+            NotificationService::new(Arc::new(SqliteNotificationChoice::new(database)));
         let sync = SyncService::new(SyncPorts {
             ledger: sync_ledger,
             folder: Arc::new(FolderOfComputers::new()),
@@ -190,6 +196,7 @@ impl AppState {
             listener: Arc::new(EventToInterface {
                 app: app.clone(),
                 this_computer,
+                notifications: notifications.clone(),
             }),
             clock: clock.clone(),
             this_computer,
@@ -263,6 +270,7 @@ impl AppState {
             work,
             sync,
             workbook,
+            notifications,
             exported_workbooks: Mutex::new(Vec::new()),
             this_computer,
         })
@@ -508,10 +516,12 @@ impl FileSystem for LocalFileSystem {
 }
 
 /// Tells the interface about every change to a conversation, with the event
-/// `conversation-changed`.
+/// `conversation-changed`, and what happened in a project to the listeners
+/// outside the window.
 struct EventToInterface {
     app: AppHandle,
     this_computer: ComputerId,
+    notifications: NotificationService,
 }
 
 impl WorkListener for EventToInterface {
@@ -523,5 +533,9 @@ impl WorkListener for EventToInterface {
             CONVERSATION_CHANGED,
             ConversationDto::new(conversation, turns, self.this_computer),
         );
+    }
+
+    fn happened(&self, event: &ProjectEvent) {
+        events::tell(&self.app, &self.notifications, event);
     }
 }

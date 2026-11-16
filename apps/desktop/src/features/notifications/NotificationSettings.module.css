@@ -1,0 +1,24 @@
+/* A part of the page of this computer: a label over a hairline, then its
+   lines, as the parts about syncing are. */
+.part {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-width: 680px;
+  padding-top: var(--space-4);
+}
+
+.part > h2 {
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--rule);
+}
+
+/* The three kinds hang under the main switch, set in a little, so that
+   they read as part of it. */
+.kinds {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: var(--space-2);
+  padding-left: var(--space-4);
+  border-left: 1px solid var(--rule);
+}

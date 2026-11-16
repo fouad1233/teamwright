@@ -1,12 +1,15 @@
 //! Commands for sprints, the backlog and story points.
 
-use tauri::State;
+use tauri::{AppHandle, State};
+use teamwright_application::{ProjectEvent, event_of_completed_sprint, event_of_started_sprint};
+use teamwright_domain::{Project, Sprint};
 
 use crate::dto::{
     NewSprintInput, SprintChangesInput, SprintCompletionInput, SprintDto, SprintReportDto,
     SprintStartInput, TaskDto, parse_id,
 };
 use crate::error::CommandError;
+use crate::events;
 use crate::state::AppState;
 
 /// Lists the sprints of a project: the active one, the planned ones, the
@@ -56,6 +59,7 @@ pub async fn delete_sprint(
 /// Starts a planned sprint with its name, goal and dates.
 #[tauri::command]
 pub async fn start_sprint(
+    app: AppHandle,
     state: State<'_, AppState>,
     sprint_id: String,
     input: SprintStartInput,
@@ -63,6 +67,7 @@ pub async fn start_sprint(
     let sprint = state
         .sprints
         .start(parse_id(&sprint_id)?, input.try_into()?)?;
+    tell_about(&app, &state, &sprint, event_of_started_sprint);
     Ok(SprintDto::from(&sprint))
 }
 
@@ -70,6 +75,7 @@ pub async fn start_sprint(
 /// backlog or to another sprint.
 #[tauri::command]
 pub async fn complete_sprint(
+    app: AppHandle,
     state: State<'_, AppState>,
     sprint_id: String,
     input: SprintCompletionInput,
@@ -82,7 +88,24 @@ pub async fn complete_sprint(
     let sprint = state
         .sprints
         .complete(parse_id(&sprint_id)?, move_unfinished_to)?;
+    tell_about(&app, &state, &sprint, event_of_completed_sprint);
     Ok(SprintDto::from(&sprint))
+}
+
+/// Tells the listeners outside the window about a sprint that was started
+/// or completed. The sprint is changed already, so a project that cannot
+/// be read only means that nothing is told.
+fn tell_about(
+    app: &AppHandle,
+    state: &AppState,
+    sprint: &Sprint,
+    event_of: fn(&Project, &Sprint) -> Option<ProjectEvent>,
+) {
+    if let Ok(project) = state.projects.get(sprint.project_id())
+        && let Some(event) = event_of(&project, sprint)
+    {
+        events::tell(app, &state.notifications, &event);
+    }
 }
 
 /// Puts a task with its subtasks into a sprint, or back into the backlog.

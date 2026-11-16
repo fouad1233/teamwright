@@ -22,6 +22,9 @@ import type {
   NewSprint,
   NewTask,
   NewView,
+  NotificationChoice,
+  NotificationKind,
+  NotificationPressed,
   Priority,
   Moment,
   Project,
@@ -426,7 +429,35 @@ export class TauriBackend implements Backend {
     // The shell sends the projects in which a round took in changes.
     return listenTo(DATA_CHANGED, listener);
   }
+
+  notificationChoice(): Promise<NotificationChoice> {
+    return call('notification_choice');
+  }
+
+  allowNotifications(): Promise<NotificationChoice> {
+    return call('allow_notifications');
+  }
+
+  declineNotifications(): Promise<NotificationChoice> {
+    return call('decline_notifications');
+  }
+
+  setNotificationKind(kind: NotificationKind, on: boolean): Promise<NotificationChoice> {
+    return call('set_notification_kind', { kind, on });
+  }
+
+  sendTestNotification(): Promise<void> {
+    return call('send_test_notification');
+  }
+
+  onNotificationPressed(listener: (pressed: NotificationPressed) => void): () => void {
+    // The shell sends this after it brought the window to the front.
+    return listenTo(NOTIFICATION_PRESSED, listener);
+  }
 }
+
+/** The name of the event the shell sends when the manager pressed a notification. */
+const NOTIFICATION_PRESSED = 'notification-pressed';
 
 /** The name of the event the shell sends when a conversation has changed. */
 const CONVERSATION_CHANGED = 'conversation-changed';

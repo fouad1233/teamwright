@@ -902,3 +902,35 @@ export interface SyncNotice {
 export interface DataChanged {
   projectIds: Id[];
 }
+
+/** Whether the manager has allowed notifications of the operating system on this computer. */
+export type NotificationPermission = 'not_asked' | 'allowed' | 'declined';
+
+/** The kinds of notification, each of which can be turned off. */
+export type NotificationKind = 'waiting' | 'finished' | 'stopped';
+
+/**
+ * What the manager chose about notifications on this computer. It is kept
+ * there only: not synced, not logged.
+ */
+export interface NotificationChoice {
+  permission: NotificationPermission;
+  /** A specialist or the Advisor waits for the manager. */
+  waiting: boolean;
+  /** A specialist finished its work on a task. */
+  finished: boolean;
+  /** A specialist or the Advisor could not go on. */
+  stopped: boolean;
+}
+
+/**
+ * What the event `notification-pressed` carries: what the notification
+ * the manager pressed was about. A field it did not carry is null.
+ */
+export interface NotificationPressed {
+  kind: NotificationKind | null;
+  projectId: Id | null;
+  taskId: Id | null;
+  memberId: Id | null;
+  isWithAdvisor: boolean;
+}

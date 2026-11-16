@@ -1,4 +1,5 @@
 import { Inbox } from '@/features/inbox/Inbox';
+import { useOpenPressedNotifications } from '@/features/notifications/notificationQueries';
 import { ProjectWorkspace } from '@/features/projects/ProjectWorkspace';
 import { Sidebar } from '@/features/projects/Sidebar';
 import { Welcome } from '@/features/projects/Welcome';
@@ -19,6 +20,8 @@ export function App() {
   const projects = useProjects();
   // What another computer changed is shown wherever the manager looks.
   useFreshDataFromOtherComputers();
+  // A notification the manager pressed opens what it was about.
+  useOpenPressedNotifications();
 
   // The project the user was in last, or the first one if that is gone.
   const openProject =

@@ -17,6 +17,9 @@ import type {
   NewSprint,
   NewTask,
   NewView,
+  NotificationChoice,
+  NotificationKind,
+  NotificationPressed,
   Priority,
   Moment,
   Project,
@@ -469,6 +472,32 @@ export interface Backend {
    * to be asked for again. Returns the function that stops the calls.
    */
   onDataChanged(listener: (change: DataChanged) => void): () => void;
+
+  /**
+   * What the manager chose about notifications of the operating system on
+   * this computer. They are off until the manager allows them.
+   */
+  notificationChoice(): Promise<NotificationChoice>;
+  /** Allows notifications on this computer, with the kinds as they were. */
+  allowNotifications(): Promise<NotificationChoice>;
+  /**
+   * Turns notifications off on this computer, or says no to the question
+   * whether to allow them. The program does not ask again.
+   */
+  declineNotifications(): Promise<NotificationChoice>;
+  /** Turns one kind of notification on or off. */
+  setNotificationKind(kind: NotificationKind, on: boolean): Promise<NotificationChoice>;
+  /**
+   * Sends a notification to try them. Refused while they are not allowed
+   * (`notifications_off`), and where there are none (`not_available`).
+   */
+  sendTestNotification(): Promise<void>;
+  /**
+   * Calls the listener when the manager pressed a notification, with what
+   * it was about. The window is in front by then. Returns the function
+   * that stops the calls.
+   */
+  onNotificationPressed(listener: (pressed: NotificationPressed) => void): () => void;
 }
 
 /**
