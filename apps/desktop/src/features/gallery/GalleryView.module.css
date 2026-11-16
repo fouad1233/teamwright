@@ -1,0 +1,348 @@
+/*
+ * The gallery is a wall of plates: cards of one width in a grid, each with
+ * a field of the proportions of a photograph at the top. A card without a
+ * picture is a plate of its own, a sunken field inside a hairline frame
+ * with ticks at its corners, the task's key set large and quiet in its
+ * middle, so that a wall without pictures reads as a set of plates waiting
+ * to be filled, not as missing images.
+ */
+.gallery {
+  --card-width: 212px;
+  --key-size: var(--text-title);
+  --frame-inset: var(--space-2);
+  --tick: var(--space-2);
+
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.gallery[data-size='small'] {
+  --card-width: 156px;
+  --key-size: var(--text-strong);
+  --frame-inset: 6px;
+  --tick: 6px;
+}
+
+.gallery[data-size='large'] {
+  --card-width: 312px;
+  --key-size: var(--text-display);
+  --frame-inset: var(--space-3);
+  --tick: var(--space-3);
+}
+
+/* A thin bar of the height of the filter line: one quiet line at the left,
+   the size of the cards at the right. */
+.bar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-3);
+  height: 36px;
+  padding: 0 var(--space-5);
+  border-bottom: 1px solid var(--rule);
+}
+
+.note {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: var(--ink-faint);
+  font-size: var(--text-small);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* What the pictures weigh is counted, so it is set in the mono face. */
+.weight {
+  font-family: var(--font-mono);
+}
+
+/* Little room is left: the next move is the manager's. */
+.little {
+  color: var(--brass-text);
+}
+
+.size {
+  margin-right: calc(-1 * var(--space-2));
+  margin-left: 0;
+  color: var(--ink-soft);
+  font-size: var(--text-small);
+  font-weight: 550;
+}
+
+.size:hover,
+.size[data-state='open'] {
+  color: var(--ink);
+}
+
+.size svg {
+  width: 12px;
+  height: 12px;
+  color: var(--ink-faint);
+}
+
+.grid {
+  display: grid;
+  flex: 1;
+  grid-template-columns: repeat(auto-fill, minmax(var(--card-width), 1fr));
+  gap: var(--space-4);
+  align-content: start;
+  margin: 0;
+  padding: var(--space-5);
+  overflow: auto;
+  list-style: none;
+}
+
+.cell {
+  min-width: 0;
+}
+
+/* The card is flat, like a card of the board: a hairline, the surface, and
+   a stronger hairline under the pointer. */
+.card {
+  position: relative;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  transition: border-color var(--duration-quick) ease;
+}
+
+.card:hover {
+  border-color: var(--rule-strong);
+}
+
+.isOpen {
+  border-color: var(--brass);
+}
+
+/* A picture file is held over the card. */
+.dropTarget,
+.dropTarget:hover {
+  border-color: var(--brass);
+}
+
+.face {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  border-radius: inherit;
+  color: inherit;
+  text-align: left;
+}
+
+.face:focus-visible {
+  outline-offset: 3px;
+}
+
+/* The field at the top of the card, of the proportions of a photograph. */
+.plate {
+  position: relative;
+  display: block;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  border-bottom: 1px solid var(--rule);
+  border-radius: calc(var(--radius-card) - 1px) calc(var(--radius-card) - 1px) 0 0;
+  background: var(--ground-sunken);
+}
+
+.picture {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* A plate without a picture: a hairline frame set in from the edge, with a
+   tick at each corner that runs on past it, like the frame of a plate in a
+   handbook. */
+.bare::before,
+.bare::after {
+  position: absolute;
+  inset: var(--frame-inset);
+  pointer-events: none;
+  content: '';
+}
+
+.bare::before {
+  border: 1px solid var(--rule);
+}
+
+.bare::after {
+  inset: calc(var(--frame-inset) - var(--tick) / 2);
+  background:
+    linear-gradient(var(--rule-strong), var(--rule-strong)) top left / var(--tick) 1px,
+    linear-gradient(var(--rule-strong), var(--rule-strong)) top left / 1px var(--tick),
+    linear-gradient(var(--rule-strong), var(--rule-strong)) top right / var(--tick) 1px,
+    linear-gradient(var(--rule-strong), var(--rule-strong)) top right / 1px var(--tick),
+    linear-gradient(var(--rule-strong), var(--rule-strong)) bottom left / var(--tick) 1px,
+    linear-gradient(var(--rule-strong), var(--rule-strong)) bottom left / 1px var(--tick),
+    linear-gradient(var(--rule-strong), var(--rule-strong)) bottom right / var(--tick) 1px,
+    linear-gradient(var(--rule-strong), var(--rule-strong)) bottom right / 1px var(--tick);
+  background-repeat: no-repeat;
+}
+
+/* The task's key, large and quiet: it names the plate and does not shout. */
+.key {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: var(--key-size);
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  opacity: 0.7;
+}
+
+/* Said over the plate while a file is held over it or reduced. */
+.drop {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-3);
+  background: var(--backdrop);
+  color: var(--ink);
+  font-size: var(--text-small);
+  text-align: center;
+}
+
+.dropTarget .drop {
+  box-shadow: inset 0 0 0 1px var(--brass);
+  color: var(--brass-text);
+}
+
+.caption {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+}
+
+.gallery[data-size='small'] .caption {
+  gap: 6px;
+  padding: var(--space-2) 10px 10px;
+}
+
+/* Two lines at most, and always the room of two, so the cards of a row
+   end on one line. */
+.title {
+  display: -webkit-box;
+  height: calc(2 * 1.35em);
+  overflow: hidden;
+  font-size: var(--text-body);
+  font-weight: 500;
+  line-height: 1.35;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.gallery[data-size='small'] .title {
+  font-size: var(--text-small);
+}
+
+.facts {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  height: 20px;
+}
+
+.mark {
+  display: inline-flex;
+  flex: none;
+}
+
+.status {
+  overflow: hidden;
+  color: var(--ink-soft);
+  font-size: var(--text-small);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reference {
+  flex: none;
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: var(--text-small);
+}
+
+.reference::before {
+  margin-right: 6px;
+  color: var(--rule-strong);
+  content: '·';
+}
+
+/* A small card has room for the status alone; the key is on the plate or
+   in the task's name for a screen reader. */
+.gallery[data-size='small'] .reference {
+  display: none;
+}
+
+.person {
+  display: inline-flex;
+  flex: none;
+  margin-left: auto;
+}
+
+/* The menu sits in the corner of the plate. It shows under the pointer and
+   when it has the focus, so that a wall of pictures is not covered with
+   buttons. */
+.menu {
+  position: absolute;
+  top: var(--space-1);
+  right: var(--space-1);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+  opacity: 0;
+  transition: opacity var(--duration-quick) ease;
+}
+
+.card:hover .menu,
+.card:focus-within .menu,
+.menu:has([data-state='open']) {
+  opacity: 1;
+}
+
+/* Kept out of sight: the file field the menu's "Choose a picture" opens. */
+.fileField {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.empty {
+  max-width: 60ch;
+  padding: var(--space-6) var(--space-5);
+}
+
+.emptyLead {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-strong);
+  font-weight: 600;
+}
+
+.emptyNote {
+  margin: 0;
+  color: var(--ink-soft);
+  line-height: 1.55;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card,
+  .menu {
+    transition: none;
+  }
+}
