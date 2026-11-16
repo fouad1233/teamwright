@@ -101,10 +101,19 @@ export interface GroundOptions {
    * How much of the frame the box of the content always covers, as a share
    * of the frame's width and of its height, so that the content is not
    * dragged out of sight. Left out, a half. With 0 the content can be moved
-   * until it only touches the frame: for a ground that is to feel without
-   * edges.
+   * until it only touches the frame. With `null` nothing holds the ground:
+   * it goes wherever it is moved, as a whiteboard without edges does, and
+   * "fit" brings the content back.
    */
-  reach?: number;
+  reach?: number | null;
+  /**
+   * Whether the ground fits its content only once, when it first has both
+   * a content and a frame, and then stays where it lies while the content
+   * changes, until "fit" is pressed. Left out, no: the ground follows its
+   * content until it is moved or zoomed. A ground on which the manager
+   * draws must not jump every time a thing is added.
+   */
+  fitsOnce?: boolean;
   /**
    * Says whether a press moves the ground. It is asked for every press of
    * the main or the middle button that reaches the frame. Left out, every
@@ -151,7 +160,8 @@ export interface Ground {
   zoomTo: (scale: number) => void;
   /**
    * Brings all the content into view. The ground then follows its content
-   * and its frame, as it does from the start, until it is moved or zoomed.
+   * and its frame, as it does from the start, until it is moved or zoomed;
+   * a ground that `fitsOnce` stays where the fit put it.
    */
   fit: () => void;
   /** Moves the ground by so many pixels of the frame. */
@@ -210,6 +220,7 @@ export function useGround({
   limits = SCALE_LIMITS,
   largestFit = 1,
   reach = REACH,
+  fitsOnce = false,
   takesPress,
 }: GroundOptions): Ground {
   const [frame, setFrame] = useState<HTMLDivElement | null>(null);
@@ -231,6 +242,11 @@ export function useGround({
     [content, frameSize, limits, largestFit],
   );
   const placement = chosen ?? fitted;
+
+  if (fitsOnce && chosen === null && content && frameSize) {
+    // The ground has fitted its content once, and now stays where it lies.
+    setChosen(fitted);
+  }
 
   useLayoutEffect(() => {
     if (!frame) {
@@ -263,7 +279,9 @@ export function useGround({
       if (next === from) {
         return current;
       }
-      return content && frameSize ? withinReach(next, content, frameSize, reach) : next;
+      return content && frameSize && reach !== null
+        ? withinReach(next, content, frameSize, reach)
+        : next;
     });
     setIsGliding(glides);
   }
