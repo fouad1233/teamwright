@@ -1,0 +1,411 @@
+/*
+ * The report view is a ground on which one printed page lies, and beside
+ * it, not on it, the few controls of the page. The page is paper in both
+ * themes (`data-paper` brings the paper tokens): ink, hairlines, one column
+ * of text and a few quiet figures, in the proportions of A4.
+ */
+.view {
+  height: 100%;
+  min-height: 0;
+  overflow: auto;
+}
+
+.ground {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: var(--space-6);
+  padding: var(--space-7) var(--space-5) var(--space-8);
+}
+
+/* The page. 680 by 962 is A4, and it grows when there is more to say. */
+.sheet {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: var(--space-6);
+  width: 680px;
+  min-height: 962px;
+  padding: var(--space-8) var(--space-8) var(--space-6);
+  background: var(--surface-raised);
+  color: var(--ink);
+  print-color-adjust: exact;
+}
+
+/* The title block. */
+.head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* The one gilded mark of the page, where the title block is held. */
+.mark {
+  width: var(--space-5);
+  height: 2px;
+  margin-bottom: var(--space-2);
+  background: var(--brass);
+}
+
+.kicker {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.key {
+  color: var(--ink-soft);
+}
+
+.title {
+  font-family: var(--font-serif);
+  font-size: var(--text-display);
+  font-weight: 400;
+  line-height: 1.1;
+}
+
+.date {
+  color: var(--ink-soft);
+  font-family: var(--font-mono);
+  font-size: var(--text-small);
+}
+
+/* The manager's words: a paragraph, and while it is written, the same paragraph. */
+.introduction {
+  margin: 0;
+  color: var(--ink);
+  font-size: var(--text-strong);
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.introductionInput {
+  display: block;
+  width: calc(100% + 2 * var(--space-2));
+  min-height: 3lh;
+  padding: var(--space-1) var(--space-2);
+  margin: calc(-1 * var(--space-1)) calc(-1 * var(--space-2));
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  background: transparent;
+  field-sizing: content;
+  font-family: inherit;
+  resize: none;
+  transition:
+    background-color 100ms ease,
+    border-color 100ms ease;
+}
+
+.introductionInput:hover {
+  background: var(--hover);
+}
+
+.introductionInput:focus-visible {
+  border-color: var(--rule-strong);
+  outline: none;
+  background: var(--hover);
+}
+
+.introductionInput::placeholder {
+  color: var(--ink-faint);
+}
+
+.part {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  break-inside: avoid;
+}
+
+.partTitle {
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--rule-strong);
+  break-after: avoid;
+}
+
+.lead {
+  font-size: var(--text-strong);
+  line-height: 1.6;
+}
+
+.quiet {
+  color: var(--ink-faint);
+  font-size: var(--text-small);
+}
+
+/* Progress: one bar, finished in ink and begun in a thinner ink. */
+.bar {
+  display: flex;
+  height: var(--space-2);
+  border: 1px solid var(--ink);
+}
+
+.barFinished,
+.barInWork {
+  display: block;
+  height: 100%;
+}
+
+.barFinished {
+  width: calc(var(--finished) * 100%);
+  background: var(--ink);
+}
+
+.barInWork {
+  width: calc(var(--in-work) * 100%);
+  background: var(--ink-faint);
+  opacity: 0.45;
+}
+
+.figures {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  margin: 0;
+}
+
+.figure {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-left: var(--space-3);
+  border-left: 1px solid var(--rule);
+}
+
+.figure:first-child {
+  padding-left: 0;
+  border-left: none;
+}
+
+.figureValue {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-title);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+
+/* The sprint: words at the left, the burndown drawn small at the right. */
+.sprint {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-6);
+}
+
+.sprintWords {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.sprintName {
+  font-size: var(--text-strong);
+  font-weight: 600;
+}
+
+.sprintFacts {
+  color: var(--ink-soft);
+  font-family: var(--font-mono);
+  font-size: var(--text-small);
+  white-space: pre;
+}
+
+.sprintGoal {
+  margin-top: var(--space-1);
+  color: var(--ink-soft);
+}
+
+/* Tables with hairlines only. */
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-small);
+}
+
+.table th {
+  padding: 0 var(--space-2) var(--space-1) 0;
+  text-align: left;
+}
+
+.table td {
+  padding: 6px var(--space-2) 6px 0;
+  border-top: 1px solid var(--rule);
+  vertical-align: baseline;
+}
+
+.table tr {
+  break-inside: avoid;
+}
+
+.table tfoot td {
+  border-top: 1px solid var(--rule-strong);
+  font-weight: 600;
+}
+
+.keyColumn {
+  width: 72px;
+}
+
+.whoColumn {
+  width: 132px;
+}
+
+.factColumn {
+  width: 104px;
+}
+
+.nameColumn {
+  width: 164px;
+}
+
+.countColumn {
+  width: 72px;
+}
+
+.table th.countColumn,
+.count {
+  text-align: right;
+}
+
+.key,
+.fact,
+.count {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.key,
+.fact {
+  color: var(--ink-soft);
+}
+
+.soft {
+  color: var(--ink-soft);
+}
+
+.more {
+  color: var(--ink-faint);
+  font-size: var(--text-small);
+}
+
+.foot {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding-top: var(--space-3);
+  margin-top: auto;
+  border-top: 1px solid var(--rule);
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+}
+
+/* Beside the page: the button, a quiet line, and the parts with a check each. */
+.side {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: var(--space-4);
+  width: 208px;
+}
+
+.sideNote {
+  color: var(--ink-faint);
+  font-size: var(--text-small);
+}
+
+.parts {
+  display: flex;
+  flex-direction: column;
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--rule);
+}
+
+.parts h2 {
+  margin-bottom: var(--space-2);
+}
+
+.partChoice {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 28px;
+  padding: 0 var(--space-1);
+  margin: 0 calc(-1 * var(--space-1));
+  border-radius: var(--radius-control);
+  color: var(--ink-faint);
+  text-align: left;
+  transition:
+    background-color 100ms ease,
+    color 100ms ease;
+}
+
+.partChoice:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+
+.partOn {
+  color: var(--ink);
+}
+
+.box {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--rule-strong);
+  border-radius: 3px;
+}
+
+.partOn .box {
+  border-color: var(--ink-soft);
+}
+
+.box svg {
+  width: 11px;
+  height: 11px;
+  stroke-width: 2.25;
+}
+
+/* The copy that is printed is not seen on the screen. */
+.printCopy {
+  display: none;
+}
+
+/*
+ * On paper, the page alone: everything else in the document is left out,
+ * the page loses its shadow and its fixed size, and the printer's margins
+ * are the margins. A part is not cut in the middle where it can be avoided.
+ */
+@media print {
+  :global(html),
+  :global(body) {
+    height: auto;
+    overflow: visible;
+    background: none;
+  }
+
+  :global(body) > :global(*):not(.printCopy) {
+    display: none !important;
+  }
+
+  .printCopy {
+    display: block;
+  }
+
+  .printCopy .sheet {
+    width: auto;
+    min-height: 0;
+    padding: 0;
+    background: none;
+    box-shadow: none;
+  }
+
+  .printCopy .foot {
+    margin-top: var(--space-6);
+  }
+}

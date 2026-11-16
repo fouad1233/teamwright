@@ -299,6 +299,33 @@
 }
 
 /*
+ * A sheet that is paper in both themes: the page of a report, which is
+ * printed (`data-paper` on the sheet). At night the ground around it stays
+ * dark and the page stays paper, ink on it. The values are those of paper
+ * above; only the ones a page of ink and hairlines uses are repeated.
+ */
+[data-paper] {
+  color-scheme: light;
+
+  --ground: #ece5d7;
+  --surface: #faf7f0;
+  --surface-raised: #fffdf8;
+  --rule: rgb(18 16 14 / 11%);
+  --rule-strong: rgb(18 16 14 / 22%);
+  --hover: rgb(18 16 14 / 5%);
+  --pressed: rgb(18 16 14 / 9%);
+  --ink: #12100e;
+  --ink-soft: #4b4036;
+  --ink-faint: #6b5f50;
+  --ink-inverse: #e8e0d0;
+  --brass: #a07a35;
+  --brass-text: #6f5220;
+  --brass-soft: rgb(160 122 53 / 14%);
+
+  color: var(--ink);
+}
+
+/*
  * In a wide window the people of the office are drawn at three times
  * rather than two (decision 0019), and the aisles and the band of shared
  * places deepen in proportion, so that nobody walks over a word.
