@@ -1,0 +1,360 @@
+/*
+ * The files of a project: the folders down a narrow column at the left,
+ * what lies in the chosen one in a ruled sheet at the right, the way a
+ * drawing register lists its sheets. Nothing is coloured: a mark beside a
+ * name says what it is, in the ink of the text.
+ */
+.files {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+}
+
+/* The folders of the project. */
+.roots {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 1px;
+  width: 232px;
+  padding: var(--space-4) var(--space-3) var(--space-4) var(--space-5);
+  overflow-y: auto;
+  border-right: 1px solid var(--rule);
+}
+
+.rootsHeading {
+  margin: 0;
+  padding: var(--space-3) var(--space-2) var(--space-2);
+}
+
+.rootsHeading:first-child {
+  padding-top: 0;
+}
+
+.root {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 30px;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-control);
+  color: var(--ink-soft);
+  text-align: left;
+  transition:
+    background-color var(--duration-quick) ease,
+    color var(--duration-quick) ease;
+}
+
+.root svg {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  color: var(--ink-faint);
+}
+
+.root:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+
+.chosenRoot {
+  background: var(--hover);
+  box-shadow: inset 2px 0 var(--brass);
+  color: var(--ink);
+}
+
+.rootName {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.manageRoots {
+  align-self: flex-start;
+  margin-top: var(--space-3);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-control);
+  color: var(--ink-faint);
+  font-size: var(--text-small);
+  transition: color var(--duration-quick) ease;
+}
+
+.manageRoots:hover {
+  color: var(--ink);
+}
+
+/* What lies in the chosen folder. */
+.listing {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* The line above the sheet: where the manager is, and the tools. */
+.bar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  height: 48px;
+  padding: 0 var(--space-4) 0 var(--space-5);
+}
+
+.crumbs {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  list-style: none;
+}
+
+.crumb {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.slash {
+  margin: 0 2px;
+  color: var(--ink-faint);
+}
+
+.crumbButton {
+  max-width: 220px;
+  padding: 2px var(--space-1);
+  overflow: hidden;
+  border-radius: var(--radius-control);
+  color: var(--ink-soft);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition:
+    background-color var(--duration-quick) ease,
+    color var(--duration-quick) ease;
+}
+
+.crumbButton:not(:disabled):hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+
+.here {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.crumbButton:disabled {
+  cursor: default;
+}
+
+.tools {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.narrow {
+  width: 200px;
+  height: 28px;
+  margin-right: var(--space-2);
+  font-size: var(--text-small);
+}
+
+.tool svg {
+  width: 14px;
+  height: 14px;
+}
+
+.scroller {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scroll-padding-top: 36px;
+}
+
+.grid {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: fixed;
+  font-variant-numeric: tabular-nums;
+}
+
+.sizeColumn {
+  width: 112px;
+}
+
+.changedColumn {
+  width: 148px;
+}
+
+.menuColumn {
+  width: 56px;
+}
+
+.grid thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  height: 32px;
+  padding: 0 var(--space-3);
+  border-bottom: 1px solid var(--rule-strong);
+  background: var(--ground);
+  text-align: left;
+}
+
+.grid tr > :first-child {
+  padding-left: var(--space-5);
+}
+
+.grid tr > :last-child {
+  padding-right: var(--space-4);
+}
+
+.row {
+  cursor: default;
+}
+
+.row:hover > td {
+  background: var(--hover);
+}
+
+.row:focus {
+  outline: none;
+}
+
+/* The row the keyboard stands on is held by a gilt edge and a ring. */
+.row:focus-visible > td {
+  background: var(--hover);
+}
+
+.row:focus-visible > td:first-child {
+  box-shadow: inset 2px 0 var(--brass);
+}
+
+.row:focus-visible {
+  outline: 2px solid var(--brass);
+  outline-offset: -2px;
+}
+
+.row > td {
+  height: 34px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: middle;
+}
+
+.nameCell {
+  padding-right: var(--space-3);
+}
+
+.nameLine {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.mark {
+  display: flex;
+  flex: none;
+  color: var(--ink-faint);
+}
+
+.mark svg {
+  width: 14px;
+  height: 14px;
+  stroke-width: 1.75;
+}
+
+.name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.folderName {
+  font-weight: 500;
+}
+
+.linkRow .name {
+  color: var(--ink-faint);
+  font-style: italic;
+}
+
+.cell {
+  padding: 0 var(--space-3);
+  overflow: hidden;
+  color: var(--ink-soft);
+  font-size: var(--text-small);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.figure {
+  font-family: var(--font-mono);
+  text-align: right;
+}
+
+.grid thead th.figure {
+  text-align: right;
+}
+
+.menuCell {
+  text-align: right;
+}
+
+/* The menu of a row shows under the pointer or the keyboard, so that the
+   sheet stays quiet. */
+.rowMenu {
+  opacity: 0;
+  transition: opacity var(--duration-quick) ease;
+}
+
+.rowMenu svg {
+  width: 14px;
+  height: 14px;
+}
+
+.row:hover .rowMenu,
+.row:focus-within .rowMenu,
+.rowMenu[data-state='open'] {
+  opacity: 1;
+}
+
+.note {
+  max-width: 60ch;
+  margin: 0;
+  padding: var(--space-4) var(--space-5);
+  color: var(--ink-faint);
+  font-size: var(--text-small);
+}
+
+/* A project whose folders hold nothing yet. */
+.empty {
+  max-width: 60ch;
+  padding: var(--space-6) var(--space-5);
+}
+
+.emptyLead {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-strong);
+  font-weight: 600;
+}
+
+.emptyNote {
+  margin: 0;
+  color: var(--ink-soft);
+  line-height: 1.55;
+}
+
+.emptyActions {
+  margin-top: var(--space-4);
+}

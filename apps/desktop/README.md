@@ -314,6 +314,7 @@ src/
     embed/            The Embed view: one https address shown in a sandboxed frame, under a thin bar
     form/             The Form view: a form set like a printed sheet, which makes a task when it is sent
     gallery/          The Gallery view: the tasks as cards with a picture the view keeps, in three sizes
+    files/            The Files view: what lies in the folders of the project, a quiet table to walk, open and show
     tasks/            The task panel, the list, badges, the fold of subtasks, task logic
     team/             The team: avatars, the Team view, adding and changing a member
     office/           The office: the team at work, drawn as a workshop in plan
