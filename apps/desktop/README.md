@@ -239,6 +239,7 @@ src/
     mindmap/          The Mind map view: the project, its areas, tasks and subtasks as a tree that folds
     activity/         The Activity view: the log of the project, newest first, by day
     doc/              The Doc view: a page of Markdown the view keeps, read like a page of a book
+    chat/             The Chat view: the talk with the specialists and the Advisor that is not about a task
     embed/            The Embed view: one https address shown in a sandboxed frame, under a thin bar
     form/             The Form view: a form set like a printed sheet, which makes a task when it is sent
     gallery/          The Gallery view: the tasks as cards with a picture the view keeps, in three sizes

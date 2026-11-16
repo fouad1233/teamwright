@@ -1,0 +1,187 @@
+/*
+ * The chat is one column of reading measure in the middle of the view: the
+ * talk above, which scrolls, and the field at the foot, set off by a
+ * hairline. The turns are the program's own; what is the chat's is the
+ * quiet rule over each run of them.
+ */
+.view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.talk {
+  flex: 1;
+  min-height: 0;
+  padding: var(--space-6) var(--space-5) var(--space-5);
+  overflow: auto;
+}
+
+.column {
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.empty {
+  max-width: 60ch;
+  padding: var(--space-6) 0;
+}
+
+.emptyTitle {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-strong);
+  font-weight: 600;
+}
+
+.emptyText {
+  margin: 0;
+  color: var(--ink-soft);
+  line-height: 1.55;
+}
+
+.runs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.run {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* The rule that starts a run: who it is with, then a hairline to the end
+   of the measure, and at the end what is going on. */
+.rule {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--control-height);
+}
+
+.name {
+  flex: none;
+  font-weight: 550;
+}
+
+.began {
+  flex: none;
+  margin-left: var(--space-1);
+}
+
+.line {
+  flex: 1;
+  min-width: var(--space-5);
+  height: 0;
+  margin-left: var(--space-2);
+  border-top: 1px solid var(--rule);
+}
+
+.turns {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* What the Advisor asked or proposed, named in one line with the way there. */
+.outcome {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-3);
+  margin: 0;
+  color: var(--ink-soft);
+}
+
+.link {
+  color: var(--ink-soft);
+  text-decoration: underline;
+  text-decoration-color: var(--rule-strong);
+  text-underline-offset: 3px;
+}
+
+.link:hover {
+  color: var(--ink);
+  text-decoration-color: currentcolor;
+}
+
+.link:focus-visible {
+  border-radius: 2px;
+  outline: 2px solid var(--brass-soft);
+  outline-offset: 2px;
+}
+
+/* The foot: the field to write in. */
+.foot {
+  flex: none;
+  padding: var(--space-4) var(--space-5) var(--space-4);
+  border-top: 1px solid var(--rule);
+  background: var(--ground);
+}
+
+.address {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-2);
+}
+
+.chooser {
+  width: auto;
+  min-width: 220px;
+}
+
+.chosen {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.nobody {
+  color: var(--ink-faint);
+}
+
+.space {
+  flex: 1;
+}
+
+.write {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-2);
+}
+
+.text {
+  flex: 1;
+  min-height: 56px;
+  resize: vertical;
+}
+
+/* What becomes of the message: one quiet line under the field. */
+.state {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 20px;
+  margin: var(--space-2) 0 0;
+  color: var(--ink-faint);
+  font-size: var(--text-small);
+}
+
+.keys {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  letter-spacing: 0.04em;
+}
