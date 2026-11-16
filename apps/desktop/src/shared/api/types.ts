@@ -562,6 +562,8 @@ export interface Turn {
   model: string | null;
   /** The tokens the turn used, all models together, once it has ended. */
   tokens: TokenCounts | null;
+  /** How full the context of the session was after the turn, if the program said. */
+  context: ContextUse | null;
   /** What the specialist asked the manager to decide in this turn, if anything. */
   decision: DecisionRequest | null;
   /** What the Advisor asked the manager in this turn, if anything. */
@@ -605,6 +607,60 @@ export interface Conversation {
   isHere: boolean;
   /** The turns, the oldest first. */
   turns: Turn[];
+  /**
+   * How full the context of the conversation's session is: what its last
+   * turn that reported one says. Nothing while no turn has.
+   */
+  context: ContextUse | null;
+}
+
+/**
+ * How full the context of a session is: what its last request held,
+ * against the window of the model. The session makes room when it is
+ * full, so this can shrink from one turn to the next.
+ */
+export interface ContextUse {
+  /** The tokens the last request held: read, read from the cache and written to it. */
+  held: number;
+  /** The tokens the window of the model has, if the program said. */
+  window: number | null;
+  /** Whether it is nearly full (from 80 % of the window): the session will soon make room. */
+  isNearlyFull: boolean;
+}
+
+/** What one agent, or a group of them, has spent. */
+export interface AgentUsage {
+  /** The tokens of every turn that has ended, by kind. */
+  tokens: TokenCounts;
+  /** Every kind of token together. */
+  allTokens: number;
+  /** How many turns have ended. */
+  turns: number;
+  /** The model the latest turn ran on, once one named it. */
+  lastModel: string | null;
+  /**
+   * How full the context of the agent is: that of its latest conversation.
+   * Nothing for a group, and nothing while that conversation has not said.
+   */
+  context: ContextUse | null;
+}
+
+/** What a member of the team has spent. */
+export interface MemberUsage {
+  memberId: Id;
+  usage: AgentUsage;
+}
+
+/** What a project has spent, and who spent it. */
+export interface ProjectUsage {
+  /** Every member that has had a conversation, the one that spent the most first. */
+  members: MemberUsage[];
+  /** The Advisor, if the project has spoken with it. */
+  advisor: AgentUsage | null;
+  /** The members who have left the team since, together, if they had conversations. */
+  former: AgentUsage | null;
+  /** The whole project. Its context is always nothing. */
+  total: AgentUsage;
 }
 
 /** The dates of a task: when it starts and when it is due. Either may be missing. */

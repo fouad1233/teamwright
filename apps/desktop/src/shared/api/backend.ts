@@ -22,6 +22,7 @@ import type {
   Project,
   ProjectChange,
   ProjectPlaces,
+  ProjectUsage,
   Sprint,
   SprintChanges,
   SprintCompletion,
@@ -324,6 +325,12 @@ export interface Backend {
    * approving and stopping are refused elsewhere (`runs_elsewhere`).
    */
   listConversations(projectId: Id): Promise<Conversation[]>;
+  /**
+   * What the specialists and the Advisor of a project have spent, in tokens
+   * of every kind, and how full the context of each is. Worked out from the
+   * turns; it changes when a turn ends.
+   */
+  projectUsage(projectId: Id): Promise<ProjectUsage>;
   /**
    * Lets the AI specialist a task is given to start on it. The specialist
    * gets a brief that the program writes from the task, and the task moves

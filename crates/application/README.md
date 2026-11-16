@@ -397,6 +397,16 @@ full the context of the session is after a turn arrives as
 held, and the window of its model if the program named it), and is kept on
 the turn (`Turn::record_context`, the domain's `ContextUse`).
 
+`WorkService::usage` (the pure `usage_of` in `usage.rs`) says what a
+project has spent: for every member that had a conversation, the one that
+spent the most first, for the Advisor and for those who left (together),
+and for the whole project, the tokens of the turns that ended by kind, how
+many turns ended, and the model of the latest turn. The context of an agent
+is that of its latest conversation (the one started last), as its last turn
+that reported one says: nothing while that conversation has not reported
+one, even if an older one did, because the latest is the session that goes
+on. Groups have no context.
+
 ## Keeping computers in step
 
 `SyncService` keeps the computers of one manager in step through a folder

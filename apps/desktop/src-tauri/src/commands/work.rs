@@ -10,7 +10,7 @@ use teamwright_application::ApprovedProposal;
 
 use crate::dto::{
     AgentProgramDto, ApprovedProposalInput, ConversationDto, DecisionAnswerInput,
-    InterviewAnswerInput, NewAdviceInput, parse_effort, parse_id,
+    InterviewAnswerInput, NewAdviceInput, ProjectUsageDto, parse_effort, parse_id,
 };
 use crate::error::CommandError;
 use crate::state::AppState;
@@ -34,6 +34,18 @@ pub async fn list_conversations(
         .iter()
         .map(|conversation| ConversationDto::of(conversation, state.this_computer))
         .collect())
+}
+
+/// What the specialists and the Advisor of a project have spent, and how
+/// full the context of each is.
+#[tauri::command]
+pub async fn project_usage(
+    state: State<'_, AppState>,
+    project_id: String,
+) -> Result<ProjectUsageDto, CommandError> {
+    Ok(ProjectUsageDto::from(
+        state.work.usage(parse_id(&project_id)?)?,
+    ))
 }
 
 /// Starts the work on a task: the specialist it is given to gets its brief.

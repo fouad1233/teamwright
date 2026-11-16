@@ -221,6 +221,7 @@ export function scriptForBrief(): Script {
     endsAfter: 600,
     answer: 'I have asked three questions and wait for your answers.',
     tokens: { input: 24, output: 1180, cacheRead: 14_000, cacheWritten: 8200 },
+    contextAdded: 31_500,
     interviews: structuredClone(QUESTIONS),
   };
 }
@@ -256,6 +257,9 @@ export function scriptForAnswers(team: readonly string[] = []): Script {
     endsAfter: 900,
     answer: `${whom ?? 'I propose'} twelve tasks. Ordering the parts, assembling and testing are yours. Change what does not fit, and approve it when it does.`,
     tokens: { input: 30, output: 2240, cacheRead: 16_700, cacheWritten: 2600 },
+    // It reads the documents of the project before it proposes, which fills
+    // most of its window.
+    contextAdded: 137_200,
     proposes: proposal,
   };
 }
@@ -279,6 +283,7 @@ export function scriptForChange(previous: NewProposal | undefined): Script {
       ? 'This is the demo, so your words were not read. To show a changed proposal, here is one with a smaller team.'
       : 'This is the demo, so there is nobody to answer. In the desktop program, the Advisor would go on from your message here.',
     tokens: { input: 18, output: 900, cacheRead: 19_300, cacheWritten: 700 },
+    contextAdded: 9800,
     proposes: smaller,
   };
 }

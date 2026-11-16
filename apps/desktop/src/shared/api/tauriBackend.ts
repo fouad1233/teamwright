@@ -27,6 +27,7 @@ import type {
   Project,
   ProjectChange,
   ProjectPlaces,
+  ProjectUsage,
   Sprint,
   SprintChanges,
   SprintCompletion,
@@ -325,6 +326,10 @@ export class TauriBackend implements Backend {
 
   listConversations(projectId: Id): Promise<Conversation[]> {
     return call('list_conversations', { projectId });
+  }
+
+  projectUsage(projectId: Id): Promise<ProjectUsage> {
+    return call('project_usage', { projectId });
   }
 
   startWork(taskId: Id): Promise<Conversation> {

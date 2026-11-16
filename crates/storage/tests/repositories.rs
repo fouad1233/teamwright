@@ -1089,6 +1089,39 @@ fn a_finished_turn_keeps_its_tokens_and_a_tool_its_outcome() {
     assert!(store.conversations.running_turns().unwrap().is_empty());
 }
 
+#[test]
+fn a_turn_keeps_how_full_its_context_was_with_or_without_a_window() {
+    let store = Store::in_memory();
+    let (_, _, _, conversation) = stored_conversation(&store);
+    let ended = |held, window, minute| {
+        let mut turn = running_turn(&conversation, "Draw the schematic", moment(minute));
+        turn.record_context(teamwright_domain::ContextUse { held, window })
+            .unwrap();
+        turn.finish("Report.", tokens(), moment(minute + 1))
+            .unwrap();
+        turn
+    };
+    let with_window = ended(38_200, Some(200_000), 9);
+    let without_window = ended(41_003, None, 12);
+    let without_context = running_turn(&conversation, "Check it", moment(15));
+
+    for turn in [&with_window, &without_window, &without_context] {
+        store.conversations.save_turn(turn).unwrap();
+    }
+
+    let contexts: Vec<_> = store
+        .conversations
+        .turns_of(conversation.id())
+        .unwrap()
+        .iter()
+        .map(Turn::context)
+        .collect();
+    assert_eq!(
+        contexts,
+        [with_window.context(), without_window.context(), None]
+    );
+}
+
 /// A finished turn that asked the manager which battery to use.
 fn turn_that_asked(conversation: &Conversation) -> Turn {
     let mut turn = running_turn(conversation, "Choose the battery", moment(9));

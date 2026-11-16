@@ -48,6 +48,7 @@ function turn(overrides: Partial<Turn> = {}): Turn {
     decision: null,
     interview: null,
     proposal: null,
+    context: null,
     ...overrides,
   };
 }
@@ -63,6 +64,7 @@ function conversation(overrides: Partial<Conversation> = {}): Conversation {
     homeComputer: 'desk',
     isHere: true,
     turns: [],
+    context: null,
     ...overrides,
   };
 }

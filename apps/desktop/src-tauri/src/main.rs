@@ -102,6 +102,7 @@ fn main() -> ExitCode {
             commands::team::remove_member,
             commands::work::agent_program,
             commands::work::list_conversations,
+            commands::work::project_usage,
             commands::work::start_work,
             commands::work::reply,
             commands::work::ask,

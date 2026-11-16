@@ -215,6 +215,7 @@ describe('lastNewsOf', () => {
     decision: null,
     interview: null,
     proposal: null,
+    context: null,
   };
 
   it('is the latest step of a running turn', () => {

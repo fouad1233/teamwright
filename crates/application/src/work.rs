@@ -31,6 +31,7 @@ use crate::ports::{
     AreaRepository, Clock, ConversationRepository, FileSystem, MemberRepository, PlacesRepository,
     PlanningRepository, ProjectFolders, ProjectRepository, TaskRepository, WorkListener,
 };
+use crate::usage::{ProjectUsage, usage_of};
 
 mod advisor;
 
@@ -269,6 +270,16 @@ impl WorkService {
                 })
             })
             .collect()
+    }
+
+    /// What the specialists and the Advisor of a project have spent, and
+    /// how full the context of each is.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if there is no such project or if storage fails.
+    pub fn usage(&self, project_id: ProjectId) -> Result<ProjectUsage, ApplicationError> {
+        Ok(usage_of(&self.list_for_project(project_id)?))
     }
 
     /// Starts the work on a task: opens a conversation with the specialist

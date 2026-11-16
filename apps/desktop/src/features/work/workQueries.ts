@@ -27,6 +27,11 @@ function conversationsKey(projectId: Id) {
   return ['conversations', projectId] as const;
 }
 
+/** The name under which what a project has spent in tokens is cached. */
+function usageKey(projectId: Id) {
+  return ['usage', projectId] as const;
+}
+
 /** The name under which the conversations that wait for the manager are cached. */
 const WAITING_KEY = ['conversations-waiting'] as const;
 
@@ -86,6 +91,7 @@ export function useConversations(projectId: Id) {
       const known = before.find((other) => other.id === conversation.id);
       if (hasTurnStartedOrEnded(known, conversation)) {
         void queryClient.invalidateQueries({ queryKey: tasksKey(projectId) });
+        void queryClient.invalidateQueries({ queryKey: usageKey(projectId) });
       }
     });
   }, [backend, queryClient, projectId]);
@@ -93,6 +99,19 @@ export function useConversations(projectId: Id) {
   return useQuery({
     queryKey: conversationsKey(projectId),
     queryFn: () => backend.listConversations(projectId),
+  });
+}
+
+/**
+ * What the specialists and the Advisor of a project have spent, and how
+ * full the context of each is. It changes only when a turn starts or ends,
+ * and is asked for again then, while the conversations are watched.
+ */
+export function useProjectUsage(projectId: Id) {
+  const backend = useBackend();
+  return useQuery({
+    queryKey: usageKey(projectId),
+    queryFn: () => backend.projectUsage(projectId),
   });
 }
 
@@ -147,6 +166,7 @@ export function useWorkCommands(projectId: Id): WorkCommands {
         );
         await Promise.all([
           queryClient.invalidateQueries({ queryKey: tasksKey(projectId) }),
+          queryClient.invalidateQueries({ queryKey: usageKey(projectId) }),
           queryClient.invalidateQueries({ queryKey: WAITING_KEY }),
         ]);
         return conversation;

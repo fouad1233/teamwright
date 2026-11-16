@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use teamwright_application::{ConversationRepository, StorageError};
 use teamwright_domain::{
-    Conversation, ConversationId, ConversationSnapshot, DecisionAnswer, DecisionOption,
+    ContextUse, Conversation, ConversationId, ConversationSnapshot, DecisionAnswer, DecisionOption,
     DecisionRequest, DecisionSnapshot, DomainError, MemberProfile, ModelName, ProjectId, Step,
     StepContent, StepKind, TokenCounts, Turn, TurnSnapshot,
 };
@@ -36,7 +36,7 @@ const CONVERSATION_COLUMNS: &str = "id, project_id, member_id, task_id, started_
 
 /// The columns of the `turns` table that every query reads.
 const TURN_COLUMNS: &str = "id, conversation_id, request, origin, state, started_at, ended_at, \
-     answer, failure, model, input_tokens, output_tokens, cache_read_tokens, cache_written_tokens";
+     answer, failure, model, input_tokens, output_tokens, cache_read_tokens, cache_written_tokens, \n     context_tokens, context_window_tokens";
 
 /// The columns of the `turn_steps` table that every query reads.
 const STEP_COLUMNS: &str = "turn_id, position, at, kind, text, tool_use_id, tool, summary, outcome";
@@ -67,12 +67,13 @@ const UPSERT_CONVERSATION: &str = "
 const UPSERT_TURN: &str = "
     INSERT INTO turns (
         id, conversation_id, request, origin, state, started_at, ended_at, answer, failure,
-        model, input_tokens, output_tokens, cache_read_tokens, cache_written_tokens
+        model, input_tokens, output_tokens, cache_read_tokens, cache_written_tokens,
+        context_tokens, context_window_tokens
     )
     VALUES (
         :id, :conversation_id, :request, :origin, :state, :started_at, :ended_at, :answer,
         :failure, :model, :input_tokens, :output_tokens, :cache_read_tokens,
-        :cache_written_tokens
+        :cache_written_tokens, :context_tokens, :context_window_tokens
     )
     ON CONFLICT (id) DO UPDATE SET
         conversation_id = excluded.conversation_id,
@@ -87,7 +88,9 @@ const UPSERT_TURN: &str = "
         input_tokens = excluded.input_tokens,
         output_tokens = excluded.output_tokens,
         cache_read_tokens = excluded.cache_read_tokens,
-        cache_written_tokens = excluded.cache_written_tokens";
+        cache_written_tokens = excluded.cache_written_tokens,
+        context_tokens = excluded.context_tokens,
+        context_window_tokens = excluded.context_window_tokens";
 
 const UPSERT_STEP: &str = "
     INSERT INTO turn_steps (
@@ -251,6 +254,13 @@ struct TurnRecord {
     output_tokens: Option<i64>,
     cache_read_tokens: Option<i64>,
     cache_written_tokens: Option<i64>,
+    /// The tokens the context of the session held after the turn. A turn
+    /// logged before version 16 has none.
+    #[serde(default)]
+    context_tokens: Option<i64>,
+    /// The tokens the window of the model has, if the program said.
+    #[serde(default)]
+    context_window_tokens: Option<i64>,
 }
 
 impl TurnRecord {
@@ -273,6 +283,11 @@ impl TurnRecord {
             output_tokens: count(|tokens| tokens.output),
             cache_read_tokens: count(|tokens| tokens.cache_read),
             cache_written_tokens: count(|tokens| tokens.cache_written),
+            context_tokens: turn.context().map(|context| stored_count(context.held)),
+            context_window_tokens: turn
+                .context()
+                .and_then(|context| context.window)
+                .map(stored_count),
         }
     }
 
@@ -293,6 +308,8 @@ impl TurnRecord {
             output_tokens: row.get("output_tokens")?,
             cache_read_tokens: row.get("cache_read_tokens")?,
             cache_written_tokens: row.get("cache_written_tokens")?,
+            context_tokens: row.get("context_tokens")?,
+            context_window_tokens: row.get("context_window_tokens")?,
         })
     }
 
@@ -306,6 +323,7 @@ impl TurnRecord {
         proposal: Option<ProposalRecord>,
     ) -> Result<Turn, DatabaseError> {
         let tokens = self.tokens()?;
+        let context = self.context()?;
         let steps = steps
             .into_iter()
             .map(StepRecord::into_step)
@@ -327,11 +345,27 @@ impl TurnRecord {
             failure: self.failure,
             model: self.model,
             tokens,
-            context: None,
+            context,
             decision: decision.map(DecisionRecord::into_decision).transpose()?,
             interview: interview.map(InterviewRecord::into_interview).transpose()?,
             proposal: proposal.map(ProposalRecord::into_proposal).transpose()?,
         }))
+    }
+
+    /// Reads how full the context was from its two columns. A window
+    /// without what was held is damaged.
+    fn context(&self) -> Result<Option<ContextUse>, DatabaseError> {
+        match (self.context_tokens, self.context_window_tokens) {
+            (None, None) => Ok(None),
+            (Some(held), window) => Ok(Some(ContextUse {
+                held: count_from_store(held)?,
+                window: window.map(count_from_store).transpose()?,
+            })),
+            (None, Some(_)) => Err(DatabaseError::Damaged(format!(
+                "the turn {} has the window of its context but not what it held",
+                self.id
+            ))),
+        }
     }
 
     /// Reads the tokens from their four columns.
@@ -954,6 +988,8 @@ fn write_turn(transaction: &Transaction<'_>, record: &TurnRecord) -> Result<(), 
             ":output_tokens": record.output_tokens,
             ":cache_read_tokens": record.cache_read_tokens,
             ":cache_written_tokens": record.cache_written_tokens,
+            ":context_tokens": record.context_tokens,
+            ":context_window_tokens": record.context_window_tokens,
         },
     )?;
     Ok(())

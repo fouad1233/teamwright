@@ -109,6 +109,7 @@ function turn(overrides: Partial<Turn> & Pick<Turn, 'id'>): Turn {
     decision: null,
     interview: null,
     proposal: null,
+    context: null,
     ...overrides,
   };
 }
@@ -123,6 +124,7 @@ function conversation(overrides: Partial<Conversation> & Pick<Conversation, 'id'
     homeComputer: 'desk',
     isHere: true,
     turns: [],
+    context: null,
     ...overrides,
   };
 }

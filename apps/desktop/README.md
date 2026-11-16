@@ -109,6 +109,15 @@ The shell is where the work of an AI specialist meets the outside world
   member of the team), and `main.rs` then serves those tools on standard
   input and output without a window and without the database. What is asked
   or proposed arrives in the events of the turn, like every other step.
+- **What the agents spent.** `project_usage` answers with what every member,
+  the Advisor and those who left have spent (`ProjectUsageDto`: the tokens
+  by kind and in all, the turns that ended, the model of the latest turn,
+  and the context of the agent's latest conversation), worked out by
+  `teamwright_application::usage_of`. A turn and a conversation carry their
+  `context` (`ContextDto`: `held`, `window` or null, `isNearlyFull`). The
+  interface asks for the usage again when a turn starts or ends; the demo
+  backend stands in with `shared/api/demo/usage.ts`, which follows the
+  same rules.
 - **Planning with the Advisor.** The commands `advise`, `answer_interview`
   and `approve_proposal` in `commands/work.rs` carry it out; `reply` and
   `list_conversations_waiting` serve conversations with the Advisor too. In

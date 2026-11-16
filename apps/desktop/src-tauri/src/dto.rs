@@ -10,17 +10,17 @@ use std::str::FromStr;
 use chrono::SecondsFormat;
 use serde::{Deserialize, Serialize};
 use teamwright_application::{
-    Acceptance, AgentProgram, ApprovedMember, ApprovedOwner, ApprovedProposal, ApprovedTask,
-    ConversationWithTurns, KnownComputer, NewMember, NewProject, NewSprint, NewTask, NewView,
-    ProjectChange, ProjectPlaces, SprintChanges, SprintReport, SprintStart, StatusProperties,
-    SyncNotice, SyncState, WorkflowTemplate,
+    Acceptance, AgentProgram, AgentUsage, ApprovedMember, ApprovedOwner, ApprovedProposal,
+    ApprovedTask, ConversationWithTurns, KnownComputer, NewMember, NewProject, NewSprint, NewTask,
+    NewView, ProjectChange, ProjectPlaces, ProjectUsage, SprintChanges, SprintReport, SprintStart,
+    StatusProperties, SyncNotice, SyncState, WorkflowTemplate,
 };
 use teamwright_domain::{
-    Area, Assignee, CalendarDate, Color, ComputerId, Conversation, DecisionOption, DecisionRequest,
-    DomainError, Effort, Interview, InterviewAnswer, Member, MemberKind, Priority, Project,
-    Proposal, ProposedOwner, Schedule, Sprint, SprintSummary, Status, StatusCategory, Step,
-    StepContent, StoryPoints, Task, TaskChange, TaskChangeKind, Timestamp, TokenCounts, Turn, View,
-    ViewAssignee, ViewFilter, ViewKind,
+    Area, Assignee, CalendarDate, Color, ComputerId, ContextUse, Conversation, DecisionOption,
+    DecisionRequest, DomainError, Effort, Interview, InterviewAnswer, Member, MemberKind, Priority,
+    Project, Proposal, ProposedOwner, Schedule, Sprint, SprintSummary, Status, StatusCategory,
+    Step, StepContent, StoryPoints, Task, TaskChange, TaskChangeKind, Timestamp, TokenCounts, Turn,
+    View, ViewAssignee, ViewFilter, ViewKind, context_of,
 };
 
 use crate::error::CommandError;
@@ -672,6 +672,9 @@ pub struct ConversationDto {
     /// answer, approve or stop.
     is_here: bool,
     turns: Vec<TurnDto>,
+    /// How full the context of the conversation's session is: what its
+    /// last turn that reported one says.
+    context: Option<ContextDto>,
 }
 
 impl ConversationDto {
@@ -688,6 +691,7 @@ impl ConversationDto {
             home_computer: conversation.home_computer().to_string(),
             is_here: conversation.is_at_home_on(this_computer),
             turns: turns.iter().map(TurnDto::from).collect(),
+            context: context_of(turns).map(ContextDto::from),
         }
     }
 
@@ -718,6 +722,7 @@ pub struct TurnDto {
     failure: Option<String>,
     model: Option<String>,
     tokens: Option<TokenCountsDto>,
+    context: Option<ContextDto>,
     decision: Option<DecisionRequestDto>,
     interview: Option<InterviewDto>,
     proposal: Option<ProposalDto>,
@@ -737,6 +742,7 @@ impl From<&Turn> for TurnDto {
             failure: turn.failure().map(str::to_owned),
             model: turn.model().map(str::to_owned),
             tokens: turn.tokens().map(TokenCountsDto::from),
+            context: turn.context().map(ContextDto::from),
             decision: turn.decision().map(DecisionRequestDto::from),
             interview: turn.interview().map(InterviewDto::from),
             proposal: turn.proposal().map(ProposalDto::from),
@@ -1184,6 +1190,88 @@ impl From<TokenCounts> for TokenCountsDto {
             output: tokens.output,
             cache_read: tokens.cache_read,
             cache_written: tokens.cache_written,
+        }
+    }
+}
+
+/// How full the context of a session is, as the interface sees it. Whether
+/// it is nearly full is a rule of the domain, carried so that the interface
+/// does not work it out again.
+#[derive(Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ContextDto {
+    held: u64,
+    window: Option<u64>,
+    is_nearly_full: bool,
+}
+
+impl From<ContextUse> for ContextDto {
+    fn from(context: ContextUse) -> Self {
+        Self {
+            held: context.held,
+            window: context.window,
+            is_nearly_full: context.is_nearly_full(),
+        }
+    }
+}
+
+/// What one agent, or a group of them, has spent, as the interface sees it.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentUsageDto {
+    tokens: TokenCountsDto,
+    /// Every kind of token together.
+    all_tokens: u64,
+    turns: u32,
+    last_model: Option<String>,
+    context: Option<ContextDto>,
+}
+
+impl From<AgentUsage> for AgentUsageDto {
+    fn from(usage: AgentUsage) -> Self {
+        Self {
+            tokens: TokenCountsDto::from(usage.tokens),
+            all_tokens: usage.tokens.all(),
+            turns: usage.turns,
+            last_model: usage.last_model,
+            context: usage.context.map(ContextDto::from),
+        }
+    }
+}
+
+/// What a member of the team has spent, as the interface sees it.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MemberUsageDto {
+    member_id: String,
+    usage: AgentUsageDto,
+}
+
+/// What a project has spent, and who spent it, as the interface sees it.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectUsageDto {
+    /// The one that spent the most first.
+    members: Vec<MemberUsageDto>,
+    advisor: Option<AgentUsageDto>,
+    former: Option<AgentUsageDto>,
+    total: AgentUsageDto,
+}
+
+impl From<ProjectUsage> for ProjectUsageDto {
+    fn from(usage: ProjectUsage) -> Self {
+        Self {
+            members: usage
+                .members
+                .into_iter()
+                .map(|member| MemberUsageDto {
+                    member_id: member.member_id.to_string(),
+                    usage: AgentUsageDto::from(member.usage),
+                })
+                .collect(),
+            advisor: usage.advisor.map(AgentUsageDto::from),
+            former: usage.former.map(AgentUsageDto::from),
+            total: AgentUsageDto::from(usage.total),
         }
     }
 }

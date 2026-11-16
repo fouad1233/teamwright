@@ -168,6 +168,13 @@ involved.
   is logged by the migration: a view state logged before version 15 has no
   `content` and is read as a view without any. A state whose content has
   more than 2 MiB breaks a rule of the domain and is refused.
+- **The context of a turn** (version 16) is the pair of columns
+  `context_tokens` (what the session held after the turn) and
+  `context_window_tokens` (the window of the model) of `turns`, each null
+  where the program did not say, and the same keys of the logged state of
+  a turn. A window without what was held is damaged. Nothing is logged by
+  the migration: a turn state logged before version 16 has neither and is
+  read as a turn without a context.
 - **An approved plan is one transaction.** `SqlitePlanningRepository`
   writes the project (with its next task number), every new member, every
   new task with what it waits for, and the turn with its approved proposal,

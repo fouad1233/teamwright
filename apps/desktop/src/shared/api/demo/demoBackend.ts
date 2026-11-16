@@ -30,6 +30,7 @@ import type {
   Project,
   ProjectChange,
   ProjectPlaces,
+  ProjectUsage,
   ProposedMember,
   ProposedTask,
   Sprint,
@@ -72,6 +73,7 @@ import {
 } from './sprints';
 import { LAPTOP, PretendedSync, THIS_COMPUTER, type SyncTrouble } from './sync';
 import { historyOf, pretendedPastOf, projectHistoryOf } from './taskHistory';
+import { contextAfter, usageOfConversations } from './usage';
 import {
   SIMULATED_MODEL,
   scriptAfterDecision,
@@ -980,6 +982,13 @@ export class DemoBackend implements Backend {
     });
   }
 
+  projectUsage(projectId: Id): Promise<ProjectUsage> {
+    return this.answer(() => {
+      this.requireProject(projectId);
+      return usageOfConversations(this.conversationsOf(projectId));
+    });
+  }
+
   startWork(taskId: Id): Promise<Conversation> {
     return this.answer(() => {
       const task = this.requireTask(taskId);
@@ -1007,6 +1016,7 @@ export class DemoBackend implements Backend {
         homeComputer: THIS_COMPUTER,
         isHere: true,
         turns: [],
+        context: null,
       };
       this.conversations.set(conversation.id, conversation);
       this.beginTurn(
@@ -1122,6 +1132,7 @@ export class DemoBackend implements Backend {
         homeComputer: THIS_COMPUTER,
         isHere: true,
         turns: [],
+        context: null,
       };
       this.conversations.set(conversation.id, conversation);
       this.beginTurn(conversation, brief, 'message', scriptForBrief());
@@ -1318,6 +1329,7 @@ export class DemoBackend implements Backend {
         homeComputer: THIS_COMPUTER,
         isHere: true,
         turns: [],
+        context: null,
       };
       this.conversations.set(conversation.id, conversation);
       this.beginTurn(conversation, text, 'message', scriptForMessage(member));
@@ -1534,6 +1546,7 @@ export class DemoBackend implements Backend {
       homeComputer: LAPTOP,
       isHere: false,
       turns: [],
+      context: null,
     };
     this.conversations.set(conversation.id, conversation);
     this.beginTurn(
@@ -1652,6 +1665,7 @@ export class DemoBackend implements Backend {
       failure: null,
       model: SIMULATED_MODEL,
       tokens: null,
+      context: null,
       decision: null,
       interview: null,
       proposal: null,
@@ -1730,6 +1744,8 @@ export class DemoBackend implements Backend {
     turn.endedAt = this.nowAsText();
     turn.answer = script.answer;
     turn.tokens = script.tokens;
+    turn.context = contextAfter(conversation.context, script.contextAdded);
+    conversation.context = turn.context;
     turn.decision = script.asks ? { ...structuredClone(script.asks), answer: null } : null;
     turn.interview = script.interviews
       ? { questions: structuredClone(script.interviews), answers: null, answeredAt: null }

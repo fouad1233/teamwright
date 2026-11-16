@@ -28,6 +28,7 @@ pub mod sprints;
 pub mod sync;
 pub mod tasks;
 pub mod team;
+pub mod usage;
 pub mod views;
 pub mod work;
 pub mod workbook;
@@ -59,6 +60,7 @@ pub use sync::{
 };
 pub use tasks::{HistoryEntry, MOST_PROJECT_CHANGES, NewTask, ProjectChange, TaskService};
 pub use team::{NewMember, TeamService};
+pub use usage::{AgentUsage, MemberUsage, ProjectUsage, usage_of};
 pub use views::{NewView, ViewService};
 pub use work::{
     AgentProgram, AgentProgramState, ApprovedMember, ApprovedOwner, ApprovedProposal, ApprovedTask,

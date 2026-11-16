@@ -25,6 +25,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("schema/0013_views.sql"),
     include_str!("schema/0014_areas.sql"),
     include_str!("schema/0015_view_content.sql"),
+    include_str!("schema/0016_turn_context.sql"),
 ];
 
 /// Applies the migrations a database has not seen yet. Each one runs in its
