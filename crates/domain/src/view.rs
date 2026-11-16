@@ -58,6 +58,8 @@ pub enum ViewKind {
     Gallery,
     /// Figures and charts the manager chooses.
     Report,
+    /// What lies in the folders of the project on this computer.
+    Files,
 }
 
 text_enum!(ViewKind, kind = "view kind", {
@@ -81,6 +83,7 @@ text_enum!(ViewKind, kind = "view kind", {
     Form => "form",
     Gallery => "gallery",
     Report => "report",
+    Files => "files",
 });
 
 impl ViewKind {
@@ -108,6 +111,7 @@ impl ViewKind {
             Self::Form => "Form",
             Self::Gallery => "Gallery",
             Self::Report => "Report",
+            Self::Files => "Files",
         })
     }
 
@@ -131,7 +135,8 @@ impl ViewKind {
     /// Whether a view of this kind can be filtered: one that shows some of
     /// the tasks of the project. A backlog and a dashboard show every task;
     /// an activity, a whiteboard, a chat, a document, an embedded page, a
-    /// form and a report are not a set of tasks at all.
+    /// form, a report and the files of the project are not a set of tasks
+    /// at all.
     #[must_use]
     pub const fn can_be_filtered(self) -> bool {
         match self {
@@ -154,7 +159,8 @@ impl ViewKind {
             | Self::Doc
             | Self::Embed
             | Self::Form
-            | Self::Report => false,
+            | Self::Report
+            | Self::Files => false,
         }
     }
 

@@ -40,6 +40,7 @@ const NAME_OF_KIND: Record<ViewKind, string> = {
   form: 'Form',
   gallery: 'Gallery',
   report: 'Report',
+  files: 'Files',
 };
 
 /** The kinds of which a project has at most one view. */

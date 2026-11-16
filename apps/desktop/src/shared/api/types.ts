@@ -268,7 +268,8 @@ export type ViewKind =
   | 'embed'
   | 'form'
   | 'gallery'
-  | 'report';
+  | 'report'
+  | 'files';
 
 /**
  * Whose tasks a view shows: everybody's, the manager's, those of one member

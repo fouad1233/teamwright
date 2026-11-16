@@ -127,3 +127,22 @@ storage, both halves of the wire and the demo backend know all twenty.
 - A view of the kind `team` is named "People". A project already has a
   place called Team, where its members are kept, and two tabs with one
   name and two meanings would mislead. The word on the wire stays `team`.
+
+## Note of 16 November 2026: the files of a project
+
+The owner asked for every kind of view the tool they use has, and that
+tool has a "collection" of files. In Teamwright a project already has
+folders on this computer, where its specialists work, so a twenty-first
+kind, `files` (named "Files"), shows what lies in them.
+
+- It is not a set of tasks, so it cannot be filtered. A project may have
+  several, and a new project does not start with one.
+- What it shows is read from the disk each time; nothing of it is stored
+  in the database, and nothing is synced. Its content keeps only what the
+  manager chose: the folder last opened and whether hidden names show.
+- A path that comes from the interface is checked before it is read or
+  handed to the system: it stays inside the folder of the project, also
+  after links are resolved. A link that leads outside is listed, not
+  followed.
+- The disk is not watched. The view reads again when it is shown and when
+  the manager asks it to.

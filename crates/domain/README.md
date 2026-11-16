@@ -59,10 +59,10 @@ done with them. It does no input or output.
   The refusals about the state of a sprint have codes of their own
   (`DomainError::code`): `sprint_completed`, `sprint_active`,
   `sprint_not_active`.
-- A view is of one of twenty kinds (`ViewKind`): board, backlog, list,
+- A view is of one of twenty-one kinds (`ViewKind`): board, backlog, list,
   Gantt chart, calendar, dashboard, timeline, table, workload, team,
-  activity, mind map, map, whiteboard, chat, doc, embed, form, gallery and
-  report. A project has at most one backlog and one dashboard
+  activity, mind map, map, whiteboard, chat, doc, embed, form, gallery,
+  report and files. A project has at most one backlog and one dashboard
   (`is_single`). Its name has at most 40 characters; a view named after its
   kind whose name is taken gets the first free number from 2 on, whatever
   the capitals. Only the kinds that show some of the tasks can be filtered
