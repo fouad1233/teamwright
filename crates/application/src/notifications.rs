@@ -146,7 +146,10 @@ pub fn notification_of(event: &ProjectEvent) -> Option<Notification> {
                 first_words(reason)
             },
         ),
-        Happening::SprintStarted { .. } | Happening::SprintCompleted { .. } => return None,
+        Happening::TaskCreated { .. }
+        | Happening::TaskStatusChanged { .. }
+        | Happening::SprintStarted { .. }
+        | Happening::SprintCompleted { .. } => return None,
     };
     Some(Notification { kind, title, body })
 }
@@ -358,6 +361,8 @@ mod tests {
                 task_id: TaskId::generate(),
                 reference: "SH-4".to_owned(),
                 title: "Draw the schematic".to_owned(),
+                status: None,
+                assignee: None,
             },
             report: "Done.".to_owned(),
         })

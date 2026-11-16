@@ -14,8 +14,8 @@
 //! the events of a sprint after the manager started or completed one.
 
 use teamwright_domain::{
-    Conversation, ConversationId, Member, MemberId, Project, ProjectId, Sprint, SprintId,
-    SprintUnit, Task, TaskId, Timestamp, Turn, TurnState,
+    Assignee, Conversation, ConversationId, Member, MemberId, Project, ProjectId, Sprint, SprintId,
+    SprintUnit, Status, StatusCategory, Task, TaskId, Timestamp, Turn, TurnState,
 };
 
 use crate::work::reference_of;
@@ -72,6 +72,19 @@ pub enum Happening {
         task: Option<TaskOfEvent>,
         /// Why, in the words of the program.
         reason: String,
+    },
+    /// A task was opened, by the manager or from a plan.
+    TaskCreated {
+        /// The task, as it was opened.
+        task: TaskOfEvent,
+    },
+    /// A task moved to another status. A move within the same status, to
+    /// order the cards, is not an event.
+    TaskStatusChanged {
+        /// The task, in its new status.
+        task: TaskOfEvent,
+        /// The status it left.
+        from: StatusOfEvent,
     },
     /// The manager started a sprint.
     SprintStarted {
@@ -132,16 +145,56 @@ pub struct TaskOfEvent {
     pub reference: String,
     /// Its title.
     pub title: String,
+    /// Its status, or nothing if the workflow no longer has it.
+    pub status: Option<StatusOfEvent>,
+    /// The name of who it is assigned to, or nothing if nobody is, or if
+    /// the name is not known where the event was found.
+    pub assignee: Option<String>,
 }
 
 impl TaskOfEvent {
-    /// The task of a project, as an event names it.
+    /// The task of a project, as an event names it. `team` holds the
+    /// members whose names may be needed for the assignee; a member not in
+    /// it is not named.
     #[must_use]
-    pub fn of(project: &Project, task: &Task) -> Self {
+    pub fn of(project: &Project, task: &Task, team: &[&Member]) -> Self {
         Self {
             task_id: task.id(),
             reference: reference_of(project, task),
             title: task.title().as_str().to_owned(),
+            status: project
+                .workflow()
+                .status(task.status_id())
+                .map(StatusOfEvent::of),
+            assignee: match task.assignee() {
+                None => None,
+                Some(Assignee::Manager) => Some("The manager".to_owned()),
+                Some(Assignee::Member(member_id)) => team
+                    .iter()
+                    .find(|member| member.id() == member_id)
+                    .map(|member| member.name().as_str().to_owned()),
+            },
+        }
+    }
+}
+
+/// A status as an event names it: the name the manager gave it, and its
+/// category, which is what a listener should go by.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StatusOfEvent {
+    /// Its name, such as "In review".
+    pub name: String,
+    /// Its category.
+    pub category: StatusCategory,
+}
+
+impl StatusOfEvent {
+    /// The status of a workflow, as an event names it.
+    #[must_use]
+    pub fn of(status: &Status) -> Self {
+        Self {
+            name: status.name().as_str().to_owned(),
+            category: status.category(),
         }
     }
 }
@@ -199,7 +252,7 @@ pub fn event_of_ended_turn(
     };
     let task = task
         .filter(|task| conversation.task_id() == Some(task.id()))
-        .map(|task| TaskOfEvent::of(project, task));
+        .map(|task| TaskOfEvent::of(project, task, member.as_slice()));
 
     let happening = match turn.state() {
         TurnState::Running | TurnState::Stopped => return None,
@@ -293,6 +346,45 @@ pub fn event_of_completed_sprint(project: &Project, sprint: &Sprint) -> Option<P
             unit: summary.unit,
             committed: summary.committed,
             completed: summary.completed,
+        },
+    })
+}
+
+/// The event of a task that has just been opened. `team` names its
+/// assignee.
+#[must_use]
+pub fn event_of_created_task(project: &Project, task: &Task, team: &[&Member]) -> ProjectEvent {
+    ProjectEvent {
+        project_id: project.id(),
+        project_name: project.name().as_str().to_owned(),
+        at: task.created_at(),
+        happening: Happening::TaskCreated {
+            task: TaskOfEvent::of(project, task, team),
+        },
+    }
+}
+
+/// The event of a task that has just been moved, or nothing if it stayed
+/// in its status: `before` is the task before the move, `after` the task
+/// after it. `team` names its assignee.
+#[must_use]
+pub fn event_of_moved_task(
+    project: &Project,
+    before: &Task,
+    after: &Task,
+    team: &[&Member],
+) -> Option<ProjectEvent> {
+    if before.status_id() == after.status_id() {
+        return None;
+    }
+    let from = project.workflow().status(before.status_id())?;
+    Some(ProjectEvent {
+        project_id: project.id(),
+        project_name: project.name().as_str().to_owned(),
+        at: after.updated_at(),
+        happening: Happening::TaskStatusChanged {
+            task: TaskOfEvent::of(project, after, team),
+            from: StatusOfEvent::of(from),
         },
     })
 }
@@ -400,6 +492,11 @@ mod tests {
                 task_id: self.task.id(),
                 reference: "SH-4".to_owned(),
                 title: "Draw the schematic".to_owned(),
+                status: Some(StatusOfEvent {
+                    name: "To do".to_owned(),
+                    category: StatusCategory::Todo,
+                }),
+                assignee: None,
             }
         }
     }
@@ -556,5 +653,61 @@ mod tests {
         };
         assert_eq!(specialist.name(), "A specialist");
         assert_eq!(Agent::Advisor.name(), "The Advisor");
+    }
+
+    #[test]
+    fn an_opened_task_is_an_event_with_its_status_and_assignee() {
+        let mut setting = setting();
+        setting
+            .task
+            .assign(Some(Assignee::Member(setting.engineer.id())), moment(2));
+        let event = event_of_created_task(&setting.project, &setting.task, &[&setting.engineer]);
+        assert_eq!(event.at, moment(0));
+        let Happening::TaskCreated { task } = event.happening else {
+            panic!("{event:?}");
+        };
+        assert_eq!(task.reference, "SH-4");
+        assert_eq!(task.assignee.as_deref(), Some("Hardware engineer"));
+        assert_eq!(task.status.unwrap().category, StatusCategory::Todo);
+
+        // Without the team, the member is not named; the manager always is.
+        let unnamed = TaskOfEvent::of(&setting.project, &setting.task, &[]);
+        assert_eq!(unnamed.assignee, None);
+        setting.task.assign(Some(Assignee::Manager), moment(3));
+        let manager = TaskOfEvent::of(&setting.project, &setting.task, &[]);
+        assert_eq!(manager.assignee.as_deref(), Some("The manager"));
+    }
+
+    #[test]
+    fn a_task_that_changes_its_status_is_an_event_and_one_that_is_reordered_is_not() {
+        let setting = setting();
+        let workflow = setting.project.workflow();
+        let review = workflow.first_in(StatusCategory::Review).unwrap();
+        let mut moved = setting.task.clone();
+        moved.move_to(review, Rank::between(None, None), moment(7));
+        let event = event_of_moved_task(&setting.project, &setting.task, &moved, &[]).unwrap();
+        assert_eq!(event.at, moment(7));
+        let Happening::TaskStatusChanged { task, from } = event.happening else {
+            panic!("{event:?}");
+        };
+        assert_eq!(from.name, "To do");
+        assert_eq!(
+            task.status,
+            Some(StatusOfEvent {
+                name: "In test".to_owned(),
+                category: StatusCategory::Review,
+            })
+        );
+
+        let mut reordered = setting.task.clone();
+        reordered.move_to(
+            workflow.initial_status(),
+            Rank::between(Some(setting.task.rank()), None),
+            moment(8),
+        );
+        assert_eq!(
+            event_of_moved_task(&setting.project, &setting.task, &reordered, &[]),
+            None
+        );
     }
 }

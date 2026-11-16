@@ -413,12 +413,19 @@ on. Groups have no context.
 (`ProjectEvent`: the project, its name, when, and a `Happening`):
 `TaskFinished` (a specialist finished its work on a task), `WaitsForManager`
 (a decision, the Advisor's questions or its proposal; `WaitsFor`),
-`AgentStopped` (a turn failed), `SprintStarted` and `SprintCompleted`. An
-`Agent` is a specialist with its name, or the Advisor; a `TaskOfEvent` has
-the task's reference and title. The pure `event_of_ended_turn` finds the
-event of a turn that has just ended, or nothing (a turn the manager stopped,
-an answer to a question the manager asked); `event_of_started_sprint` and
-`event_of_completed_sprint` those of a sprint. `WorkService` calls
+`AgentStopped` (a turn failed), `TaskCreated`, `TaskStatusChanged` (with the
+status it left), `SprintStarted` and `SprintCompleted`. An `Agent` is a
+specialist with its name, or the Advisor; a `TaskOfEvent` has the task's
+reference, title, status (`StatusOfEvent`: name and category) and the name
+of its assignee where the team that was handed in knows it. The pure
+`event_of_ended_turn` finds the event of a turn that has just ended, or
+nothing (a turn the manager stopped, an answer to a question the manager
+asked); `event_of_started_sprint` and `event_of_completed_sprint` those of
+a sprint; `event_of_created_task` and `event_of_moved_task` those of a task
+the manager opened or moved (a move within its status is none). The shell
+finds the events of tasks in its commands `create_task` and `move_task`;
+tasks opened from an approved plan or moved by the work of a specialist
+are not told as these events. `WorkService` calls
 `WorkListener::happened` once for each turn that ends with an event, after
 it told `conversation_changed`; a listener that does not care keeps the
 empty default.

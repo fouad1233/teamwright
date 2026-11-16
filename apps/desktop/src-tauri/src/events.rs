@@ -163,6 +163,9 @@ impl PressTarget {
                 member_of(agent),
                 matches!(agent, Agent::Advisor),
             ),
+            Happening::TaskCreated { task } | Happening::TaskStatusChanged { task, .. } => {
+                (Some(task), None, false)
+            }
             Happening::SprintStarted { .. } | Happening::SprintCompleted { .. } => {
                 (None, None, false)
             }

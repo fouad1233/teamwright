@@ -57,8 +57,9 @@ pub use ports::{
     StorageError, TaskRepository, ViewRepository, WorkListener,
 };
 pub use project_events::{
-    Agent, Happening, ProjectEvent, TaskOfEvent, WaitsFor, event_of_completed_sprint,
-    event_of_ended_turn, event_of_started_sprint,
+    Agent, Happening, ProjectEvent, StatusOfEvent, TaskOfEvent, WaitsFor,
+    event_of_completed_sprint, event_of_created_task, event_of_ended_turn, event_of_moved_task,
+    event_of_started_sprint,
 };
 pub use projects::{NewProject, ProjectService, StatusProperties, WorkflowTemplate};
 pub use sprints::{NewSprint, SprintChanges, SprintDay, SprintReport, SprintService, SprintStart};

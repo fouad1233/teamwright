@@ -1,14 +1,35 @@
 //! Commands for tasks.
 
-use tauri::State;
-use teamwright_domain::{Assignee, ComputerId};
+use tauri::{AppHandle, State};
+use teamwright_application::{ProjectEvent, event_of_created_task, event_of_moved_task};
+use teamwright_domain::{Assignee, ComputerId, Member, Project, ProjectId};
 
 use crate::dto::{
     AssigneeDto, NewTaskInput, ProjectChangeDto, TaskChangeDto, TaskDto, parse_id, parse_moment,
     parse_optional_date, parse_priority,
 };
 use crate::error::CommandError;
+use crate::events;
 use crate::state::AppState;
+
+/// Tells the listeners outside the window what happened to a task. The
+/// task is changed already, so a project or a team that cannot be read
+/// only means that nothing is told.
+fn tell_about_task(
+    app: &AppHandle,
+    state: &AppState,
+    project_id: ProjectId,
+    event_of: impl FnOnce(&Project, &[&Member]) -> Option<ProjectEvent>,
+) {
+    let Ok(project) = state.projects.get(project_id) else {
+        return;
+    };
+    let members = state.team.list_for_project(project_id).unwrap_or_default();
+    let team: Vec<&Member> = members.iter().collect();
+    if let Some(event) = event_of(&project, &team) {
+        events::tell(app, &state.notifications, &event);
+    }
+}
 
 /// Lists the tasks of a project in the order the manager arranged them.
 #[tauri::command]
@@ -23,10 +44,14 @@ pub async fn list_tasks(
 /// Opens a task.
 #[tauri::command]
 pub async fn create_task(
+    app: AppHandle,
     state: State<'_, AppState>,
     input: NewTaskInput,
 ) -> Result<TaskDto, CommandError> {
     let task = state.tasks.create(input.try_into()?)?;
+    tell_about_task(&app, &state, task.project_id(), |project, team| {
+        Some(event_of_created_task(project, &task, team))
+    });
     Ok(TaskDto::from(&task))
 }
 
@@ -107,14 +132,18 @@ pub async fn reschedule_task(
 /// Moves a task to a status and to a position among the tasks there.
 #[tauri::command]
 pub async fn move_task(
+    app: AppHandle,
     state: State<'_, AppState>,
     task_id: String,
     status_id: String,
     index: usize,
 ) -> Result<TaskDto, CommandError> {
-    let task = state
-        .tasks
-        .move_to(parse_id(&task_id)?, parse_id(&status_id)?, index)?;
+    let task_id = parse_id(&task_id)?;
+    let before = state.tasks.get(task_id)?;
+    let task = state.tasks.move_to(task_id, parse_id(&status_id)?, index)?;
+    tell_about_task(&app, &state, task.project_id(), |project, team| {
+        event_of_moved_task(project, &before, &task, team)
+    });
     Ok(TaskDto::from(&task))
 }
 
