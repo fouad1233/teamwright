@@ -311,6 +311,14 @@ pub enum DomainError {
         /// The most addresses a project may have.
         max: usize,
     },
+
+    /// A path inside a folder of a project would lead outside it, by how
+    /// it is written or through a link.
+    #[error("the path {path} does not stay inside the folder")]
+    PathLeavesFolder {
+        /// The path, as it was given.
+        path: String,
+    },
 }
 
 impl DomainError {

@@ -20,6 +20,7 @@ pub mod agent_runtime;
 pub mod areas;
 pub mod clock;
 pub mod error;
+pub mod files;
 pub mod in_memory;
 pub mod integrations;
 pub mod notifications;
@@ -47,6 +48,7 @@ pub use agent_runtime::{
 pub use areas::AreaService;
 pub use clock::SystemClock;
 pub use error::ApplicationError;
+pub use files::{FolderListing, ProjectFilesService};
 pub use integrations::delivery::{
     Deliveries, Delivery, DeliveryPorts, DeliveryService, Target, WebSender, targets_of,
 };
@@ -68,9 +70,10 @@ pub use notifications::{
 };
 pub use places::{ChosenPlaces, PlacesService, ProjectPlaces, REFERENCES_FOLDER};
 pub use ports::{
-    ApprovedPlan, AreaRepository, Clock, ConversationRepository, FileSystem, MemberRepository,
-    PlacesRepository, PlanningRepository, ProjectFolders, ProjectRepository, SprintRepository,
-    StorageError, TaskRepository, ViewRepository, WorkListener,
+    ApprovedPlan, AreaRepository, Clock, ConversationRepository, DiskEntry, FileSystem,
+    FolderReader, MemberRepository, PlacesRepository, PlanningRepository, ProjectFolders,
+    ProjectRepository, SprintRepository, StorageError, TaskRepository, ViewRepository,
+    WorkListener,
 };
 pub use project_events::{
     Agent, Happening, ProjectEvent, StatusOfEvent, TaskOfEvent, WaitsFor,

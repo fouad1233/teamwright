@@ -25,6 +25,7 @@ pub mod integration;
 pub mod member;
 pub mod planning;
 pub mod project;
+pub mod project_files;
 pub mod sprint;
 pub mod task;
 pub mod task_history;
@@ -53,6 +54,7 @@ pub use planning::{
     ProposedMember, ProposedOwner, ProposedTask,
 };
 pub use project::{Project, ProjectKey, ProjectSnapshot};
+pub use project_files::{EntryKind, FolderEntry, PathInFolder};
 pub use sprint::{
     CountedTask, Sprint, SprintDates, SprintSnapshot, SprintState, SprintSummary, SprintUnit,
     StoryPoints,

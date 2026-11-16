@@ -379,6 +379,22 @@ pub enum ApplicationError {
     #[error("a file to copy has no name")]
     FileWithoutName,
 
+    /// A folder was to be read as one of a project that is neither its work
+    /// folder nor one of its reference folders.
+    #[error("{folder} is not a folder of this project")]
+    NotAFolderOfProject {
+        /// The folder, as it was given.
+        folder: String,
+    },
+
+    /// Nothing that can be read lies at a path inside a folder of a
+    /// project: it is gone, or it is a file where a folder was expected.
+    #[error("nothing that can be opened lies at {path}")]
+    NothingAtPath {
+        /// The path inside the folder, as it was given.
+        path: String,
+    },
+
     /// The agent program could not be used.
     #[error(transparent)]
     AgentProgram(#[from] AgentRuntimeError),
@@ -434,12 +450,13 @@ impl ApplicationError {
             | Self::ReferenceInsideWorkFolder { .. }
             | Self::WorkFolderInsideReference { .. }
             | Self::FileWithoutName
+            | Self::NotAFolderOfProject { .. }
             | Self::OwnerNotThere { .. }
             | Self::UnfinishedStayInSprint
             | Self::SubtaskInAnotherArea { .. }
             | Self::ProjectWithoutAreas => "rule_broken",
             Self::FolderNotFound { .. } => "folder_not_found",
-            Self::NotFound { .. } => "not_found",
+            Self::NotFound { .. } | Self::NothingAtPath { .. } => "not_found",
             Self::ProjectKeyTaken { .. } => "project_key_taken",
             Self::DifferentProjects
             | Self::SprintOfAnotherProject

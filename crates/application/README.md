@@ -14,10 +14,11 @@ window or agent runtime.
 | `areas` | `AreaService`: list, add, rename, move and remove the areas of a project, and move a task with its subtasks into another area |
 | `team` | `TeamService`: put members on the team of a project, change them, take them off |
 | `places` | `PlacesService`: the folders of a project: choose its work folder, add and take away reference folders, copy reference files into it |
+| `files` | `ProjectFilesService`: what lies in the folders of a project, for the files view: `list` a folder at a path inside it, `locate` an entry to open or show, each path checked first |
 | `work` | `WorkService`: let AI specialists work: start on a task, ask, reply, answer a specialist's question, list what waits for the manager, stop, follow every event, open a session in the desktop app, recover after a restart; `brief_for` and `instructions_for`. Its part `advisor`: plan a project with the Advisor (`advise`, `answer_interview`, `approve_proposal`); `ApprovedProposal`, `answers_in_words` and `instructions_for_advisor` |
 | `sync` | `SyncService`: keep several computers of one manager in step through a folder the manager owns (`round`, `choose_folder`, `stop`, `rename_this_computer`, `accept`, `ignore`, `notices`, `dismiss`, `new_identity`); the ports `SyncFolder` and `SyncLedger`, and the operations that travel between computers |
 | `workbook` | `WorkbookService`: gather a project into a workbook of four sheets (summary, tasks, sprints, team) as plain data: `Workbook`, `Sheet`, `SheetContent`, `Section`, `Table`, `Column` and `Cell`, whose kind says whether it is text, a whole number, hours, a date or a status. Writing the file is done outside this crate ([decision 0025](../../docs/decisions/0025-the-project-as-a-workbook.md)) |
-| `ports` | The interfaces the services need: `ProjectRepository`, `TaskRepository`, `MemberRepository`, `ConversationRepository`, `PlanningRepository`, `PlacesRepository`, `SprintRepository`, `ViewRepository`, `AreaRepository`, `ProjectFolders`, `FileSystem`, `WorkListener`, `Clock` (which also tells the day a moment falls on) |
+| `ports` | The interfaces the services need: `ProjectRepository`, `TaskRepository`, `MemberRepository`, `ConversationRepository`, `PlanningRepository`, `PlacesRepository`, `SprintRepository`, `ViewRepository`, `AreaRepository`, `ProjectFolders`, `FileSystem`, `FolderReader`, `WorkListener`, `Clock` (which also tells the day a moment falls on) |
 | `agent_runtime` | `AgentRuntime`: the interface to the program that runs a team member's session, and the data it speaks |
 | `error` | `ApplicationError`, with a stable `code()` for interfaces |
 | `clock` | `SystemClock`, the real clock |
@@ -224,6 +225,20 @@ manager sees; `ChosenPlaces` is what `PlacesRepository` stores.
   anything is copied (`rule_broken`); a file that cannot be read fails as
   storage (`storage_failed`) with its path in the message.
 - Teamwright never removes a file or folder of the manager.
+
+`ProjectFilesService` shows what lies in these folders, for the view of
+the kind `files`. It only reads, through `FolderReader`.
+
+- The folder must be the work folder or a reference folder of the project,
+  as `places` names it (`rule_broken` otherwise). The path inside it is a
+  `PathInFolder` (`rule_broken` if it goes up or starts elsewhere).
+- What the path names, with every link followed, must lie inside the full
+  form of the folder (`rule_broken`). A link in a listing that leads
+  outside, or nowhere, is listed as a link and not followed.
+- Nothing at the path, or a file where a folder is listed, is `not_found`.
+- `.git`, `node_modules` and `target` are never listed; other names that
+  begin with a dot only when asked. At most 2000 entries are answered, and
+  `has_more` says when there were more.
 
 ## The work of the specialists
 

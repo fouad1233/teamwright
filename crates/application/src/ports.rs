@@ -453,6 +453,45 @@ pub trait FileSystem: Send + Sync {
     fn copy_file(&self, from: &Path, to: &Path) -> Result<(), StorageError>;
 }
 
+/// One entry of a folder as the disk describes it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DiskEntry {
+    /// Its name.
+    pub name: String,
+    /// Whether it is a link (on Windows also a junction). Whether it may be
+    /// followed is for the use case to decide.
+    pub is_link: bool,
+    /// Whether it is a folder; for a link, whether it leads to one.
+    pub is_folder: bool,
+    /// Its size in bytes; for a link, the size of what it leads to, and 0
+    /// if it leads nowhere.
+    pub size: u64,
+    /// When it was last changed, if the system says.
+    pub changed: Option<Timestamp>,
+}
+
+/// Reads what lies in the folders of a project, for the view of its files.
+/// It only reads; it never changes anything on the disk.
+pub trait FolderReader: Send + Sync {
+    /// The full form of a path that exists, with every link on the way
+    /// followed, in which two paths of one place are equal.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if nothing is at the path or it cannot be reached.
+    fn full_form(&self, path: &Path) -> Result<PathBuf, StorageError>;
+
+    /// Whether a folder is at the path, links followed.
+    fn is_folder(&self, path: &Path) -> bool;
+
+    /// The entries directly inside a folder, in no particular order.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the folder cannot be read.
+    fn entries_in(&self, folder: &Path) -> Result<Vec<DiskEntry>, StorageError>;
+}
+
 /// Is told when a conversation changes, for example to show the change at
 /// once.
 ///
