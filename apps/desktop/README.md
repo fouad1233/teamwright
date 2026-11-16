@@ -348,7 +348,20 @@ Rules of the interface:
   tasks, the team, the conversations and the sprints the interface already
   has. It asks no model and adds no command. It reuses the burndown and the
   completed sprints of `sprints/` and the count of what waits and the words
-  for tokens of `office/officeModel.ts`.
+  for tokens of `office/officeModel.ts`. Its part Usage is the exception:
+  a table of what every specialist, the Advisor and those who left spent,
+  by kind, in all, in turns, and the model they ran on last, with the
+  project at the foot. Those figures are the backend's (`projectUsage`);
+  `usageTable` only names them and puts them in order.
+- **The context of an agent is drawn, not worked out.** `work/ContextMeter`
+  draws how full a session is ("Context 38k of 200k" over a hairline meter,
+  in the warning colour from 80 %, its title saying the session will soon
+  have to make room) from the `context` the backend sends. The office shows
+  it on the place of every specialist and of the Advisor, the conversation
+  panel of a task at its head, and the Team view beside what each
+  specialist used. `ProjectWorkspace` asks for the usage and hands it down
+  through `WorkContext` (`useUsageOfProject`). The "Used" figures of the
+  office are still added up from the turns (`tokensOfTurns`).
 - **Sprints were in the contract before they were in the shell.** The
   demo backend and `demoSprints.test.ts` came first and said what the
   shell was to do; the Rust side was written against them, case by case

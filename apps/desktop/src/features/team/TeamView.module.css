@@ -35,6 +35,10 @@
   width: 320px;
 }
 
+.spentColumn {
+  width: 184px;
+}
+
 .actionsColumn {
   width: 44px;
 }
@@ -188,4 +192,18 @@
   justify-content: flex-end;
   gap: var(--space-2);
   margin-top: var(--space-5);
+}
+
+/* What a specialist has used, over the meter of its context. */
+.spent {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.spentTokens {
+  color: var(--ink-soft);
+  font-family: var(--font-mono);
+  font-size: var(--text-small);
+  font-variant-numeric: tabular-nums;
 }

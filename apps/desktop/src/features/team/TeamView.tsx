@@ -2,7 +2,7 @@ import { Ellipsis, MessageSquare, Pencil, Plus, UserMinus } from 'lucide-react';
 import { useState } from 'react';
 
 import { useNavigation } from '@/app/navigation';
-import type { Member, Project, Task } from '@/shared/api/types';
+import type { AgentUsage, Member, Project, Task } from '@/shared/api/types';
 import { taskReference } from '@/shared/lib/format';
 import { classNames } from '@/shared/lib/classNames';
 import { Button, IconButton } from '@/shared/ui/Button';
@@ -11,8 +11,10 @@ import { ActionMenu } from '@/shared/ui/Menu';
 
 import { Portrait } from '../office/characters/Portrait';
 import { TaskTally } from '../projects/TaskTally';
+import { usageInWords } from '../office/officeModel';
 import { ProgramStatus } from '../work/ProgramStatus';
-import { useConversationsOfProject } from '../work/WorkContext';
+import { ContextMeter } from '../work/ContextMeter';
+import { useConversationsOfProject, useUsageOfProject } from '../work/WorkContext';
 import { whatMemberIsWorkingOn, whatMemberWaitsFor } from '../work/workModel';
 import { MANAGER_NAME } from './Assignee';
 import { MemberDialog } from './MemberDialog';
@@ -62,6 +64,20 @@ function WorkingOn({ project, tasks, work, waiting }: WorkingOnProps) {
 }
 
 /**
+ * What an AI specialist has used in the project, and how full the context
+ * of its latest conversation is. A specialist that has not worked shows
+ * nothing yet.
+ */
+function Spent({ usage }: { usage: AgentUsage | undefined }) {
+  return (
+    <div className={styles.spent}>
+      <span className={styles.spentTokens}>{usageInWords(usage?.allTokens ?? 0)}</span>
+      {usage?.context && <ContextMeter context={usage.context} />}
+    </div>
+  );
+}
+
+/**
  * A dialog about a member. The member stays known while the dialog closes,
  * so that its words do not change in the moment it disappears.
  */
@@ -81,6 +97,7 @@ export function TeamView({ project, tasks }: TeamViewProps) {
   const commands = useTeamCommands(project.id);
   const navigation = useNavigation();
   const conversations = useConversationsOfProject();
+  const usage = useUsageOfProject();
   const [form, setForm] = useState(CLOSED);
   const [removal, setRemoval] = useState(CLOSED);
   const hasSpecialists = members.some((member) => member.kind === 'agent');
@@ -102,6 +119,7 @@ export function TeamView({ project, tasks }: TeamViewProps) {
             <th className="label">Member</th>
             <th className={classNames('label', styles.kindColumn)}>Kind</th>
             <th className={classNames('label', styles.tasksColumn)}>Tasks</th>
+            <th className={classNames('label', styles.spentColumn)}>Used</th>
             <th className={styles.actionsColumn}>
               <span className={styles.hidden}>Actions</span>
             </th>
@@ -124,6 +142,7 @@ export function TeamView({ project, tasks }: TeamViewProps) {
             <td>
               <TaskTally project={project} tasks={tasksOfManager(tasks)} />
             </td>
+            <td />
             <td />
           </tr>
 
@@ -160,6 +179,13 @@ export function TeamView({ project, tasks }: TeamViewProps) {
               </td>
               <td>
                 <TaskTally project={project} tasks={tasksOfMember(tasks, member.id)} />
+              </td>
+              <td>
+                {member.kind === 'agent' && (
+                  <Spent
+                    usage={usage?.members.find((spent) => spent.memberId === member.id)?.usage}
+                  />
+                )}
               </td>
               <td>
                 <ActionMenu
