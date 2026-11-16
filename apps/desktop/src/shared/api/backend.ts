@@ -6,6 +6,8 @@ import type {
   CalendarDate,
   Conversation,
   DataChanged,
+  Deliveries,
+  Delivery,
   EventKind,
   GitHubItem,
   GitHubOverview,
@@ -560,6 +562,13 @@ export interface Backend {
   issueDraft(taskId: Id): Promise<IssueDraft>;
   /** Opens the issue of `issueDraft` on GitHub. Only after the manager confirmed it. */
   openIssue(taskId: Id): Promise<GitHubItem>;
+
+  /** What was delivered to the channel and the web addresses of a project since the program started. */
+  integrationDeliveries(projectId: Id): Promise<Deliveries>;
+  /** Sends a line to the project's Slack channel to try it (`no_channel` without one). */
+  testChannel(projectId: Id): Promise<Delivery>;
+  /** Sends the event `test` to the web address at a position. */
+  testWebAddress(projectId: Id, index: number): Promise<Delivery>;
 }
 
 /**

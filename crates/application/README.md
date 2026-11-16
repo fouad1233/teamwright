@@ -470,6 +470,21 @@ interface does only after the manager confirmed. `sign_in_problem` says
 what is missing: not installed (with where to get it), or not signed in
 (`gh auth login`).
 
+`integrations/messages.rs` says what the listeners outside the computer
+get of an event, in pure functions: `kind_of` (the `EventKind` the manager
+chooses by), `channel_message_of` (one plain line for a chat channel, the
+project's name first: "Smart sensor node: Hardware engineer finished SH-4
+Draw the schematic.") and `payload_of` (an `EventPayload`, whose JSON form,
+version `PAYLOAD_VERSION`, is written by the integrations crate and
+documented in [webhooks](../../docs/integrations/webhooks.md)).
+`integrations/delivery.rs` passes events on: `targets_of` is the rule of
+which event goes where (the channel if it tells that kind, every address
+that hears it); `DeliveryService::deliver` sends through the port
+`WebSender` and keeps in memory the last failure of the channel and the
+last ten deliveries of each address (`deliveries`); `test_channel` and
+`test_address` try them. It waits for answers, so the shell calls it on a
+thread of its own.
+
 ## Keeping computers in step
 
 `SyncService` keeps the computers of one manager in step through a folder

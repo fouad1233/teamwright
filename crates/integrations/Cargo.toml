@@ -10,8 +10,10 @@ publish.workspace = true
 teamwright-application.workspace = true
 teamwright-domain.workspace = true
 
+chrono.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+ureq.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true

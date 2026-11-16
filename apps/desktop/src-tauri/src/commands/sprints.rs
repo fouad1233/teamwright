@@ -104,7 +104,7 @@ fn tell_about(
     if let Ok(project) = state.projects.get(sprint.project_id())
         && let Some(event) = event_of(&project, sprint)
     {
-        events::tell(app, &state.notifications, &event);
+        events::tell(app, &state.notifications, &state.deliveries, &event);
     }
 }
 

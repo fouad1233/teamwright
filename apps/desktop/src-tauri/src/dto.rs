@@ -11,9 +11,9 @@ use chrono::SecondsFormat;
 use serde::{Deserialize, Serialize};
 use teamwright_application::{
     Acceptance, AgentProgram, AgentUsage, ApprovedMember, ApprovedOwner, ApprovedProposal,
-    ApprovedTask, ConversationWithTurns, GitHubItem, GitHubOverview, GitHubSignIn, ItemKind,
-    ItemState, KnownComputer, NewMember, NewProject, NewSprint, NewTask, NewView,
-    NotificationChoice, NotificationKind, NotificationPermission, ProjectChange,
+    ApprovedTask, ConversationWithTurns, Deliveries, Delivery, GitHubItem, GitHubOverview,
+    GitHubSignIn, ItemKind, ItemState, KnownComputer, NewMember, NewProject, NewSprint, NewTask,
+    NewView, NotificationChoice, NotificationKind, NotificationPermission, ProjectChange,
     ProjectIntegrations, ProjectPlaces, ProjectUsage, SprintChanges, SprintReport, SprintStart,
     StatusProperties, SyncNotice, SyncState, TaskOnGitHub, WorkflowTemplate, sign_in_problem,
 };
@@ -1953,6 +1953,55 @@ impl From<&TaskOnGitHub> for TaskOnGitHubDto {
             repository: on_github.repository.as_ref().map(ToString::to_string),
             read_at: on_github.read_at.map(moment_to_text),
             items: on_github.items.iter().map(GitHubItemDto::from).collect(),
+        }
+    }
+}
+
+/// One delivery to a channel or a web address.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeliveryDto {
+    at: String,
+    /// The name of the event, or `test`.
+    event: &'static str,
+    /// The status of the answer, if there was one.
+    status: Option<u16>,
+    succeeded: bool,
+    /// Why it was not taken, in words, if it was not.
+    failure: Option<String>,
+}
+
+impl From<&Delivery> for DeliveryDto {
+    fn from(delivery: &Delivery) -> Self {
+        Self {
+            at: moment_to_text(delivery.at),
+            event: delivery.event,
+            status: delivery.outcome.as_ref().ok().copied(),
+            succeeded: delivery.succeeded(),
+            failure: delivery.failure(),
+        }
+    }
+}
+
+/// What was delivered for a project since the program started.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeliveriesDto {
+    channel_failure: Option<DeliveryDto>,
+    /// For each web address, in their order, its last deliveries, newest
+    /// first.
+    addresses: Vec<Vec<DeliveryDto>>,
+}
+
+impl From<&Deliveries> for DeliveriesDto {
+    fn from(deliveries: &Deliveries) -> Self {
+        Self {
+            channel_failure: deliveries.channel_failure.as_ref().map(DeliveryDto::from),
+            addresses: deliveries
+                .addresses
+                .iter()
+                .map(|kept| kept.iter().map(DeliveryDto::from).collect())
+                .collect(),
         }
     }
 }

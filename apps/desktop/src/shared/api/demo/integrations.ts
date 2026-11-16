@@ -6,7 +6,13 @@
  */
 
 import { BackendError } from '../backend';
-import type { EventKind, ListeningAddress, ProjectIntegrations } from '../types';
+import type {
+  Deliveries,
+  Delivery,
+  EventKind,
+  ListeningAddress,
+  ProjectIntegrations,
+} from '../types';
 
 /** Every kind of event, in the order the interface lists them. */
 export const EVENT_KINDS: readonly EventKind[] = [
@@ -79,6 +85,7 @@ function sorted(events: Set<EventKind>): EventKind[] {
 /** What the demo keeps of the integrations of each project. */
 export class PretendedIntegrations {
   private readonly kept = new Map<string, Kept>();
+  private readonly delivered = new Map<string, Delivery[]>();
 
   /** The integrations of a project as the interface sees them. */
   of(projectId: string): ProjectIntegrations {
@@ -173,6 +180,34 @@ export class PretendedIntegrations {
       );
     }
     return listening;
+  }
+
+  /** What was delivered: the demo pretends every test reached its address. */
+  deliveriesOf(projectId: string): Deliveries {
+    const kept = this.keptOf(projectId);
+    return {
+      channelFailure: null,
+      addresses: kept.webAddresses.map((listening) => [
+        ...(this.delivered.get(`${projectId} ${listening.address}`) ?? []),
+      ]),
+    };
+  }
+
+  /** Pretends to send a line to the channel. */
+  testChannel(projectId: string, at: string): Delivery {
+    if (this.keptOf(projectId).slack === null) {
+      throw new BackendError('no_channel', 'no Slack channel is set for this project');
+    }
+    return { at, event: 'test', status: 200, succeeded: true, failure: null };
+  }
+
+  /** Pretends to send the event `test` to an address, and keeps it with its deliveries. */
+  testWebAddress(projectId: string, index: number, at: string): Delivery {
+    const listening = this.requireAddressAt(this.keptOf(projectId), index);
+    const delivery: Delivery = { at, event: 'test', status: 200, succeeded: true, failure: null };
+    const key = `${projectId} ${listening.address}`;
+    this.delivered.set(key, [delivery, ...(this.delivered.get(key) ?? [])].slice(0, 10));
+    return delivery;
   }
 
   private keptOf(projectId: string): Kept {

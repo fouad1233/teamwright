@@ -27,7 +27,7 @@ fn tell_about_task(
     let members = state.team.list_for_project(project_id).unwrap_or_default();
     let team: Vec<&Member> = members.iter().collect();
     if let Some(event) = event_of(&project, &team) {
-        events::tell(app, &state.notifications, &event);
+        events::tell(app, &state.notifications, &state.deliveries, &event);
     }
 }
 

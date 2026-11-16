@@ -140,6 +140,14 @@ The shell is where the work of an AI specialist meets the outside world
   issue only after a dialog has shown what will be sent and where. The
   demo pretends `gh` is signed in and that a few pull requests and issues
   name the first tasks (`shared/api/demo/gitHub.ts`).
+  Slack and web addresses: `events::tell` hands every event to
+  `DeliveryService::deliver` on a thread of its own, beside the
+  notifications. `integration_deliveries`, `test_channel` and
+  `test_web_address` answer with `DeliveriesDto` and `DeliveryDto`; the
+  dialog asks for the deliveries every five seconds while it is open,
+  shows "The last message could not be sent: …" under the channel and the
+  last ten deliveries under each address. The demo pretends that every
+  test reached its address.
 - **What happened, and notifications**
   ([decision 0026](../../docs/decisions/0026-notifications.md)). The work
   of the specialists hands every event of a project

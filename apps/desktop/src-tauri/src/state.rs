@@ -10,14 +10,14 @@ use std::{env, fs, thread};
 use chrono::Utc;
 use tauri::{AppHandle, Emitter, Manager};
 use teamwright_application::{
-    AgentRuntime, ApplicationError, AreaService, FileSystem, GitHubPorts, GitHubService,
-    IntegrationSettings, NotificationService, PlacesService, ProjectEvent, ProjectFolders,
-    ProjectService, RoundReport, SprintService, StorageError, SyncPorts, SyncService, SystemClock,
-    TaskService, TeamService, ViewService, WorkListener, WorkPorts, WorkService, WorkbookPorts,
-    WorkbookService,
+    AgentRuntime, ApplicationError, AreaService, DeliveryPorts, DeliveryService, FileSystem,
+    GitHubPorts, GitHubService, IntegrationSettings, NotificationService, PlacesService,
+    ProjectEvent, ProjectFolders, ProjectService, RoundReport, SprintService, StorageError,
+    SyncPorts, SyncService, SystemClock, TaskService, TeamService, ViewService, WorkListener,
+    WorkPorts, WorkService, WorkbookPorts, WorkbookService,
 };
 use teamwright_domain::{ComputerId, Conversation, Project, Turn};
-use teamwright_integrations::{GhCommandLine, GhLocator};
+use teamwright_integrations::{GhCommandLine, GhLocator, HttpsSender};
 use teamwright_runtime::ClaudeCode;
 use teamwright_storage::{
     Database, FolderOfComputers, SqliteAreaRepository, SqliteConversationRepository,
@@ -140,6 +140,9 @@ pub struct AppState {
     pub integrations: IntegrationSettings,
     /// GitHub, through the manager's own `gh`.
     pub github: GitHubService,
+    /// What passes events on to the Slack channel and the web addresses of
+    /// each project, and what came of it.
+    pub deliveries: DeliveryService,
     /// The workbooks written since the program started. Only these can be
     /// shown in their folder.
     pub exported_workbooks: Mutex<Vec<PathBuf>>,
@@ -195,8 +198,14 @@ impl AppState {
             projects: project_repository.clone(),
             tasks: task_repository.clone(),
             places: places.clone(),
-            store: integration_store,
+            store: integration_store.clone(),
             program: Arc::new(GhCommandLine::new(GhLocator::of_this_computer())),
+            clock: clock.clone(),
+        });
+        let deliveries = DeliveryService::new(DeliveryPorts {
+            projects: project_repository.clone(),
+            store: integration_store,
+            sender: Arc::new(HttpsSender),
             clock: clock.clone(),
         });
         let sync = SyncService::new(SyncPorts {
@@ -223,6 +232,7 @@ impl AppState {
                 app: app.clone(),
                 this_computer,
                 notifications: notifications.clone(),
+                deliveries: deliveries.clone(),
             }),
             clock: clock.clone(),
             this_computer,
@@ -252,6 +262,7 @@ impl AppState {
             ),
             places,
             github,
+            deliveries,
             tasks: TaskService::new(
                 project_repository.clone(),
                 task_repository.clone(),
@@ -542,6 +553,7 @@ struct EventToInterface {
     app: AppHandle,
     this_computer: ComputerId,
     notifications: NotificationService,
+    deliveries: DeliveryService,
 }
 
 impl WorkListener for EventToInterface {
@@ -556,6 +568,6 @@ impl WorkListener for EventToInterface {
     }
 
     fn happened(&self, event: &ProjectEvent) {
-        events::tell(&self.app, &self.notifications, event);
+        events::tell(&self.app, &self.notifications, &self.deliveries, event);
     }
 }

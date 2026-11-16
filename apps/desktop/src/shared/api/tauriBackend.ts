@@ -11,6 +11,8 @@ import type {
   CalendarDate,
   Conversation,
   DataChanged,
+  Deliveries,
+  Delivery,
   EventKind,
   GitHubItem,
   GitHubOverview,
@@ -529,6 +531,18 @@ export class TauriBackend implements Backend {
 
   openIssue(taskId: Id): Promise<GitHubItem> {
     return call('open_issue', { taskId });
+  }
+
+  integrationDeliveries(projectId: Id): Promise<Deliveries> {
+    return call('integration_deliveries', { projectId });
+  }
+
+  testChannel(projectId: Id): Promise<Delivery> {
+    return call('test_channel', { projectId });
+  }
+
+  testWebAddress(projectId: Id, index: number): Promise<Delivery> {
+    return call('test_web_address', { projectId, index });
   }
 }
 

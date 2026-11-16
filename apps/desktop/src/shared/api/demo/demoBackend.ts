@@ -12,6 +12,8 @@ import type {
   Conversation,
   DataChanged,
   DecisionRequest,
+  Deliveries,
+  Delivery,
   Effort,
   EventKind,
   GitHubItem,
@@ -1594,6 +1596,22 @@ export class DemoBackend implements Backend {
         this.gitHub.draftOf(project.key, task, this.repositoryOf(project)),
       );
     });
+  }
+
+  integrationDeliveries(projectId: Id): Promise<Deliveries> {
+    return this.answer(() => this.integrations.deliveriesOf(this.requireProject(projectId).id));
+  }
+
+  testChannel(projectId: Id): Promise<Delivery> {
+    return this.answer(() =>
+      this.integrations.testChannel(this.requireProject(projectId).id, this.nowAsText()),
+    );
+  }
+
+  testWebAddress(projectId: Id, index: number): Promise<Delivery> {
+    return this.answer(() =>
+      this.integrations.testWebAddress(this.requireProject(projectId).id, index, this.nowAsText()),
+    );
   }
 
   private repositoryOf(project: Project): string {

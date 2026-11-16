@@ -3,7 +3,7 @@
 
 use tauri::State;
 
-use crate::dto::{ProjectIntegrationsDto, parse_event_kind, parse_id};
+use crate::dto::{DeliveriesDto, DeliveryDto, ProjectIntegrationsDto, parse_event_kind, parse_id};
 use crate::error::CommandError;
 use crate::state::AppState;
 
@@ -98,4 +98,42 @@ pub async fn set_web_address_event(
         .integrations
         .set_web_address_event(parse_id(&project_id)?, index, parse_event_kind(&kind)?, on)?
         .into())
+}
+
+/// What was delivered for a project since the program started: the last
+/// failure of its channel, and the last deliveries of each address.
+#[tauri::command]
+pub async fn integration_deliveries(
+    state: State<'_, AppState>,
+    project_id: String,
+) -> Result<DeliveriesDto, CommandError> {
+    Ok(DeliveriesDto::from(
+        &state.deliveries.deliveries(parse_id(&project_id)?)?,
+    ))
+}
+
+/// Sends a line to the project's Slack channel to try it. It waits for the
+/// answer, which comes within the time limit of the sending.
+#[tauri::command]
+pub async fn test_channel(
+    state: State<'_, AppState>,
+    project_id: String,
+) -> Result<DeliveryDto, CommandError> {
+    Ok(DeliveryDto::from(
+        &state.deliveries.test_channel(parse_id(&project_id)?)?,
+    ))
+}
+
+/// Sends the event `test` to the web address at a position.
+#[tauri::command]
+pub async fn test_web_address(
+    state: State<'_, AppState>,
+    project_id: String,
+    index: usize,
+) -> Result<DeliveryDto, CommandError> {
+    Ok(DeliveryDto::from(
+        &state
+            .deliveries
+            .test_address(parse_id(&project_id)?, index)?,
+    ))
 }

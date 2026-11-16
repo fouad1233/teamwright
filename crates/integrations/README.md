@@ -12,6 +12,8 @@ options and the output of GitHub's command line program.
 | `locate` | `GhLocator`: finds `gh`: the program the manager named, then the search path, then the places it is usually installed (on Windows `%LOCALAPPDATA%\Programs\gh\bin`, `%ProgramFiles%\GitHub CLI`, scoop; elsewhere Homebrew, `/usr/local/bin`, `/usr/bin`, `~/.local/bin`) |
 | `command` | Runs a short command with a time limit, its arguments as arguments (never through a shell), without a console window, with prompts and colours turned off |
 | `github` | `GhCommandLine`, which implements `GitHubProgram`: `gh auth status`, `git remote get-url origin` of the work folder, `gh repo view`, `gh pr list` and `gh issue list` as JSON (state all, at most 200 each), `gh issue create` |
+| `web` | `HttpsSender`, which implements `WebSender` with `ureq` (blocking, rustls, a time limit of 10 seconds): `{"text": …}` to a Slack channel, and an event as JSON (`payload_json`) with the headers `X-Teamwright-Event`, `X-Teamwright-Version` and, with a secret, `X-Teamwright-Signature` (`event_request`). An answer that is not a success is its status; a failure is said without the address |
+| `signature` | `sha256`, `hmac_sha256`, `hex`: small, and checked against the published test vectors, so that no cryptography crate is added for one signature |
 
 ## Rules
 
@@ -25,8 +27,11 @@ options and the output of GitHub's command line program.
 
 ## Tests
 
-The unit tests read JSON in the shape `gh` writes it, and the locator works
-on folders of its own. `tests/real_gh.rs` reads a real repository through
+The unit tests read JSON in the shape `gh` writes it, the locator works on
+folders of its own, and the signature is checked against FIPS 180-4 and
+RFC 4231. `tests/listener.rs` starts a listener on this computer and sends
+it a signed event, as an address would get it; nothing leaves the
+computer. `tests/real_gh.rs` reads a real repository through
 the `gh` of this computer; it is ignored by default:
 
 ```bash

@@ -173,7 +173,7 @@ pub fn test_notification() -> Notification {
 
 /// The first words of a text, on one line: at most
 /// [`MOST_BODY_CHARACTERS`] characters, cut at a word.
-fn first_words(text: &str) -> String {
+pub(crate) fn first_words(text: &str) -> String {
     let line = text.split_whitespace().collect::<Vec<_>>().join(" ");
     if line.chars().count() <= MOST_BODY_CHARACTERS {
         return line;

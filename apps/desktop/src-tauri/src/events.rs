@@ -8,10 +8,13 @@
 //! (`teamwright_application::notifications`). The shell only knows whether
 //! its window is in front and how to send.
 
+use std::thread;
+
 use tauri::{AppHandle, Emitter, Manager, Runtime};
 use tauri_plugin_notification::{ActionPerformed, NotificationExt};
 use teamwright_application::{
-    Agent, Happening, Notification, NotificationKind, NotificationService, ProjectEvent,
+    Agent, DeliveryService, Happening, Notification, NotificationKind, NotificationService,
+    ProjectEvent,
 };
 use teamwright_domain::MemberId;
 
@@ -29,11 +32,22 @@ const NOTIFICATION_PRESSED: &str = "notification-pressed";
 /// notification is sent only if the event is worth one with the choice of
 /// this computer, and only while the window is not in front: in front, the
 /// manager sees the change itself.
+///
+/// The Slack channel and the web addresses of the project hear it too, as
+/// the manager chose on this computer. Sending to them waits for answers,
+/// so it runs on a thread of its own; what fails is kept by the
+/// `DeliveryService` for the integrations page, and never reaches the
+/// work.
 pub fn tell<R: Runtime>(
     app: &AppHandle<R>,
     notifications: &NotificationService,
+    deliveries: &DeliveryService,
     event: &ProjectEvent,
 ) {
+    let deliveries = deliveries.clone();
+    let delivered = event.clone();
+    thread::spawn(move || deliveries.deliver(&delivered));
+
     // A choice that cannot be read sends nothing: silence is the default.
     let Ok(Some(notification)) = notifications.notification_for(event) else {
         return;

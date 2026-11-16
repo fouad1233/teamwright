@@ -2,7 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo } from 'react';
 
 import { useBackend } from '@/shared/api/BackendProvider';
-import type { EventKind, Id, ProjectIntegrations } from '@/shared/api/types';
+import type { Delivery, EventKind, Id, ProjectIntegrations } from '@/shared/api/types';
 
 /** The name under which the integrations of a project are cached. */
 function integrationsKey(projectId: Id) {
@@ -16,6 +16,43 @@ export function useProjectIntegrations(projectId: Id) {
     queryKey: integrationsKey(projectId),
     queryFn: () => backend.projectIntegrations(projectId),
   });
+}
+
+/** The name under which the deliveries of a project are cached. */
+function deliveriesKey(projectId: Id) {
+  return ['integration-deliveries', projectId] as const;
+}
+
+/**
+ * What was delivered to the channel and the addresses of a project. Events
+ * are sent on a thread of their own, so this is asked for again every few
+ * seconds while it is shown.
+ */
+export function useIntegrationDeliveries(projectId: Id) {
+  const backend = useBackend();
+  return useQuery({
+    queryKey: deliveriesKey(projectId),
+    queryFn: () => backend.integrationDeliveries(projectId),
+    refetchInterval: 5000,
+  });
+}
+
+/** The tests of the channel and of the addresses; each answers with what came of it. */
+export function useDeliveryTests(projectId: Id) {
+  const backend = useBackend();
+  const queryClient = useQueryClient();
+
+  return useMemo(() => {
+    const afterwards = async (delivery: Delivery) => {
+      await queryClient.invalidateQueries({ queryKey: deliveriesKey(projectId) });
+      return delivery;
+    };
+    return {
+      testChannel: async () => afterwards(await backend.testChannel(projectId)),
+      testWebAddress: async (index: number) =>
+        afterwards(await backend.testWebAddress(projectId, index)),
+    };
+  }, [backend, queryClient, projectId]);
 }
 
 /**

@@ -1,7 +1,8 @@
 import { ChevronDown, Trash2 } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 
-import type { EventKind, Project, ProjectIntegrations } from '@/shared/api/types';
+import type { Delivery, EventKind, Project, ProjectIntegrations } from '@/shared/api/types';
+import { formatMoment } from '@/shared/lib/format';
 import { Button, IconButton } from '@/shared/ui/Button';
 import { CheckMenu } from '@/shared/ui/CheckMenu';
 import { Dialog } from '@/shared/ui/Dialog';
@@ -13,7 +14,12 @@ import { GitHubItems } from '../github/GitHubItems';
 import { agoInWords, gitHubInWords, linkedInWords } from '../github/gitHubModel';
 import { useGitHubCommands, useGitHubOverview } from '../github/gitHubQueries';
 import styles from './IntegrationsDialog.module.css';
-import { useIntegrationCommands, useProjectIntegrations } from './integrationQueries';
+import {
+  useDeliveryTests,
+  useIntegrationCommands,
+  useIntegrationDeliveries,
+  useProjectIntegrations,
+} from './integrationQueries';
 import { EVENT_LABELS, chosenInWords, slackInWords, webAddressesInWords } from './integrationModel';
 
 interface IntegrationsDialogProps {
@@ -192,7 +198,11 @@ function GitHubPart({ project, integrations, attempt }: PartProps) {
 
 function SlackPart({ project, integrations, attempt }: PartProps) {
   const commands = useIntegrationCommands(project.id);
+  const tests = useDeliveryTests(project.id);
+  const deliveries = useIntegrationDeliveries(project.id);
   const [address, setAddress] = useState('');
+  const [isSending, setSending] = useState(false);
+  const [tried, setTried] = useState<Delivery | null>(null);
   const slack = integrations.slack;
 
   return (
@@ -223,6 +233,35 @@ function SlackPart({ project, integrations, attempt }: PartProps) {
             <Trash2 />
           </IconButton>
         </div>
+      )}
+      {slack !== null && (
+        <div className={styles.row}>
+          <Button
+            variant="ghost"
+            disabled={isSending}
+            onClick={() => {
+              setSending(true);
+              setTried(null);
+              void attempt(async () => {
+                setTried(await tests.testChannel());
+              }).finally(() => {
+                setSending(false);
+              });
+            }}
+          >
+            {isSending ? 'Sending…' : 'Send a test message'}
+          </Button>
+          {tried !== null && (
+            <span className={styles.fact} role="status">
+              {tried.succeeded ? 'Slack took it.' : `It could not be sent: ${tried.failure ?? ''}`}
+            </span>
+          )}
+        </div>
+      )}
+      {slack !== null && tried === null && deliveries.data?.channelFailure && (
+        <p className={styles.problem} role="status">
+          The last message could not be sent: {deliveries.data.channelFailure.failure}
+        </p>
       )}
       <form
         className={styles.row}
@@ -255,6 +294,8 @@ function SlackPart({ project, integrations, attempt }: PartProps) {
 
 function WebAddressesPart({ project, integrations, attempt }: PartProps) {
   const commands = useIntegrationCommands(project.id);
+  const tests = useDeliveryTests(project.id);
+  const deliveries = useIntegrationDeliveries(project.id);
   const [address, setAddress] = useState('');
   const [secret, setSecret] = useState('');
 
@@ -269,26 +310,39 @@ function WebAddressesPart({ project, integrations, attempt }: PartProps) {
       {integrations.webAddresses.length > 0 && (
         <ul className={styles.list}>
           {integrations.webAddresses.map((listening, index) => (
-            <li key={`${listening.address}-${index.toString()}`} className={styles.line}>
-              <span className={styles.address} data-selectable>
-                {listening.address}
-              </span>
-              {listening.isSigned && <span className={styles.mark}>Signed</span>}
-              <EventsMenu
-                label="Events sent to the address"
-                events={listening.events}
-                onToggle={(kind, on) => {
-                  void attempt(() => commands.setWebAddressEvent(index, kind, on));
-                }}
-              />
-              <IconButton
-                label={`Remove ${listening.address}`}
-                onClick={() => {
-                  void attempt(() => commands.removeWebAddress(index));
-                }}
-              >
-                <Trash2 />
-              </IconButton>
+            <li key={`${listening.address}-${index.toString()}`} className={styles.entry}>
+              <div className={styles.line}>
+                <span className={styles.address} data-selectable>
+                  {listening.address}
+                </span>
+                {listening.isSigned && <span className={styles.mark}>Signed</span>}
+                <EventsMenu
+                  label="Events sent to the address"
+                  events={listening.events}
+                  onToggle={(kind, on) => {
+                    void attempt(() => commands.setWebAddressEvent(index, kind, on));
+                  }}
+                />
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    void attempt(async () => {
+                      await tests.testWebAddress(index);
+                    });
+                  }}
+                >
+                  Send a test event
+                </Button>
+                <IconButton
+                  label={`Remove ${listening.address}`}
+                  onClick={() => {
+                    void attempt(() => commands.removeWebAddress(index));
+                  }}
+                >
+                  <Trash2 />
+                </IconButton>
+              </div>
+              <DeliveryList deliveries={deliveries.data?.addresses[index] ?? []} />
             </li>
           ))}
         </ul>
@@ -333,6 +387,32 @@ function WebAddressesPart({ project, integrations, attempt }: PartProps) {
         </Button>
       </form>
     </section>
+  );
+}
+
+/** The last deliveries of an address since Teamwright started, newest first: when, what, the answer. */
+function DeliveryList({ deliveries }: { deliveries: readonly Delivery[] }) {
+  if (deliveries.length === 0) {
+    return null;
+  }
+  return (
+    <ol className={styles.deliveries} aria-label="Last deliveries">
+      {deliveries.map((delivery, index) => (
+        <li
+          key={`${delivery.at}-${index.toString()}`}
+          className={styles.delivery}
+          data-failed={!delivery.succeeded || undefined}
+        >
+          <span className={styles.when}>{formatMoment(delivery.at)}</span>
+          <span className={styles.event}>{delivery.event}</span>
+          <span>
+            {delivery.succeeded
+              ? `Answered ${String(delivery.status)}`
+              : (delivery.failure ?? 'Not taken')}
+          </span>
+        </li>
+      ))}
+    </ol>
   );
 }
 

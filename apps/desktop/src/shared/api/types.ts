@@ -1029,3 +1029,23 @@ export interface IssueDraft {
   title: string;
   body: string;
 }
+
+/** One delivery to a Slack channel or a web address. */
+export interface Delivery {
+  at: Moment;
+  /** The name of the event, or `test`. */
+  event: string;
+  /** The status of the answer, if there was one. */
+  status: number | null;
+  succeeded: boolean;
+  /** Why it was not taken, in words, if it was not. */
+  failure: string | null;
+}
+
+/** What was delivered for a project since the program started. Kept in memory only. */
+export interface Deliveries {
+  /** The last message to the channel, if it could not be delivered. */
+  channelFailure: Delivery | null;
+  /** For each web address, in their order, its last ten deliveries, newest first. */
+  addresses: Delivery[][];
+}
