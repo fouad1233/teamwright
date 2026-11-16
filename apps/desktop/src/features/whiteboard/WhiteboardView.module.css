@@ -1,0 +1,447 @@
+/*
+ * The whiteboard is a workshop's pin board on a ground (shared/ui/Ground)
+ * that is moved and zoomed: tinted cards, words, hairline boxes and rings,
+ * and hairline joins. The bar of tools stands at the top left, the buttons
+ * of the ground at the bottom left, as on the mind map.
+ *
+ * Where a thing lies is set by the component, in pixels of the ground. A
+ * line or a mark that is to keep its size on screen divides by the scale.
+ */
+.view {
+  position: relative;
+  height: 100%;
+}
+
+/* The ground: a faint grid of dots that moves and scales with it. */
+.view .frame {
+  height: 100%;
+  background-color: var(--ground);
+  background-image: radial-gradient(
+    circle at 1px 1px,
+    var(--rule-strong) 0.75px,
+    transparent 1.25px
+  );
+  background-position: var(--grid-x, 0) var(--grid-y, 0);
+  background-size: var(--grid-step, 24px) var(--grid-step, 24px);
+  cursor: default;
+}
+
+/* The frame takes the focus from a press on the bare ground, so that the
+   keys work after it; the ring belongs to the things on it. */
+.view .frame:focus-visible {
+  outline: none;
+}
+
+.view .frame:not([data-tool='select']) {
+  cursor: crosshair;
+}
+
+.view .frame[data-panning],
+.view .frame[data-panning] * {
+  cursor: grab;
+}
+
+.view .frame[data-moving],
+.view .frame[data-moving] * {
+  cursor: grabbing;
+}
+
+.sheet {
+  /* A line that is one pixel on screen at every scale of the ground. */
+  --hairline: calc(1px / var(--ground-scale, 1));
+  --on-screen: calc(1 / var(--ground-scale, 1));
+
+  position: relative;
+}
+
+/* ------------------------------------------------------------------ */
+/* Shapes                                                               */
+/* ------------------------------------------------------------------ */
+
+.shape {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  color: var(--ink);
+  outline: none;
+}
+
+.frame[data-tool='select'] .shape {
+  cursor: move;
+}
+
+.words {
+  min-height: 0;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+/* Words being written are set exactly as they will stand. */
+.writing {
+  flex: 1;
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  line-height: inherit;
+  text-align: inherit;
+  text-transform: inherit;
+  resize: none;
+  outline: none;
+  caret-color: var(--brass);
+}
+
+/* A note: a card of paper, tinted with the wash of a pigment. */
+.note {
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-3) var(--space-2);
+  border-radius: 3px;
+  background-color: var(--surface-raised);
+  box-shadow: inset 0 0 0 var(--hairline) var(--rule-strong);
+  font-size: var(--text-body);
+  line-height: 1.45;
+}
+
+.note[data-tone] {
+  background-image: linear-gradient(var(--tone-wash) 0 0);
+  box-shadow: inset 0 0 0 var(--hairline) color-mix(in srgb, var(--tone) 26%, transparent);
+}
+
+/* The task a note became: its status and its key, set as the program sets them. */
+.taskLine {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink-faint);
+}
+
+.reference {
+  padding: 0;
+  color: var(--ink-soft);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+}
+
+.reference:hover {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-thickness: var(--hairline);
+  text-underline-offset: 2px;
+}
+
+.note[data-progress='done'] .words {
+  color: var(--ink-faint);
+}
+
+/* A text: words in the serif, without a frame. */
+.text {
+  font-family: var(--font-serif);
+  font-size: var(--text-title);
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+
+/* A box: a hairline frame, named in its corner the way the parts of a
+   drawing are labeled. */
+.box {
+  padding: var(--space-2) 10px;
+  border-radius: 2px;
+  box-shadow: inset 0 0 0 var(--hairline) var(--ink-faint);
+  color: var(--ink-soft);
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  letter-spacing: 0.08em;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+
+/* An ellipse: a hairline ring, its words in the middle. */
+.ellipse {
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-3) var(--space-4);
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 var(--hairline) var(--ink-faint);
+  font-size: var(--text-small);
+  line-height: 1.4;
+  text-align: center;
+}
+
+.ellipse .writing {
+  flex: none;
+  width: 100%;
+  field-sizing: content;
+}
+
+/* Gold marks what is selected; a ring of ink, what the keys are on. */
+.selected,
+.note.selected,
+.note[data-tone].selected {
+  box-shadow: inset 0 0 0 var(--hairline) var(--brass);
+}
+
+.text.selected {
+  box-shadow: 0 0 0 var(--hairline) var(--brass);
+}
+
+.shape:focus-visible:not(.selected) {
+  box-shadow: 0 0 0 var(--hairline) var(--ink-soft);
+}
+
+/* The shape a line being drawn would end on. */
+.target,
+.note.target {
+  box-shadow: inset 0 0 0 calc(2px / var(--ground-scale, 1)) var(--brass);
+}
+
+/* ------------------------------------------------------------------ */
+/* Joins                                                                */
+/* ------------------------------------------------------------------ */
+
+.joins {
+  position: absolute;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.join path {
+  fill: none;
+  stroke: var(--ink-faint);
+  stroke-width: var(--hairline);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* A wide clear stroke under each join, for the pointer. */
+.join .hit {
+  stroke: transparent;
+  stroke-width: calc(12px / var(--ground-scale, 1));
+  pointer-events: stroke;
+}
+
+.frame[data-tool='select'] .join .hit {
+  cursor: pointer;
+}
+
+.joinSelected path:not(.hit) {
+  stroke: var(--brass);
+  stroke-width: calc(1.5px / var(--ground-scale, 1));
+}
+
+.joinDrawing path {
+  stroke: var(--brass);
+  stroke-dasharray: calc(4px / var(--ground-scale, 1)) calc(3px / var(--ground-scale, 1));
+}
+
+/* ------------------------------------------------------------------ */
+/* Selection and drawing                                                */
+/* ------------------------------------------------------------------ */
+
+/* The small square grips at the corners of the one selected shape. */
+.grip {
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  border: 1px solid var(--brass);
+  background: var(--ground);
+  transform: scale(var(--on-screen)) translate(-50%, -50%);
+  transform-origin: 0 0;
+}
+
+.grip[data-corner='top-left'],
+.grip[data-corner='bottom-right'] {
+  cursor: nwse-resize;
+}
+
+.grip[data-corner='top-right'],
+.grip[data-corner='bottom-left'] {
+  cursor: nesw-resize;
+}
+
+/* The small menu of the selected shape, above its top right corner. */
+.more {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 18px;
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--rule-strong);
+  color: var(--ink-faint);
+  cursor: pointer;
+  transform: scale(var(--on-screen)) translate(-100%, calc(-100% - 6px));
+  transform-origin: 0 0;
+}
+
+.more:hover,
+.more[data-state='open'] {
+  color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--ink-faint);
+}
+
+.more svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* The box around several selected things. */
+.around {
+  position: absolute;
+  box-shadow: 0 0 0 var(--hairline) rgb(var(--brass-rgb) / 50%);
+  pointer-events: none;
+}
+
+/* The frame being dragged to select. */
+.framing {
+  position: absolute;
+  background: var(--brass-soft);
+  box-shadow: inset 0 0 0 var(--hairline) var(--brass);
+  pointer-events: none;
+}
+
+/* The shape being drawn, before it is made. */
+.making {
+  position: absolute;
+  border-radius: 2px;
+  box-shadow: inset 0 0 0 var(--hairline) var(--brass);
+  pointer-events: none;
+}
+
+.making.ellipse {
+  border-radius: 50%;
+}
+
+/* A dot of a tint, in the menu of a note. */
+.swatch {
+  display: block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  background-color: var(--surface-raised);
+  box-shadow: inset 0 0 0 1px var(--rule-strong);
+}
+
+.swatch[data-tone] {
+  background-color: var(--tone);
+  box-shadow: none;
+}
+
+/* ------------------------------------------------------------------ */
+/* The bar of tools, the foot, and the empty board                      */
+/* ------------------------------------------------------------------ */
+
+/* One block of cells divided by hairlines, like the buttons of the ground. */
+.tools {
+  position: absolute;
+  top: var(--space-4);
+  left: var(--space-5);
+  display: inline-flex;
+  height: var(--control-height);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+}
+
+.tool {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--control-height);
+  color: var(--ink-faint);
+  transition:
+    background-color 100ms ease,
+    color 100ms ease;
+}
+
+.tool + .tool {
+  border-left: 1px solid var(--rule);
+}
+
+/* The tools that make things stand apart from the one that selects. */
+.tool.afterSelect {
+  border-left-color: var(--rule-strong);
+}
+
+.tool:first-child {
+  border-radius: var(--radius-control) 0 0 var(--radius-control);
+}
+
+.tool:last-child {
+  border-radius: 0 var(--radius-control) var(--radius-control) 0;
+}
+
+.tool:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+
+.tool[aria-pressed='true'] {
+  background: var(--pressed);
+  color: var(--brass-text);
+}
+
+.tool:focus-visible {
+  outline-offset: -2px;
+}
+
+.tool svg {
+  width: 14px;
+  height: 14px;
+  stroke-width: 1.75;
+}
+
+.foot {
+  position: absolute;
+  right: var(--space-5);
+  bottom: var(--space-5);
+  left: var(--space-5);
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  pointer-events: none;
+}
+
+.foot > * {
+  pointer-events: auto;
+}
+
+.room {
+  margin: 0 0 0 auto;
+  color: var(--pigment-amber-text);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+
+.empty {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  max-width: 52ch;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  pointer-events: none;
+}
+
+.emptyLead {
+  margin: 0 0 var(--space-2);
+  font-family: var(--font-serif);
+  font-size: var(--text-title);
+  letter-spacing: -0.01em;
+}
+
+.emptyNote {
+  margin: 0;
+  color: var(--ink-soft);
+  line-height: 1.55;
+}
