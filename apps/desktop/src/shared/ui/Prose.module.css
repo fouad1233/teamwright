@@ -97,6 +97,22 @@
   background: var(--ink-soft);
 }
 
+/* A box that can be pressed, where the text lets its boxes be ticked. */
+.tickable {
+  cursor: pointer;
+  transition:
+    border-color var(--duration-quick) ease,
+    background-color var(--duration-quick) ease;
+}
+
+.tickable:hover {
+  border-color: var(--ink);
+}
+
+.tickable[data-checked]:hover {
+  background: var(--ink);
+}
+
 /* A name in code is a chip: the same faint tint in the dark and in the
    light, so that it reads as one thing. */
 .prose code {
@@ -161,6 +177,21 @@
   border-bottom-color: var(--rule-strong);
   color: var(--ink-soft);
   font-weight: 600;
+}
+
+/* A link that can be pressed, in text the manager wrote: its words on a
+   hairline, as the interface underlines what leads somewhere. */
+.link {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--rule-strong);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  transition: text-decoration-color var(--duration-quick) ease;
+}
+
+.link:hover {
+  text-decoration-color: currentcolor;
 }
 
 /* The address of a link, which cannot be followed from here. */
