@@ -454,6 +454,10 @@ export class TauriBackend implements Backend {
     // The shell sends this after it brought the window to the front.
     return listenTo(NOTIFICATION_PRESSED, listener);
   }
+
+  openWebAddress(address: string): Promise<void> {
+    return call('open_web_address', { address });
+  }
 }
 
 /** The name of the event the shell sends when the manager pressed a notification. */

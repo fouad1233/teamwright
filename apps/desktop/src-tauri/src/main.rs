@@ -133,6 +133,7 @@ fn main() -> ExitCode {
             commands::notifications::decline_notifications,
             commands::notifications::set_notification_kind,
             commands::notifications::send_test_notification,
+            commands::web::open_web_address,
         ])
         .build(tauri::generate_context!());
 

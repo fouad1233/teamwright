@@ -139,6 +139,14 @@ The shell is where the work of an AI specialist meets the outside world
   (`NotificationSettings`). The demo backend keeps the choice in memory and
   refuses the test notification with `not_available`, as it does other
   things only the desktop has.
+- **Opening a web address.** `open_web_address` in `commands/web.rs` opens
+  an address in the manager's own browser. The pure `checked_web_address`
+  refuses anything that is not `https` with a host (and an address with a
+  name and a password); what is handed on is the address as the parser
+  wrote it again, as one argument to the system's own opener (`explorer`,
+  `open`, `xdg-open`), without a shell. `Backend.openWebAddress` calls it;
+  the demo does what a link does (`window.open` with `noopener`). The Embed
+  view's "Open in the browser" uses it.
 - **Planning with the Advisor.** The commands `advise`, `answer_interview`
   and `approve_proposal` in `commands/work.rs` carry it out; `reply` and
   `list_conversations_waiting` serve conversations with the Advisor too. In

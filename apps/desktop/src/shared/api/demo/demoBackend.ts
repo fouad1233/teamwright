@@ -1472,6 +1472,14 @@ export class DemoBackend implements Backend {
     return () => undefined;
   }
 
+  openWebAddress(address: string): Promise<void> {
+    return this.answer(() => {
+      // In the browser the demo does what a link does: a new tab, which
+      // learns nothing of the page that opened it.
+      window.open(address, '_blank', 'noopener,noreferrer');
+    });
+  }
+
   private changeNotifications(change: Partial<NotificationChoice>): NotificationChoice {
     this.notifications = { ...this.notifications, ...change };
     return { ...this.notifications };

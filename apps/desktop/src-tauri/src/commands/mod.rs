@@ -13,5 +13,6 @@ pub mod sync;
 pub mod tasks;
 pub mod team;
 pub mod views;
+pub mod web;
 pub mod work;
 pub mod workbook;

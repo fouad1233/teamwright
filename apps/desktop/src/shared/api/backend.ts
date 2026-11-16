@@ -498,6 +498,13 @@ export interface Backend {
    * that stops the calls.
    */
   onNotificationPressed(listener: (pressed: NotificationPressed) => void): () => void;
+
+  /**
+   * Opens a web address in the manager's own browser. Only an address that
+   * starts with `https://` and names a host is opened (`invalid_request`
+   * otherwise).
+   */
+  openWebAddress(address: string): Promise<void>;
 }
 
 /**

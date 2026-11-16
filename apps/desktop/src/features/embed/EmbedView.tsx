@@ -1,7 +1,9 @@
 import { useId, useMemo, useState, type FormEvent } from 'react';
 
+import { useBackend } from '@/shared/api/BackendProvider';
 import { Button } from '@/shared/ui/Button';
 import { TextInput } from '@/shared/ui/Field';
+import { describeFailure, useNotifier } from '@/shared/ui/Toast';
 
 import type { KindProps } from '../views/viewKinds';
 import { useSetViewContent } from '../views/viewQueries';
@@ -50,9 +52,15 @@ function Frame({ address, onChange }: { address: string; onChange: () => void })
   // A new number makes a new frame, which loads the page again.
   const [loads, setLoads] = useState(0);
   const shown = useMemo(() => embedAddress(address), [address]);
+  const backend = useBackend();
+  const notifier = useNotifier();
 
   function openInBrowser() {
-    window.open(address, '_blank', 'noopener,noreferrer');
+    // The shell hands the address to the browser of the system; the
+    // desktop window itself opens no tabs.
+    backend.openWebAddress(address).catch((failure: unknown) => {
+      notifier.showError(describeFailure(failure));
+    });
   }
 
   return (
