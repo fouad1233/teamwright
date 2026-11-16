@@ -1,0 +1,279 @@
+/*
+ * The activity is a log book. A slim strip holds the control that narrows
+ * it; under the strip is a sheet to read down: a heading for every day on
+ * a strong rule, and under it the entries of the day as lines of writing,
+ * without rules between them, as the history of a task is set. An entry
+ * has three columns that run down the whole sheet: the time and the key of
+ * the task in the monospace, then the sentence. The sentences keep to a
+ * measure that can still be read beside the panel of a task.
+ */
+.activity {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* The strip above the log, like the strip above the lanes of a sprint. */
+.head {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-3);
+  height: 40px;
+  padding: 0 var(--space-5);
+  border-bottom: 1px solid var(--rule);
+}
+
+.scroller {
+  /* How high the heading of a day is while it stays at the top. */
+  --day-head: 48px;
+
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  /* What the keyboard brings into view comes to rest under that heading,
+     not behind it. */
+  scroll-padding-top: calc(var(--day-head) + var(--space-2));
+}
+
+/* The sheet is as wide as the sheets of the backlog and the dashboard. */
+.sheet {
+  /* The width of the column of times, and of the lines of the log. */
+  --time: 40px;
+  --measure: 600px;
+
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  max-width: 1120px;
+  padding: var(--space-2) var(--space-5) var(--space-8);
+}
+
+.day {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* The name of a day is the one gesture of the serif in this view. It stands
+   on a strong rule that runs on to the edge of the sheet, and stays at the
+   top while the entries of its day pass under it, so that a long day still
+   says which day it is. */
+.dayHead {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  box-sizing: border-box;
+  min-height: var(--day-head);
+  padding: var(--space-4) 0 var(--space-2);
+  border-bottom: 1px solid var(--rule-strong);
+  background: var(--ground);
+}
+
+.dayName {
+  font-family: var(--font-serif);
+  font-size: var(--text-title);
+  font-weight: 400;
+  line-height: 1.1;
+}
+
+.entries {
+  display: flex;
+  flex-direction: column;
+  max-width: var(--measure);
+}
+
+/* An entry is a line of the log: when, which task, what. The entries of
+   one minute stand close together, and a new minute begins after a small
+   space, so that the times at the left can be read down like a scale. */
+.entry {
+  display: grid;
+  grid-template-columns: var(--time) max-content minmax(0, 1fr);
+  column-gap: var(--space-3);
+  align-items: baseline;
+  padding: 3px 0;
+  margin-top: var(--space-2);
+}
+
+.entry:first-child,
+.entry.follows {
+  margin-top: 0;
+}
+
+.time,
+.key,
+.aside {
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+/* A time is written once. The entries of the same minute that follow leave
+   it out, as the lines of a log book do; it is still there to be read out,
+   and shows itself when its line is pointed at or holds the keyboard. */
+.follows .time {
+  opacity: 0;
+  transition: opacity var(--duration-quick) ease;
+}
+
+.follows:hover .time,
+.follows:focus-within .time {
+  opacity: 1;
+}
+
+/* The keys stand in one column, as wide as the longest of them. */
+.key {
+  min-width: calc(var(--key-length) * (1ch + 0.02em));
+  text-align: left;
+}
+
+/* The key of a task is the way to it: it stands on a hairline, like the
+   links in a sentence elsewhere. The space around it is part of what can
+   be pressed, and takes no room. */
+.link {
+  box-sizing: content-box;
+  padding: 3px 6px;
+  margin: -3px -6px;
+  border-radius: var(--radius-control);
+  text-decoration: underline;
+  text-decoration-color: var(--rule-strong);
+  text-underline-offset: 3px;
+  transition:
+    color 100ms ease,
+    text-decoration-color 100ms ease;
+}
+
+.link:hover,
+.link.isOpen {
+  color: var(--ink);
+}
+
+.link:hover {
+  text-decoration-color: var(--ink-faint);
+}
+
+/* The ring of the keyboard keeps clear of the title beside the key. */
+.link:focus-visible {
+  outline-offset: 0;
+}
+
+/* What happened: the title of the task in ink, and the rest of the
+   sentence a little quieter. */
+.what {
+  min-width: 0;
+  color: var(--ink-soft);
+  overflow-wrap: anywhere;
+}
+
+.title {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+/* A task that was deleted since is named in a quieter ink, and its key
+   stands on no line. */
+.gone .title {
+  color: var(--ink-soft);
+}
+
+/* The parts of an entry that tells several changes, one to a line. */
+.parts {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Where a change was made, or that its task is gone: a note after the
+   words, in the hand of the times and the keys. */
+.aside {
+  margin-left: var(--space-3);
+}
+
+/* What stands in the place of the log when it has nothing to show. It
+   begins where the name of a day would. */
+.nothing {
+  max-width: var(--measure);
+  padding-top: var(--space-4);
+  color: var(--ink-soft);
+}
+
+/* The foot of the log: the way on into the past, or its beginning. */
+.foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2) var(--space-4);
+  max-width: var(--measure);
+}
+
+.earlier {
+  height: 24px;
+  padding: 0 var(--space-2);
+  margin-left: calc(-1 * var(--space-2));
+  border-radius: var(--radius-control);
+  color: var(--ink-soft);
+  font-size: var(--text-small);
+  font-weight: 550;
+  transition:
+    background-color 100ms ease,
+    color 100ms ease;
+}
+
+.earlier:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+
+/* While earlier entries are read, the button cannot be pressed. It only
+   goes quiet when the reading takes long enough to be noticed. */
+.earlier[aria-disabled='true'] {
+  background: none;
+  color: var(--ink-faint);
+  cursor: default;
+  transition-delay: var(--duration-arrive);
+}
+
+.end {
+  color: var(--ink-faint);
+  font-size: var(--text-small);
+}
+
+.end:focus-visible,
+.nothing:focus-visible {
+  outline-offset: 4px;
+}
+
+.failure {
+  flex-basis: 100%;
+  color: var(--danger);
+  font-size: var(--text-small);
+}
+
+/* While the history loads, or when it cannot be. */
+.note {
+  padding: var(--space-5);
+  color: var(--ink-soft);
+}
+
+/* Before anything has happened. */
+.empty {
+  max-width: 60ch;
+  padding: var(--space-6) var(--space-5);
+}
+
+.emptyLead {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-strong);
+  font-weight: 600;
+}
+
+.emptyNote {
+  margin: 0;
+  color: var(--ink-soft);
+  line-height: 1.55;
+}
