@@ -37,8 +37,8 @@ pub use agent_runtime::{
     ManagerInterview, ManagerQuestion, McpServer, ModelUsage, PermissionDenial, PermissionMode,
     PermissionProfile, PlanProposal, PlanUsage, PlanWindow, PlanWindowKind, PlannedMember,
     PlannedOwner, PlannedTask, ProgramVersion, QuestionOption, RunningTurn, SessionChoice,
-    SessionId, SessionStarted, SignIn, TeamTool, TokenCounts, TurnFailure, TurnOutcome,
-    TurnRequest,
+    SessionContext, SessionId, SessionStarted, SignIn, TeamTool, TokenCounts, TurnFailure,
+    TurnOutcome, TurnRequest,
 };
 pub use areas::AreaService;
 pub use clock::SystemClock;

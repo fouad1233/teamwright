@@ -1187,6 +1187,12 @@ fn end_turn(
     // A turn that failed may have used tokens before it did. They are
     // recorded when the program reported any.
     let used = (!outcome.usage.is_empty()).then_some(tokens);
+    if let Some(context) = outcome.context {
+        turn.record_context(teamwright_domain::ContextUse {
+            held: context.held,
+            window: context.window,
+        })?;
+    }
     match &outcome.failure {
         None => turn.finish(&outcome.final_text, tokens, now),
         Some(TurnFailure::Stopped) => turn.stop(used, now),
@@ -1858,7 +1864,15 @@ mod tests {
             duration: None,
             model_calls: None,
             permission_denials: Vec::new(),
+            context: Some(runtime_context()),
         })
+    }
+
+    fn runtime_context() -> agent_runtime::SessionContext {
+        agent_runtime::SessionContext {
+            held: 27_942,
+            window: Some(200_000),
+        }
     }
 
     #[test]
@@ -2277,6 +2291,13 @@ mod tests {
         assert_eq!(turn.state(), TurnState::Finished);
         assert_eq!(turn.answer(), REPORT);
         assert_eq!(turn.tokens(), Some(tokens_of(runtime_tokens())));
+        assert_eq!(
+            turn.context(),
+            Some(teamwright_domain::ContextUse {
+                held: 27_942,
+                window: Some(200_000),
+            })
+        );
         assert_eq!(turn.ended_at(), Some(workspace.ports.clock.now()));
         let texts: Vec<&StepContent> = turn
             .steps()

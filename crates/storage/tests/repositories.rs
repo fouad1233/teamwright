@@ -1177,6 +1177,7 @@ fn asking_and_answering_are_logged_with_the_whole_question() {
         failure: None,
         model: None,
         tokens: asked.tokens(),
+        context: asked.context(),
         decision: asked.decision().cloned(),
         interview: None,
         proposal: None,
@@ -2437,6 +2438,7 @@ fn the_work_of_a_specialist_is_kept_on_the_real_database() {
             duration: None,
             model_calls: None,
             permission_denials: Vec::new(),
+            context: None,
         }),
     );
 
@@ -2494,6 +2496,7 @@ fn the_work_of_a_specialist_is_kept_on_the_real_database() {
             duration: None,
             model_calls: None,
             permission_denials: Vec::new(),
+            context: None,
         }),
     );
     assert_eq!(work.waiting_for_manager().unwrap().len(), 1);
@@ -2625,6 +2628,7 @@ fn approving_a_proposal_creates_the_team_and_the_plan_in_one_logged_write() {
             duration: None,
             model_calls: None,
             permission_denials: Vec::new(),
+            context: None,
         }),
     );
     let approval = ApprovedProposal {

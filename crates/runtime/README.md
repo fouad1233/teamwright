@@ -161,6 +161,19 @@ and the tests rely on.
 - `modelUsage` in the `result` event adds up the whole session when a
   session is resumed. `model_usage_since_last_result` holds the turn alone,
   and is what the outcome reports. The same goes for `total_cost_usd`.
+- Every `assistant` event carries the `usage` of the request it answers:
+  `input_tokens`, `cache_read_input_tokens` and
+  `cache_creation_input_tokens` add up to everything the session sent the
+  model then. The last such event of the session itself (not of a helper,
+  whose events have a `parent_tool_use_id`) is how full the context is;
+  its `output_tokens` there are only what was written so far. Each model in
+  `modelUsage` and `model_usage_since_last_result` names its
+  `contextWindow` (1,000,000 for every model in the recordings). Together
+  they become `TurnOutcome::context` (`SessionContext`). A turn that never
+  reached a model (the made-up message of `<synthetic>`, all zero) has no
+  context, and a turn that ended without a `result` has no window. What the
+  program reports when it makes room in a full session (the context then
+  shrinks) has not been seen.
 - A failed turn may still have the subtype `success`; `is_error` decides.
   Without a sign-in, the turn ends with the text "Not logged in" and an
   assistant event with `"error": "authentication_failed"`.

@@ -422,6 +422,7 @@ fn ended(final_text: &str) -> AgentEvent {
         duration: None,
         model_calls: None,
         permission_denials: Vec::new(),
+        context: None,
     })
 }
 

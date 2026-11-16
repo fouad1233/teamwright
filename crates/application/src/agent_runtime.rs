@@ -723,6 +723,19 @@ pub struct TurnOutcome {
     pub model_calls: Option<u32>,
     /// The tool uses that were denied.
     pub permission_denials: Vec<PermissionDenial>,
+    /// How full the context of the session was at the end of the turn, if
+    /// the program said.
+    pub context: Option<SessionContext>,
+}
+
+/// How full the context of a session is, as the program reports it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SessionContext {
+    /// The tokens the last request of the turn held: what the model read,
+    /// read from the cache and wrote to the cache.
+    pub held: u64,
+    /// The tokens the window of the model has, if the program said.
+    pub window: Option<u64>,
 }
 
 impl TurnOutcome {
@@ -881,6 +894,7 @@ mod tests {
             duration: None,
             model_calls: None,
             permission_denials: Vec::new(),
+            context: None,
         };
         assert_eq!(
             outcome.total_tokens(),

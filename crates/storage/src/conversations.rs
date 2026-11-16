@@ -327,6 +327,7 @@ impl TurnRecord {
             failure: self.failure,
             model: self.model,
             tokens,
+            context: None,
             decision: decision.map(DecisionRecord::into_decision).transpose()?,
             interview: interview.map(InterviewRecord::into_interview).transpose()?,
             proposal: proposal.map(ProposalRecord::into_proposal).transpose()?,

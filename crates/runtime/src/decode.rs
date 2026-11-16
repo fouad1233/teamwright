@@ -14,7 +14,7 @@ use chrono::{TimeZone, Utc};
 use serde_json::{Map, Value};
 use teamwright_application::{
     AgentEvent, McpServer, ModelUsage, PermissionDenial, PlanUsage, PlanWindow, PlanWindowKind,
-    SessionId, SessionStarted, TokenCounts, TurnFailure, TurnOutcome,
+    SessionContext, SessionId, SessionStarted, TokenCounts, TurnFailure, TurnOutcome,
 };
 
 use crate::team_bus::{
@@ -58,8 +58,24 @@ pub struct Decoder {
     taken_use: Option<String>,
     last_text: String,
     failure_kind: Option<String>,
+    /// The last request the session itself made to the model, not one of
+    /// a helper it started: what it held, and the model it went to.
+    last_request: Option<LastRequest>,
     result: Option<Map<String, Value>>,
 }
+
+/// What the last request of a session sent the model.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct LastRequest {
+    /// The tokens it held: read, read from the cache and written to it.
+    held: u64,
+    /// The model it went to, by its full name.
+    model: Option<String>,
+}
+
+/// How Claude Code names a message it made up itself, which no model wrote
+/// and which used no tokens.
+const MADE_UP_MODEL: &str = "<synthetic>";
 
 impl Decoder {
     /// A decoder for a new turn of a project without a team. The tests
@@ -122,6 +138,12 @@ impl Decoder {
                         message: describe_early_end(code, &error_lines),
                     },
                 };
+                // Without the last message the window is not known; what
+                // the session held is.
+                let context = self.last_request.map(|request| SessionContext {
+                    held: request.held,
+                    window: None,
+                });
                 TurnOutcome {
                     session_id: self.session_id,
                     failure: Some(failure),
@@ -131,6 +153,7 @@ impl Decoder {
                     duration: None,
                     model_calls: None,
                     permission_denials: Vec::new(),
+                    context,
                 }
             }
         }
@@ -188,6 +211,66 @@ impl Decoder {
             duration: number(result, "duration_ms").map(Duration::from_millis),
             model_calls: number(result, "num_turns").and_then(|calls| u32::try_from(calls).ok()),
             permission_denials,
+            context: self.context_at_the_end(result),
+        }
+    }
+
+    /// How full the context of the session is after the turn: what its last
+    /// request held, against the window the last message names for the
+    /// model of that request. Both the usage of this turn and that of the
+    /// whole session name the window.
+    fn context_at_the_end(&self, result: &Map<String, Value>) -> Option<SessionContext> {
+        let request = self.last_request.as_ref()?;
+        let window = request.model.as_deref().and_then(|model| {
+            ["model_usage_since_last_result", "modelUsage"]
+                .iter()
+                .filter_map(|key| result.get(*key).and_then(Value::as_object))
+                .find_map(|models| {
+                    models
+                        .get(model)
+                        .and_then(Value::as_object)
+                        .and_then(|counts| number(counts, "contextWindow"))
+                })
+        });
+        Some(SessionContext {
+            held: request.held,
+            window,
+        })
+    }
+
+    /// Remembers the size of a request the session made, from the usage of
+    /// the message the model answered with. The messages of a helper the
+    /// session started run in a context of their own and are passed over.
+    fn note_request(&mut self, event: &Map<String, Value>) {
+        if event
+            .get("parent_tool_use_id")
+            .is_some_and(|parent| !parent.is_null())
+        {
+            return;
+        }
+        let Some(message) = event.get("message").and_then(Value::as_object) else {
+            return;
+        };
+        let model = text(message, "model");
+        if model == Some(MADE_UP_MODEL) {
+            return;
+        }
+        let Some(usage) = message.get("usage").and_then(Value::as_object) else {
+            return;
+        };
+        let held = [
+            "input_tokens",
+            "cache_read_input_tokens",
+            "cache_creation_input_tokens",
+        ]
+        .iter()
+        .filter_map(|key| number(usage, key))
+        .fold(0_u64, u64::saturating_add);
+        if held > 0 {
+            self.last_request = Some(LastRequest {
+                held,
+                model: model.map(str::to_owned),
+            });
         }
     }
 
@@ -268,6 +351,7 @@ impl Decoder {
         if let Some(kind) = text(event, "error") {
             self.failure_kind = Some(kind.to_owned());
         }
+        self.note_request(event);
         let mut events = Vec::new();
         for block in content_blocks(event) {
             match text(block, "type") {
@@ -904,6 +988,90 @@ mod tests {
         let second = decoder.decode_line(&ask("toolu_sample2"));
         assert!(matches!(first.as_slice(), [AgentEvent::ManagerAsked(_)]));
         assert!(matches!(second.as_slice(), [AgentEvent::ToolUse { .. }]));
+    }
+
+    fn context(held: u64, window: Option<u64>) -> Option<SessionContext> {
+        Some(SessionContext { held, window })
+    }
+
+    #[test]
+    fn the_context_is_the_size_of_the_last_request_against_the_window_of_its_model() {
+        // The last message of the assistant read 2 tokens, 20,809 from the
+        // cache, and wrote 5,279 to it. The window of the model is in the
+        // usage by model of the last message.
+        let (_, decoder) = replay(FILE_WRITTEN);
+        assert_eq!(
+            decoder.finish(exited()).context,
+            context(2 + 20_809 + 5279, Some(1_000_000))
+        );
+
+        let (_, decoder) = replay(TEXT_REPLY);
+        assert_eq!(
+            decoder.finish(exited()).context,
+            context(2 + 10_115 + 11_325, Some(1_000_000))
+        );
+
+        // A resumed session holds what was said before: more than this
+        // turn read.
+        let (_, decoder) = replay(RESUMED_WITH_DENIALS);
+        assert_eq!(
+            decoder.finish(exited()).context,
+            context(2 + 33_114 + 565, Some(1_000_000))
+        );
+
+        let (_, decoder) = replay(PLAN_PROPOSED);
+        assert_eq!(
+            decoder.finish(exited()).context,
+            context(2 + 8496 + 2275, Some(1_000_000))
+        );
+    }
+
+    #[test]
+    fn a_turn_that_reached_no_model_reports_no_context() {
+        let (_, decoder) = replay(NOT_SIGNED_IN_RECORDING);
+        assert_eq!(
+            decoder
+                .finish(ProcessEnd::Exited {
+                    code: Some(1),
+                    error_lines: Vec::new(),
+                })
+                .context,
+            None
+        );
+    }
+
+    #[test]
+    fn a_helper_does_not_count_and_an_early_end_knows_no_window() {
+        let mut decoder = Decoder::new();
+        decoder.decode_line(
+            r#"{"type":"assistant","parent_tool_use_id":null,"message":{"model":"claude-sample",
+                "usage":{"input_tokens":3,"cache_read_input_tokens":40000,
+                "cache_creation_input_tokens":1000,"output_tokens":20},"content":[]}}"#,
+        );
+        decoder.decode_line(
+            r#"{"type":"assistant","parent_tool_use_id":"toolu_sample1","message":{
+                "model":"claude-sample","usage":{"input_tokens":900,"output_tokens":5},
+                "content":[]}}"#,
+        );
+
+        let outcome = decoder.finish(ProcessEnd::Stopped);
+
+        assert_eq!(outcome.context, context(41_003, None));
+    }
+
+    #[test]
+    fn a_window_the_program_does_not_name_stays_unknown() {
+        let mut decoder = Decoder::new();
+        decoder.decode_line(
+            r#"{"type":"assistant","message":{"model":"claude-sample",
+                "usage":{"input_tokens":10,"cache_read_input_tokens":90},"content":[]}}"#,
+        );
+        decoder.decode_line(
+            r#"{"type":"result","subtype":"success","is_error":false,
+                "modelUsage":{"claude-other":{"outputTokens":7,"contextWindow":200000}}}"#,
+        );
+
+        assert_eq!(decoder.finish(exited()).context, context(100, None));
     }
 
     #[test]

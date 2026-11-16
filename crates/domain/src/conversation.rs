@@ -511,6 +511,60 @@ impl TokenCounts {
     }
 }
 
+/// How full the context of a session was after a turn: what the last
+/// request of the turn sent the model, against the size of the model's
+/// window.
+///
+/// A session of the agent program keeps everything said in it, and sends
+/// it all again with every request. When the window is nearly full the
+/// program makes room by summing up what was said, so the context can
+/// shrink from one turn to the next.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ContextUse {
+    /// The tokens the last request held: what the model read, what it read
+    /// from the cache and what it wrote to the cache.
+    pub held: u64,
+    /// The tokens the window of the model has, if the program said.
+    pub window: Option<u64>,
+}
+
+impl ContextUse {
+    /// From how many hundredths of its window on a context is nearly full.
+    pub const NEARLY_FULL_PERCENT: u64 = 80;
+
+    /// The part of the window the context holds, from 0 to 1 and above if
+    /// the program reported more than the window. Nothing if the window is
+    /// not known or is empty.
+    #[must_use]
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "a share is shown, never counted with; tokens stay far below 2^52"
+    )]
+    pub fn share(&self) -> Option<f64> {
+        self.window
+            .filter(|window| *window > 0)
+            .map(|window| self.held as f64 / window as f64)
+    }
+
+    /// Whether the context is nearly full: the session will soon have to
+    /// make room. A context whose window is not known is never nearly full.
+    #[must_use]
+    pub fn is_nearly_full(&self) -> bool {
+        self.window.is_some_and(|window| {
+            window > 0
+                && u128::from(self.held) * 100
+                    >= u128::from(window) * u128::from(Self::NEARLY_FULL_PERCENT)
+        })
+    }
+}
+
+/// The context of a conversation: what the last turn that reported one
+/// says. Nothing while no turn has reported it.
+#[must_use]
+pub fn context_of(turns: &[Turn]) -> Option<ContextUse> {
+    turns.iter().rev().find_map(Turn::context)
+}
+
 /// The plain data of a turn, used to recreate one that was stored.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TurnSnapshot {
@@ -538,6 +592,9 @@ pub struct TurnSnapshot {
     pub model: Option<String>,
     /// The tokens the turn used, once it has ended.
     pub tokens: Option<TokenCounts>,
+    /// How full the context of the session was after the turn, if the
+    /// program said.
+    pub context: Option<ContextUse>,
     /// What the specialist asked the manager to decide in this turn, if
     /// anything.
     pub decision: Option<DecisionRequest>,
@@ -566,6 +623,7 @@ pub struct Turn {
     failure: Option<String>,
     model: Option<String>,
     tokens: Option<TokenCounts>,
+    context: Option<ContextUse>,
     decision: Option<DecisionRequest>,
     interview: Option<Interview>,
     proposal: Option<Proposal>,
@@ -604,6 +662,7 @@ impl Turn {
             failure: None,
             model: None,
             tokens: None,
+            context: None,
             decision: None,
             interview: None,
             proposal: None,
@@ -626,6 +685,7 @@ impl Turn {
             failure: snapshot.failure,
             model: snapshot.model,
             tokens: snapshot.tokens,
+            context: snapshot.context,
             decision: snapshot.decision,
             interview: snapshot.interview,
             proposal: snapshot.proposal,
@@ -708,6 +768,25 @@ impl Turn {
     #[must_use]
     pub const fn tokens(&self) -> Option<TokenCounts> {
         self.tokens
+    }
+
+    /// How full the context of the session was after the turn, if the
+    /// program said.
+    #[must_use]
+    pub const fn context(&self) -> Option<ContextUse> {
+        self.context
+    }
+
+    /// Records how full the context of the session is, as the program
+    /// reported it at the end of the turn.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the turn has ended.
+    pub fn record_context(&mut self, context: ContextUse) -> Result<(), DomainError> {
+        self.require_running()?;
+        self.context = Some(context);
+        Ok(())
     }
 
     /// What the specialist asked the manager to decide in this turn, if
@@ -1395,12 +1474,63 @@ mod tests {
             failure: None,
             model: Some("claude-model".to_owned()),
             tokens: turn.tokens(),
+            context: None,
             decision: None,
             interview: None,
             proposal: None,
         };
 
         assert_eq!(Turn::restore(snapshot), turn);
+    }
+
+    fn context(held: u64, window: Option<u64>) -> ContextUse {
+        ContextUse { held, window }
+    }
+
+    #[test]
+    fn a_context_is_nearly_full_from_eighty_hundredths_of_a_known_window() {
+        assert!(!context(159_999, Some(200_000)).is_nearly_full());
+        assert!(context(160_000, Some(200_000)).is_nearly_full());
+        assert!(context(210_000, Some(200_000)).is_nearly_full());
+        assert!(!context(190_000, None).is_nearly_full());
+        assert!(!context(10, Some(0)).is_nearly_full());
+        assert_eq!(context(50_000, Some(200_000)).share(), Some(0.25));
+        assert_eq!(context(50_000, None).share(), None);
+    }
+
+    #[test]
+    fn the_context_of_a_conversation_is_the_last_one_a_turn_reported_and_may_shrink() {
+        let ended = |reported: Option<ContextUse>| {
+            let mut turn = running_turn();
+            if let Some(reported) = reported {
+                turn.record_context(reported).unwrap();
+            }
+            turn.finish("Report.", tokens(), moment(5)).unwrap();
+            turn
+        };
+        let full = context(170_000, Some(200_000));
+        let made_room = context(42_000, Some(200_000));
+
+        assert_eq!(context_of(&[]), None);
+        assert_eq!(context_of(&[ended(None)]), None);
+        assert_eq!(context_of(&[ended(Some(full)), ended(None)]), Some(full));
+        assert_eq!(
+            context_of(&[ended(Some(full)), ended(Some(made_room))]),
+            Some(made_room)
+        );
+    }
+
+    #[test]
+    fn a_context_is_recorded_only_while_the_turn_runs() {
+        let mut turn = running_turn();
+        turn.record_context(context(1, Some(2))).unwrap();
+        turn.stop(None, moment(2)).unwrap();
+
+        assert_eq!(turn.context(), Some(context(1, Some(2))));
+        assert_eq!(
+            turn.record_context(context(3, None)),
+            Err(DomainError::TurnEnded)
+        );
     }
 
     fn option(label: &str, consequence: &str) -> DecisionOption {

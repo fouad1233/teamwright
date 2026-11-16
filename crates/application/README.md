@@ -391,7 +391,11 @@ manager's behalf are not offered.
 Usage is counted in tokens
 ([decision 0008](../../docs/decisions/0008-budgets-in-tokens.md)). The dollar
 figure is kept as `estimated_cost_usd`. Plan limits are reported as
-`PlanUsage` when the program reports them, and are unknown otherwise.
+`PlanUsage` when the program reports them, and are unknown otherwise. How
+full the context of the session is after a turn arrives as
+`TurnOutcome::context` (`SessionContext`: the tokens the last request
+held, and the window of its model if the program named it), and is kept on
+the turn (`Turn::record_context`, the domain's `ContextUse`).
 
 ## Keeping computers in step
 

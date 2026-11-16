@@ -21,7 +21,7 @@ done with them. It does no input or output.
 | `task_history` | `TaskChange`, `history_of`: what changed from one version of a task to the next |
 | `dependencies` | `DependencyGraph`: which task waits for which |
 | `member` | `Member`, `MemberKind`: an AI agent or a person on the team of a project; `MemberProfile`, `Effort`: the model and the effort of a specialist |
-| `conversation` | `Conversation`, `Turn`, `Step`, `TokenCounts`: the work of an AI specialist or of the Advisor, one request at a time; `DecisionRequest`, `DecisionOption`, `DecisionAnswer`: a question a specialist asks the manager to decide |
+| `conversation` | `Conversation`, `Turn`, `Step`, `TokenCounts`, `ContextUse` (how full the context of a session was after a turn; nearly full from 80 % of the window; `context_of` a conversation is that of its last turn that reported one): the work of an AI specialist or of the Advisor, one request at a time; `DecisionRequest`, `DecisionOption`, `DecisionAnswer`: a question a specialist asks the manager to decide |
 | `planning` | `Interview`, `InterviewQuestion`, `InterviewAnswer`: the questions the Advisor asks before it proposes; `Proposal`, `ProposedMember`, `ProposedTask`, `ProposedOwner`: the team and the plan it proposes |
 | `error` | `DomainError`: every rule that can be broken |
 | `time` | `Timestamp`, `CalendarDate` |
