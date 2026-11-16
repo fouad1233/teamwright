@@ -788,6 +788,34 @@ missing in a sentence and leaves those parts out. The dashboard does not
 show what Teamwright does not know: the limits of your plan, how long
 anything will still take, or a list of the latest changes.
 
+## Integrations
+
+"Integrations…" in the menu of a project connects it to three things
+outside Teamwright. What you set there stays on this computer: addresses
+are secrets and are never synced to your other computers.
+
+- **GitHub.** The tasks of the project know the pull requests and issues
+  that name their key, such as `SSN-4`, in their title or branch (a pull
+  request also in its description). Teamwright asks GitHub's own command
+  line program, `gh`, signed in as you, and keeps no token. If `gh` is
+  missing or not signed in, the dialog says so and what to do. The
+  repository is the one your work folder is a clone of, or the one you
+  name as `owner/name`. Each task has a part "GitHub" with its pull
+  requests and issues; a line opens it in your browser. Nothing is read in
+  the background: "Refresh" reads again. "Open an issue for this task"
+  shows the title, the text and the repository before anything is sent.
+- **Slack.** Paste the address Slack gives a channel when you add an
+  incoming webhook to it, and choose which events are told there: one
+  plain line each. "Send a test message" tries it. If a message cannot be
+  sent, the dialog says why; the work goes on.
+- **Web addresses.** Up to five addresses (https) hear the events you
+  choose, as JSON. Zapier (Catch Hook), Make and n8n listen this way, and
+  so can your own tools. A secret signs what is sent. The last ten
+  deliveries of each address are shown with the answer. The shape of what
+  is sent is described in [webhooks](../integrations/webhooks.md).
+
+Events are sent only while Teamwright runs on this computer.
+
 ## Several computers
 
 You can work on your projects from more than one computer: a desk at home
