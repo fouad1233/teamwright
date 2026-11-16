@@ -51,6 +51,14 @@ A single specialist that really works through Claude Code.
   works in the folder of the project, reports, and can be answered
 - ✅ Ask a specialist something that is not about a task
 - ✅ Token usage of every turn
+- ✅ What each agent has spent and how full its context is: the context a
+  session held at its last request against the window of its model, read
+  from what Claude Code reports, kept with the turn, and shown as a meter
+  in the office, at the head of a conversation and in the Team place; the
+  Usage of the dashboard is a table with a row for every member and the
+  Advisor. The rule is in `application`. Seen in a browser on demo data
+  and tested on recorded streams; not yet seen with a real specialist in
+  the built program
 - ✅ A specialist reads and writes files in the folder of its project and
   can do nothing else
 - ✅ The folders of a project: a work folder the manager chooses, folders
@@ -143,11 +151,17 @@ Several specialists working together with the manager in the loop.
   and the interface finds a kind by its folder, so a kind is one more
   folder. Built so far: Timeline (a row for every person along the days),
   Table (every field a column, changed in place), Workload (the hours on
-  each person week by week) and People (the kind `team`: a column for
-  every person). To come: Activity, Mind map, Map, Gallery, Doc,
-  Whiteboard, Form, Embed, Chat, Report and Files. Each was seen in a
-  browser on demo data only; none in the built program, and what a view
-  keeps was never written through the real storage by its interface
+  each person week by week), People (the kind `team`: a column for every
+  person), Gallery (the tasks as cards with a picture the view keeps),
+  Form (a sheet that makes a task when it is sent) and Embed (a page
+  from elsewhere in a sandboxed frame). To come: Activity, Mind map, Map,
+  Doc, Whiteboard, Chat, Report and Files. Each was seen in a browser on
+  demo data only; none in the built program, and what a view keeps was
+  never written through the real storage by its interface. For the Embed
+  view the content security policy of the program now allows frames from
+  https, and for the Gallery the window lets a dropped file reach the
+  page; neither was tried in the built program, and "Open in the
+  browser" there has no command of the shell behind it yet
 - ✅ A project as an Excel workbook, from the menu of the project
   ([decision 0025](../decisions/0025-the-project-as-a-workbook.md)):
   the sheets Summary, Tasks, Sprints and Team. The file the program's
