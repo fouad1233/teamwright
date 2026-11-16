@@ -17,6 +17,7 @@ import {
   countsOf,
   daysLate,
   isFinished,
+  isInWork,
   isLate,
   largestHolding,
   lateCountInWords,
@@ -196,6 +197,13 @@ describe('isFinished and isLate', () => {
   it('follow the category of the status, whatever it is called', () => {
     expect(isFinished(project, task({ id: 'x', number: 9, statusId: 'shipped' }))).toBe(true);
     expect(isFinished(project, task({ id: 'x', number: 9, statusId: 'check' }))).toBe(false);
+  });
+
+  it('call a task in work when its status is active or in review', () => {
+    expect(isInWork(project, task({ id: 'x', number: 9, statusId: 'doing' }))).toBe(true);
+    expect(isInWork(project, task({ id: 'x', number: 9, statusId: 'check' }))).toBe(true);
+    expect(isInWork(project, task({ id: 'x', number: 9, statusId: 'backlog' }))).toBe(false);
+    expect(isInWork(project, task({ id: 'x', number: 9, statusId: 'shipped' }))).toBe(false);
   });
 
   it('call a task late only when it is not finished and due before today', () => {

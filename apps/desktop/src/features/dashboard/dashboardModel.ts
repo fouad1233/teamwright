@@ -41,6 +41,12 @@ export function isFinished(project: Project, task: Task): boolean {
   return categoryOf(project, task) === 'done';
 }
 
+/** Whether a task is in work: begun and not finished, in a status that is active or in review. */
+export function isInWork(project: Project, task: Task): boolean {
+  const category = categoryOf(project, task);
+  return category === 'active' || category === 'review';
+}
+
 /** Whether a task is late: not finished, and due before today. */
 export function isLate(project: Project, task: Task, today: CalendarDate): boolean {
   // Dates in the form year-month-day compare correctly as text.
@@ -69,12 +75,11 @@ export function countsOf(
   conversations: readonly Conversation[],
   today: CalendarDate,
 ): DashboardCounts {
-  const categories = tasks.map((task) => categoryOf(project, task));
-  const finished = categories.filter((category) => category === 'done').length;
+  const finished = tasks.filter((task) => isFinished(project, task)).length;
   return {
     total: tasks.length,
     open: tasks.length - finished,
-    inWork: categories.filter((category) => category === 'active' || category === 'review').length,
+    inWork: tasks.filter((task) => isInWork(project, task)).length,
     finished,
     late: tasks.filter((task) => isLate(project, task, today)).length,
     givenToNobody: tasks.filter((task) => task.assignee === null && !isFinished(project, task))
