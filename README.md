@@ -20,7 +20,11 @@ with a clear decision request whenever a choice is yours to make.
 > **Status: pre-alpha.** The project started on 11 November 2026 and is built
 > in the open, one small commit at a time. What works today: a desktop app
 > that keeps projects and tasks in a local database, shows them on a board,
-> in a list, on a Gantt chart and on a calendar, and lets you put together a
+> in a list, on a Gantt chart, on a calendar and in fourteen more kinds of
+> view that you add (a table, a timeline, a mind map, a whiteboard, a page
+> of writing and others), writes a project as an Excel workbook, tells you
+> with a notification when something waits for you, knows the pull
+> requests on GitHub that name a task, and lets you put together a
 > team. An AI specialist on that team carries out a task through your own
 > Claude Code: it gets a brief, works in the folder of the project or in
 > one you choose, reads the folders and files you give it for reference,

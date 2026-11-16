@@ -35,3 +35,4 @@ two readers.
 | 7 | [Many hands](07-many-hands.md) | 12 November 2026 |
 | 8 | [The night shift](08-the-night-shift.md) | 13 November 2026 |
 | 9 | [The film](09-the-film.md) | 14 November 2026 |
+| 10 | [Every view](10-every-view.md) | 16 November 2026 |

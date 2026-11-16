@@ -57,8 +57,9 @@ A single specialist that really works through Claude Code.
   in the office, at the head of a conversation and in the Team place; the
   Usage of the dashboard is a table with a row for every member and the
   Advisor. The rule is in `application`. Seen in a browser on demo data
-  and tested on recorded streams; not yet seen with a real specialist in
-  the built program
+  and tested on recorded streams; the built program answered the command
+  for a project in which nobody had worked. Not yet seen with a real
+  specialist in the built program
 - ✅ A specialist reads and writes files in the folder of its project and
   can do nothing else
 - ✅ The folders of a project: a work folder the manager chooses, folders
@@ -144,29 +145,58 @@ Several specialists working together with the manager in the loop.
   travel to another computer. Dragging a tab to another place and the
   "N more" of a narrow window were seen on demo data only. A view cannot
   be grouped by anything but status yet
-- 🚧 Every kind of view the tracker the owner uses has, asked for on
-  15 November 2026. The model knows twenty kinds, a view may keep content
-  of its own
+- ✅ Every kind of view the tracker the owner uses has, asked for on
+  15 November 2026, but for the map, which the owner said is not needed.
+  A view may keep content of its own
   ([decision 0024](../decisions/0024-a-view-keeps-content-of-its-own.md)),
   and the interface finds a kind by its folder, so a kind is one more
-  folder. Built so far: Timeline (a row for every person along the days),
-  Table (every field a column, changed in place), Workload (the hours on
-  each person week by week), People (the kind `team`: a column for every
-  person), Gallery (the tasks as cards with a picture the view keeps),
-  Form (a sheet that makes a task when it is sent) and Embed (a page
-  from elsewhere in a sandboxed frame). To come: Activity, Mind map, Map,
-  Doc, Whiteboard, Chat, Report and Files. Each was seen in a browser on
-  demo data only; none in the built program, and what a view keeps was
-  never written through the real storage by its interface. For the Embed
-  view the content security policy of the program now allows frames from
-  https, and for the Gallery the window lets a dropped file reach the
-  page; neither was tried in the built program, and "Open in the
-  browser" there has no command of the shell behind it yet
+  folder. Fourteen kinds were added to the six: Timeline (a row for every
+  person along the days), Table (every field a column, changed in
+  place), Workload (the hours on each person week by week), People (the
+  kind `team`: a column for every person), Activity (the log of the
+  project), Mind map (the project as a tree that folds), Gallery (cards
+  with a picture the view keeps), Doc (a page of Markdown), Whiteboard
+  (notes, boxes and arrows on a free ground; a note can become a task),
+  Form (a sheet that makes a task), Embed (a page from elsewhere in a
+  sandboxed frame), Chat (the talk with the specialists that is not
+  about a task), Report (one page about the project, to print or save as
+  PDF) and Files (what lies in the folders of the project). In the built
+  program, on real storage, a view of every one of the fourteen kinds
+  was added and opened without an error, and a page written in the Doc
+  view was kept and drawn again after the window was loaded anew. Each
+  view was looked at closely only in a browser on demo data. Not tried
+  in the built program: dropping a picture on a card of the Gallery, a
+  page in the frame of the Embed view, printing the Report, opening a
+  file from the Files view, and content that arrives from another
+  computer while a view is open. The model still knows the kind `map`;
+  it has no interface
 - ✅ A project as an Excel workbook, from the menu of the project
   ([decision 0025](../decisions/0025-the-project-as-a-workbook.md)):
-  the sheets Summary, Tasks, Sprints and Team. The file the program's
-  own code wrote was opened in Excel; the dialog of the built program
-  that asks where to save was not tried
+  the sheets Summary, Tasks, Sprints and Team. A file the program's own
+  code wrote was opened in Excel, and the built program wrote one through
+  its command; the dialog that asks where to save was not tried
+- ✅ Notifications of the operating system, off until the manager allows
+  them ([decision 0026](../decisions/0026-notifications.md)): when a
+  specialist or the Advisor waits for the manager, when work is ready,
+  and when somebody could not go on, while the window is not in front.
+  The program asks once, in the inbox; the choice and a switch for each
+  kind are on the page Computers, with a test notification. What is
+  worth telling is a rule in `application`, fed by a small module that
+  says what happened in a project. In the built program the choice was
+  made and kept and the test notification was sent without a refusal;
+  nobody has seen a notification on the screen, and none was pressed
+- ✅ Three integrations, set for a project on one computer
+  ([decision 0027](../decisions/0027-integrations.md)). GitHub, through
+  the manager's own `gh`, so that no token is kept: a task knows the
+  pull requests and issues that name its key, and an issue can be opened
+  for it. A Slack channel is told what happens, one plain line for each
+  chosen event. Up to five web addresses get every chosen event as
+  JSON, signed with a secret if one is given, which is how Zapier and
+  Make listen ([the shape](../integrations/webhooks.md)). The pull
+  requests of a real repository were read with the real `gh`; sending
+  was tried against a listener on the same computer only. No real Slack
+  channel and no real listener on the internet has received anything,
+  and no real issue was opened
 - ✅ Areas: a project cut into the jobs inside it, shown at the side
   under the project, each showing only its tasks in every view
   ([decision 0022](../decisions/0022-areas-inside-a-project.md)).
@@ -242,6 +272,5 @@ Ideas that are recorded but not scheduled:
 - People on the team who use Teamwright themselves, from their own
   computers. Today a person on a team is a name that tasks can be given to
 - Voice conversation with the Advisor
-- Whiteboards and documents inside projects
 - Automation rules
 - More agent runtimes than Claude Code
