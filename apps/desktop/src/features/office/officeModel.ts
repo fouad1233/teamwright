@@ -1,4 +1,14 @@
-import type { Conversation, Id, Member, Moment, Project, Step, Task } from '@/shared/api/types';
+import type {
+  ContextUse,
+  Conversation,
+  Id,
+  Member,
+  Moment,
+  Project,
+  ProjectUsage,
+  Step,
+  Task,
+} from '@/shared/api/types';
 import { formatEstimate, taskReference } from '@/shared/lib/format';
 
 import { advisorConversation, advisorWaitsFor } from '../advisor/advisorModel';
@@ -76,6 +86,12 @@ export interface Place {
   alsoWaits: string | null;
   /** What the place has used in this project, or for the manager what everybody has. */
   usage: Measure;
+  /**
+   * How full the context of the agent who sits here is, as the backend says:
+   * that of its latest conversation. Nothing for a person, for the manager,
+   * and for an agent whose latest conversation has not said.
+   */
+  context: ContextUse | null;
   /** Where pressing the place leads, or nothing if it leads nowhere. */
   target: PlaceTarget | null;
   /** What pressing it does, in words, for the keyboard and for screen readers. */
@@ -110,6 +126,8 @@ export interface OfficeSources {
   conversations: readonly Conversation[];
   /** The moment the office is drawn at, to count how long work has been going on. */
   now: Moment;
+  /** What the agents have spent, once the backend has said. */
+  usage?: ProjectUsage | undefined;
 }
 
 /** The longest stretch of a specialist's own words that a place quotes. */
@@ -256,7 +274,7 @@ function measuresOfWork(
 /** The place of one member of the team. */
 export function placeOfMember(
   member: Member,
-  { project, tasks, conversations, now }: Omit<OfficeSources, 'members'>,
+  { project, tasks, conversations, now, usage }: Omit<OfficeSources, 'members'>,
 ): Place {
   const own = conversations.filter((conversation) => conversation.memberId === member.id);
   const base = {
@@ -265,6 +283,10 @@ export function placeOfMember(
     name: member.name,
     role: [kindLabel(member.kind), profileInWords(member)].filter(Boolean).join(', '),
     usage: { label: 'Used', value: usageInWords(tokensOf(own)) },
+    context:
+      member.kind === 'agent'
+        ? (usage?.members.find((spent) => spent.memberId === member.id)?.usage.context ?? null)
+        : null,
     alsoWaits: null,
   };
   const given = tasksOfMember(tasks, member.id);
@@ -340,7 +362,11 @@ export function placeOfMember(
 }
 
 /** The place of the Advisor, who plans the project with the manager. */
-export function placeOfAdvisor(conversations: readonly Conversation[], now: Moment): Place {
+export function placeOfAdvisor(
+  conversations: readonly Conversation[],
+  now: Moment,
+  usage?: ProjectUsage,
+): Place {
   const withAdvisor = conversations.filter((conversation) => conversation.isWithAdvisor);
   const latest = advisorConversation(withAdvisor);
   const base = {
@@ -350,6 +376,7 @@ export function placeOfAdvisor(conversations: readonly Conversation[], now: Mome
     role: 'Plans the project with you',
     subject: null,
     usage: { label: 'Used', value: usageInWords(tokensOf(withAdvisor)) },
+    context: usage?.advisor?.context ?? null,
     target: { kind: 'advisor' } as const,
     actionInWords: 'Open the Advisor',
     alsoWaits: null,
@@ -428,6 +455,7 @@ export function placeOfManager({
     measures: [],
     alsoWaits: null,
     usage: { label: 'The project', value: usageInWords(tokensOf(conversations)) },
+    context: null,
     target: { kind: 'inbox' },
     actionInWords: 'Open the inbox',
   };
@@ -436,7 +464,10 @@ export function placeOfManager({
 /** The whole office of a project. */
 export function describeOffice(sources: OfficeSources): Office {
   const floor = sources.members.map((member) => placeOfMember(member, sources));
-  const front = [placeOfManager(sources), placeOfAdvisor(sources.conversations, sources.now)];
+  const front = [
+    placeOfManager(sources),
+    placeOfAdvisor(sources.conversations, sources.now, sources.usage),
+  ];
   const all = [...front, ...floor];
   return {
     front,

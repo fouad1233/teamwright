@@ -1,6 +1,7 @@
 import { classNames } from '@/shared/lib/classNames';
 
 import { MANAGER_NAME } from '../team/Assignee';
+import { ContextMeter } from '../work/ContextMeter';
 import { Portrait } from './characters/Portrait';
 import type { Place, PlaceFigure } from './officeModel';
 import styles from './OfficePlace.module.css';
@@ -36,7 +37,8 @@ interface OfficePlaceProps {
  * One bench of the office: who sits there, what it is doing now, and what
  * it has used. A lamp hangs over every bench and is lit only while work
  * goes on there; a bench that waits for the manager is held by four gold
- * corners. The words say the same as the lights, so the bench still reads
+ * corners. Over the foot, the context of an agent is drawn as a thin
+ * meter. The words say the same as the lights, so the bench still reads
  * in a picture and with motion turned down.
  */
 export function OfficePlace({ place, reference, onPress }: OfficePlaceProps) {
@@ -99,6 +101,8 @@ export function OfficePlace({ place, reference, onPress }: OfficePlaceProps) {
       )}
 
       {place.alsoWaits !== null && <span className={styles.alsoWaits}>{place.alsoWaits}</span>}
+
+      {place.context && <ContextMeter className={styles.context} context={place.context} />}
 
       <span className={styles.usage}>
         <span className="label">{place.usage.label}</span>

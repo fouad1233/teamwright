@@ -349,6 +349,39 @@ describe('placeOfMember', () => {
   });
 });
 
+describe('the context of a place', () => {
+  const spent = (held: number, isNearlyFull: boolean) => ({
+    tokens: { input: 0, output: 0, cacheRead: 0, cacheWritten: 0 },
+    allTokens: 0,
+    turns: 1,
+    lastModel: null,
+    context: { held, window: 200_000, isNearlyFull },
+  });
+  const usage = {
+    members: [
+      { memberId: 'hardware', usage: spent(38_000, false) },
+      { memberId: 'pat', usage: spent(10, false) },
+    ],
+    advisor: spent(170_000, true),
+    former: null,
+    total: { ...spent(0, false), context: null },
+  };
+  const sources = { project, tasks: [], conversations: [], now: NOW, usage };
+
+  it('is what the backend says for an agent, and nothing for a person or the manager', () => {
+    expect(placeOfMember(hardware, sources).context?.held).toBe(38_000);
+    const person = member({ id: 'pat', name: 'Pat', kind: 'human' });
+    expect(placeOfMember(person, sources).context).toBeNull();
+    expect(placeOfAdvisor([], NOW, usage).context?.isNearlyFull).toBe(true);
+    expect(describeOffice({ ...sources, members: [] }).front[0]?.context).toBeNull();
+  });
+
+  it('is nothing while the backend has not said', () => {
+    expect(placeOfMember(hardware, { ...sources, usage: undefined }).context).toBeNull();
+    expect(placeOfAdvisor([], NOW).context).toBeNull();
+  });
+});
+
 describe('placeOfAdvisor', () => {
   it('is free and leads to its page before the project is planned', () => {
     const place = placeOfAdvisor([], NOW);

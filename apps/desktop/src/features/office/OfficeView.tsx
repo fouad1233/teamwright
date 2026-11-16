@@ -5,7 +5,7 @@ import type { Moment, Project, Task } from '@/shared/api/types';
 import { classNames } from '@/shared/lib/classNames';
 
 import { useTeamMembers } from '../team/TeamContext';
-import { useConversationsOfProject } from '../work/WorkContext';
+import { useConversationsOfProject, useUsageOfProject } from '../work/WorkContext';
 import {
   arrangeOffice,
   describeOffice,
@@ -110,13 +110,14 @@ interface OfficeViewProps {
 export function OfficeView({ project, tasks }: OfficeViewProps) {
   const members = useTeamMembers();
   const conversations = useConversationsOfProject();
+  const usage = useUsageOfProject();
   const navigation = useNavigation();
   const [sheet, measures] = useOfficeMeasures();
   const now = useNow(isAnybodyWorking(conversations));
 
   const office = useMemo(
-    () => describeOffice({ project, members, tasks, conversations, now }),
-    [project, members, tasks, conversations, now],
+    () => describeOffice({ project, members, tasks, conversations, now, usage }),
+    [project, members, tasks, conversations, now, usage],
   );
 
   const arrangement = measures

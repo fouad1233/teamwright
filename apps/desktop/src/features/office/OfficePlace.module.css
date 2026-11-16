@@ -235,3 +235,13 @@
   padding: var(--space-2) var(--space-4);
   border-top: 1px solid var(--rule);
 }
+
+/* The context of an agent stands just over the foot, so that the foot of
+   every bench of a row still meets the others. */
+.context {
+  margin-top: auto;
+}
+
+.context + .usage {
+  margin-top: var(--space-3);
+}
