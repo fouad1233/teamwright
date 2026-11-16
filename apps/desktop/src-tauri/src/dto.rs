@@ -13,15 +13,16 @@ use teamwright_application::{
     Acceptance, AgentProgram, AgentUsage, ApprovedMember, ApprovedOwner, ApprovedProposal,
     ApprovedTask, ConversationWithTurns, KnownComputer, NewMember, NewProject, NewSprint, NewTask,
     NewView, NotificationChoice, NotificationKind, NotificationPermission, ProjectChange,
-    ProjectPlaces, ProjectUsage, SprintChanges, SprintReport, SprintStart, StatusProperties,
-    SyncNotice, SyncState, WorkflowTemplate,
+    ProjectIntegrations, ProjectPlaces, ProjectUsage, SprintChanges, SprintReport, SprintStart,
+    StatusProperties, SyncNotice, SyncState, WorkflowTemplate,
 };
 use teamwright_domain::{
     Area, Assignee, CalendarDate, Color, ComputerId, ContextUse, Conversation, DecisionOption,
-    DecisionRequest, DomainError, Effort, Interview, InterviewAnswer, Member, MemberKind, Priority,
-    Project, Proposal, ProposedOwner, Schedule, Sprint, SprintSummary, Status, StatusCategory,
-    Step, StepContent, StoryPoints, Task, TaskChange, TaskChangeKind, Timestamp, TokenCounts, Turn,
-    View, ViewAssignee, ViewFilter, ViewKind, context_of,
+    DecisionRequest, DomainError, Effort, EventKind, EventKinds, Interview, InterviewAnswer,
+    Member, MemberKind, Priority, Project, Proposal, ProposedOwner, Schedule, Sprint,
+    SprintSummary, Status, StatusCategory, Step, StepContent, StoryPoints, Task, TaskChange,
+    TaskChangeKind, Timestamp, TokenCounts, Turn, View, ViewAssignee, ViewFilter, ViewKind,
+    context_of,
 };
 
 use crate::error::CommandError;
@@ -1781,6 +1782,64 @@ pub struct NotificationPressedDto {
     pub member_id: Option<String>,
     /// Whether it was about the Advisor.
     pub is_with_advisor: bool,
+}
+
+/// The integrations of a project on this computer, as the interface sees
+/// them. An address is a secret: only its host is sent back.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectIntegrationsDto {
+    repository: Option<String>,
+    slack: Option<SlackChannelDto>,
+    web_addresses: Vec<ListeningAddressDto>,
+}
+
+/// The Slack channel of a project.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SlackChannelDto {
+    address: String,
+    events: Vec<&'static str>,
+}
+
+/// A web address that listens for the events of a project.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ListeningAddressDto {
+    address: String,
+    is_signed: bool,
+    events: Vec<&'static str>,
+}
+
+fn event_names(events: &EventKinds) -> Vec<&'static str> {
+    events.iter().map(EventKind::as_str).collect()
+}
+
+impl From<ProjectIntegrations> for ProjectIntegrationsDto {
+    fn from(integrations: ProjectIntegrations) -> Self {
+        Self {
+            repository: integrations.repository.map(|name| name.to_string()),
+            slack: integrations.slack.map(|slack| SlackChannelDto {
+                address: slack.address.shown(),
+                events: event_names(&slack.events),
+            }),
+            web_addresses: integrations
+                .web_addresses
+                .iter()
+                .map(|listening| ListeningAddressDto {
+                    address: listening.address.shown(),
+                    is_signed: listening.secret.is_some(),
+                    events: event_names(&listening.events),
+                })
+                .collect(),
+        }
+    }
+}
+
+/// Reads a kind of event the interface names.
+pub fn parse_event_kind(text: &str) -> Result<EventKind, CommandError> {
+    text.parse::<EventKind>()
+        .map_err(|error| CommandError::invalid_request(error.to_string()))
 }
 
 #[cfg(test)]

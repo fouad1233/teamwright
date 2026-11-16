@@ -11,6 +11,7 @@ import type {
   CalendarDate,
   Conversation,
   DataChanged,
+  EventKind,
   Id,
   InterviewAnswer,
   Member,
@@ -29,6 +30,7 @@ import type {
   Moment,
   Project,
   ProjectChange,
+  ProjectIntegrations,
   ProjectPlaces,
   ProjectUsage,
   Sprint,
@@ -457,6 +459,43 @@ export class TauriBackend implements Backend {
 
   openWebAddress(address: string): Promise<void> {
     return call('open_web_address', { address });
+  }
+
+  projectIntegrations(projectId: Id): Promise<ProjectIntegrations> {
+    return call('project_integrations', { projectId });
+  }
+
+  setRepository(projectId: Id, name: string | null): Promise<ProjectIntegrations> {
+    return call('set_repository', { projectId, name });
+  }
+
+  setSlackAddress(projectId: Id, address: string | null): Promise<ProjectIntegrations> {
+    return call('set_slack_address', { projectId, address });
+  }
+
+  setSlackEvent(projectId: Id, kind: EventKind, on: boolean): Promise<ProjectIntegrations> {
+    return call('set_slack_event', { projectId, kind, on });
+  }
+
+  addWebAddress(
+    projectId: Id,
+    address: string,
+    secret: string | null,
+  ): Promise<ProjectIntegrations> {
+    return call('add_web_address', { projectId, address, secret });
+  }
+
+  removeWebAddress(projectId: Id, index: number): Promise<ProjectIntegrations> {
+    return call('remove_web_address', { projectId, index });
+  }
+
+  setWebAddressEvent(
+    projectId: Id,
+    index: number,
+    kind: EventKind,
+    on: boolean,
+  ): Promise<ProjectIntegrations> {
+    return call('set_web_address_event', { projectId, index, kind, on });
   }
 }
 

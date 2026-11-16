@@ -26,6 +26,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("schema/0014_areas.sql"),
     include_str!("schema/0015_view_content.sql"),
     include_str!("schema/0016_turn_context.sql"),
+    include_str!("schema/0017_integrations.sql"),
 ];
 
 /// Applies the migrations a database has not seen yet. Each one runs in its
@@ -111,7 +112,9 @@ mod tests {
             "meta",
             "notices",
             "operations",
+            "project_integrations",
             "project_places",
+            "project_web_addresses",
             "project_reference_folders",
             "projects",
             "sprints",

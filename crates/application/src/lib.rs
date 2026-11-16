@@ -21,6 +21,7 @@ pub mod areas;
 pub mod clock;
 pub mod error;
 pub mod in_memory;
+pub mod integrations;
 pub mod notifications;
 pub mod places;
 pub mod ports;
@@ -46,6 +47,10 @@ pub use agent_runtime::{
 pub use areas::AreaService;
 pub use clock::SystemClock;
 pub use error::ApplicationError;
+pub use integrations::{
+    IntegrationSettings, IntegrationStore, ListeningAddress, ProjectIntegrations, SlackChannel,
+    events_sent_to_an_address, events_told_in_a_channel,
+};
 pub use notifications::{
     Notification, NotificationChoice, NotificationChoiceStore, NotificationKind,
     NotificationPermission, NotificationService, notification_for, notification_of,

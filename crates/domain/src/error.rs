@@ -292,6 +292,25 @@ pub enum DomainError {
         /// The number of bytes that were given.
         actual_bytes: usize,
     },
+
+    /// A web address was not one the program sends to. The address itself
+    /// is not repeated: it may be a secret.
+    #[error("{field} starts with https:// and names a host, with no spaces")]
+    InvalidWebAddress {
+        /// What the address is for, for example "the address of a channel".
+        field: &'static str,
+    },
+
+    /// The name of a GitHub repository was not of the form `owner/name`.
+    #[error("a repository is named as owner/name, such as octo-org/sensor-node")]
+    InvalidRepositoryName,
+
+    /// More web addresses were given than a project may have.
+    #[error("a project sends to at most {max} web addresses")]
+    TooManyWebAddresses {
+        /// The most addresses a project may have.
+        max: usize,
+    },
 }
 
 impl DomainError {

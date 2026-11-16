@@ -10,18 +10,18 @@ use std::{env, fs, thread};
 use chrono::Utc;
 use tauri::{AppHandle, Emitter, Manager};
 use teamwright_application::{
-    AgentRuntime, ApplicationError, AreaService, FileSystem, NotificationService, PlacesService,
-    ProjectEvent, ProjectFolders, ProjectService, RoundReport, SprintService, StorageError,
-    SyncPorts, SyncService, SystemClock, TaskService, TeamService, ViewService, WorkListener,
-    WorkPorts, WorkService, WorkbookPorts, WorkbookService,
+    AgentRuntime, ApplicationError, AreaService, FileSystem, IntegrationSettings,
+    NotificationService, PlacesService, ProjectEvent, ProjectFolders, ProjectService, RoundReport,
+    SprintService, StorageError, SyncPorts, SyncService, SystemClock, TaskService, TeamService,
+    ViewService, WorkListener, WorkPorts, WorkService, WorkbookPorts, WorkbookService,
 };
 use teamwright_domain::{ComputerId, Conversation, Project, Turn};
 use teamwright_runtime::ClaudeCode;
 use teamwright_storage::{
     Database, FolderOfComputers, SqliteAreaRepository, SqliteConversationRepository,
-    SqliteMemberRepository, SqliteNotificationChoice, SqlitePlacesRepository,
-    SqlitePlanningRepository, SqliteProjectRepository, SqliteSprintRepository, SqliteSyncLedger,
-    SqliteTaskRepository, SqliteViewRepository,
+    SqliteIntegrationStore, SqliteMemberRepository, SqliteNotificationChoice,
+    SqlitePlacesRepository, SqlitePlanningRepository, SqliteProjectRepository,
+    SqliteSprintRepository, SqliteSyncLedger, SqliteTaskRepository, SqliteViewRepository,
 };
 
 use crate::dto::{ConversationDto, DataChangedDto, SyncStateDto};
@@ -134,6 +134,8 @@ pub struct AppState {
     /// The choice of this computer about notifications, and what an event
     /// is worth with it.
     pub notifications: NotificationService,
+    /// The settings of the integrations of each project on this computer.
+    pub integrations: IntegrationSettings,
     /// The workbooks written since the program started. Only these can be
     /// shown in their folder.
     pub exported_workbooks: Mutex<Vec<PathBuf>>,
@@ -172,7 +174,11 @@ impl AppState {
         });
         let file_system: Arc<dyn FileSystem> = Arc::new(LocalFileSystem);
         let notifications =
-            NotificationService::new(Arc::new(SqliteNotificationChoice::new(database)));
+            NotificationService::new(Arc::new(SqliteNotificationChoice::new(database.clone())));
+        let integrations = IntegrationSettings::new(
+            project_repository.clone(),
+            Arc::new(SqliteIntegrationStore::new(database)),
+        );
         let sync = SyncService::new(SyncPorts {
             ledger: sync_ledger,
             folder: Arc::new(FolderOfComputers::new()),
@@ -271,6 +277,7 @@ impl AppState {
             sync,
             workbook,
             notifications,
+            integrations,
             exported_workbooks: Mutex::new(Vec::new()),
             this_computer,
         })

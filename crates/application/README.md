@@ -440,6 +440,21 @@ stopped ("Firmware engineer stopped", with why). A sprint is worth none.
 each `NotificationKind`. Nothing is sent until allowed
 ([decision 0026](../../docs/decisions/0026-notifications.md)).
 
+## Integrations
+
+`integrations.rs` keeps what the manager set for the integrations of a
+project on this computer
+([decision 0027](../../docs/decisions/0027-integrations.md)):
+`ProjectIntegrations` is the GitHub repository the manager named (or none,
+to read it from the work folder), the Slack channel (`SlackChannel`: its
+address and the kinds of events told in it) and up to five web addresses
+(`ListeningAddress`: an address, an optional secret, the kinds of events
+sent). `IntegrationSettings` changes them through the port
+`IntegrationStore`, which also keeps the GitHub program the manager named.
+A new channel is told what a person wants to hear of
+(`events_told_in_a_channel`); a new address hears everything
+(`events_sent_to_an_address`). The settings are not logged and not synced.
+
 ## Keeping computers in step
 
 `SyncService` keeps the computers of one manager in step through a folder

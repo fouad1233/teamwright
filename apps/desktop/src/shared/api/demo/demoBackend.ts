@@ -13,6 +13,7 @@ import type {
   DataChanged,
   DecisionRequest,
   Effort,
+  EventKind,
   Id,
   InterviewAnswer,
   Member,
@@ -31,6 +32,7 @@ import type {
   Priority,
   Project,
   ProjectChange,
+  ProjectIntegrations,
   ProjectPlaces,
   ProjectUsage,
   ProposedMember,
@@ -60,6 +62,7 @@ import {
   tidyAreaName,
 } from './areas';
 import { briefFor } from './brief';
+import { PretendedIntegrations } from './integrations';
 import { freeName, isInside, isSameFolder, nameOf } from './places';
 import { answersInWords, openInterviewOf, openProposalOf, waitInCircle } from './planning';
 import { scriptForAnswers, scriptForBrief, scriptForChange } from './simulatedAdvisor';
@@ -241,6 +244,7 @@ export class DemoBackend implements Backend {
    */
   private readonly sprintsCreated = new Map<Id, number>();
   private readonly places = new Map<Id, ChosenPlaces>();
+  private readonly integrations = new PretendedIntegrations();
   /** The views of each project, in the order the manager gave them. */
   private readonly views = new Map<Id, View[]>();
   /** The areas of each project, in the order the manager gave them. */
@@ -1478,6 +1482,55 @@ export class DemoBackend implements Backend {
       // learns nothing of the page that opened it.
       window.open(address, '_blank', 'noopener,noreferrer');
     });
+  }
+
+  projectIntegrations(projectId: Id): Promise<ProjectIntegrations> {
+    return this.answer(() => this.integrations.of(this.requireProject(projectId).id));
+  }
+
+  setRepository(projectId: Id, name: string | null): Promise<ProjectIntegrations> {
+    return this.answer(() =>
+      this.integrations.setRepository(this.requireProject(projectId).id, name),
+    );
+  }
+
+  setSlackAddress(projectId: Id, address: string | null): Promise<ProjectIntegrations> {
+    return this.answer(() =>
+      this.integrations.setSlackAddress(this.requireProject(projectId).id, address),
+    );
+  }
+
+  setSlackEvent(projectId: Id, kind: EventKind, on: boolean): Promise<ProjectIntegrations> {
+    return this.answer(() =>
+      this.integrations.setSlackEvent(this.requireProject(projectId).id, kind, on),
+    );
+  }
+
+  addWebAddress(
+    projectId: Id,
+    address: string,
+    secret: string | null,
+  ): Promise<ProjectIntegrations> {
+    return this.answer(() =>
+      this.integrations.addWebAddress(this.requireProject(projectId).id, address, secret),
+    );
+  }
+
+  removeWebAddress(projectId: Id, index: number): Promise<ProjectIntegrations> {
+    return this.answer(() =>
+      this.integrations.removeWebAddress(this.requireProject(projectId).id, index),
+    );
+  }
+
+  setWebAddressEvent(
+    projectId: Id,
+    index: number,
+    kind: EventKind,
+    on: boolean,
+  ): Promise<ProjectIntegrations> {
+    return this.answer(() =>
+      this.integrations.setWebAddressEvent(this.requireProject(projectId).id, index, kind, on),
+    );
   }
 
   private changeNotifications(change: Partial<NotificationChoice>): NotificationChoice {

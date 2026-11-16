@@ -20,6 +20,7 @@ done with them. It does no input or output.
 | `area` | `Area`: a part of a project with a job of its own, such as its firmware, with a name and a place among the areas of the project |
 | `task_history` | `TaskChange`, `history_of`: what changed from one version of a task to the next |
 | `dependencies` | `DependencyGraph`: which task waits for which |
+| `integration` | `EventKind` (with stable names such as `task.status_changed`): the kinds of events a Slack channel or a web address can hear; `WebAddress`: an https address whose `Debug` form and `shown()` hide all but the host, since it may be a secret; `RepositoryName`: `owner/name` of a GitHub repository, also read from a git remote (`of_remote`) |
 | `member` | `Member`, `MemberKind`: an AI agent or a person on the team of a project; `MemberProfile`, `Effort`: the model and the effort of a specialist |
 | `conversation` | `Conversation`, `Turn`, `Step`, `TokenCounts`, `ContextUse` (how full the context of a session was after a turn; nearly full from 80 % of the window; `context_of` a conversation is that of its last turn that reported one): the work of an AI specialist or of the Advisor, one request at a time; `DecisionRequest`, `DecisionOption`, `DecisionAnswer`: a question a specialist asks the manager to decide |
 | `planning` | `Interview`, `InterviewQuestion`, `InterviewAnswer`: the questions the Advisor asks before it proposes; `Proposal`, `ProposedMember`, `ProposedTask`, `ProposedOwner`: the team and the plan it proposes |

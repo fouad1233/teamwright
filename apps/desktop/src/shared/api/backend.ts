@@ -6,6 +6,7 @@ import type {
   CalendarDate,
   Conversation,
   DataChanged,
+  EventKind,
   Id,
   InterviewAnswer,
   Member,
@@ -24,6 +25,7 @@ import type {
   Moment,
   Project,
   ProjectChange,
+  ProjectIntegrations,
   ProjectPlaces,
   ProjectUsage,
   Sprint,
@@ -505,6 +507,33 @@ export interface Backend {
    * otherwise).
    */
   openWebAddress(address: string): Promise<void>;
+
+  /** The integrations of a project on this computer. */
+  projectIntegrations(projectId: Id): Promise<ProjectIntegrations>;
+  /**
+   * Names the GitHub repository of a project (`owner/name`), or, with null,
+   * reads it from the work folder again.
+   */
+  setRepository(projectId: Id, name: string | null): Promise<ProjectIntegrations>;
+  /** Sets the address of the project's Slack channel (https), or takes it away with null. */
+  setSlackAddress(projectId: Id, address: string | null): Promise<ProjectIntegrations>;
+  /** Tells, or stops telling, a kind of event in the Slack channel (`no_channel` without one). */
+  setSlackEvent(projectId: Id, kind: EventKind, on: boolean): Promise<ProjectIntegrations>;
+  /** Adds a web address (https) that hears every kind of event. At most five. */
+  addWebAddress(
+    projectId: Id,
+    address: string,
+    secret: string | null,
+  ): Promise<ProjectIntegrations>;
+  /** Takes away the web address at a position. */
+  removeWebAddress(projectId: Id, index: number): Promise<ProjectIntegrations>;
+  /** Sends, or stops sending, a kind of event to the web address at a position. */
+  setWebAddressEvent(
+    projectId: Id,
+    index: number,
+    kind: EventKind,
+    on: boolean,
+  ): Promise<ProjectIntegrations>;
 }
 
 /**

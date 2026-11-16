@@ -6,6 +6,7 @@ import {
   Folder,
   Layers,
   Pencil,
+  Plug,
   Trash2,
 } from 'lucide-react';
 import { useState } from 'react';
@@ -19,6 +20,7 @@ import { ActionMenu } from '@/shared/ui/Menu';
 import { AreasDialog } from '../areas/AreasDialog';
 import { useTeamMembers } from '../team/TeamContext';
 import { FoldersDialog } from './FoldersDialog';
+import { IntegrationsDialog } from './IntegrationsDialog';
 import { ProjectDetailsDialog } from './ProjectDetailsDialog';
 import styles from './ProjectMenu.module.css';
 import { StatusesDialog } from './StatusesDialog';
@@ -26,7 +28,7 @@ import { useProjectCommands } from './projectQueries';
 import { useWorkbookExport } from './workbookExport';
 
 /** The dialogs the menu can open. One at a time. */
-type OpenDialog = 'details' | 'statuses' | 'areas' | 'folders' | 'removal';
+type OpenDialog = 'details' | 'statuses' | 'areas' | 'folders' | 'integrations' | 'removal';
 
 interface ProjectMenuProps {
   project: Project;
@@ -88,6 +90,13 @@ export function ProjectMenu({ project, taskCount }: ProjectMenuProps) {
             },
           },
           {
+            label: 'Integrations…',
+            icon: <Plug />,
+            onSelect: () => {
+              setOpenDialog('integrations');
+            },
+          },
+          {
             label: 'Export to Excel…',
             icon: <FileSpreadsheet />,
             onSelect: () => {
@@ -120,6 +129,7 @@ export function ProjectMenu({ project, taskCount }: ProjectMenuProps) {
       <StatusesDialog open={openDialog === 'statuses'} project={project} onClose={close} />
       <AreasDialog open={openDialog === 'areas'} project={project} onClose={close} />
       <FoldersDialog open={openDialog === 'folders'} project={project} onClose={close} />
+      <IntegrationsDialog open={openDialog === 'integrations'} project={project} onClose={close} />
 
       <Dialog open={openDialog === 'removal'} title={`Delete ${project.name}?`} onClose={close}>
         <p className={styles.warning}>

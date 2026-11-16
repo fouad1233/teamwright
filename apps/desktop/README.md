@@ -118,6 +118,17 @@ The shell is where the work of an AI specialist meets the outside world
   interface asks for the usage again when a turn starts or ends; the demo
   backend stands in with `shared/api/demo/usage.ts`, which follows the
   same rules.
+- **Integrations**
+  ([decision 0027](../../docs/decisions/0027-integrations.md)). The entry
+  "Integrations…" of the project's menu opens `IntegrationsDialog`
+  (`features/projects`), with a part for GitHub, Slack and web addresses,
+  each saying in one line whether it is on. The commands in
+  `commands/integrations.rs` (`project_integrations`, `set_repository`,
+  `set_slack_address`, `set_slack_event`, `add_web_address`,
+  `remove_web_address`, `set_web_address_event`) answer with
+  `ProjectIntegrationsDto`, in which an address is only its host: the
+  interface never gets a secret back. The demo backend keeps the settings
+  in memory (`shared/api/demo/integrations.ts`) and sends nothing.
 - **What happened, and notifications**
   ([decision 0026](../../docs/decisions/0026-notifications.md)). The work
   of the specialists hands every event of a project

@@ -1,0 +1,99 @@
+.integrations {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.part {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* A part is set off from the one above it by a hairline, as the folders
+   of a project are. */
+.part + .part {
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--rule);
+}
+
+/* The name of a part, and in one line whether it is on. */
+.head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.state {
+  min-width: 0;
+  color: var(--ink-soft);
+  font-size: var(--text-small);
+  overflow-wrap: anywhere;
+}
+
+.note {
+  max-width: 560px;
+  color: var(--ink-soft);
+  line-height: 1.5;
+}
+
+.note code {
+  padding: 1px 3px;
+  border-radius: 3px;
+  background: var(--rule);
+  font-family: var(--font-mono);
+  font-size: var(--text-small);
+}
+
+/* A form on one line: the field takes what room there is. */
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+}
+
+.input {
+  flex: 1 1 260px;
+  min-width: 0;
+}
+
+.secret {
+  flex: 0 1 180px;
+  min-width: 0;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+}
+
+/* An address that is set, with what it hears and the way to remove it. */
+.line {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 34px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.line:first-child,
+.part > .line {
+  border-top: 1px solid var(--rule);
+}
+
+/* An address is a place, so it is set in the monospace, as a folder is. */
+.address {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-small);
+  overflow-wrap: anywhere;
+}
+
+.mark {
+  color: var(--ink-faint);
+  font-size: var(--text-small);
+}

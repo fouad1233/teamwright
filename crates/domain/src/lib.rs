@@ -21,6 +21,7 @@ pub mod conversation;
 pub mod dependencies;
 pub mod error;
 pub mod ids;
+pub mod integration;
 pub mod member;
 pub mod planning;
 pub mod project;
@@ -45,6 +46,7 @@ pub use ids::{
     AreaId, ComputerId, ConversationId, MemberId, ProjectId, SprintId, StatusId, TaskId, TurnId,
     ViewId,
 };
+pub use integration::{EventKind, EventKinds, RepositoryName, WebAddress};
 pub use member::{Effort, Member, MemberKind, MemberProfile, MemberSnapshot};
 pub use planning::{
     Interview, InterviewAnswer, InterviewQuestion, InterviewSnapshot, Proposal, ProposalSnapshot,

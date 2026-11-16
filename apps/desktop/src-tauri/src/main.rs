@@ -134,6 +134,13 @@ fn main() -> ExitCode {
             commands::notifications::set_notification_kind,
             commands::notifications::send_test_notification,
             commands::web::open_web_address,
+            commands::integrations::project_integrations,
+            commands::integrations::set_repository,
+            commands::integrations::set_slack_address,
+            commands::integrations::set_slack_event,
+            commands::integrations::add_web_address,
+            commands::integrations::remove_web_address,
+            commands::integrations::set_web_address_event,
         ])
         .build(tauri::generate_context!());
 

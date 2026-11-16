@@ -934,3 +934,44 @@ export interface NotificationPressed {
   memberId: Id | null;
   isWithAdvisor: boolean;
 }
+
+/**
+ * The kinds of events of a project that can be passed on to a Slack
+ * channel or a web address. The names are the stable names of the events
+ * a web address receives.
+ */
+export type EventKind =
+  | 'task.created'
+  | 'task.status_changed'
+  | 'task.finished'
+  | 'agent.waiting'
+  | 'agent.stopped'
+  | 'sprint.started'
+  | 'sprint.completed';
+
+/**
+ * The integrations of a project on this computer: not synced, not logged.
+ * An address is a secret, so only its host comes back.
+ */
+export interface ProjectIntegrations {
+  /** The GitHub repository the manager named, `owner/name`, or null to read it from the work folder. */
+  repository: string | null;
+  slack: SlackChannel | null;
+  webAddresses: ListeningAddress[];
+}
+
+/** The Slack channel of a project. */
+export interface SlackChannel {
+  /** The host of its address, the rest hidden. */
+  address: string;
+  events: EventKind[];
+}
+
+/** A web address that listens for the events of a project. */
+export interface ListeningAddress {
+  /** The host of the address, the rest hidden. */
+  address: string;
+  /** Whether the body is signed with a secret. */
+  isSigned: boolean;
+  events: EventKind[];
+}

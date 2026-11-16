@@ -383,6 +383,25 @@ pub enum ApplicationError {
     #[error(transparent)]
     AgentProgram(#[from] AgentRuntimeError),
 
+    /// GitHub's command line program could not be used, or GitHub refused
+    /// what it was asked. The reason is said in plain words.
+    #[error("{reason}")]
+    GitHubUnavailable {
+        /// Why, for the manager.
+        reason: String,
+    },
+
+    /// Something of GitHub was asked while the project has no repository.
+    #[error(
+        "this project has no GitHub repository: name one, or choose a work folder that is a \
+         clone of one"
+    )]
+    NoRepository,
+
+    /// A test message was to be sent while the project has no channel.
+    #[error("no Slack channel is set for this project")]
+    NoChannel,
+
     /// Stored data could not be read or written.
     #[error("the data could not be read or written: {0}")]
     Storage(#[from] StorageError),
@@ -462,6 +481,9 @@ impl ApplicationError {
             Self::SyncFolderInDataFolder { .. } => "sync_folder_in_data",
             Self::IdentityInUse => "identity_in_use",
             Self::AgentProgram(error) => error.code(),
+            Self::GitHubUnavailable { .. } => "github_unavailable",
+            Self::NoRepository => "no_repository",
+            Self::NoChannel => "no_channel",
             Self::Storage(_) => "storage_failed",
         }
     }
