@@ -10,6 +10,7 @@ import type {
   Assignee,
   CalendarDate,
   Conversation,
+  FolderListing,
   DataChanged,
   Deliveries,
   Delivery,
@@ -288,6 +289,23 @@ export class TauriBackend implements Backend {
 
   showWorkFolder(projectId: Id): Promise<void> {
     return call('show_work_folder', { projectId });
+  }
+
+  listProjectFiles(
+    projectId: Id,
+    folder: string,
+    path: string,
+    showsHidden: boolean,
+  ): Promise<FolderListing> {
+    return call('list_project_files', { projectId, folder, path, showsHidden });
+  }
+
+  openProjectFile(projectId: Id, folder: string, path: string): Promise<void> {
+    return call('open_project_file', { projectId, folder, path });
+  }
+
+  showProjectFile(projectId: Id, folder: string, path: string): Promise<void> {
+    return call('show_project_file', { projectId, folder, path });
   }
 
   async chooseWorkbookFile(suggestedName: string): Promise<string | null> {

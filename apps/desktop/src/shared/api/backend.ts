@@ -9,6 +9,7 @@ import type {
   Deliveries,
   Delivery,
   EventKind,
+  FolderListing,
   GitHubItem,
   GitHubOverview,
   GitHubSignIn,
@@ -112,6 +113,28 @@ export interface Backend {
    * can never make the program open a place the manager did not choose.
    */
   showWorkFolder(projectId: Id): Promise<void>;
+  /**
+   * What lies in a folder of a project (its work folder or a reference
+   * folder, as `projectPlaces` names it) at a path inside it, written with
+   * `/`; empty for the folder itself. A path that leaves the folder, by
+   * `..` or through a link, is refused (`rule_broken`); nothing at the
+   * path is `not_found`. Names that begin with a dot are left out unless
+   * `showsHidden`.
+   */
+  listProjectFiles(
+    projectId: Id,
+    folder: string,
+    path: string,
+    showsHidden: boolean,
+  ): Promise<FolderListing>;
+  /**
+   * Opens a file of a project with the program this computer has for it.
+   * A folder, or a file that would run as a program, is refused
+   * (`invalid_request`).
+   */
+  openProjectFile(projectId: Id, folder: string, path: string): Promise<void>;
+  /** Shows a file or folder of a project in the file manager of this computer. */
+  showProjectFile(projectId: Id, folder: string, path: string): Promise<void>;
 
   /**
    * Lets the manager choose where to save a workbook of this computer,

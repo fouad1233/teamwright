@@ -73,7 +73,14 @@ pub async fn show_exported_workbook(
             path.display()
         )));
     }
-    let mut file_manager = show_command(&path)
+    show_in_file_manager(&path)
+}
+
+/// Shows a file in its folder, chosen in the file manager of the operating
+/// system. The caller has checked the path; it is handed over as one
+/// argument, without a shell.
+pub fn show_in_file_manager(path: &Path) -> Result<(), CommandError> {
+    let mut file_manager = show_command(path)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())

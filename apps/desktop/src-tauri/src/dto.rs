@@ -656,6 +656,48 @@ fn path_to_text(path: &Path) -> String {
     path.to_string_lossy().into_owned()
 }
 
+/// What lies in a folder of a project: `{"entries": [...], "hasMore": false}`.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FolderListingDto {
+    entries: Vec<FileEntryDto>,
+    has_more: bool,
+}
+
+/// One entry of a folder. `kind` is `folder`, `file` or `link` (a link that
+/// leads outside the folder or nowhere, not followed); `size` is in bytes,
+/// for a file only.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FileEntryDto {
+    name: String,
+    kind: &'static str,
+    size: Option<u64>,
+    changed_at: Option<String>,
+}
+
+impl From<teamwright_application::FolderListing> for FolderListingDto {
+    fn from(listing: teamwright_application::FolderListing) -> Self {
+        Self {
+            entries: listing
+                .entries
+                .into_iter()
+                .map(|entry| FileEntryDto {
+                    kind: match entry.kind {
+                        teamwright_domain::EntryKind::Folder => "folder",
+                        teamwright_domain::EntryKind::File => "file",
+                        teamwright_domain::EntryKind::Link => "link",
+                    },
+                    name: entry.name,
+                    size: entry.size,
+                    changed_at: entry.changed.map(moment_to_text),
+                })
+                .collect(),
+            has_more: listing.has_more,
+        }
+    }
+}
+
 /// A conversation with a specialist and all of its turns, as the interface
 /// sees it. It is also the payload of the event `conversation-changed`.
 #[derive(Debug, Clone, Serialize)]

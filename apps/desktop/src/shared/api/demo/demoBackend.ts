@@ -29,6 +29,7 @@ import type {
   NewAdvice,
   NewDecisionAnswer,
   NewMember,
+  FolderListing,
   NewProject,
   NewSprint,
   NewTask,
@@ -72,6 +73,7 @@ import { briefFor } from './brief';
 import { PretendedGitHub } from './gitHub';
 import { PretendedIntegrations } from './integrations';
 import { freeName, isInside, isSameFolder, nameOf } from './places';
+import { pretendedListing } from './projectFiles';
 import { answersInWords, openInterviewOf, openProposalOf, waitInCircle } from './planning';
 import { scriptForAnswers, scriptForBrief, scriptForChange } from './simulatedAdvisor';
 import {
@@ -529,6 +531,46 @@ export class DemoBackend implements Backend {
       this.requireProject(projectId);
       throw new BackendError('not_available', 'the demo has no file manager to show a folder in');
     });
+  }
+
+  listProjectFiles(
+    projectId: Id,
+    folder: string,
+    path: string,
+    showsHidden: boolean,
+  ): Promise<FolderListing> {
+    return this.answer(() => {
+      this.requireFolderOfProject(projectId, folder);
+      return pretendedListing(folder, path, showsHidden, this.environment.now());
+    });
+  }
+
+  openProjectFile(projectId: Id, folder: string, path: string): Promise<void> {
+    return this.answer(() => {
+      this.requireFolderOfProject(projectId, folder);
+      throw new BackendError(
+        'not_available',
+        `the demo has no program to open ${nameOf(path)} with`,
+      );
+    });
+  }
+
+  showProjectFile(projectId: Id, folder: string, path: string): Promise<void> {
+    return this.answer(() => {
+      this.requireFolderOfProject(projectId, folder);
+      throw new BackendError(
+        'not_available',
+        `the demo has no file manager to show ${nameOf(path) || nameOf(folder)} in`,
+      );
+    });
+  }
+
+  /** Refuses a folder that is neither the work folder nor a reference folder of a project. */
+  private requireFolderOfProject(projectId: Id, folder: string): void {
+    const places = this.placesOf(this.requireProject(projectId));
+    if (![places.workFolder, ...places.referenceFolders].includes(folder)) {
+      throw new BackendError('rule_broken', `${folder} is not a folder of this project`);
+    }
   }
 
   chooseWorkbookFile(suggestedName: string): Promise<string | null> {

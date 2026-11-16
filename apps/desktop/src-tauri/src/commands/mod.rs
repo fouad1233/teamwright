@@ -5,6 +5,7 @@
 //! in the application crate.
 
 pub mod areas;
+pub mod files;
 pub mod github;
 pub mod integrations;
 pub mod notifications;

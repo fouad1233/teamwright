@@ -10,11 +10,11 @@ use std::{env, fs, thread};
 use chrono::Utc;
 use tauri::{AppHandle, Emitter, Manager};
 use teamwright_application::{
-    AgentRuntime, ApplicationError, AreaService, DeliveryPorts, DeliveryService, FileSystem,
-    GitHubPorts, GitHubService, IntegrationSettings, NotificationService, PlacesService,
-    ProjectEvent, ProjectFolders, ProjectService, RoundReport, SprintService, StorageError,
-    SyncPorts, SyncService, SystemClock, TaskService, TeamService, ViewService, WorkListener,
-    WorkPorts, WorkService, WorkbookPorts, WorkbookService,
+    AgentRuntime, ApplicationError, AreaService, DeliveryPorts, DeliveryService, DiskEntry,
+    FileSystem, FolderReader, GitHubPorts, GitHubService, IntegrationSettings, NotificationService,
+    PlacesService, ProjectEvent, ProjectFilesService, ProjectFolders, ProjectService, RoundReport,
+    SprintService, StorageError, SyncPorts, SyncService, SystemClock, TaskService, TeamService,
+    ViewService, WorkListener, WorkPorts, WorkService, WorkbookPorts, WorkbookService,
 };
 use teamwright_domain::{ComputerId, Conversation, Project, Turn};
 use teamwright_integrations::{GhCommandLine, GhLocator, HttpsSender};
@@ -126,6 +126,8 @@ pub struct AppState {
     pub team: TeamService,
     /// The use cases for the folders of a project.
     pub places: PlacesService,
+    /// The use cases for what lies in the folders of a project.
+    pub files: ProjectFilesService,
     /// The use cases for the work of the AI specialists.
     pub work: WorkService,
     /// The use cases for keeping this computer in step with the manager's
@@ -260,6 +262,7 @@ impl AppState {
                 area_repository.clone(),
                 clock.clone(),
             ),
+            files: ProjectFilesService::new(places.clone(), Arc::new(LocalFolderReader)),
             places,
             github,
             deliveries,
@@ -543,6 +546,51 @@ impl FileSystem for LocalFileSystem {
             )
         })?;
         Ok(())
+    }
+}
+
+/// Reads what lies in the folders of a project, through the standard
+/// library. It only reads.
+struct LocalFolderReader;
+
+impl FolderReader for LocalFolderReader {
+    fn full_form(&self, path: &Path) -> Result<PathBuf, StorageError> {
+        teamwright_runtime::full_form(path).map_err(|error| {
+            StorageError::caused_by(format!("{} could not be reached", path.display()), error)
+        })
+    }
+
+    fn is_folder(&self, path: &Path) -> bool {
+        path.is_dir()
+    }
+
+    fn entries_in(&self, folder: &Path) -> Result<Vec<DiskEntry>, StorageError> {
+        let could_not_read = |error: io::Error| {
+            StorageError::caused_by(
+                format!("the folder {} could not be read", folder.display()),
+                error,
+            )
+        };
+        fs::read_dir(folder)
+            .map_err(could_not_read)?
+            .map(|entry| {
+                let entry = entry.map_err(could_not_read)?;
+                // On Windows a junction counts as a link too.
+                let is_link = entry.file_type().map_err(could_not_read)?.is_symlink();
+                // What the entry is, a link followed; nothing for a link
+                // that leads nowhere.
+                let followed = fs::metadata(entry.path()).ok();
+                Ok(DiskEntry {
+                    name: entry.file_name().to_string_lossy().into_owned(),
+                    is_link,
+                    is_folder: followed.as_ref().is_some_and(fs::Metadata::is_dir),
+                    size: followed.as_ref().map_or(0, fs::Metadata::len),
+                    changed: followed
+                        .and_then(|metadata| metadata.modified().ok())
+                        .map(chrono::DateTime::<Utc>::from),
+                })
+            })
+            .collect()
     }
 }
 

@@ -77,6 +77,32 @@ export interface ProjectPlaces {
   referenceFolders: string[];
 }
 
+/**
+ * What an entry of a folder is. A link is one that leads outside the folder
+ * of the project, or nowhere: it is listed and not followed.
+ */
+export type FileEntryKind = 'folder' | 'file' | 'link';
+
+/** One entry of a folder of a project. */
+export interface FileEntry {
+  name: string;
+  kind: FileEntryKind;
+  /** The size of a file in bytes; nothing for a folder or a link. */
+  size: number | null;
+  /** When it was last changed, if the system says. */
+  changedAt: Moment | null;
+}
+
+/**
+ * What lies in a folder of a project: folders first, then by name, without
+ * the noise of the tools (`.git`, `node_modules`, `target`). At most 2000
+ * entries; `hasMore` says when there were more.
+ */
+export interface FolderListing {
+  entries: FileEntry[];
+  hasMore: boolean;
+}
+
 /** Whether a member of a team is an AI agent or a person. */
 export type MemberKind = 'agent' | 'human';
 

@@ -97,6 +97,16 @@ The shell is where the work of an AI specialist meets the outside world
   `show_work_folder` opens the work folder in the file manager of the
   operating system (`explorer`, `open` or `xdg-open`) without waiting for
   it, and reports a chosen folder that is gone as `folder_not_found`.
+  `commands/files.rs` serves the files view: `list_project_files` reads a
+  folder of the project through `LocalFolderReader`, which only reads;
+  `open_project_file` opens a file with the program the system has for it,
+  and `show_project_file` shows it in the file manager (the same way the
+  exported workbook is shown). Each first has the use case check the path:
+  it stays inside the folder, links followed, and only its full form is
+  handed over, as one argument and without a shell. A folder is not opened
+  with another program, and a file that would run as a program (`.exe`,
+  `.bat`, `.ps1`, `.lnk` and the like) is not opened at all
+  (`invalid_request`): it can be shown in its folder.
 - **The team bus.** A specialist asks the manager to decide through a tool,
   `ask_manager`
   ([decision 0012](../../docs/decisions/0012-a-specialist-asks-through-a-tool.md)).
