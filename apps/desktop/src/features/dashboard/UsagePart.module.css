@@ -5,16 +5,52 @@
   font-variant-numeric: tabular-nums;
 }
 
-.users {
-  display: flex;
-  flex-direction: column;
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
 }
 
-.user {
-  display: grid;
-  grid-template-columns: minmax(0, 164px) minmax(0, 1fr) 132px;
-  align-items: center;
-  gap: var(--space-3);
+.table thead th {
+  height: 32px;
+  padding: 0 var(--space-2);
+  border-bottom: 1px solid var(--rule);
+  font-weight: inherit;
+  text-align: right;
+  vertical-align: bottom;
+  padding-bottom: var(--space-2);
+}
+
+.table thead th.nameColumn {
+  text-align: left;
+}
+
+.nameColumn {
+  width: 17%;
+}
+
+.countColumn {
+  width: 8%;
+}
+
+/* The two kinds that are counted for the cache have the longest names. */
+.countColumn.wide {
+  width: 15%;
+}
+
+.allColumn {
+  width: 18%;
+}
+
+.turnsColumn {
+  width: 6%;
+}
+
+.modelColumn {
+  width: 12%;
+}
+
+.row > * {
   height: 36px;
   padding: 0 var(--space-2);
   border-bottom: 1px solid var(--rule);
@@ -22,12 +58,38 @@
 
 .name {
   overflow: hidden;
+  font-weight: inherit;
+  text-align: left;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.count,
+.allCount,
+.model {
+  color: var(--ink-soft);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.model {
+  overflow: hidden;
+  color: var(--ink-faint);
+  text-overflow: ellipsis;
+}
+
+.allCell {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
 .track {
   position: relative;
+  flex: 1;
   height: var(--dashboard-bar-height);
 }
 
@@ -42,13 +104,25 @@
   background: var(--ink-faint);
 }
 
-.tokens {
-  color: var(--ink-soft);
-  font-family: var(--font-mono);
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
-  text-align: right;
-  white-space: nowrap;
+.allCount {
+  flex: none;
+  min-width: 5ch;
+  color: var(--ink);
+}
+
+/* The project in all closes the table on a strong rule, without a bar. */
+.project > * {
+  border-top: 1px solid var(--rule-strong);
+  border-bottom: none;
+}
+
+.project .name,
+.project .allCount {
+  font-weight: 550;
+}
+
+.project .allCell {
+  justify-content: flex-end;
 }
 
 .quiet {

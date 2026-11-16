@@ -1,9 +1,11 @@
 import type {
+  AgentUsage,
   CalendarDate,
   Color,
   Conversation,
   Member,
   Project,
+  ProjectUsage,
   Sprint,
   SprintReport,
   Status,
@@ -16,7 +18,7 @@ import { calendarDateOf } from '@/shared/lib/format';
 import { advisorConversation } from '../advisor/advisorModel';
 import { countWaitingForManager } from '../office/officeModel';
 import { daysLeft } from '../sprints/sprintModel';
-import { allTokens, runningTurn, tokensOfTurns } from '../work/workModel';
+import { runningTurn } from '../work/workModel';
 
 /**
  * Pure functions for the dashboard of a project (decision 0020): what it
@@ -208,62 +210,73 @@ export function thisWeek(project: Project, tasks: readonly Task[], today: Calend
   return { finished, due };
 }
 
-/** What a specialist, the Advisor or somebody who left has used, in tokens. */
-export interface Usage {
+/** One row of the usage of a project: a specialist, the Advisor, those who left, or the project. */
+export interface UsageRow {
   key: string;
-  kind: 'advisor' | 'member' | 'former';
+  kind: 'advisor' | 'member' | 'former' | 'project';
   member: Member | null;
   name: string;
-  tokens: number;
+  usage: AgentUsage;
 }
 
-/** What the project used, and who used it. */
-export interface ProjectUsage {
-  total: number;
-  /** The Advisor, then every AI specialist in the order they joined, then those who left. */
-  users: Usage[];
+/** The rows of the usage of a project, the one that spent the most first, and the project. */
+export interface UsageTable {
+  rows: UsageRow[];
+  total: UsageRow;
 }
 
 /**
- * Who used how many tokens in the project. A person uses none and is not
- * listed. Conversations whose specialist has left the team are counted
- * together, and only if they used anything.
+ * The usage of a project as the dashboard lists it: one row for every
+ * specialist, the Advisor and those who left that spent anything, the one
+ * that spent the most first, and the project in all. The figures are the
+ * backend's; here they are only given names and put in order.
  */
-export function usageOf(
-  members: readonly Member[],
-  conversations: readonly Conversation[],
-): ProjectUsage {
-  const tokensOf = (some: readonly Conversation[]) =>
-    allTokens(tokensOfTurns(some.flatMap((conversation) => conversation.turns)));
-  const known = new Set(members.map((member) => member.id));
-  const advisor: Usage = {
-    key: 'advisor',
-    kind: 'advisor',
-    member: null,
-    name: 'Advisor',
-    tokens: tokensOf(conversations.filter((conversation) => conversation.isWithAdvisor)),
-  };
-  const specialists = members
-    .filter((member) => member.kind === 'agent')
-    .map((member): Usage => ({
-      key: member.id,
+export function usageTable(members: readonly Member[], usage: ProjectUsage): UsageTable {
+  const memberRows = usage.members.map((spent): UsageRow => {
+    const member = members.find((candidate) => candidate.id === spent.memberId) ?? null;
+    return {
+      key: spent.memberId,
       kind: 'member',
       member,
-      name: member.name,
-      tokens: tokensOf(conversations.filter((conversation) => conversation.memberId === member.id)),
-    }));
-  const formerTokens = tokensOf(
-    conversations.filter(
-      (conversation) =>
-        !conversation.isWithAdvisor &&
-        (conversation.memberId === null || !known.has(conversation.memberId)),
-    ),
-  );
-  const former: Usage[] =
-    formerTokens > 0
-      ? [{ key: 'former', kind: 'former', member: null, name: 'Who left', tokens: formerTokens }]
-      : [];
-  return { total: tokensOf(conversations), users: [advisor, ...specialists, ...former] };
+      name: member?.name ?? 'A member who left',
+      usage: spent.usage,
+    };
+  });
+  const others: UsageRow[] = [
+    ...(usage.advisor
+      ? [
+          {
+            key: 'advisor',
+            kind: 'advisor',
+            member: null,
+            name: 'Advisor',
+            usage: usage.advisor,
+          } as const,
+        ]
+      : []),
+    ...(usage.former
+      ? [
+          {
+            key: 'former',
+            kind: 'former',
+            member: null,
+            name: 'Who left',
+            usage: usage.former,
+          } as const,
+        ]
+      : []),
+  ];
+  const rows = [...memberRows, ...others].sort((a, b) => b.usage.allTokens - a.usage.allTokens);
+  return {
+    rows,
+    total: {
+      key: 'project',
+      kind: 'project',
+      member: null,
+      name: 'The project',
+      usage: usage.total,
+    },
+  };
 }
 
 /** Who is at work now: the specialists with a running turn, and the Advisor. */

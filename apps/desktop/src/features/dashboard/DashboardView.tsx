@@ -8,7 +8,7 @@ import { reportVersionOf } from '../sprints/sprintModel';
 import { useSprintReport, useSprints } from '../sprints/sprintQueries';
 import { useTeamMembers } from '../team/TeamContext';
 import { useViews } from '../views/viewQueries';
-import { useConversationsOfProject } from '../work/WorkContext';
+import { useConversationsOfProject, useUsageOfProject } from '../work/WorkContext';
 import { DashboardSection } from './DashboardSection';
 import styles from './DashboardView.module.css';
 import {
@@ -17,7 +17,6 @@ import {
   standingInWords,
   tasksAtRisk,
   thisWeek,
-  usageOf,
   workByHolder,
   workByStatus,
 } from './dashboardModel';
@@ -105,7 +104,7 @@ function DashboardPage({ project, tasks, sprints, report }: DashboardPageProps) 
   });
   const atRisk = tasksAtRisk(project, tasks, today);
   const week = thisWeek(project, tasks, today);
-  const usage = usageOf(members, conversations);
+  const usage = useUsageOfProject();
   const hasTasks = tasks.length > 0;
   const usesSprints = (sprints?.length ?? 0) > 0;
 
@@ -199,7 +198,7 @@ function DashboardPage({ project, tasks, sprints, report }: DashboardPageProps) 
           />
         )}
 
-        <UsagePart usage={usage} hasTeam={members.length > 0} />
+        <UsagePart members={members} usage={usage} />
       </div>
     </div>
   );

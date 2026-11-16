@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type {
+  AgentUsage,
   Conversation,
   DecisionRequest,
   Member,
@@ -27,7 +28,7 @@ import {
   standingInWords,
   tasksAtRisk,
   thisWeek,
-  usageOf,
+  usageTable,
   waitingInWords,
   weekOf,
   whoIsAtWork,
@@ -308,28 +309,39 @@ describe('thisWeek', () => {
   });
 });
 
-describe('usageOf', () => {
-  it('counts the Advisor, every specialist and those who left, but no person', () => {
-    const conversations = [
-      conversation({ id: 'h', memberId: 'hardware', turns: [turn({ id: '1' }), running] }),
-      conversation({ id: 'a', isWithAdvisor: true, memberId: null, turns: [turn({ id: '2' })] }),
-      conversation({ id: 'gone', memberId: 'gone', turns: [turn({ id: '3' })] }),
-    ];
-    const usage = usageOf([hardware, firmware, tester], conversations);
-    expect(usage.total).toBe(12000);
-    expect(usage.users.map(({ name, tokens }) => [name, tokens])).toEqual([
-      ['Advisor', 4000],
-      ['Hardware engineer', 4000],
-      ['Firmware engineer', 0],
-      ['Who left', 4000],
-    ]);
+describe('usageTable', () => {
+  const spent = (allTokens: number): AgentUsage => ({
+    tokens: { input: 0, output: allTokens, cacheRead: 0, cacheWritten: 0 },
+    allTokens,
+    turns: 1,
+    lastModel: 'claude-sonnet',
+    context: null,
   });
 
-  it('lists only the Advisor in a project without a team', () => {
-    expect(usageOf([], [])).toEqual({
-      total: 0,
-      users: [{ key: 'advisor', kind: 'advisor', member: null, name: 'Advisor', tokens: 0 }],
+  it('names the figures of the backend and puts the one that spent the most first', () => {
+    const table = usageTable([hardware, firmware, tester], {
+      members: [
+        { memberId: 'hardware', usage: spent(4000) },
+        { memberId: 'firmware', usage: spent(100) },
+      ],
+      advisor: spent(9000),
+      former: spent(50),
+      total: spent(13_150),
     });
+    expect(table.rows.map(({ name, usage }) => [name, usage.allTokens])).toEqual([
+      ['Advisor', 9000],
+      ['Hardware engineer', 4000],
+      ['Firmware engineer', 100],
+      ['Who left', 50],
+    ]);
+    expect(table.total.name).toBe('The project');
+    expect(table.total.usage.allTokens).toBe(13_150);
+  });
+
+  it('lists nobody in a project that has spent nothing', () => {
+    expect(
+      usageTable([hardware], { members: [], advisor: null, former: null, total: spent(0) }).rows,
+    ).toEqual([]);
   });
 });
 
