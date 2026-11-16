@@ -10,12 +10,14 @@ use std::{env, fs, thread};
 use chrono::Utc;
 use tauri::{AppHandle, Emitter, Manager};
 use teamwright_application::{
-    AgentRuntime, ApplicationError, AreaService, FileSystem, IntegrationSettings,
-    NotificationService, PlacesService, ProjectEvent, ProjectFolders, ProjectService, RoundReport,
-    SprintService, StorageError, SyncPorts, SyncService, SystemClock, TaskService, TeamService,
-    ViewService, WorkListener, WorkPorts, WorkService, WorkbookPorts, WorkbookService,
+    AgentRuntime, ApplicationError, AreaService, FileSystem, GitHubPorts, GitHubService,
+    IntegrationSettings, NotificationService, PlacesService, ProjectEvent, ProjectFolders,
+    ProjectService, RoundReport, SprintService, StorageError, SyncPorts, SyncService, SystemClock,
+    TaskService, TeamService, ViewService, WorkListener, WorkPorts, WorkService, WorkbookPorts,
+    WorkbookService,
 };
 use teamwright_domain::{ComputerId, Conversation, Project, Turn};
+use teamwright_integrations::{GhCommandLine, GhLocator};
 use teamwright_runtime::ClaudeCode;
 use teamwright_storage::{
     Database, FolderOfComputers, SqliteAreaRepository, SqliteConversationRepository,
@@ -136,6 +138,8 @@ pub struct AppState {
     pub notifications: NotificationService,
     /// The settings of the integrations of each project on this computer.
     pub integrations: IntegrationSettings,
+    /// GitHub, through the manager's own `gh`.
+    pub github: GitHubService,
     /// The workbooks written since the program started. Only these can be
     /// shown in their folder.
     pub exported_workbooks: Mutex<Vec<PathBuf>>,
@@ -175,10 +179,26 @@ impl AppState {
         let file_system: Arc<dyn FileSystem> = Arc::new(LocalFileSystem);
         let notifications =
             NotificationService::new(Arc::new(SqliteNotificationChoice::new(database.clone())));
-        let integrations = IntegrationSettings::new(
+        let integration_store = Arc::new(SqliteIntegrationStore::new(database));
+        let integrations =
+            IntegrationSettings::new(project_repository.clone(), integration_store.clone());
+        let places = PlacesService::new(
             project_repository.clone(),
-            Arc::new(SqliteIntegrationStore::new(database)),
+            task_repository.clone(),
+            member_repository.clone(),
+            conversation_repository.clone(),
+            places_repository.clone(),
+            folders.clone(),
+            file_system.clone(),
         );
+        let github = GitHubService::new(GitHubPorts {
+            projects: project_repository.clone(),
+            tasks: task_repository.clone(),
+            places: places.clone(),
+            store: integration_store,
+            program: Arc::new(GhCommandLine::new(GhLocator::of_this_computer())),
+            clock: clock.clone(),
+        });
         let sync = SyncService::new(SyncPorts {
             ledger: sync_ledger,
             folder: Arc::new(FolderOfComputers::new()),
@@ -230,15 +250,8 @@ impl AppState {
                 area_repository.clone(),
                 clock.clone(),
             ),
-            places: PlacesService::new(
-                project_repository.clone(),
-                task_repository.clone(),
-                member_repository.clone(),
-                conversation_repository.clone(),
-                places_repository,
-                folders,
-                file_system,
-            ),
+            places,
+            github,
             tasks: TaskService::new(
                 project_repository.clone(),
                 task_repository.clone(),

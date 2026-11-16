@@ -11,10 +11,11 @@ use chrono::SecondsFormat;
 use serde::{Deserialize, Serialize};
 use teamwright_application::{
     Acceptance, AgentProgram, AgentUsage, ApprovedMember, ApprovedOwner, ApprovedProposal,
-    ApprovedTask, ConversationWithTurns, KnownComputer, NewMember, NewProject, NewSprint, NewTask,
-    NewView, NotificationChoice, NotificationKind, NotificationPermission, ProjectChange,
+    ApprovedTask, ConversationWithTurns, GitHubItem, GitHubOverview, GitHubSignIn, ItemKind,
+    ItemState, KnownComputer, NewMember, NewProject, NewSprint, NewTask, NewView,
+    NotificationChoice, NotificationKind, NotificationPermission, ProjectChange,
     ProjectIntegrations, ProjectPlaces, ProjectUsage, SprintChanges, SprintReport, SprintStart,
-    StatusProperties, SyncNotice, SyncState, WorkflowTemplate,
+    StatusProperties, SyncNotice, SyncState, TaskOnGitHub, WorkflowTemplate, sign_in_problem,
 };
 use teamwright_domain::{
     Area, Assignee, CalendarDate, Color, ComputerId, ContextUse, Conversation, DecisionOption,
@@ -1840,6 +1841,132 @@ impl From<ProjectIntegrations> for ProjectIntegrationsDto {
 pub fn parse_event_kind(text: &str) -> Result<EventKind, CommandError> {
     text.parse::<EventKind>()
         .map_err(|error| CommandError::invalid_request(error.to_string()))
+}
+
+/// Whether the manager's `gh` is there and signed in, with what is missing
+/// in words.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitHubSignInDto {
+    /// `not_installed`, `not_signed_in` or `signed_in`.
+    state: &'static str,
+    program: Option<String>,
+    account: Option<String>,
+    problem: Option<&'static str>,
+}
+
+impl From<&GitHubSignIn> for GitHubSignInDto {
+    fn from(sign_in: &GitHubSignIn) -> Self {
+        let (state, program, account) = match sign_in {
+            GitHubSignIn::NotInstalled => ("not_installed", None, None),
+            GitHubSignIn::NotSignedIn { program } => ("not_signed_in", Some(program), None),
+            GitHubSignIn::SignedIn { program, account } => {
+                ("signed_in", Some(program), account.clone())
+            }
+        };
+        Self {
+            state,
+            program: program.map(|program| path_to_text(program)),
+            account,
+            problem: sign_in_problem(sign_in),
+        }
+    }
+}
+
+/// A pull request or an issue.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitHubItemDto {
+    /// `pull_request` or `issue`.
+    kind: &'static str,
+    number: u64,
+    title: String,
+    /// `open`, `draft`, `merged` or `closed`.
+    state: &'static str,
+    url: String,
+    /// The branch of a pull request; null for an issue.
+    branch: Option<String>,
+}
+
+impl From<&GitHubItem> for GitHubItemDto {
+    fn from(item: &GitHubItem) -> Self {
+        Self {
+            kind: match item.kind {
+                ItemKind::PullRequest => "pull_request",
+                ItemKind::Issue => "issue",
+            },
+            number: item.number,
+            title: item.title.clone(),
+            state: match item.state {
+                ItemState::Open => "open",
+                ItemState::Draft => "draft",
+                ItemState::Merged => "merged",
+                ItemState::Closed => "closed",
+            },
+            url: item.url.clone(),
+            branch: (!item.branch.is_empty()).then(|| item.branch.clone()),
+        }
+    }
+}
+
+/// GitHub for a project, as the integrations page shows it.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitHubOverviewDto {
+    sign_in: GitHubSignInDto,
+    repository: Option<String>,
+    is_from_work_folder: bool,
+    read_at: Option<String>,
+    linked_pull_requests: usize,
+    linked_issues: usize,
+    unlinked: Vec<GitHubItemDto>,
+    unlinked_count: usize,
+}
+
+impl From<&GitHubOverview> for GitHubOverviewDto {
+    fn from(overview: &GitHubOverview) -> Self {
+        Self {
+            sign_in: GitHubSignInDto::from(&overview.sign_in),
+            repository: overview.repository.as_ref().map(ToString::to_string),
+            is_from_work_folder: overview.is_from_work_folder,
+            read_at: overview.read_at.map(moment_to_text),
+            linked_pull_requests: overview.linked_pull_requests,
+            linked_issues: overview.linked_issues,
+            unlinked: overview.unlinked.iter().map(GitHubItemDto::from).collect(),
+            unlinked_count: overview.unlinked_count,
+        }
+    }
+}
+
+/// The pull requests and issues about a task.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskOnGitHubDto {
+    repository: Option<String>,
+    read_at: Option<String>,
+    items: Vec<GitHubItemDto>,
+}
+
+impl From<&TaskOnGitHub> for TaskOnGitHubDto {
+    fn from(on_github: &TaskOnGitHub) -> Self {
+        Self {
+            repository: on_github.repository.as_ref().map(ToString::to_string),
+            read_at: on_github.read_at.map(moment_to_text),
+            items: on_github.items.iter().map(GitHubItemDto::from).collect(),
+        }
+    }
+}
+
+/// What an issue opened for a task would say, and where it would go.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IssueDraftDto {
+    /// The repository, `owner/name`.
+    pub repository: String,
+    /// The title, with the task's reference first.
+    pub title: String,
+    /// The body.
+    pub body: String,
 }
 
 #[cfg(test)]

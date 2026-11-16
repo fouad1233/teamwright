@@ -455,6 +455,21 @@ A new channel is told what a person wants to hear of
 (`events_told_in_a_channel`); a new address hears everything
 (`events_sent_to_an_address`). The settings are not logged and not synced.
 
+`integrations/github.rs` is GitHub through the manager's own `gh`, behind
+the port `GitHubProgram`. The repository of a project is the one named, or
+the one its work folder is a clone of (`RepositoryName::of_remote`). A
+pull request or an issue is about a task when the pure `mentions` finds
+the task's reference, whole and in any case, in its title or branch (for
+a pull request also in its body): `SH-4` is not in `SH-41`.
+`GitHubService` keeps one reading per project in memory with its age, and
+reads only when asked (`refresh`), or once for a task when nothing was
+read since the program started (`of_task`). `overview` counts what is
+about tasks and lists the rest; `issue_for_task` words an issue (the
+reference first in the title) and `open_issue` sends it, which the
+interface does only after the manager confirmed. `sign_in_problem` says
+what is missing: not installed (with where to get it), or not signed in
+(`gh auth login`).
+
 ## Keeping computers in step
 
 `SyncService` keeps the computers of one manager in step through a folder

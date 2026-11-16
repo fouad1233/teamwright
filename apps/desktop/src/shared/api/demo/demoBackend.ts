@@ -14,8 +14,12 @@ import type {
   DecisionRequest,
   Effort,
   EventKind,
+  GitHubItem,
+  GitHubOverview,
+  GitHubSignIn,
   Id,
   InterviewAnswer,
+  IssueDraft,
   Member,
   MemberKind,
   MemberProfile,
@@ -49,6 +53,7 @@ import type {
   SyncState,
   Task,
   TaskChange,
+  TaskOnGitHub,
   Turn,
   View,
   ViewFilter,
@@ -62,6 +67,7 @@ import {
   tidyAreaName,
 } from './areas';
 import { briefFor } from './brief';
+import { PretendedGitHub } from './gitHub';
 import { PretendedIntegrations } from './integrations';
 import { freeName, isInside, isSameFolder, nameOf } from './places';
 import { answersInWords, openInterviewOf, openProposalOf, waitInCircle } from './planning';
@@ -245,6 +251,7 @@ export class DemoBackend implements Backend {
   private readonly sprintsCreated = new Map<Id, number>();
   private readonly places = new Map<Id, ChosenPlaces>();
   private readonly integrations = new PretendedIntegrations();
+  private readonly gitHub = new PretendedGitHub();
   /** The views of each project, in the order the manager gave them. */
   private readonly views = new Map<Id, View[]>();
   /** The areas of each project, in the order the manager gave them. */
@@ -1530,6 +1537,76 @@ export class DemoBackend implements Backend {
   ): Promise<ProjectIntegrations> {
     return this.answer(() =>
       this.integrations.setWebAddressEvent(this.requireProject(projectId).id, index, kind, on),
+    );
+  }
+
+  gitHubSignIn(): Promise<GitHubSignIn> {
+    return this.answer(() => this.gitHub.signIn());
+  }
+
+  setGitHubProgram(): Promise<GitHubSignIn> {
+    return this.answer(() => this.gitHub.signIn());
+  }
+
+  gitHubOverview(projectId: Id): Promise<GitHubOverview> {
+    return this.answer(() => this.gitHubOverviewOf(this.requireProject(projectId)));
+  }
+
+  refreshGitHub(projectId: Id): Promise<GitHubOverview> {
+    return this.answer(() => {
+      const project = this.requireProject(projectId);
+      this.gitHub.read(project.id, this.nowAsText());
+      return this.gitHubOverviewOf(project);
+    });
+  }
+
+  taskOnGitHub(taskId: Id, refresh: boolean): Promise<TaskOnGitHub> {
+    return this.answer(() => {
+      const task = this.requireTask(taskId);
+      const project = this.requireProject(task.projectId);
+      if (refresh || this.gitHub.readAtOf(project.id) === null) {
+        this.gitHub.read(project.id, this.nowAsText());
+      }
+      return this.gitHub.ofTask(
+        project.id,
+        project.key,
+        this.repositoryOf(project),
+        this.tasksOfProject(project.id),
+        task,
+      );
+    });
+  }
+
+  issueDraft(taskId: Id): Promise<IssueDraft> {
+    return this.answer(() => {
+      const task = this.requireTask(taskId);
+      const project = this.requireProject(task.projectId);
+      return this.gitHub.draftOf(project.key, task, this.repositoryOf(project));
+    });
+  }
+
+  openIssue(taskId: Id): Promise<GitHubItem> {
+    return this.answer(() => {
+      const task = this.requireTask(taskId);
+      const project = this.requireProject(task.projectId);
+      return this.gitHub.open(
+        project.id,
+        this.gitHub.draftOf(project.key, task, this.repositoryOf(project)),
+      );
+    });
+  }
+
+  private repositoryOf(project: Project): string {
+    return this.gitHub.repositoryOf(project.name, this.integrations.of(project.id).repository);
+  }
+
+  private gitHubOverviewOf(project: Project): GitHubOverview {
+    return this.gitHub.overview(
+      project.id,
+      project.key,
+      this.repositoryOf(project),
+      this.integrations.of(project.id).repository === null,
+      this.tasksOfProject(project.id),
     );
   }
 

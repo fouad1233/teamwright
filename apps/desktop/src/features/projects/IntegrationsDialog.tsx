@@ -9,6 +9,9 @@ import { TextInput } from '@/shared/ui/Field';
 import { Refusal } from '@/shared/ui/Form';
 import { describeFailure } from '@/shared/ui/Toast';
 
+import { GitHubItems } from '../github/GitHubItems';
+import { agoInWords, gitHubInWords, linkedInWords } from '../github/gitHubModel';
+import { useGitHubCommands, useGitHubOverview } from '../github/gitHubQueries';
 import styles from './IntegrationsDialog.module.css';
 import { useIntegrationCommands, useProjectIntegrations } from './integrationQueries';
 import { EVENT_LABELS, chosenInWords, slackInWords, webAddressesInWords } from './integrationModel';
@@ -96,24 +99,78 @@ function PartHead({ name, state }: { name: string; state: string }) {
 
 function GitHubPart({ project, integrations, attempt }: PartProps) {
   const commands = useIntegrationCommands(project.id);
+  const gitHub = useGitHubCommands();
+  const overview = useGitHubOverview(project.id);
   const [name, setName] = useState(integrations.repository ?? '');
+  const [isReading, setReading] = useState(false);
+  const data = overview.data;
 
   return (
     <section className={styles.part} aria-label="GitHub">
-      <PartHead
-        name="GitHub"
-        state={integrations.repository === null ? 'From the work folder' : integrations.repository}
-      />
+      <PartHead name="GitHub" state={data === undefined ? '' : gitHubInWords(data)} />
       <p className={styles.note}>
         The tasks of this project know the pull requests and issues that name their key, such as{' '}
         <code>{project.key}-4</code>. Teamwright asks GitHub’s own command line program, signed in
         as you, and keeps no token.
       </p>
+      {data !== undefined && data.signIn.problem !== null && (
+        <p className={styles.problem} role="status">
+          {data.signIn.problem}.
+        </p>
+      )}
+      {data !== undefined && data.signIn.state === 'signed_in' && (
+        <p className={styles.fact}>
+          Signed in{data.signIn.account === null ? '' : ` as ${data.signIn.account}`}.{' '}
+          {data.repository === null
+            ? 'The work folder is not a clone of a repository on GitHub; name one below.'
+            : `${data.isFromWorkFolder ? 'The work folder is a clone of' : 'The repository is'} ${data.repository}.`}
+        </p>
+      )}
+      {data !== undefined && data.repository !== null && data.signIn.state === 'signed_in' && (
+        <div className={styles.reading}>
+          <div className={styles.row}>
+            <span className={styles.fact}>
+              {data.readAt === null
+                ? 'Not read since Teamwright started.'
+                : `Read ${agoInWords(data.readAt)}. ${linkedInWords(data)}`}
+            </span>
+            <Button
+              variant="ghost"
+              disabled={isReading}
+              onClick={() => {
+                setReading(true);
+                void attempt(() => gitHub.refresh(project.id)).finally(() => {
+                  setReading(false);
+                });
+              }}
+            >
+              {isReading ? 'Reading…' : data.readAt === null ? 'Read now' : 'Refresh'}
+            </Button>
+          </div>
+          {data.unlinked.length > 0 && (
+            <>
+              <h4 className={styles.subhead}>
+                About no task
+                {data.unlinkedCount > data.unlinked.length &&
+                  `, the first ${data.unlinked.length.toString()} of ${data.unlinkedCount.toString()}`}
+              </h4>
+              <GitHubItems
+                items={data.unlinked}
+                onOpen={(url) => {
+                  void attempt(() => gitHub.open(url));
+                }}
+              />
+            </>
+          )}
+        </div>
+      )}
       <form
         className={styles.row}
         onSubmit={(event) => {
           event.preventDefault();
-          void attempt(() => commands.setRepository(name.trim() === '' ? null : name));
+          void attempt(() => commands.setRepository(name.trim() === '' ? null : name)).then(() =>
+            overview.refetch(),
+          );
         }}
       >
         <TextInput

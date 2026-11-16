@@ -24,6 +24,7 @@ import { useAreas } from '../areas/areaQueries';
 import { PointsEditor } from '../sprints/PointsEditor';
 import { useSprintCommands, useSprints } from '../sprints/sprintQueries';
 import { useTeamMembers } from '../team/TeamContext';
+import { TaskGitHub } from '../github/TaskGitHub';
 import { TaskWork } from '../work/TaskWork';
 import { PRIORITIES, PriorityFlag, StatusLabel, StatusMark, priorityLabel } from './TaskBadges';
 import { TaskComposer } from './TaskComposer';
@@ -320,6 +321,10 @@ export function TaskPanel({ project, task, tasks, onClose }: TaskPanelProps) {
               return created !== undefined;
             }}
           />
+        </Section>
+
+        <Section title="GitHub">
+          <TaskGitHub project={project} task={task} />
         </Section>
 
         <Section title="History">

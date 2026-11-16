@@ -12,10 +12,15 @@ import type {
   Conversation,
   DataChanged,
   EventKind,
+  GitHubItem,
+  GitHubOverview,
+  GitHubSignIn,
   Id,
   InterviewAnswer,
+  IssueDraft,
   Member,
   MemberProfile,
+  Moment,
   NewAdvice,
   NewDecisionAnswer,
   NewMember,
@@ -27,7 +32,6 @@ import type {
   NotificationKind,
   NotificationPressed,
   Priority,
-  Moment,
   Project,
   ProjectChange,
   ProjectIntegrations,
@@ -43,6 +47,7 @@ import type {
   SyncState,
   Task,
   TaskChange,
+  TaskOnGitHub,
   View,
   ViewFilter,
 } from './types';
@@ -496,6 +501,34 @@ export class TauriBackend implements Backend {
     on: boolean,
   ): Promise<ProjectIntegrations> {
     return call('set_web_address_event', { projectId, index, kind, on });
+  }
+
+  gitHubSignIn(): Promise<GitHubSignIn> {
+    return call('github_sign_in');
+  }
+
+  setGitHubProgram(program: string | null): Promise<GitHubSignIn> {
+    return call('set_github_program', { program });
+  }
+
+  gitHubOverview(projectId: Id): Promise<GitHubOverview> {
+    return call('github_overview', { projectId });
+  }
+
+  refreshGitHub(projectId: Id): Promise<GitHubOverview> {
+    return call('refresh_github', { projectId });
+  }
+
+  taskOnGitHub(taskId: Id, refresh: boolean): Promise<TaskOnGitHub> {
+    return call('task_on_github', { taskId, refresh });
+  }
+
+  issueDraft(taskId: Id): Promise<IssueDraft> {
+    return call('issue_draft', { taskId });
+  }
+
+  openIssue(taskId: Id): Promise<GitHubItem> {
+    return call('open_issue', { taskId });
   }
 }
 

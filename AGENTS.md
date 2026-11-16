@@ -19,6 +19,7 @@ TypeScript in the front. Start with [README.md](README.md) and
 | `crates/application` | Use cases, and the interfaces they need. | [README](crates/application/README.md) |
 | `crates/storage` | SQLite storage and the operation log. | [README](crates/storage/README.md) |
 | `crates/workbook` | Writes a project as an Excel workbook. | [README](crates/workbook/README.md) |
+| `crates/integrations` | GitHub through `gh`, and web addresses. | [README](crates/integrations/README.md) |
 | `apps/desktop` | The Tauri shell and the interface. | [README](apps/desktop/README.md) |
 | `website` | The public website, with the film. | [README](website/README.md) |
 | `docs/decisions` | Why things are the way they are. | [README](docs/decisions/README.md) |

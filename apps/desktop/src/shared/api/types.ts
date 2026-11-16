@@ -975,3 +975,57 @@ export interface ListeningAddress {
   isSigned: boolean;
   events: EventKind[];
 }
+
+/** Whether the manager's GitHub command line program (`gh`) is there and signed in. */
+export interface GitHubSignIn {
+  state: 'not_installed' | 'not_signed_in' | 'signed_in';
+  /** Where the program is, if it was found. */
+  program: string | null;
+  /** The account it is signed in as, if it said. */
+  account: string | null;
+  /** What is missing, in words, or null when nothing is. */
+  problem: string | null;
+}
+
+/** A pull request or an issue on GitHub. */
+export interface GitHubItem {
+  kind: 'pull_request' | 'issue';
+  number: number;
+  title: string;
+  state: 'open' | 'draft' | 'merged' | 'closed';
+  /** Its page on GitHub. */
+  url: string;
+  /** The branch of a pull request; null for an issue. */
+  branch: string | null;
+}
+
+/** GitHub for a project, from what was last read. */
+export interface GitHubOverview {
+  signIn: GitHubSignIn;
+  /** `owner/name`, or null if the project has none. */
+  repository: string | null;
+  /** Whether the repository was read from the work folder rather than named. */
+  isFromWorkFolder: boolean;
+  /** When the repository was last read, or null if it was not read since the program started. */
+  readAt: string | null;
+  linkedPullRequests: number;
+  linkedIssues: number;
+  /** The pull requests and issues about no task, at most ten. */
+  unlinked: GitHubItem[];
+  /** How many are about no task in all. */
+  unlinkedCount: number;
+}
+
+/** The pull requests and issues about one task. */
+export interface TaskOnGitHub {
+  repository: string | null;
+  readAt: string | null;
+  items: GitHubItem[];
+}
+
+/** What an issue opened for a task would say, and where it would go. Nothing is sent yet. */
+export interface IssueDraft {
+  repository: string;
+  title: string;
+  body: string;
+}

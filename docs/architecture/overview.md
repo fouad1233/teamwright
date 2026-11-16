@@ -53,6 +53,7 @@ point in one direction only: towards the domain.
 | `teamwright-storage` | Implements the storage interfaces with SQLite, runs migrations, writes the operation log. | application, domain |
 | `teamwright-runtime` | Everything that knows about Claude Code: finding it, starting sessions, encoding turns, decoding events. | application, domain |
 | `teamwright-workbook` | Writes a project, as the application gathers it, into an Excel workbook ([decision 0025](../decisions/0025-the-project-as-a-workbook.md)). | application, domain |
+| `teamwright-integrations` | The ways out to other services ([decision 0027](../decisions/0027-integrations.md)): GitHub through the manager's own `gh`, and web addresses over HTTPS. | application, domain |
 | `teamwright-bus` | The local MCP server through which team members reach the application. | application, domain |
 | `teamwright-desktop` | The Tauri shell. Builds all the parts, connects them, and translates between the interface and the use cases. | all of the above |
 

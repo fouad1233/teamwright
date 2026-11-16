@@ -1,0 +1,49 @@
+.part {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.note {
+  color: var(--ink-soft);
+  line-height: 1.5;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* Where it was read from, and how long ago, said quietly after the buttons. */
+.age {
+  min-width: 0;
+  margin-left: auto;
+  color: var(--ink-faint);
+  font-size: var(--text-small);
+}
+
+.confirmation {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.draft {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--space-2) var(--space-4);
+  margin: 0;
+}
+
+.draft dd {
+  margin: 0;
+}
+
+/* The body is shown as it will be sent: its lines kept. */
+.body {
+  max-height: 200px;
+  overflow: auto;
+  white-space: pre-wrap;
+}

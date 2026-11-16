@@ -47,6 +47,10 @@ pub use agent_runtime::{
 pub use areas::AreaService;
 pub use clock::SystemClock;
 pub use error::ApplicationError;
+pub use integrations::github::{
+    GitHubItem, GitHubOverview, GitHubPorts, GitHubProgram, GitHubReading, GitHubService,
+    GitHubSignIn, ItemKind, ItemState, TaskOnGitHub, mentions, sign_in_problem,
+};
 pub use integrations::{
     IntegrationSettings, IntegrationStore, ListeningAddress, ProjectIntegrations, SlackChannel,
     events_sent_to_an_address, events_told_in_a_channel,

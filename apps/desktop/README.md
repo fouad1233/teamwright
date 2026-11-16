@@ -129,6 +129,17 @@ The shell is where the work of an AI specialist meets the outside world
   `ProjectIntegrationsDto`, in which an address is only its host: the
   interface never gets a secret back. The demo backend keeps the settings
   in memory (`shared/api/demo/integrations.ts`) and sends nothing.
+  GitHub: the commands in `commands/github.rs` (`github_sign_in`,
+  `set_github_program`, `github_overview`, `refresh_github`,
+  `task_on_github`, `issue_draft`, `open_issue`) call `GitHubService`,
+  which runs the manager's `gh` through `teamwright-integrations`. The
+  part "GitHub" of a task (`features/github/TaskGitHub`) lists its pull
+  requests and issues (`GitHubItems`: a status mark and a word for the
+  state, the number, the title; a line opens the item in the browser
+  through `open_web_address`), reads again on "Refresh", and opens an
+  issue only after a dialog has shown what will be sent and where. The
+  demo pretends `gh` is signed in and that a few pull requests and issues
+  name the first tasks (`shared/api/demo/gitHub.ts`).
 - **What happened, and notifications**
   ([decision 0026](../../docs/decisions/0026-notifications.md)). The work
   of the specialists hands every event of a project

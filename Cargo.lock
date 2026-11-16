@@ -4054,6 +4054,7 @@ dependencies = [
  "tauri-plugin-notification",
  "teamwright-application",
  "teamwright-domain",
+ "teamwright-integrations",
  "teamwright-runtime",
  "teamwright-storage",
  "teamwright-workbook",
@@ -4067,6 +4068,17 @@ dependencies = [
  "chrono",
  "thiserror 2.0.21",
  "uuid",
+]
+
+[[package]]
+name = "teamwright-integrations"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "teamwright-application",
+ "teamwright-domain",
+ "tempfile",
 ]
 
 [[package]]

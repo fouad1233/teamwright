@@ -7,6 +7,8 @@
 //! behind other doors, so the settings are neither logged nor synced
 //! (`AGENTS.md`, rule 5).
 
+pub mod github;
+
 use std::path::PathBuf;
 use std::sync::Arc;
 

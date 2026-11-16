@@ -1,0 +1,58 @@
+.items {
+  display: flex;
+  flex-direction: column;
+}
+
+/* One item: its state, its number, its title, on a line between hairlines,
+   as the tasks a task waits for are listed. */
+.item {
+  display: grid;
+  grid-template-columns: 84px 72px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: 32px;
+  padding: 0 var(--space-1);
+  border: 0;
+  border-bottom: 1px solid var(--rule);
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.items li:first-child .item {
+  border-top: 1px solid var(--rule);
+}
+
+.item:hover {
+  background: var(--hover);
+}
+
+.item:focus-visible {
+  outline: 2px solid var(--brass);
+  outline-offset: -2px;
+}
+
+.state {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--ink-soft);
+  font-size: var(--text-small);
+}
+
+.number {
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: var(--text-small);
+  white-space: nowrap;
+}
+
+.title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

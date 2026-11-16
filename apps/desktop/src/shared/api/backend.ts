@@ -7,10 +7,15 @@ import type {
   Conversation,
   DataChanged,
   EventKind,
+  GitHubItem,
+  GitHubOverview,
+  GitHubSignIn,
   Id,
   InterviewAnswer,
+  IssueDraft,
   Member,
   MemberProfile,
+  Moment,
   NewAdvice,
   NewDecisionAnswer,
   NewMember,
@@ -22,7 +27,6 @@ import type {
   NotificationKind,
   NotificationPressed,
   Priority,
-  Moment,
   Project,
   ProjectChange,
   ProjectIntegrations,
@@ -38,6 +42,7 @@ import type {
   SyncState,
   Task,
   TaskChange,
+  TaskOnGitHub,
   View,
   ViewFilter,
 } from './types';
@@ -534,6 +539,27 @@ export interface Backend {
     kind: EventKind,
     on: boolean,
   ): Promise<ProjectIntegrations>;
+
+  /** Whether the manager's `gh` is there and signed in. Asks it, which may take a moment. */
+  gitHubSignIn(): Promise<GitHubSignIn>;
+  /** Names the `gh` of this computer, or, with null, looks for it again. */
+  setGitHubProgram(program: string | null): Promise<GitHubSignIn>;
+  /** GitHub for a project, from what was last read. Nothing is read. */
+  gitHubOverview(projectId: Id): Promise<GitHubOverview>;
+  /**
+   * Reads the pull requests and issues of the project's repository again
+   * (`no_repository` without one, `github_unavailable` when `gh` cannot).
+   */
+  refreshGitHub(projectId: Id): Promise<GitHubOverview>;
+  /**
+   * The pull requests and issues about a task. The repository is read once
+   * if it was not read since the program started, and again with `refresh`.
+   */
+  taskOnGitHub(taskId: Id, refresh: boolean): Promise<TaskOnGitHub>;
+  /** What an issue opened for a task would say, and where it would go. Nothing is sent. */
+  issueDraft(taskId: Id): Promise<IssueDraft>;
+  /** Opens the issue of `issueDraft` on GitHub. Only after the manager confirmed it. */
+  openIssue(taskId: Id): Promise<GitHubItem>;
 }
 
 /**

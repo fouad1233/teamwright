@@ -97,3 +97,37 @@
   color: var(--ink-faint);
   font-size: var(--text-small);
 }
+
+/* What GitHub says now: signed in, which repository, what was read. */
+.fact {
+  color: var(--ink-soft);
+  font-size: var(--text-small);
+  line-height: 1.5;
+}
+
+.problem {
+  color: var(--danger);
+  line-height: 1.5;
+}
+
+.reading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.reading .fact {
+  flex: 1;
+  min-width: 0;
+}
+
+.subhead {
+  margin-top: var(--space-2);
+  color: var(--ink-soft);
+  font-size: var(--text-small);
+  font-weight: 500;
+}
+
+.note code {
+  white-space: nowrap;
+}
