@@ -11,6 +11,7 @@ import { Prose } from '@/shared/ui/Prose';
 import { RunsElsewhere, useComputerOf } from '../sync/RunsElsewhere';
 import { MemberAvatar } from '../team/Assignee';
 import { useTeamMember } from '../team/TeamContext';
+import { ContextMeter } from './ContextMeter';
 import styles from './ConversationView.module.css';
 import { DecisionCard } from './DecisionCard';
 import {
@@ -93,6 +94,12 @@ export function ConversationView({
           )
         )}
       </div>
+
+      {/* How full the session is, once a turn has said. A conversation that
+          has not run shows nothing. */}
+      {conversation.context && (
+        <ContextMeter className={styles.context} context={conversation.context} />
+      )}
 
       <ol className={styles.turns}>
         {conversation.turns.map((turn) => (

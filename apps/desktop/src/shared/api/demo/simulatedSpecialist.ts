@@ -91,7 +91,7 @@ export function scriptForChoice(task: Task): Script {
     endsAfter: 600,
     answer: 'I am waiting for your decision before I go on.',
     tokens: { input: 30, output: 410, cacheRead: 21_500, cacheWritten: 5200 },
-    contextAdded: 27_100,
+    contextAdded: 24_800,
     asks: {
       question: `Which way should I take for "${task.title}"?`,
       reason:
@@ -131,7 +131,7 @@ export function scriptAfterDecision(decision: string): Script {
       '4. **What is open:** please read the result, and accept it or send it back.',
     ].join('\n'),
     tokens: { input: 36, output: 640, cacheRead: 22_900, cacheWritten: 900 },
-    contextAdded: 14_600,
+    contextAdded: 11_900,
   };
 }
 
@@ -168,7 +168,7 @@ export function scriptForTask(task: Task): Script {
       '4. **What is open:** please read the result, and accept it or send it back with what to change.',
     ].join('\n'),
     tokens: { input: 42, output: 880, cacheRead: 21_500, cacheWritten: 6400 },
-    contextAdded: 38_400,
+    contextAdded: 24_600,
   };
 }
 
@@ -182,7 +182,7 @@ export function scriptForMessage(member: Member): Script {
     endsAfter: 900,
     answer: `This is the demo, so there is nobody to answer. In the desktop program, ${member.name} would reply here and carry on with the work.`,
     tokens: { input: 18, output: 120, cacheRead: 22_300, cacheWritten: 310 },
-    contextAdded: 23_200,
+    contextAdded: 9800,
   };
 }
 

@@ -1,6 +1,6 @@
 import { createContext, useContext, useMemo, type ReactNode } from 'react';
 
-import type { Conversation, Id } from '@/shared/api/types';
+import type { Conversation, Id, ProjectUsage } from '@/shared/api/types';
 
 import { conversationOfTask, tasksBeingWorkedOn, tasksWaitingForManager } from './workModel';
 
@@ -11,15 +11,24 @@ interface Work {
   busyTasks: ReadonlySet<Id>;
   /** The tasks whose specialist waits for a decision of the manager. */
   waitingTasks: ReadonlySet<Id>;
+  /** What the agents of the project have spent, once it is known. */
+  usage: ProjectUsage | undefined;
 }
 
-const NO_WORK: Work = { conversations: [], busyTasks: new Set(), waitingTasks: new Set() };
+const NO_WORK: Work = {
+  conversations: [],
+  busyTasks: new Set(),
+  waitingTasks: new Set(),
+  usage: undefined,
+};
 
 const WorkContext = createContext<Work>(NO_WORK);
 
 interface WorkProviderProps {
   /** The conversations of the open project. */
   conversations: readonly Conversation[];
+  /** What the agents of the open project have spent, once it is known. */
+  usage?: ProjectUsage;
   children: ReactNode;
 }
 
@@ -28,14 +37,15 @@ interface WorkProviderProps {
  * so that a card can show that somebody is working on its task without the
  * conversations being handed down to it.
  */
-export function WorkProvider({ conversations, children }: WorkProviderProps) {
+export function WorkProvider({ conversations, usage, children }: WorkProviderProps) {
   const work = useMemo(
     () => ({
       conversations,
       busyTasks: tasksBeingWorkedOn(conversations),
       waitingTasks: tasksWaitingForManager(conversations),
+      usage,
     }),
-    [conversations],
+    [conversations, usage],
   );
   return <WorkContext value={work}>{children}</WorkContext>;
 }
@@ -58,4 +68,9 @@ export function useWaitsForManager(taskId: Id): boolean {
 /** Every conversation of the open project. */
 export function useConversationsOfProject(): readonly Conversation[] {
   return useContext(WorkContext).conversations;
+}
+
+/** What the agents of the open project have spent, and how full their contexts are, once it is known. */
+export function useUsageOfProject(): ProjectUsage | undefined {
+  return useContext(WorkContext).usage;
 }

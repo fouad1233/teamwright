@@ -1,5 +1,6 @@
 import type {
   AgentProgram,
+  ContextUse,
   Conversation,
   DecisionRequest,
   Id,
@@ -202,6 +203,41 @@ export function tokensInWords(tokens: TokenCounts): string {
         : `${formatTokens(part.count)} ${part.words}`,
     )
     .join(' · ');
+}
+
+/** How full a context is, short: "38k of 200k", or "38k" when the window is not known. */
+export function contextAmount(context: ContextUse): string {
+  return context.window === null
+    ? formatTokens(context.held)
+    : `${formatTokens(context.held)} of ${formatTokens(context.window)}`;
+}
+
+/** How full a context is, in a few words: "Context 38k of 200k". */
+export function contextInWords(context: ContextUse): string {
+  return `Context ${contextAmount(context)}`;
+}
+
+/**
+ * How full a context is, said in full for a title: what the session holds,
+ * the window it has, and, when it is nearly full, what comes of that.
+ */
+export function contextInFull(context: ContextUse): string {
+  const held = `The session holds ${context.held.toLocaleString('en')} tokens`;
+  const sentence =
+    context.window === null
+      ? `${held}; the program did not say how large its window is.`
+      : `${held} of the ${context.window.toLocaleString('en')} its window has.`;
+  return context.isNearlyFull
+    ? `${sentence} It is nearly full: the session will soon have to make room, and keeps only a summary of what was said.`
+    : sentence;
+}
+
+/** The part of its window a context fills, from 0 to 1, for a meter. Nothing if the window is not known. */
+export function contextShare(context: ContextUse): number | null {
+  if (context.window === null || context.window <= 0) {
+    return null;
+  }
+  return Math.min(1, Math.max(0, context.held / context.window));
 }
 
 const MILLISECONDS_PER_SECOND = 1000;

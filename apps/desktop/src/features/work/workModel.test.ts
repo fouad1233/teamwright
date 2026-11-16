@@ -9,6 +9,10 @@ import {
   conversationOfTask,
   decisionInWords,
   durationInWords,
+  contextAmount,
+  contextInFull,
+  contextInWords,
+  contextShare,
   formatTokens,
   hasSession,
   hasTurnStartedOrEnded,
@@ -170,6 +174,32 @@ describe('tokensOfTurns and allTokens', () => {
 
     expect(sum).toEqual({ input: 20, output: 200, cacheRead: 2000, cacheWritten: 10 });
     expect(allTokens(sum)).toBe(2230);
+  });
+});
+
+describe('the words for a context', () => {
+  const context = (held: number, window: number | null, isNearlyFull = false) => ({
+    held,
+    window,
+    isNearlyFull,
+  });
+
+  it('says how much of the window the session holds', () => {
+    expect(contextInWords(context(38_400, 200_000))).toBe('Context 38.4k of 200k');
+    expect(contextAmount(context(41_003, null))).toBe('41k');
+    expect(contextShare(context(50_000, 200_000))).toBe(0.25);
+    expect(contextShare(context(250_000, 200_000))).toBe(1);
+    expect(contextShare(context(5, null))).toBeNull();
+  });
+
+  it('says in its title what comes of a context that is nearly full', () => {
+    expect(contextInFull(context(38_400, 200_000))).toBe(
+      'The session holds 38,400 tokens of the 200,000 its window has.',
+    );
+    expect(contextInFull(context(170_000, 200_000, true))).toContain(
+      'the session will soon have to make room',
+    );
+    expect(contextInFull(context(41_003, null))).toContain('did not say how large its window is');
   });
 });
 

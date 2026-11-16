@@ -1,0 +1,56 @@
+/* How full the context of a session is: a line of words over a hairline
+   meter. It is counted, not judged, so it is a quiet ink until it is
+   nearly full. */
+.context {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.line > :global(.label) {
+  color: var(--ink-faint);
+}
+
+.amount {
+  color: var(--ink-soft);
+  font-family: var(--font-mono);
+  font-size: var(--text-small);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.track {
+  position: relative;
+  display: block;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--rule-strong);
+}
+
+.fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: calc(var(--share) * 100%);
+  border-radius: 1px;
+  background: var(--ink-faint);
+}
+
+/* Nearly full: the session will soon have to make room. */
+.nearlyFull .amount,
+.nearlyFull .line > :global(.label) {
+  color: var(--danger);
+}
+
+.nearlyFull .fill {
+  background: var(--danger);
+}

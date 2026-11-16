@@ -27,6 +27,11 @@
   flex: 1;
 }
 
+/* The context of the session, at the head of the conversation. */
+.context {
+  padding-bottom: var(--space-2);
+}
+
 /* Somebody is at work: the one point of attention, so it gets the gold. With
    the global label class in the selector, the gold wins over the faint ink
    of that class, which is loaded later. */
