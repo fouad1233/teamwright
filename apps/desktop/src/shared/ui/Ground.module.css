@@ -1,0 +1,108 @@
+/*
+ * The frame a ground is seen through. The view gives it its size. What
+ * lies outside it is cut off, and nothing can scroll it: the ground moves
+ * by its placement alone. (`clip` forbids scrolling; `hidden` is for a web
+ * view that does not know `clip` yet.)
+ */
+.frame {
+  position: relative;
+  overflow: hidden;
+  overflow: clip;
+  cursor: grab;
+  /* A finger on the ground moves the ground, not the page. */
+  touch-action: none;
+}
+
+.frame[data-moving] {
+  cursor: grabbing;
+}
+
+/* The ring of the keyboard lies inside the frame, where it is not cut off. */
+.frame:focus-visible {
+  outline-offset: -2px;
+}
+
+/* The ground itself: a point at the top left of the frame, from which
+   everything on it is placed. It has no size of its own. */
+.ground {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+}
+
+/* After a button or a key the ground slides into place; under the pointer
+   it is there at once. */
+.ground[data-gliding] {
+  transition: transform var(--duration-settle) var(--ease-settle);
+}
+
+/*
+ * The buttons of the ground: one block of cells divided by hairlines, like
+ * the title block in the corner of a drawing.
+ */
+.controls {
+  display: inline-flex;
+  flex: none;
+  align-items: stretch;
+  height: var(--control-height);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  /* A press on the cluster is no press on the ground under it. */
+  cursor: default;
+}
+
+.control {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--control-height);
+  color: var(--ink-faint);
+  transition:
+    background-color 100ms ease,
+    color 100ms ease;
+}
+
+.control + .control {
+  border-left: 1px solid var(--rule);
+}
+
+.control:first-child {
+  border-radius: var(--radius-control) 0 0 var(--radius-control);
+}
+
+.control:last-child {
+  border-radius: 0 var(--radius-control) var(--radius-control) 0;
+}
+
+.control:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--ink);
+}
+
+.control:disabled {
+  opacity: 0.4;
+}
+
+.control:focus-visible {
+  outline-offset: -2px;
+}
+
+.control svg {
+  width: 14px;
+  height: 14px;
+  stroke-width: 1.75;
+}
+
+/* The scale is a figure: it is set in the monospace, and wide enough for
+   its longest value, so that the buttons beside it stay put. */
+.scale {
+  min-width: 52px;
+  padding: 0 var(--space-2);
+  color: var(--ink-soft);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
