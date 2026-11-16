@@ -8,14 +8,17 @@ import { rankBetween } from '@/shared/lib/rank';
 
 /**
  * Where the next page of the history of a project starts: before the last
- * change of the page just loaded. Nothing once a page came back shorter
- * than was asked for, which means it was the last.
+ * change of the page just loaded. Nothing once a page came back empty,
+ * which means that the history has been read to its beginning.
+ *
+ * A page that is shorter than was asked for is not always the last. The
+ * history never splits the changes of one moment across two pages, so it
+ * hands out a short page where the cut would fall inside such a moment,
+ * for example where many tasks were opened at once. Only an empty page
+ * says for certain that nothing earlier is left.
  */
-export function nextHistoryPage(
-  page: readonly ProjectChange[],
-  pageSize: number,
-): Moment | undefined {
-  return page.length < pageSize ? undefined : page.at(-1)?.at;
+export function nextHistoryPage(page: readonly ProjectChange[]): Moment | undefined {
+  return page.at(-1)?.at;
 }
 
 /** Sorts tasks the way the manager arranged them: by rank, then by number. */

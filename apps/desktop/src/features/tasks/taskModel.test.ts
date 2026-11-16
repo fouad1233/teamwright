@@ -50,15 +50,18 @@ describe('nextHistoryPage', () => {
     return { at, kind: 'created', task: { id: 't', number: 1, title: 'T', gone: false } };
   }
 
-  it('starts the next page before the last change of a full page', () => {
+  it('starts the next page before the last change of a page', () => {
     const page = [created('2026-11-11T10:00:00.000Z'), created('2026-11-11T09:00:00.000Z')];
 
-    expect(nextHistoryPage(page, 2)).toBe('2026-11-11T09:00:00.000Z');
+    expect(nextHistoryPage(page)).toBe('2026-11-11T09:00:00.000Z');
   });
 
-  it('stops after a page shorter than was asked for', () => {
-    expect(nextHistoryPage([created('2026-11-11T10:00:00.000Z')], 2)).toBeUndefined();
-    expect(nextHistoryPage([], 2)).toBeUndefined();
+  it('goes on after a short page, which may have been cut so as not to split a moment', () => {
+    expect(nextHistoryPage([created('2026-11-11T10:00:00.000Z')])).toBe('2026-11-11T10:00:00.000Z');
+  });
+
+  it('stops after an empty page', () => {
+    expect(nextHistoryPage([])).toBeUndefined();
   });
 });
 

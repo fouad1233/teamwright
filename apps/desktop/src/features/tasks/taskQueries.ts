@@ -46,10 +46,15 @@ export const PROJECT_HISTORY_PAGE = 50;
  * What has happened to the tasks of a project, the newest change first,
  * one page of `PROJECT_HISTORY_PAGE` changes at a time. `data.pages` holds
  * the pages loaded so far, in order; `fetchNextPage()` loads the next one,
- * older, and `hasNextPage` is false once the oldest change is loaded. It is
- * asked for again, every loaded page, whenever the tasks of the project
- * have been loaded again, so a change made here or on another computer
- * shows.
+ * older. `hasNextPage` is false once a page has come back empty: a page
+ * shorter than the others may only have been cut so as not to split one
+ * moment, so a reader that wants to know whether it has reached the
+ * beginning asks on after a short page.
+ *
+ * It is asked for again, from its first page, whenever the tasks of the
+ * project have been loaded again, so a change made here or on another
+ * computer shows. A reader that had gone further back asks for the earlier
+ * pages again.
  */
 export function useProjectHistory(projectId: Id) {
   const backend = useBackend();
@@ -59,7 +64,7 @@ export function useProjectHistory(projectId: Id) {
     queryFn: ({ pageParam }) =>
       backend.listProjectHistory(projectId, PROJECT_HISTORY_PAGE, pageParam),
     initialPageParam: undefined as Moment | undefined,
-    getNextPageParam: (lastPage) => nextHistoryPage(lastPage, PROJECT_HISTORY_PAGE),
+    getNextPageParam: (lastPage) => nextHistoryPage(lastPage),
   });
 }
 
