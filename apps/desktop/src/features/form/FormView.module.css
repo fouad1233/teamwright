@@ -1,0 +1,441 @@
+/*
+ * The form view is a thin bar with the switch between its two faces, and
+ * under it a ground on which the form lies like a printed sheet: one
+ * column, a title block at its head, the fields under each other, and a
+ * foot with the button.
+ */
+.view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.bar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-3);
+  height: 40px;
+  padding: 0 var(--space-5);
+  border-bottom: 1px solid var(--rule);
+}
+
+.barNote {
+  flex: 1;
+  min-width: 0;
+  color: var(--ink-faint);
+  font-size: var(--text-small);
+}
+
+.switch {
+  display: inline-flex;
+  flex: none;
+  padding: 2px;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius-control);
+}
+
+.choice {
+  height: 22px;
+  padding: 0 var(--space-2);
+  border-radius: 3px;
+  color: var(--ink-faint);
+  font-size: var(--text-small);
+  font-weight: 550;
+  transition:
+    background-color 100ms ease,
+    color 100ms ease;
+}
+
+.choice:hover {
+  color: var(--ink);
+}
+
+.chosen,
+.chosen:hover {
+  background: var(--pressed);
+  color: var(--ink);
+}
+
+.ground {
+  flex: 1;
+  min-height: 0;
+  padding: var(--space-7) var(--space-5) var(--space-8);
+  overflow: auto;
+}
+
+/* The sheet. Its margins are the largest share of it, as on a printed form. */
+.sheet {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 600px;
+  margin: 0 auto;
+  padding: var(--space-6) var(--space-7) var(--space-5);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+}
+
+/* The title block: the title, what the form is for, and the introduction. */
+.head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-bottom: var(--space-5);
+  margin-bottom: var(--space-5);
+  border-bottom: 1px solid var(--rule);
+}
+
+.title,
+.titleInput {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: var(--text-display);
+  font-weight: 400;
+  line-height: 1.1;
+}
+
+.purpose {
+  margin: 0;
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: var(--text-small);
+}
+
+.introduction,
+.introductionInput {
+  margin: var(--space-2) 0 0;
+  color: var(--ink-soft);
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.labelLine {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-height: 18px;
+}
+
+.fieldLabel {
+  flex: 1;
+  min-width: 0;
+  color: var(--ink-soft);
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+
+/* A required field is marked in the margin of its label, quietly. */
+.required {
+  flex: none;
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  letter-spacing: 0.04em;
+}
+
+.input[data-invalid],
+.dateBox[data-invalid] {
+  border-color: var(--danger);
+}
+
+/* Points and an estimate are counted: the monospace. */
+.figure {
+  max-width: 160px;
+  font-family: var(--font-mono);
+  font-size: var(--text-small);
+  font-variant-numeric: tabular-nums;
+}
+
+.chosenValue {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* The calendar field of the program, set in the frame of a form field. */
+.dateBox {
+  display: flex;
+  align-items: center;
+  max-width: 240px;
+  min-height: var(--control-height);
+  padding: 0 2px;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius-control);
+  background: var(--ground);
+}
+
+.dateBox:focus-within {
+  border-color: var(--brass);
+}
+
+.dateBox > button {
+  flex: 1;
+  justify-content: flex-start;
+}
+
+.problem {
+  margin: 0;
+  color: var(--danger);
+  font-size: var(--text-small);
+}
+
+/* The foot: what the last sending came to, and the button. */
+.foot {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding-top: var(--space-4);
+  margin-top: var(--space-6);
+  border-top: 1px solid var(--rule);
+}
+
+.outcome {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 var(--space-2);
+  min-width: 0;
+  margin: 0;
+  font-size: var(--text-small);
+}
+
+.outcomeWord {
+  color: var(--ink-faint);
+}
+
+.outcomeRefused {
+  color: var(--danger);
+}
+
+.madeTask {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+  color: var(--ink);
+  text-align: left;
+  text-decoration: underline;
+  text-decoration-color: var(--rule-strong);
+  text-underline-offset: 3px;
+}
+
+.madeTask:hover {
+  text-decoration-color: currentcolor;
+}
+
+.madeReference {
+  color: var(--ink-soft);
+  font-family: var(--font-mono);
+}
+
+.madeTitle {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Editing: the same sheet, with handles. */
+.titleInput,
+.introductionInput,
+.labelInput {
+  width: 100%;
+  padding: 2px var(--space-1);
+  margin-left: calc(-1 * var(--space-1));
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--ink);
+  transition:
+    background-color 100ms ease,
+    border-color 100ms ease;
+}
+
+/* The introduction grows with its words, as it does when the form is filled in. */
+.introductionInput {
+  field-sizing: content;
+  color: var(--ink-soft);
+  resize: none;
+  font: inherit;
+  line-height: 1.55;
+}
+
+.titleInput:hover,
+.introductionInput:hover,
+.labelInput:hover {
+  background: var(--hover);
+}
+
+.titleInput:focus-visible,
+.introductionInput:focus-visible,
+.labelInput:focus-visible {
+  border-color: var(--brass);
+  outline: 2px solid var(--brass-soft);
+  outline-offset: 0;
+  background: var(--ground);
+}
+
+.titleInput::placeholder,
+.introductionInput::placeholder {
+  color: var(--ink-faint);
+}
+
+/* A label is shown as it will read; while it is written, as it is typed. */
+.labelInput {
+  flex: 1;
+  min-width: 0;
+  color: var(--ink-soft);
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.labelInput:focus-visible {
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: var(--text-small);
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.editedRow {
+  position: relative;
+  background: var(--surface);
+}
+
+.editedRow .labelLine {
+  align-items: center;
+}
+
+/* The grip hangs in the margin of the sheet, beside the field it moves. */
+.grip {
+  position: absolute;
+  top: 0;
+  left: calc(-1 * var(--space-6));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 24px;
+  border-radius: var(--radius-control);
+  color: var(--ink-faint);
+  cursor: grab;
+  touch-action: none;
+}
+
+.grip:hover {
+  color: var(--ink);
+}
+
+.grip:focus-visible {
+  outline: 2px solid var(--brass-soft);
+  outline-offset: 0;
+  color: var(--ink);
+}
+
+.grip svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* The field that is being dragged lies over the others. */
+.lifted {
+  z-index: 1;
+  border-radius: var(--radius-control);
+  box-shadow: var(--shadow-lifted);
+}
+
+/* The property a relabelled field fills, so that it is never lost. */
+.property {
+  flex: none;
+  color: var(--ink-faint);
+  font-size: var(--text-small);
+}
+
+.requiredToggle {
+  flex: none;
+  height: 22px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  letter-spacing: 0.04em;
+  transition:
+    border-color 100ms ease,
+    color 100ms ease;
+}
+
+.requiredToggle:hover:not(:disabled) {
+  border-color: var(--rule-strong);
+  color: var(--ink);
+}
+
+.requiredToggle:focus-visible {
+  outline: 2px solid var(--brass-soft);
+  outline-offset: 0;
+}
+
+.isRequired {
+  border-color: var(--rule-strong);
+  color: var(--ink);
+}
+
+.requiredToggle:disabled {
+  cursor: default;
+}
+
+.remove,
+.removeSpace {
+  flex: none;
+  width: 26px;
+}
+
+/* Where the field will be: its frame, and in it what goes there. */
+.preview {
+  display: flex;
+  align-items: center;
+  min-height: var(--control-height);
+  padding: 0 var(--space-2);
+  border: 1px dashed var(--rule-strong);
+  border-radius: var(--radius-control);
+  color: var(--ink-faint);
+  font-size: var(--text-small);
+}
+
+.tall {
+  align-items: flex-start;
+  min-height: 88px;
+  padding-top: var(--space-2);
+}
+
+.adder {
+  margin-top: var(--space-4);
+  margin-left: calc(-1 * var(--space-2));
+}
