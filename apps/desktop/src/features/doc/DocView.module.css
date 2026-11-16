@@ -1,0 +1,534 @@
+/*
+ * A doc is a page of a book kept with the project. It is read as a set
+ * page: a measure of about 68 characters, generous leading, headings in
+ * the serif, hairlines for rules. Its text begins on the margin every view
+ * begins on, and the list of its headings stands in the wide margin at its
+ * right, the way a note stands beside a drawing.
+ *
+ * The parts size themselves on the width of the view, not of the window.
+ */
+.doc {
+  /* The line of the page, as wide as about 68 characters of its text: a
+     figure 0, which `ch` counts in, is much wider than the average letter
+     of the grotesque. */
+  --measure: 48ch;
+  /* The sizes of the headings: the display and the title size of the
+     interface, and one halfway between them. */
+  --heading-1: var(--text-display);
+  --heading-2: calc((var(--text-title) + var(--text-display)) / 2);
+  --heading-3: var(--text-title);
+  --bar: 44px;
+  --contents: 216px;
+
+  container: doc / size;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* The bar over the page: what is counted on it or the tools to write it
+   with, when it was saved, and the way from reading to writing and back. */
+.bar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-3);
+  height: var(--bar);
+  padding: 0 var(--space-5);
+  border-bottom: 1px solid var(--rule);
+}
+
+.space {
+  flex: 1;
+}
+
+.facts,
+.saved {
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.refused {
+  color: var(--danger);
+}
+
+.tools {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  /* The first tool stands on the margin of the text, not its hover area. */
+  margin-left: -6px;
+}
+
+/* A hairline between two groups of tools. */
+.rule {
+  width: 1px;
+  height: 14px;
+  margin: 0 var(--space-1);
+  background: var(--rule-strong);
+}
+
+.scroller {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* The page, and the list of its headings in the margin beside it. */
+.sheet {
+  display: grid;
+  grid-template-columns: minmax(0, var(--measure)) var(--contents);
+  column-gap: var(--space-8);
+  align-items: start;
+  justify-content: start;
+  padding: var(--space-7) var(--space-5) var(--space-8);
+  /* The measure counts in the letters of the page. */
+  font-size: var(--text-strong);
+}
+
+.column {
+  min-width: 0;
+}
+
+/*
+ * The page as it is read.
+ */
+.page {
+  color: var(--ink);
+  line-height: 1.65;
+  overflow-wrap: break-word;
+  text-wrap: pretty;
+}
+
+.page > * + * {
+  margin-top: var(--space-4);
+}
+
+/* Headings are the gesture of the serif on this page. A heading that is
+   jumped to comes to rest a little under the top. */
+.page h1,
+.page h2,
+.page h3,
+.page h4,
+.page h5,
+.page h6 {
+  scroll-margin-top: var(--space-6);
+  text-wrap: balance;
+}
+
+.page h1,
+.page h2,
+.page h3 {
+  font-family: var(--font-serif);
+  font-weight: 400;
+}
+
+.page h1 {
+  font-size: var(--heading-1);
+  letter-spacing: -0.01em;
+  line-height: 1.12;
+}
+
+.page h2 {
+  font-size: var(--heading-2);
+  letter-spacing: -0.005em;
+  line-height: 1.2;
+}
+
+.page h3 {
+  font-size: var(--heading-3);
+  line-height: 1.3;
+}
+
+/* The smallest headings are labels, as everywhere in the interface. */
+.page h4,
+.page h5,
+.page h6 {
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+
+/* A heading stands nearer to what it heads than to what came before. */
+.page > h1:not(:first-child) {
+  margin-top: var(--space-7);
+}
+
+.page > h2:not(:first-child) {
+  margin-top: calc(var(--space-6) + var(--space-2));
+}
+
+.page > h3:not(:first-child),
+.page > h4:not(:first-child),
+.page > h5:not(:first-child),
+.page > h6:not(:first-child) {
+  margin-top: var(--space-6);
+}
+
+.page > h1 + * {
+  margin-top: var(--space-5);
+}
+
+.page > h2 + * {
+  margin-top: var(--space-3);
+}
+
+.page > h3 + *,
+.page > h4 + *,
+.page > h5 + *,
+.page > h6 + * {
+  margin-top: var(--space-2);
+}
+
+.page strong {
+  font-weight: 600;
+}
+
+.page em {
+  font-style: italic;
+}
+
+.page del {
+  color: var(--ink-faint);
+}
+
+/* Lists: a small square for an item, as the parts of the logo are squares,
+   and the number of a numbered item in the hand for what is counted. */
+.page ul,
+.page ol {
+  padding-left: 22px;
+}
+
+.page ul {
+  list-style: square;
+}
+
+.page ol {
+  list-style: decimal;
+}
+
+.page li::marker {
+  color: var(--ink-faint);
+}
+
+.page ul > li::marker {
+  font-size: 0.8em;
+}
+
+.page ol > li::marker {
+  font-family: var(--font-mono);
+  font-size: var(--text-small);
+}
+
+.page li + li,
+.page li > ul,
+.page li > ol {
+  margin-top: var(--space-1);
+}
+
+.page li > p + p {
+  margin-top: var(--space-2);
+}
+
+/* A list of things to do has boxes instead of squares. A box stands in the
+   margin of its item, so that the lines of the item begin under each other.
+   An item that is ticked goes quiet, as finished work does everywhere. */
+.page :global(.contains-task-list) {
+  padding-left: 0;
+  list-style: none;
+}
+
+.page :global(.task-list-item) {
+  position: relative;
+  padding-left: 26px;
+  color: var(--ink);
+}
+
+.page
+  :global(.task-list-item):has(> [aria-checked='true'], > p:first-child > [aria-checked='true']) {
+  color: var(--ink-faint);
+}
+
+.page [role='checkbox'] {
+  position: absolute;
+  top: 0.36em;
+  left: 0;
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  border-radius: 3px;
+}
+
+.page [aria-checked='true'] {
+  border-color: var(--ink-soft);
+  background: var(--ink-soft);
+}
+
+.page [aria-checked='true']:hover {
+  border-color: var(--ink);
+  background: var(--ink);
+}
+
+/* The tick, cut out of the box in the colour of the page. */
+.page [aria-checked='true']::after {
+  position: absolute;
+  top: 2px;
+  left: 4px;
+  width: 4px;
+  height: 7px;
+  border: solid var(--ground);
+  border-width: 0 1.5px 1.5px 0;
+  transform: rotate(45deg);
+  content: '';
+}
+
+/* Code: a name in the running text is a chip, a block stands on sunken
+   ground and scrolls sideways rather than break its lines. */
+.page code {
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: var(--rule);
+  font-family: var(--font-mono);
+  font-size: var(--text-small);
+}
+
+.page pre {
+  padding: var(--space-3) var(--space-4);
+  margin-bottom: 0;
+  overflow-x: auto;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  background: var(--ground-sunken);
+  line-height: 1.6;
+}
+
+.page pre code {
+  padding: 0;
+  background: none;
+  overflow-wrap: normal;
+  white-space: pre;
+}
+
+/* What somebody said: set in from a hairline, and quieter than the page. */
+.page blockquote {
+  padding-left: var(--space-4);
+  margin-right: 0;
+  margin-bottom: 0;
+  margin-left: 0;
+  border-left: 1px solid var(--rule-strong);
+  color: var(--ink-soft);
+}
+
+.page blockquote > * + * {
+  margin-top: var(--space-2);
+}
+
+.page hr {
+  height: 0;
+  margin: var(--space-6) 0;
+  border: 0;
+  border-top: 1px solid var(--rule-strong);
+}
+
+.page table {
+  border-collapse: collapse;
+  font-size: var(--text-body);
+}
+
+.page th,
+.page td {
+  padding: var(--space-2) var(--space-5) var(--space-2) 0;
+  border-bottom: 1px solid var(--rule);
+  text-align: left;
+  vertical-align: top;
+}
+
+.page th {
+  border-bottom-color: var(--rule-strong);
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+/* The key of a task in the running text: the mark of its status and the
+   key, in the hand for what is counted. It opens the task. */
+.taskKey {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 3px;
+  background: var(--hover);
+  color: var(--ink-soft);
+  font-family: var(--font-mono);
+  font-size: var(--text-small);
+  letter-spacing: 0.02em;
+  line-height: 1;
+  vertical-align: 1px;
+  white-space: nowrap;
+  transition:
+    background-color var(--duration-quick) ease,
+    color var(--duration-quick) ease;
+}
+
+.taskKey:hover {
+  background: var(--pressed);
+  color: var(--ink);
+}
+
+.taskKey[data-progress='done'] {
+  color: var(--ink-faint);
+}
+
+/* The task open in the panel at the side carries a hairline of ink. */
+.taskKey.isOpen {
+  box-shadow: inset 0 0 0 1px var(--ink-soft);
+  color: var(--ink);
+}
+
+/*
+ * The page as it is written: its plain text in the hand for what is coded,
+ * on the same measure, growing with what is written.
+ */
+.desk {
+  position: relative;
+}
+
+.source {
+  display: block;
+  width: 100%;
+  /* A press anywhere under the last line still lands in the field. */
+  min-height: calc(100cqh - var(--bar) - var(--space-7) - var(--space-8));
+  padding: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: var(--text-body);
+  line-height: 1.7;
+  overflow-wrap: break-word;
+  resize: none;
+  tab-size: 2;
+  white-space: pre-wrap;
+  field-sizing: content;
+}
+
+.source::placeholder {
+  color: var(--ink-faint);
+}
+
+/* The field needs no ring: it is the page, and the caret says where one is. */
+.source:focus-visible {
+  outline: none;
+}
+
+.ruler {
+  position: absolute;
+  top: 0;
+  left: 0;
+  min-height: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/*
+ * The list of the headings: it stands on a hairline at its left and stays
+ * while the page scrolls. The entry one is at carries the gold on that
+ * hairline.
+ */
+.contents {
+  position: sticky;
+  top: var(--space-7);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-height: calc(100cqh - var(--bar) - 2 * var(--space-7));
+  padding-left: var(--space-4);
+  overflow-y: auto;
+  /* The hairline is drawn inside the list, so that an entry can lie on it. */
+  box-shadow: inset 1px 0 0 var(--rule-strong);
+  font-size: var(--text-small);
+}
+
+.contents > h2 {
+  color: var(--ink-faint);
+}
+
+.entries {
+  display: flex;
+  flex-direction: column;
+}
+
+.entry {
+  display: block;
+  width: calc(100% + var(--space-4));
+  padding: 3px 0 3px calc(var(--space-4) + var(--depth) * var(--space-3));
+  /* Its left edge lies on the hairline of the list. */
+  margin-left: calc(-1 * var(--space-4));
+  color: var(--ink-faint);
+  line-height: 1.4;
+  text-align: left;
+  transition: color var(--duration-quick) ease;
+}
+
+.entry:hover {
+  color: var(--ink);
+}
+
+.entry[aria-current] {
+  box-shadow: inset 2px 0 0 var(--brass);
+  color: var(--ink);
+}
+
+.entry:focus-visible {
+  outline-offset: -2px;
+}
+
+/* Before anything is written. */
+.empty {
+  max-width: 60ch;
+  font-size: var(--text-body);
+}
+
+.emptyLead {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-strong);
+  font-weight: 600;
+}
+
+.emptyNote {
+  margin: 0;
+  color: var(--ink-soft);
+  line-height: 1.55;
+}
+
+.example {
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: var(--text-small);
+  letter-spacing: 0.02em;
+}
+
+/* In a narrow view the page keeps its measure and the list of headings
+   gives way: it is a help, and the page is what is read. */
+@container doc (width < 880px) {
+  .sheet {
+    grid-template-columns: minmax(0, var(--measure));
+  }
+
+  .contents {
+    display: none;
+  }
+}
