@@ -1,0 +1,270 @@
+/*
+ * The mind map is a drawing on a ground (shared/ui/Ground): the tree lies
+ * on it and is moved and zoomed with it. The buttons of the ground stand
+ * over it, in the corner where a tree that grows to the right leaves room.
+ *
+ * Where a node lies, and how high it is, is worked out in mindMapModel.ts
+ * and set by the component. How wide it is follows from its words.
+ */
+.view {
+  position: relative;
+  height: 100%;
+}
+
+.frame {
+  height: 100%;
+}
+
+/* The frame takes the focus only from a press on the bare ground, so that
+   the keys of the ground work after it. The Tab key never stops at it, and
+   a press needs no ring: the ring belongs to the node the keys are on. */
+.view > .frame:focus-visible {
+  outline: none;
+}
+
+.controls {
+  position: absolute;
+  bottom: var(--space-5);
+  left: var(--space-5);
+}
+
+.sheet {
+  /* A line that is one pixel on screen at every scale of the ground. */
+  --hairline: calc(1px / var(--ground-scale, 1));
+
+  position: relative;
+}
+
+/* The joins lie under the nodes and take no presses. */
+.joins {
+  position: absolute;
+  top: 0;
+  left: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.joins path {
+  fill: none;
+  stroke: var(--ink-faint);
+  stroke-opacity: 0.6;
+  stroke-width: var(--hairline);
+}
+
+/*
+ * A node: a small plate with a hairline round it. Its ground is solid, so
+ * that the join that leaves from its edge does not show through it.
+ */
+.node {
+  position: absolute;
+  display: flex;
+  align-items: stretch;
+  max-width: 360px;
+  border-radius: var(--radius-control);
+  background: var(--ground);
+  box-shadow: inset 0 0 0 var(--hairline) var(--rule-strong);
+  color: var(--ink);
+  font-size: var(--text-small);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.node:hover {
+  box-shadow: inset 0 0 0 var(--hairline) var(--ink-faint);
+}
+
+.face {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: 0 10px 0 var(--space-2);
+}
+
+/* The project: the one place of the view where the serif speaks. */
+.project {
+  min-width: 96px;
+  border-radius: var(--radius-card);
+  background: var(--surface);
+}
+
+.project > .face {
+  padding: 0 var(--space-4);
+}
+
+.projectName {
+  overflow: hidden;
+  font-family: var(--font-serif);
+  font-size: var(--text-title);
+  letter-spacing: -0.01em;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+}
+
+/* An area is a label, the way the parts of a drawing are labeled. */
+.area > .face {
+  padding: 0 10px;
+}
+
+.areaName {
+  overflow: hidden;
+  color: var(--ink-soft);
+  text-overflow: ellipsis;
+}
+
+/* A task stands on a plate of its own; a subtask, a part of it, is
+   smaller and lies on the bare ground. */
+.task {
+  background: var(--surface);
+  box-shadow: inset 0 0 0 var(--hairline) var(--rule);
+}
+
+.subtask {
+  box-shadow: inset 0 0 0 var(--hairline) var(--rule);
+  color: var(--ink-soft);
+}
+
+.task:hover,
+.subtask:hover {
+  box-shadow: inset 0 0 0 var(--hairline) var(--rule-strong);
+}
+
+/* The key is as wide as the longest key of the tree (the component says
+   how many characters that is), so that the titles after it begin on one
+   line. In the monospace every character is as wide as the next. */
+.reference {
+  flex: none;
+  min-width: calc(var(--reference-length, 0) * (1ch + 0.02em));
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+
+.title {
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 500;
+  text-overflow: ellipsis;
+}
+
+.subtask .title {
+  font-weight: 400;
+}
+
+/* The words of a finished task go quiet, as they do on the calendar. */
+.node[data-progress='done'] .title {
+  color: var(--ink-faint);
+}
+
+/* The task open in the panel at the side carries a hairline of ink. */
+.open,
+.open:hover {
+  box-shadow: inset 0 0 0 var(--hairline) var(--ink-soft);
+}
+
+/* Gold marks where you are: the selected node. */
+.selected,
+.selected:hover {
+  box-shadow: inset 0 0 0 var(--hairline) var(--brass);
+}
+
+/*
+ * The mark that folds a branch is the last cell of its node, behind a
+ * hairline: an arrow that turns down while the branch is shown, as on
+ * every fold of the program, and the number of tasks it hides while it is
+ * folded.
+ */
+.fold {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 3px;
+  padding: 0 7px 0 5px;
+  border-left: var(--hairline) solid var(--rule);
+  border-radius: 0 var(--radius-control) var(--radius-control) 0;
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+
+.fold:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+
+.node[aria-expanded='false'] > .fold {
+  color: var(--ink-soft);
+}
+
+.chevron {
+  width: 12px;
+  height: 12px;
+  stroke-width: 2;
+  transition: transform 120ms ease;
+}
+
+.node[aria-expanded='true'] .chevron {
+  transform: rotate(90deg);
+}
+
+/* The "+" of the selected node stands on the line that leaves it. */
+.add {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-control);
+  background: var(--ground);
+  box-shadow: inset 0 0 0 var(--hairline) var(--rule-strong);
+  color: var(--ink-faint);
+  animation: appear var(--duration-quick) ease-out;
+}
+
+.add:hover {
+  box-shadow: inset 0 0 0 var(--hairline) var(--ink-faint);
+  color: var(--ink);
+}
+
+.add svg {
+  width: 12px;
+  height: 12px;
+  stroke-width: 2;
+}
+
+@keyframes appear {
+  from {
+    opacity: 0;
+  }
+}
+
+/* The line a new task is typed in, where the task will hang. */
+.composer {
+  position: absolute;
+  display: flex;
+}
+
+.composer > input {
+  height: 100%;
+  min-height: 0;
+  font-size: var(--text-small);
+}
+
+/* Before there is anything to draw. */
+.empty {
+  max-width: 60ch;
+  padding: var(--space-6) var(--space-5);
+}
+
+.emptyLead {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-strong);
+  font-weight: 600;
+}
+
+.emptyNote {
+  margin: 0;
+  color: var(--ink-soft);
+  line-height: 1.55;
+}

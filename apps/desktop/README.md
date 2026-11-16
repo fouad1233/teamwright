@@ -236,6 +236,7 @@ src/
     table/            The table: one task a row, every field a column changed in place, sums at its foot
     workload/         The workload: a row for every person, a column for every week, the hours that fall into each
     people/           The People view (kind `team`): a column for every person, what they do now, their tasks
+    mindmap/          The Mind map view: the project, its areas, tasks and subtasks as a tree that folds
     embed/            The Embed view: one https address shown in a sandboxed frame, under a thin bar
     form/             The Form view: a form set like a printed sheet, which makes a task when it is sent
     gallery/          The Gallery view: the tasks as cards with a picture the view keeps, in three sizes
@@ -253,7 +254,7 @@ src/
     views/            The row of views and places, the chooser, the menu and filter of a view
   shared/
     api/              The Backend interface and its two implementations
-    ui/               Buttons, menus, dialogs, the calendar field, tooltips
+    ui/               Buttons, menus, dialogs, the calendar field, tooltips, a ground that is moved and zoomed
     lib/              Formatting and ranking helpers
     styles/           Design tokens and document-wide styles
 ```
