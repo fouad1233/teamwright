@@ -13,47 +13,92 @@ export interface HistoryNames {
 }
 
 /**
- * Says one change of a task in a few words, the way the history lists it:
- * "Moved from To do to In progress".
+ * Says one change of a task in a few words, the way the history of the task
+ * lists it: "Moved from To do to In progress".
  *
  * A change can name a status, a member or a task that is gone by now. The
  * history then says so instead of showing an identifier.
  */
 export function changeInWords(change: TaskChange, names: HistoryNames): string {
+  const { words } = wordingOf(change, names);
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+/**
+ * Says one change as the rest of a sentence that begins with the name of
+ * the task, the way the history of a project tells it: "was given to you",
+ * to follow "SSN-4 Draw the schematic". The words are those of
+ * `changeInWords`.
+ */
+export function changeAfterTaskName(change: TaskChange, names: HistoryNames): string {
+  const { joinedBy, words } = wordingOf(change, names);
+  return joinedBy === null ? words : `${joinedBy} ${words}`;
+}
+
+/** One change in words, written once for both ways of saying it. */
+interface Wording {
+  /**
+   * What joins the words to the name of the task in a sentence: "was" for
+   * something done to the task ("was given to you"), "had its" for
+   * something done to a part of it ("had its estimate cleared"), and
+   * nothing where the task is what acts ("now waits for SSN-3").
+   */
+  joinedBy: 'was' | 'had its' | null;
+  /** What happened, without the task and without a capital: "given to you". */
+  words: string;
+}
+
+function wordingOf(change: TaskChange, names: HistoryNames): Wording {
   switch (change.kind) {
     case 'created':
-      return 'Opened';
+      return { joinedBy: 'was', words: 'opened' };
     case 'renamed':
-      return `Renamed from "${change.from}"`;
+      return { joinedBy: 'was', words: `renamed from "${change.from}"` };
     case 'described':
-      return 'Description changed';
+      return { joinedBy: 'had its', words: 'description changed' };
     case 'moved':
-      return `Moved from ${statusName(names, change.fromStatusId)} to ${statusName(names, change.toStatusId)}`;
+      return {
+        joinedBy: null,
+        words: `moved from ${statusName(names, change.fromStatusId)} to ${statusName(names, change.toStatusId)}`,
+      };
     case 'assigned':
-      return `Given to ${assigneeName(names, change.to)}`;
+      return { joinedBy: 'was', words: `given to ${assigneeName(names, change.to)}` };
     case 'prioritized':
-      return `Priority changed from ${priorityLabel(change.from)} to ${priorityLabel(change.to)}`;
+      return {
+        joinedBy: 'had its',
+        words: `priority changed from ${priorityLabel(change.from)} to ${priorityLabel(change.to)}`,
+      };
     case 'estimated':
       if (change.to === null) {
-        return 'Estimate cleared';
+        return { joinedBy: 'had its', words: 'estimate cleared' };
       }
-      return change.from === null
-        ? `Estimate set to ${formatEstimate(change.to)}`
-        : `Estimate changed from ${formatEstimate(change.from)} to ${formatEstimate(change.to)}`;
+      return {
+        joinedBy: 'had its',
+        words:
+          change.from === null
+            ? `estimate set to ${formatEstimate(change.to)}`
+            : `estimate changed from ${formatEstimate(change.from)} to ${formatEstimate(change.to)}`,
+      };
     case 'rescheduled': {
       const { startOn, dueOn } = change.to;
       if (startOn !== null && dueOn !== null) {
-        return `Planned from ${formatDate(startOn)} to ${formatDate(dueOn)}`;
+        return {
+          joinedBy: 'was',
+          words: `planned from ${formatDate(startOn)} to ${formatDate(dueOn)}`,
+        };
       }
       if (dueOn !== null) {
-        return `Due date set to ${formatDate(dueOn)}`;
+        return { joinedBy: 'had its', words: `due date set to ${formatDate(dueOn)}` };
       }
-      return startOn === null ? 'Dates cleared' : `Start set to ${formatDate(startOn)}`;
+      return {
+        joinedBy: 'had its',
+        words: startOn === null ? 'dates cleared' : `start set to ${formatDate(startOn)}`,
+      };
     }
     case 'now_waits_for':
-      return `Now waits for ${taskName(names, change.taskId)}`;
+      return { joinedBy: null, words: `now waits for ${taskName(names, change.taskId)}` };
     case 'no_longer_waits_for':
-      return `No longer waits for ${taskName(names, change.taskId)}`;
+      return { joinedBy: null, words: `no longer waits for ${taskName(names, change.taskId)}` };
   }
 }
 
