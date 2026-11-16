@@ -227,6 +227,7 @@ src/
     table/            The table: one task a row, every field a column changed in place, sums at its foot
     workload/         The workload: a row for every person, a column for every week, the hours that fall into each
     people/           The People view (kind `team`): a column for every person, what they do now, their tasks
+    embed/            The Embed view: one https address shown in a sandboxed frame, under a thin bar
     tasks/            The task panel, the list, badges, the fold of subtasks, task logic
     team/             The team: avatars, the Team view, adding and changing a member
     office/           The office: the team at work, drawn as a workshop in plan

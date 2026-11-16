@@ -1,0 +1,138 @@
+/*
+ * The embed view is a thin bar of the same height as the filter line, and
+ * under it the page, which fills the rest. Before there is a page, a small
+ * sheet sits in the middle of the ground.
+ */
+.embed {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.bar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-1);
+  height: 36px;
+  padding: 0 var(--space-3) 0 var(--space-5);
+  border-bottom: 1px solid var(--rule);
+}
+
+/* The address is data, so it is set in the mono face, and it gives way
+   before the buttons do. */
+.address {
+  flex: 1;
+  min-width: 0;
+  margin-right: var(--space-2);
+  overflow: hidden;
+  color: var(--ink-soft);
+  font-family: var(--font-mono);
+  font-size: var(--text-small);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bar > button {
+  height: 26px;
+  font-size: var(--text-small);
+}
+
+.blank {
+  flex: none;
+  margin: 0;
+  padding: 0 var(--space-5);
+  border-bottom: 1px solid var(--rule);
+  color: var(--ink-faint);
+  font-size: var(--text-small);
+  line-height: 28px;
+}
+
+.link {
+  color: var(--ink-faint);
+  text-decoration: underline;
+  text-decoration-color: var(--rule-strong);
+  text-underline-offset: 3px;
+}
+
+.link:hover {
+  color: var(--ink);
+  text-decoration-color: currentcolor;
+}
+
+/* The page brings its own ground, which is usually light; the hairline
+   above it is all the program adds. */
+.frame {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  border: 0;
+  background: var(--ground-sunken);
+}
+
+/* Before there is a page, or when it is changed. */
+.ground {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: var(--space-5);
+  overflow: auto;
+}
+
+.sheet {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: 100%;
+  max-width: 460px;
+  padding: var(--space-5);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+}
+
+.lead {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: var(--text-title);
+  font-weight: 400;
+  line-height: 1.2;
+}
+
+.note {
+  margin: 0;
+  color: var(--ink-soft);
+  line-height: 1.55;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: var(--space-2);
+}
+
+/* The address is data: mono, like the bar. */
+.input {
+  font-family: var(--font-mono);
+  font-size: var(--text-small);
+}
+
+.input[data-invalid] {
+  border-color: var(--danger);
+}
+
+.refusal {
+  margin: calc(-1 * var(--space-1)) 0 0;
+  color: var(--danger);
+  font-size: var(--text-small);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+}
