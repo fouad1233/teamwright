@@ -51,6 +51,7 @@ import type {
   Task,
   TaskChange,
   TaskOnGitHub,
+  ThemeName,
   View,
   ViewFilter,
 } from './types';
@@ -455,6 +456,14 @@ export class TauriBackend implements Backend {
   onDataChanged(listener: (change: DataChanged) => void): () => void {
     // The shell sends the projects in which a round took in changes.
     return listenTo(DATA_CHANGED, listener);
+  }
+
+  theme(): Promise<ThemeName> {
+    return call('theme');
+  }
+
+  chooseTheme(name: ThemeName): Promise<ThemeName> {
+    return call('choose_theme', { name });
   }
 
   notificationChoice(): Promise<NotificationChoice> {

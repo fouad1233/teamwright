@@ -10,11 +10,12 @@ use std::{env, fs, thread};
 use chrono::Utc;
 use tauri::{AppHandle, Emitter, Manager};
 use teamwright_application::{
-    AgentRuntime, ApplicationError, AreaService, DeliveryPorts, DeliveryService, DiskEntry,
-    FileSystem, FolderReader, GitHubPorts, GitHubService, IntegrationSettings, NotificationService,
-    PlacesService, ProjectEvent, ProjectFilesService, ProjectFolders, ProjectService, RoundReport,
-    SprintService, StorageError, SyncPorts, SyncService, SystemClock, TaskService, TeamService,
-    ViewService, WorkListener, WorkPorts, WorkService, WorkbookPorts, WorkbookService,
+    AgentRuntime, AppearanceService, ApplicationError, AreaService, DeliveryPorts, DeliveryService,
+    DiskEntry, FileSystem, FolderReader, GitHubPorts, GitHubService, IntegrationSettings,
+    NotificationService, PlacesService, ProjectEvent, ProjectFilesService, ProjectFolders,
+    ProjectService, RoundReport, SprintService, StorageError, SyncPorts, SyncService, SystemClock,
+    TaskService, TeamService, ViewService, WorkListener, WorkPorts, WorkService, WorkbookPorts,
+    WorkbookService,
 };
 use teamwright_domain::{ComputerId, Conversation, Project, Turn};
 use teamwright_integrations::{GhCommandLine, GhLocator, HttpsSender};
@@ -23,7 +24,8 @@ use teamwright_storage::{
     Database, FolderOfComputers, SqliteAreaRepository, SqliteConversationRepository,
     SqliteIntegrationStore, SqliteMemberRepository, SqliteNotificationChoice,
     SqlitePlacesRepository, SqlitePlanningRepository, SqliteProjectRepository,
-    SqliteSprintRepository, SqliteSyncLedger, SqliteTaskRepository, SqliteViewRepository,
+    SqliteSprintRepository, SqliteSyncLedger, SqliteTaskRepository, SqliteThemeStore,
+    SqliteViewRepository,
 };
 
 use crate::dto::{ConversationDto, DataChangedDto, SyncStateDto};
@@ -138,6 +140,8 @@ pub struct AppState {
     /// The choice of this computer about notifications, and what an event
     /// is worth with it.
     pub notifications: NotificationService,
+    /// The theme of this computer.
+    pub appearance: AppearanceService,
     /// The settings of the integrations of each project on this computer.
     pub integrations: IntegrationSettings,
     /// GitHub, through the manager's own `gh`.
@@ -182,6 +186,7 @@ impl AppState {
             root: projects_directory(app).map_err(|error| error.to_string()),
         });
         let file_system: Arc<dyn FileSystem> = Arc::new(LocalFileSystem);
+        let appearance = AppearanceService::new(Arc::new(SqliteThemeStore::new(database.clone())));
         let notifications =
             NotificationService::new(Arc::new(SqliteNotificationChoice::new(database.clone())));
         let integration_store = Arc::new(SqliteIntegrationStore::new(database));
@@ -304,6 +309,7 @@ impl AppState {
             sync,
             workbook,
             notifications,
+            appearance,
             integrations,
             exported_workbooks: Mutex::new(Vec::new()),
             this_computer,

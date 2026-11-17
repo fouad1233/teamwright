@@ -17,6 +17,7 @@
 //! in. Tests pass the ones in [`in_memory`].
 
 pub mod agent_runtime;
+pub mod appearance;
 pub mod areas;
 pub mod clock;
 pub mod error;
@@ -45,6 +46,7 @@ pub use agent_runtime::{
     SessionContext, SessionId, SessionStarted, SignIn, TeamTool, TokenCounts, TurnFailure,
     TurnOutcome, TurnRequest,
 };
+pub use appearance::{AppearanceService, Theme, ThemeStore};
 pub use areas::AreaService;
 pub use clock::SystemClock;
 pub use error::ApplicationError;

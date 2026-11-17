@@ -930,6 +930,22 @@ export interface DataChanged {
   projectIds: Id[];
 }
 
+/**
+ * The name of a theme of the window (decision 0028). It is kept on this
+ * computer only: not synced, not logged. `lamplight` is the default.
+ */
+export type ThemeName =
+  | 'lamplight'
+  | 'paper'
+  | 'dusk'
+  | 'slate'
+  | 'clear'
+  | 'even'
+  | 'blossom'
+  | 'wing'
+  | 'fern'
+  | 'tide';
+
 /** Whether the manager has allowed notifications of the operating system on this computer. */
 export type NotificationPermission = 'not_asked' | 'allowed' | 'declined';
 

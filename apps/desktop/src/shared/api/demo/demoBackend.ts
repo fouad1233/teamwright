@@ -57,6 +57,7 @@ import type {
   Task,
   TaskChange,
   TaskOnGitHub,
+  ThemeName,
   Turn,
   View,
   ViewFilter,
@@ -69,6 +70,7 @@ import {
   startingArea,
   tidyAreaName,
 } from './areas';
+import { isThemeName, rememberedTheme } from '@/shared/theme/themes';
 import { briefFor } from './brief';
 import { PretendedGitHub } from './gitHub';
 import { PretendedIntegrations } from './integrations';
@@ -261,6 +263,11 @@ export class DemoBackend implements Backend {
   /** The areas of each project, in the order the manager gave them. */
   private readonly areas = new Map<Id, Area[]>();
   private sampleFoldersHandedOut = 0;
+  /**
+   * The theme of this computer. The browser is the computer of the demo, so
+   * it starts from the theme the window last remembered there.
+   */
+  private themeName: ThemeName = rememberedTheme();
   /** What the manager chose about notifications; off until allowed, as in the program. */
   private notifications: NotificationChoice = {
     permission: 'not_asked',
@@ -1489,6 +1496,18 @@ export class DemoBackend implements Backend {
     return () => {
       this.dataListeners.delete(listener);
     };
+  }
+
+  theme(): Promise<ThemeName> {
+    return this.answer(() => this.themeName);
+  }
+
+  chooseTheme(name: ThemeName): Promise<ThemeName> {
+    return this.answer(() => {
+      if (!isThemeName(name)) throw new Error(`${String(name)} is not a theme`);
+      this.themeName = name;
+      return name;
+    });
   }
 
   notificationChoice(): Promise<NotificationChoice> {

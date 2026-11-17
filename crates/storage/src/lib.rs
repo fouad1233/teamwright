@@ -41,6 +41,7 @@ mod projects;
 mod sprints;
 mod take_in;
 mod tasks;
+mod theme;
 mod views;
 
 pub use areas::SqliteAreaRepository;
@@ -57,4 +58,5 @@ pub use planning::SqlitePlanningRepository;
 pub use projects::SqliteProjectRepository;
 pub use sprints::SqliteSprintRepository;
 pub use tasks::SqliteTaskRepository;
+pub use theme::SqliteThemeStore;
 pub use views::SqliteViewRepository;

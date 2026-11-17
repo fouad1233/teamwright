@@ -179,6 +179,12 @@ The shell is where the work of an AI specialist meets the outside world
   (`NotificationSettings`). The demo backend keeps the choice in memory and
   refuses the test notification with `not_available`, as it does other
   things only the desktop has.
+- **The theme of this computer.** The commands `theme` and `choose_theme`
+  in `commands/appearance.rs` read and keep the name of the theme of the
+  window (`AppearanceService`, decision 0028); `choose_theme` refuses a
+  name it does not know with `invalid_request`. The name is a plain string
+  on the wire, `ThemeName` in `types.ts`. The demo backend keeps it in
+  memory, starting from the theme the browser remembered.
 - **Opening a web address.** `open_web_address` in `commands/web.rs` opens
   an address in the manager's own browser. The pure `checked_web_address`
   refuses anything that is not `https` with a host (and an address with a

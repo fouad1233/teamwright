@@ -46,6 +46,7 @@ import type {
   Task,
   TaskChange,
   TaskOnGitHub,
+  ThemeName,
   View,
   ViewFilter,
 } from './types';
@@ -504,6 +505,11 @@ export interface Backend {
    * to be asked for again. Returns the function that stops the calls.
    */
   onDataChanged(listener: (change: DataChanged) => void): () => void;
+
+  /** The theme of the window on this computer: `lamplight` until the manager chooses another. */
+  theme(): Promise<ThemeName>;
+  /** Chooses the theme of the window on this computer, and returns it. */
+  chooseTheme(name: ThemeName): Promise<ThemeName>;
 
   /**
    * What the manager chose about notifications of the operating system on

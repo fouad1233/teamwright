@@ -455,6 +455,13 @@ stopped ("Firmware engineer stopped", with why). A sprint is worth none.
 each `NotificationKind`. Nothing is sent until allowed
 ([decision 0026](../../docs/decisions/0026-notifications.md)).
 
+`appearance.rs` keeps the `Theme` of this computer through the port
+`ThemeStore`, with `AppearanceService`: Lamplight until the manager
+chooses another of the ten, and a name it does not know reads as
+Lamplight. Like the choice about notifications it is a fact about one
+computer, not logged and never synced
+([decision 0028](../../docs/decisions/0028-themes.md)).
+
 ## Integrations
 
 `integrations.rs` keeps what the manager set for the integrations of a

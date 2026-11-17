@@ -19,6 +19,7 @@ use crate::agent_runtime::{
     AgentEvent, AgentRuntime, AgentRuntimeError, Installation, ProgramVersion, RunningTurn,
     SessionId, SignIn, TurnOutcome, TurnRequest,
 };
+use crate::appearance::{Theme, ThemeStore};
 use crate::notifications::{NotificationChoice, NotificationChoiceStore};
 use crate::places::ChosenPlaces;
 use crate::ports::{
@@ -48,6 +49,23 @@ impl NotificationChoiceStore for InMemoryNotificationChoice {
 
     fn set_choice(&self, choice: &NotificationChoice) -> Result<(), StorageError> {
         *lock(&self.choice) = Some(*choice);
+        Ok(())
+    }
+}
+
+/// Keeps the theme of this computer in memory.
+#[derive(Debug, Default)]
+pub struct InMemoryThemeStore {
+    theme: Mutex<Theme>,
+}
+
+impl ThemeStore for InMemoryThemeStore {
+    fn theme(&self) -> Result<Theme, StorageError> {
+        Ok(*lock(&self.theme))
+    }
+
+    fn set_theme(&self, theme: Theme) -> Result<(), StorageError> {
+        *lock(&self.theme) = theme;
         Ok(())
     }
 }
