@@ -155,7 +155,7 @@ export function PeopleView({ project, tasks, everyTask }: KindProps) {
 
   if (tasks.length === 0) {
     return (
-      <div className={styles.empty}>
+      <div className={classNames(styles.empty, 'pattern-band')}>
         <p className={styles.emptyLead}>Each person and their work.</p>
         <p className={styles.emptyNote}>
           You and every member of the team get a column here: what they are doing now, what comes

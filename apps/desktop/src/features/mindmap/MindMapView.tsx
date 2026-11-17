@@ -431,7 +431,7 @@ export function MindMapView({ view, project, tasks, everyTask, assigneeOfNewTask
 
   if (tasks.length === 0) {
     return (
-      <div className={styles.empty}>
+      <div className={classNames(styles.empty, 'pattern-band')}>
         <p className={styles.emptyLead}>The project as a tree.</p>
         <p className={styles.emptyNote}>
           The project stands at the left, and its areas, its tasks and their subtasks branch out to

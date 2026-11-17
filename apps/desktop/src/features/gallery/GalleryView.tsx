@@ -141,7 +141,7 @@ export function GalleryView({ view, project, tasks, everyTask }: KindProps) {
 
   if (tasks.length === 0) {
     return (
-      <div className={styles.empty}>
+      <div className={classNames(styles.empty, 'pattern-band')}>
         <p className={styles.emptyLead}>Tasks as pictures in a grid.</p>
         <p className={styles.emptyNote}>
           Every task of this view gets a card here, and a card can carry a picture: a photograph of

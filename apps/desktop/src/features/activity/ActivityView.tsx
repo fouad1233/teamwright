@@ -161,7 +161,7 @@ export function ActivityView({ project, tasks, everyTask }: KindProps) {
 
   if (loaded.length === 0 && log.isSettled && !hasEarlier) {
     return (
-      <div className={styles.empty}>
+      <div className={classNames(styles.empty, 'pattern-band')}>
         <p className={styles.emptyLead}>Everything that happened, newest first.</p>
         <p className={styles.emptyNote}>
           Whenever a task is opened, given to somebody, moved or planned, a line is written here,

@@ -12,10 +12,15 @@
  * keeps its old name, brass, so that no component had to change for it.
  *
  * Components refer to these names and never to raw values. A theme is a
- * different set of values for the same names.
+ * different set of values for the same names. The values here are
+ * Lamplight, the default theme, which follows the light or dark setting of
+ * the system; the other themes are in themes.css (decision 0028). The
+ * chooser draws a swatch of Lamplight inside `data-theme-preview`, so
+ * Lamplight's rules name that too.
  */
 
-:root {
+:root,
+[data-theme-preview='lamplight'] {
   color-scheme: dark;
 
   /* Type: a grotesque for the interface, a serif for one gesture per view,
@@ -156,6 +161,10 @@
   --mask-opaque: linear-gradient(#000 0 0);
   /* A mask that keeps the top and lets the rest fade away. */
   --mask-fade-down: linear-gradient(#000, transparent);
+  /* A mask that keeps the bottom and lets the rest fade away upwards. */
+  --mask-fade-up: linear-gradient(to top, #000, transparent);
+  /* A mask that keeps the middle and fades to every edge. */
+  --mask-vignette: radial-gradient(farthest-side, #000 25%, transparent);
 
   /*
    * Motion (decision 0015). Things arrive by slowing down and leave by
@@ -225,10 +234,26 @@
   /* Depth is used only for things that float above the sheet. */
   --shadow-overlay: 0 18px 44px rgb(0 0 0 / 50%);
   --shadow-lifted: 0 14px 32px rgb(0 0 0 / 55%), 0 2px 6px rgb(0 0 0 / 40%);
+
+  /* The pattern a special palette draws on the ground (decision 0028):
+     faint on the ground of the window, stronger in the foot of the
+     sidebar and in a band under an empty state, strongest in the swatch
+     of the chooser, where it is drawn smaller, and the height of the
+     band. Lamplight and the
+     plain palettes draw none. */
+  --pattern: none;
+  --pattern-strong: none;
+  --pattern-swatch: none;
+  --pattern-size: auto;
+  --pattern-swatch-size: auto;
+  --pattern-band: 0px;
+  /* The height of a swatch in the chooser of themes. */
+  --theme-swatch-height: 72px;
 }
 
 @media (prefers-color-scheme: light) {
-  :root {
+  :root,
+  [data-theme-preview='lamplight'] {
     color-scheme: light;
 
     /* Paper */

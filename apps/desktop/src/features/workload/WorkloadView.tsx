@@ -91,7 +91,7 @@ export function WorkloadView({ view, project, tasks, everyTask }: KindProps) {
 
   if (tasks.length === 0) {
     return (
-      <div className={styles.empty}>
+      <div className={classNames(styles.empty, 'pattern-band')}>
         <p className={styles.emptyLead}>How much lies on each person, week by week.</p>
         <p className={styles.emptyNote}>
           Each person gets a row, and the hours of their tasks are spread over the weeks from start

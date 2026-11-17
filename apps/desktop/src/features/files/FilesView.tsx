@@ -117,7 +117,7 @@ function FilesPage({ view, project }: KindProps) {
   if (folder === null || isWithoutFiles) {
     return (
       <div className={styles.files}>
-        <div className={styles.empty}>
+        <div className={classNames(styles.empty, 'pattern-band')}>
           <p className={styles.emptyLead}>Nothing lies in the folders of this project yet.</p>
           <p className={styles.emptyNote}>
             What the specialists write in the work folder shows here, with the folders you give them

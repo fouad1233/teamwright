@@ -7,6 +7,9 @@
   padding: var(--space-4) var(--space-3) var(--space-4);
   border-right: 1px solid var(--rule);
   background: var(--ground-sunken);
+  /* The pattern above the foot lies behind everything in the sidebar. */
+  position: relative;
+  isolation: isolate;
 }
 
 .brand {
@@ -225,4 +228,23 @@
   padding-top: var(--space-2);
   margin-top: calc(-1 * var(--space-2));
   border-top: 1px solid var(--rule);
+  position: relative;
+}
+
+/* The pattern of a special palette, a little stronger than on the ground,
+   rises from the hairline of the foot and fades upwards into the quiet
+   space under the projects. Lamplight and the plain palettes draw none. */
+.foot::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  right: calc(-1 * var(--space-3));
+  bottom: 100%;
+  left: calc(-1 * var(--space-3));
+  height: calc(2 * var(--pattern-band));
+  background-image: var(--pattern-strong);
+  background-size: var(--pattern-size);
+  background-attachment: fixed;
+  mask-image: var(--mask-fade-up);
+  pointer-events: none;
 }

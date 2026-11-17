@@ -760,7 +760,7 @@ export function WhiteboardView({ view, project, everyTask, assigneeOfNewTasks }:
       </div>
 
       {isEmpty && (
-        <div className={styles.empty}>
+        <div className={classNames(styles.empty, 'pattern-band')}>
           <p className={styles.emptyLead}>A free ground for notes and sketches.</p>
           <p className={styles.emptyNote}>
             Choose Note in the bar above and press anywhere to pin the first one. Draw a box around

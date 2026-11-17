@@ -148,7 +148,7 @@ export function TimelineView({ project, tasks }: KindProps) {
 
   if (tasks.length === 0) {
     return (
-      <div className={styles.empty}>
+      <div className={classNames(styles.empty, 'pattern-band')}>
         <p className={styles.emptyLead}>Who works on what, along the days.</p>
         <p className={styles.emptyNote}>
           Each person gets a row, and their tasks lie on it as bars from start to due date. Give a

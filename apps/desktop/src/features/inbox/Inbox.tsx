@@ -49,7 +49,7 @@ export function Inbox({ projects }: InboxProps) {
       {waiting.isPending && <p className={styles.note}>Loading…</p>}
 
       {waiting.data && conversations.length === 0 && (
-        <div className={styles.empty}>
+        <div className={classNames(styles.empty, 'pattern-band')}>
           <p className="label">Nothing to decide</p>
           <p className={styles.emptyText}>
             A specialist that meets a choice that is yours to make does not guess. It stops and

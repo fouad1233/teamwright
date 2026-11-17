@@ -356,7 +356,7 @@ export function DocView({ view, project, everyTask }: KindProps) {
                 <div ref={ruler} className={classNames(styles.source, styles.ruler)} aria-hidden />
               </div>
             ) : isEmpty ? (
-              <div className={styles.empty}>
+              <div className={classNames(styles.empty, 'pattern-band')}>
                 <p className={styles.emptyLead}>A page of writing kept with the project.</p>
                 <p className={styles.emptyNote}>
                   What was agreed, a plan, notes for the team: press Write and begin. A box in the

@@ -75,7 +75,7 @@ export function ChatView({ project, everyTask }: KindProps) {
       <div className={styles.talk} ref={talk} onScroll={rememberWhereRead}>
         <div className={styles.column}>
           {runs.length === 0 ? (
-            <div className={styles.empty}>
+            <div className={classNames(styles.empty, 'pattern-band')}>
               <h2 className={styles.emptyTitle}>Talk with the team</h2>
               <p className={styles.emptyText}>
                 Ask the specialists, and the Advisor once a plan is started, what is not about one
