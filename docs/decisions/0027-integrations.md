@@ -76,3 +76,16 @@ them.
   another name.
 - **GitLab and the other forty.** Later, one at a time, if they are asked
   for.
+
+## Note of 18 November 2026: Google Drive, and the marks
+
+- **Google Drive** is a fourth part of "Integrations…". It sets nothing per
+  project: syncing is chosen once for the computer, on the page Computers
+  ([decision 0017](0017-sync-through-a-folder.md)), and goes through the
+  folder that Google Drive for desktop keeps, the way GitHub goes through
+  the manager's own `gh`. The part says how it works and whether this
+  computer syncs through Drive, and leads to Computers.
+- **The official marks** of GitHub and Google Drive head their parts, small
+  and unaltered (`ServiceMark`, `shared/logos/`). GitHub's black or white
+  form follows the ground of the theme. Slack is named in words: its mark
+  is handed out only to those signed in to its media kit.

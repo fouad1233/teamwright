@@ -415,3 +415,16 @@ mended:
 - The history of a task names the computer that made each change, which
   the note above listed as not built.
 
+
+## Note of 18 November 2026: Google Drive in one press
+
+The owner asked for Google Drive and agreed to this form of it on 17
+November. Google Drive for desktop keeps a folder of the manager's Drive
+on the computer, so syncing through Drive is syncing through a folder, as
+decided above. Teamwright now finds that folder and offers it on the page
+Computers beside "Choose a folder": on Windows the drive it mounts and the
+mirrored folder in the home, on macOS one folder for each account. It makes
+the folder Teamwright inside it and chooses it through the same use case.
+There is no sign-in to Google, no token and no new dependency; on Linux,
+where there is no Drive for desktop, nothing is looked for. The rule is in
+the module google_drive of the application crate.
