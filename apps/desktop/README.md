@@ -480,7 +480,12 @@ The interface follows the design philosophy in
   drawn, so the window does not open in Lamplight and then turn. What
   draws with its own colours listens for `subscribeToWindowLook`
   (`shared/theme/applyTheme.ts`): the office and the portraits. A sheet
-  marked `data-paper` stays paper in every theme. In the demo,
+  marked `data-paper` stays paper in every theme. A theme the manager
+  chooses is crossed into in 400 ms on an eased curve
+  (`--duration-crossing`, `--ease-crossing`): a view transition of the
+  whole window where the web view has one (WebView2 does), an eased
+  transition of every colour where it does not, and at once with motion
+  turned down. In the demo,
   `window.teamwrightTheme('tide')` shows a theme as the chooser does.
 - The gold has two tokens: `--brass` for marks (a rule, a block, a ring)
   and `--brass-text` for words. On paper the gold of a mark is too light to

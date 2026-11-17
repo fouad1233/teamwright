@@ -28,8 +28,8 @@ export function useTheme(): { theme: ThemeName; choose: (name: ThemeName) => voi
     (name: ThemeName) => {
       const before = shownTheme();
       if (name === before) return;
-      // The window turns at once; the backend keeps the choice behind it.
-      applyTheme(name);
+      // The window crosses over at once; the backend keeps the choice behind it.
+      applyTheme(name, true);
       rememberTheme(name);
       backend
         .chooseTheme(name)
@@ -37,7 +37,7 @@ export function useTheme(): { theme: ThemeName; choose: (name: ThemeName) => voi
           queryClient.setQueryData<ThemeName>(THEME_KEY, kept);
         })
         .catch((failure: unknown) => {
-          applyTheme(before);
+          applyTheme(before, true);
           rememberTheme(before);
           notifier.showError(describeFailure(failure));
         });

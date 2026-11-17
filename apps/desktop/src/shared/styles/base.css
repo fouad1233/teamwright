@@ -164,6 +164,30 @@ svg {
 }
 
 /*
+ * The crossing from one theme to the next (decision 0028). Where the web
+ * view knows view transitions, the old window and the new one are two
+ * pictures that cross-fade, the pattern with the rest. Where it does not,
+ * every colour eases from the old value to the new one for as long. With
+ * motion turned down, the script changes the theme at once and neither
+ * runs.
+ */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: var(--duration-crossing);
+  animation-timing-function: var(--ease-crossing);
+}
+
+:root[data-theme-crossing='colours'],
+:root[data-theme-crossing='colours'] *,
+:root[data-theme-crossing='colours'] *::before,
+:root[data-theme-crossing='colours'] *::after {
+  transition-property:
+    background-color, border-color, color, fill, stroke, outline-color, box-shadow !important;
+  transition-duration: var(--duration-crossing) !important;
+  transition-timing-function: var(--ease-crossing) !important;
+}
+
+/*
  * With motion turned down, everything ends at once. A part that has a
  * reduced form of its own movement, as the motion table of decision 0015
  * gives it (a short fade instead of a slide, or standing still), declares

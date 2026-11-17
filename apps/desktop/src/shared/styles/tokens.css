@@ -193,6 +193,11 @@
   --delay-welcome: 400ms;
   --delay-words: 140ms;
   --stagger: 60ms;
+  /* The window crossing from one theme to the next (decision 0028): longer
+     than any part's movement, because the whole window changes at once,
+     and eased at both ends, because nothing arrives or leaves. */
+  --duration-crossing: 400ms;
+  --ease-crossing: cubic-bezier(0.45, 0, 0.2, 1);
   /* Work that goes on: the block that comes and goes, and one turn of the
      light round the edge of a card. */
   --duration-at-work: 1100ms;
