@@ -19,6 +19,8 @@ import type {
   GitHubItem,
   GitHubOverview,
   GitHubSignIn,
+  DriveFolder,
+  GoogleDrive,
   Id,
   InterviewAnswer,
   IssueDraft,
@@ -250,6 +252,11 @@ export class DemoBackend implements Backend {
   private readonly versions = new Map<Id, Task[]>();
   private readonly nextTaskNumbers = new Map<Id, number>();
   private readonly sprints = new Map<Id, Sprint>();
+  /**
+   * The folders Google Drive for desktop pretends to keep on this computer,
+   * or null while it pretends not to be installed.
+   */
+  private driveFolders: DriveFolder[] | null = [{ path: 'G:\\My Drive', account: null }];
   /**
    * How many sprints each project has had, the deleted ones included. A new
    * sprint without a name is named after the next number.
@@ -1478,6 +1485,43 @@ export class DemoBackend implements Backend {
     return this.answer(() => {
       this.sync.dismiss(noticeId);
     });
+  }
+
+  googleDrive(): Promise<GoogleDrive> {
+    return this.answer(() => {
+      const folders = this.driveFolders;
+      if (folders === null) {
+        return { finding: 'not_installed', folders: [], syncsThrough: null };
+      }
+      const syncFolder = this.sync.state().folder;
+      const syncsThrough =
+        syncFolder === null
+          ? null
+          : (folders.find(
+              (folder) => syncFolder === folder.path || syncFolder.startsWith(`${folder.path}\\`),
+            ) ?? null);
+      return { finding: 'found', folders: [...folders], syncsThrough };
+    });
+  }
+
+  prepareGoogleDriveFolder(folder: string): Promise<string> {
+    return this.answer(() => {
+      if (!this.driveFolders?.some((known) => known.path === folder)) {
+        throw new BackendError(
+          'folder_not_found',
+          `the folder ${folder} is not one that Google Drive keeps on this computer`,
+        );
+      }
+      return `${folder}\\Teamwright`;
+    });
+  }
+
+  /**
+   * Makes the demo pretend the folders that Google Drive for desktop keeps,
+   * or, with null, that it is not installed. Not part of the `Backend`.
+   */
+  pretendGoogleDrive(folders: DriveFolder[] | null): void {
+    this.driveFolders = folders;
   }
 
   giveThisComputerANewIdentity(): Promise<SyncState> {

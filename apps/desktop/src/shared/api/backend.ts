@@ -13,6 +13,7 @@ import type {
   GitHubItem,
   GitHubOverview,
   GitHubSignIn,
+  GoogleDrive,
   Id,
   InterviewAnswer,
   IssueDraft,
@@ -493,6 +494,20 @@ export interface Backend {
    * the specialists stay with it.
    */
   giveThisComputerANewIdentity(): Promise<SyncState>;
+  /**
+   * What there is of Google Drive on this computer: the folders that Google
+   * Drive for desktop keeps (on Windows its drive and the mirrored folder in
+   * the home, on macOS one folder for each account), and whether the sync
+   * folder lies inside one of them. On Linux nothing is looked for.
+   */
+  googleDrive(): Promise<GoogleDrive>;
+  /**
+   * Makes the folder `Teamwright` inside a folder of Drive that was found,
+   * if it is not there, and answers with its path: the folder to sync
+   * through, chosen afterwards with `chooseSyncFolder`. Refused if the
+   * folder is not one found on this computer (`folder_not_found`).
+   */
+  prepareGoogleDriveFolder(folder: string): Promise<string>;
   /**
    * Calls the listener with the whole state of syncing whenever it changes:
    * after every round, also one that failed. Returns the function that

@@ -18,6 +18,7 @@ import type {
   GitHubItem,
   GitHubOverview,
   GitHubSignIn,
+  GoogleDrive,
   Id,
   InterviewAnswer,
   IssueDraft,
@@ -442,6 +443,14 @@ export class TauriBackend implements Backend {
 
   dismissSyncNotice(noticeId: number): Promise<void> {
     return call('dismiss_sync_notice', { noticeId });
+  }
+
+  googleDrive(): Promise<GoogleDrive> {
+    return call('google_drive');
+  }
+
+  prepareGoogleDriveFolder(folder: string): Promise<string> {
+    return call('prepare_google_drive_folder', { folder });
   }
 
   giveThisComputerANewIdentity(): Promise<SyncState> {

@@ -401,4 +401,36 @@ describe('syncing through a folder in the DemoBackend', () => {
       });
     });
   });
+
+  describe('through Google Drive', () => {
+    const MY_DRIVE = 'G:\\My Drive';
+
+    it('pretends the drive of Drive for desktop, and makes the folder Teamwright in it', async () => {
+      const drive = await backend.googleDrive();
+      expect(drive).toEqual({
+        finding: 'found',
+        folders: [{ path: MY_DRIVE, account: null }],
+        syncsThrough: null,
+      });
+      expect(await backend.prepareGoogleDriveFolder(MY_DRIVE)).toBe(`${MY_DRIVE}\\Teamwright`);
+    });
+
+    it('says when syncing runs through Drive', async () => {
+      const inDrive = new DemoBackend(undefined, environment);
+      await inDrive.chooseSyncFolder(await inDrive.prepareGoogleDriveFolder(MY_DRIVE), 'Desk');
+      expect((await inDrive.googleDrive()).syncsThrough).toEqual({ path: MY_DRIVE, account: null });
+    });
+
+    it('refuses a folder that is not of Drive, and can pretend Drive is not there', async () => {
+      expect((await refusal(backend.prepareGoogleDriveFolder('D:\\Elsewhere'))).code).toBe(
+        'folder_not_found',
+      );
+      backend.pretendGoogleDrive(null);
+      expect(await backend.googleDrive()).toEqual({
+        finding: 'not_installed',
+        folders: [],
+        syncsThrough: null,
+      });
+    });
+  });
 });

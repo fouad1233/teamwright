@@ -11,11 +11,11 @@ use chrono::Utc;
 use tauri::{AppHandle, Emitter, Manager};
 use teamwright_application::{
     AgentRuntime, AppearanceService, ApplicationError, AreaService, DeliveryPorts, DeliveryService,
-    DiskEntry, FileSystem, FolderReader, GitHubPorts, GitHubService, IntegrationSettings,
-    NotificationService, PlacesService, ProjectEvent, ProjectFilesService, ProjectFolders,
-    ProjectService, RoundReport, SprintService, StorageError, SyncPorts, SyncService, SystemClock,
-    TaskService, TeamService, ViewService, WorkListener, WorkPorts, WorkService, WorkbookPorts,
-    WorkbookService,
+    DiskEntry, DriveSurroundings, FileSystem, FolderReader, GitHubPorts, GitHubService,
+    GoogleDriveService, IntegrationSettings, NotificationService, OperatingSystem, PlacesService,
+    ProjectEvent, ProjectFilesService, ProjectFolders, ProjectService, RoundReport, SprintService,
+    StorageError, SyncPorts, SyncService, SystemClock, TaskService, TeamService, ViewService,
+    WorkListener, WorkPorts, WorkService, WorkbookPorts, WorkbookService,
 };
 use teamwright_domain::{ComputerId, Conversation, Project, Turn};
 use teamwright_integrations::{GhCommandLine, GhLocator, HttpsSender};
@@ -135,6 +135,8 @@ pub struct AppState {
     /// The use cases for keeping this computer in step with the manager's
     /// other computers.
     pub sync: SyncService,
+    /// The folder of Google Drive on this computer, to sync through.
+    pub google_drive: GoogleDriveService,
     /// The use case that gathers a project into an Excel workbook.
     pub workbook: WorkbookService,
     /// The choice of this computer about notifications, and what an event
@@ -307,6 +309,7 @@ impl AppState {
             ),
             work,
             sync,
+            google_drive: GoogleDriveService::new(Arc::new(LocalDriveSurroundings)),
             workbook,
             notifications,
             appearance,
@@ -597,6 +600,68 @@ impl FolderReader for LocalFolderReader {
                 })
             })
             .collect()
+    }
+}
+
+/// The disk and the environment of this computer, as far as finding the
+/// folder of Google Drive needs them.
+struct LocalDriveSurroundings;
+
+impl DriveSurroundings for LocalDriveSurroundings {
+    fn operating_system(&self) -> OperatingSystem {
+        if cfg!(windows) {
+            OperatingSystem::Windows
+        } else if cfg!(target_os = "macos") {
+            OperatingSystem::MacOs
+        } else {
+            OperatingSystem::Other
+        }
+    }
+
+    fn home(&self) -> Option<PathBuf> {
+        let name = if cfg!(windows) { "USERPROFILE" } else { "HOME" };
+        env::var_os(name)
+            .filter(|home| !home.is_empty())
+            .map(PathBuf::from)
+    }
+
+    fn drive_roots(&self) -> Vec<PathBuf> {
+        if !cfg!(windows) {
+            return Vec::new();
+        }
+        // A and B were the floppy drives, which are slow to ask.
+        (b'C'..=b'Z')
+            .map(|letter| PathBuf::from(format!("{}:\\", char::from(letter))))
+            .filter(|root| root.is_dir())
+            .collect()
+    }
+
+    fn is_folder(&self, path: &Path) -> bool {
+        path.is_dir()
+    }
+
+    fn names_in(&self, folder: &Path) -> Vec<String> {
+        fs::read_dir(folder)
+            .map(|entries| {
+                entries
+                    .filter_map(Result::ok)
+                    .map(|entry| entry.file_name().to_string_lossy().into_owned())
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    fn full_form(&self, path: &Path) -> Option<PathBuf> {
+        teamwright_runtime::full_form(path).ok()
+    }
+
+    fn create_folder(&self, path: &Path) -> Result<(), StorageError> {
+        fs::create_dir(path).map_err(|error| {
+            StorageError::caused_by(
+                format!("the folder {} could not be created", path.display()),
+                error,
+            )
+        })
     }
 }
 

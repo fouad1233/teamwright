@@ -8,6 +8,7 @@ pub mod appearance;
 pub mod areas;
 pub mod files;
 pub mod github;
+pub mod google_drive;
 pub mod integrations;
 pub mod notifications;
 pub mod places;

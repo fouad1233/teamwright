@@ -896,6 +896,28 @@ export interface SyncState {
   computers: Computer[];
 }
 
+/** A folder of the manager's Google Drive that Google Drive for desktop keeps on this computer. */
+export interface DriveFolder {
+  path: string;
+  /** The address of the account, when the path names it (on macOS). */
+  account: string | null;
+}
+
+/**
+ * What was found of Google Drive on this computer: folders, or no Google
+ * Drive for desktop, or a system it is not made for (Linux).
+ */
+export type DriveFinding = 'found' | 'not_installed' | 'not_for_this_system';
+
+/** What there is of Google Drive on this computer, and whether syncing runs through it. */
+export interface GoogleDrive {
+  finding: DriveFinding;
+  /** The folders found; with several accounts the manager chooses. Empty unless found. */
+  folders: DriveFolder[];
+  /** The folder of Drive that holds the sync folder, when syncing runs through Drive. */
+  syncsThrough: DriveFolder | null;
+}
+
 /**
  * What a notice of syncing is about:
  *

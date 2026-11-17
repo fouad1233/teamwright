@@ -11,11 +11,12 @@ use chrono::SecondsFormat;
 use serde::{Deserialize, Serialize};
 use teamwright_application::{
     Acceptance, AgentProgram, AgentUsage, ApprovedMember, ApprovedOwner, ApprovedProposal,
-    ApprovedTask, ConversationWithTurns, Deliveries, Delivery, GitHubItem, GitHubOverview,
-    GitHubSignIn, ItemKind, ItemState, KnownComputer, NewMember, NewProject, NewSprint, NewTask,
-    NewView, NotificationChoice, NotificationKind, NotificationPermission, ProjectChange,
-    ProjectIntegrations, ProjectPlaces, ProjectUsage, SprintChanges, SprintReport, SprintStart,
-    StatusProperties, SyncNotice, SyncState, TaskOnGitHub, WorkflowTemplate, sign_in_problem,
+    ApprovedTask, ConversationWithTurns, Deliveries, Delivery, DriveFinding, DriveFolder,
+    GitHubItem, GitHubOverview, GitHubSignIn, GoogleDrive, ItemKind, ItemState, KnownComputer,
+    NewMember, NewProject, NewSprint, NewTask, NewView, NotificationChoice, NotificationKind,
+    NotificationPermission, ProjectChange, ProjectIntegrations, ProjectPlaces, ProjectUsage,
+    SprintChanges, SprintReport, SprintStart, StatusProperties, SyncNotice, SyncState,
+    TaskOnGitHub, WorkflowTemplate, sign_in_problem,
 };
 use teamwright_domain::{
     Area, Assignee, CalendarDate, Color, ComputerId, ContextUse, Conversation, DecisionOption,
@@ -1681,6 +1682,52 @@ impl SyncStateDto {
             problem: state.problem.clone(),
             problem_code: state.problem_code,
             computers: state.computers.iter().map(ComputerDto::from).collect(),
+        }
+    }
+}
+
+/// A folder of the manager's Google Drive on this computer.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DriveFolderDto {
+    path: String,
+    /// The address of the account, when the path names it.
+    account: Option<String>,
+}
+
+impl From<&DriveFolder> for DriveFolderDto {
+    fn from(folder: &DriveFolder) -> Self {
+        Self {
+            path: path_to_text(&folder.path),
+            account: folder.account.clone(),
+        }
+    }
+}
+
+/// What there is of Google Drive on this computer.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GoogleDriveDto {
+    /// `found`, `not_installed` or `not_for_this_system`.
+    finding: &'static str,
+    /// The folders found; empty unless something was found.
+    folders: Vec<DriveFolderDto>,
+    /// The folder of Drive that holds the sync folder, when syncing runs
+    /// through Drive.
+    syncs_through: Option<DriveFolderDto>,
+}
+
+impl From<&GoogleDrive> for GoogleDriveDto {
+    fn from(drive: &GoogleDrive) -> Self {
+        let (finding, folders) = match &drive.finding {
+            DriveFinding::Found(folders) => ("found", folders.iter().map(Into::into).collect()),
+            DriveFinding::NotInstalled => ("not_installed", Vec::new()),
+            DriveFinding::NotForThisSystem => ("not_for_this_system", Vec::new()),
+        };
+        Self {
+            finding,
+            folders,
+            syncs_through: drive.syncs_through.as_ref().map(Into::into),
         }
     }
 }

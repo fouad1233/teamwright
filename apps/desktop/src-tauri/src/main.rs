@@ -131,6 +131,8 @@ fn main() -> ExitCode {
             commands::sync::sync_notices,
             commands::sync::dismiss_sync_notice,
             commands::sync::give_this_computer_a_new_identity,
+            commands::google_drive::google_drive,
+            commands::google_drive::prepare_google_drive_folder,
             commands::appearance::theme,
             commands::appearance::choose_theme,
             commands::notifications::notification_choice,
