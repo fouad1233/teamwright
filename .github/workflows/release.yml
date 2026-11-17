@@ -1,0 +1,90 @@
+# Builds the installers of Teamwright for Windows, macOS and Linux and
+# publishes them as a release on GitHub.
+#
+# It runs when a tag that begins with "v" is pushed (v0.1.0), and can be
+# started by hand for a tag that exists. The installers are not signed:
+# signing needs certificates the project does not have yet. The notes of
+# the release say what Windows and macOS show because of that.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: The tag to build and release, for example v0.1.0
+        required: true
+
+# Publishing a release writes to the repository.
+permissions:
+  contents: write
+
+jobs:
+  installers:
+    name: Installers on ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows
+            os: windows-latest
+            args: ''
+          - name: Linux
+            os: ubuntu-22.04
+            args: ''
+          - name: macOS (Apple silicon)
+            os: macos-latest
+            args: --target aarch64-apple-darwin
+          - name: macOS (Intel)
+            os: macos-latest
+            args: --target x86_64-apple-darwin
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - name: Install the libraries Tauri needs on Linux
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev patchelf
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          # Both kinds of Mac are built on one kind of runner.
+          targets: ${{ runner.os == 'macOS' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+      - uses: Swatinem/rust-cache@v2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      # Builds the program with its installers and adds them to the release
+      # of the tag, which it creates if it is not there.
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: apps/desktop
+          tagName: ${{ github.event.inputs.tag || github.ref_name }}
+          releaseName: Teamwright ${{ github.event.inputs.tag || github.ref_name }}
+          releaseBody: |
+            Teamwright is pre-alpha. What works is in the roadmap: https://github.com/fouad1233/teamwright/blob/main/docs/product/roadmap.md
+
+            **Which file**
+            - Windows: the file that ends in `-setup.exe` (or the `.msi`).
+            - macOS: the `.dmg`; `aarch64` is for Macs with Apple silicon, `x64` for Macs with an Intel processor.
+            - Linux: the `.AppImage`, the `.deb` or the `.rpm`.
+
+            **The installers are not signed.** Signing needs certificates the project does not have yet.
+            - Windows shows "Windows protected your PC": choose "More info", then "Run anyway".
+            - macOS says the app cannot be opened: open System Settings, Privacy & Security, and choose "Open Anyway"; or right-click the app and choose "Open".
+
+            Teamwright runs its AI specialists on your own Claude Code, which must be installed and signed in.
+          releaseDraft: false
+          prerelease: true
+          args: ${{ matrix.args }}
