@@ -5,6 +5,8 @@ import { createRoot } from 'react-dom/client';
 import { App } from '@/app/App';
 import { NavigationProvider } from '@/app/navigation';
 import { BackendProvider, connectToBackend } from '@/shared/api/BackendProvider';
+import { applyTheme } from '@/shared/theme/applyTheme';
+import { rememberedTheme } from '@/shared/theme/themes';
 import { ToastProvider } from '@/shared/ui/Toast';
 import { TooltipProvider } from '@/shared/ui/Tooltip';
 
@@ -16,7 +18,12 @@ import '@fontsource/ibm-plex-mono/400.css';
 import '@fontsource/ibm-plex-mono/500.css';
 
 import '@/shared/styles/tokens.css';
+import '@/shared/styles/themes.css';
 import '@/shared/styles/base.css';
+
+// The page set the remembered theme before it was drawn; a name that is
+// not a theme falls back to the default here.
+applyTheme(rememberedTheme());
 
 const connection = connectToBackend();
 

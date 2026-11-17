@@ -1,3 +1,4 @@
+import { useKeepTheme } from '@/features/appearance/themeQueries';
 import { Inbox } from '@/features/inbox/Inbox';
 import { useOpenPressedNotifications } from '@/features/notifications/notificationQueries';
 import { ProjectWorkspace } from '@/features/projects/ProjectWorkspace';
@@ -22,6 +23,8 @@ export function App() {
   useFreshDataFromOtherComputers();
   // A notification the manager pressed opens what it was about.
   useOpenPressedNotifications();
+  // The window keeps the theme this computer chose.
+  useKeepTheme();
 
   // The project the user was in last, or the first one if that is gone.
   const openProject =

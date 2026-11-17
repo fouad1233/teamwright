@@ -1,0 +1,190 @@
+/* A part of the page of this computer, as the part about notifications
+   is: a label over a hairline, then its lines. */
+.part {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-width: 680px;
+  padding-top: var(--space-4);
+}
+
+.part > h2 {
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--rule);
+}
+
+.groups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.heading {
+  color: var(--ink-soft);
+  font-size: var(--text-small);
+  font-weight: 600;
+}
+
+/* Three to a row, on the module of the page. */
+.options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2) var(--space-3);
+}
+
+.option {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2);
+  margin: calc(-1 * var(--space-2)) 0 0;
+  border-radius: var(--radius-card);
+  text-align: left;
+  transition: background-color var(--duration-quick) var(--ease-settle);
+}
+
+.option:hover {
+  background: var(--hover);
+}
+
+.name {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* The chosen theme says so in words beside the ring of its swatch. */
+.inUse {
+  color: var(--brass-text);
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.line {
+  color: var(--ink-soft);
+  font-size: var(--text-small);
+  line-height: 1.45;
+}
+
+.aside {
+  color: var(--ink-faint);
+  font-size: var(--text-small);
+}
+
+/*
+ * The swatch: a small window in the theme's own tokens, which
+ * `data-theme-preview` gives it. Its frame is a hairline of the window
+ * around it; the chosen one is ringed in the window's gold.
+ */
+.frame {
+  display: block;
+  border-radius: var(--radius-control);
+  box-shadow: 0 0 0 1px var(--rule-strong);
+}
+
+.option[data-chosen] .frame {
+  outline: 1px solid var(--brass);
+  outline-offset: 3px;
+}
+
+.swatch {
+  position: relative;
+  display: flex;
+  height: var(--theme-swatch-height);
+  overflow: hidden;
+  border-radius: var(--radius-control);
+  background: var(--ground);
+}
+
+/* A strip of the pattern of a special palette, drawn small and strong. */
+.strip {
+  flex: none;
+  width: 38%;
+  background-color: var(--ground-sunken);
+  background-image: var(--pattern-swatch);
+  background-position: center;
+  background-size: var(--pattern-swatch-size);
+  box-shadow: 1px 0 0 var(--rule);
+}
+
+/* A sheet of surface, set in from the ground, with lines of ink on it. */
+.sheet {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+  margin: var(--space-3) var(--space-3) 0;
+  padding: var(--space-2) var(--space-2) 0;
+  border: 1px solid var(--rule);
+  border-bottom: none;
+  border-radius: 3px 3px 0 0;
+  background: var(--surface);
+}
+
+.ink,
+.inkSoft {
+  height: 3px;
+  border-radius: 1px;
+}
+
+.ink {
+  width: 62%;
+  background: var(--ink);
+}
+
+.inkSoft {
+  width: 84%;
+  background: var(--ink-soft);
+  opacity: 0.7;
+}
+
+.tints {
+  display: flex;
+  gap: var(--space-1);
+  margin-top: 3px;
+}
+
+.tint {
+  width: 16px;
+  height: 6px;
+  border-radius: 1px;
+  background: var(--tone);
+}
+
+/* The gold: the mark beside where you are, at the edge of the sheet. */
+.gold {
+  position: absolute;
+  bottom: var(--space-3);
+  right: var(--space-3);
+  width: 2px;
+  height: 18px;
+  background: var(--brass);
+}
+
+/* The special palettes are two to a row, so that their swatches are wide
+   enough to show their patterns. */
+.wide {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.wide .strip {
+  width: 50%;
+}
+
+@media (max-width: 900px) {
+  .options {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

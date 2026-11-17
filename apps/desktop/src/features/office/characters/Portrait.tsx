@@ -1,22 +1,12 @@
 import { useEffect, useRef, useSyncExternalStore } from 'react';
 
 import { classNames } from '@/shared/lib/classNames';
+import { shownTheme, subscribeToWindowLook } from '@/shared/theme/applyTheme';
 
 import { lookOf, type Sitter } from './characterModel';
 import { colorsOf, currentTheme, deviceUnit, paintSprite, readThemeColors } from './paint';
 import styles from './Portrait.module.css';
 import { portrait } from './spriteModel';
-
-const LIGHT_SCHEME = '(prefers-color-scheme: light)';
-
-function subscribeToScheme(onChange: () => void): () => void {
-  const query =
-    typeof window.matchMedia === 'function' ? window.matchMedia(LIGHT_SCHEME) : undefined;
-  query?.addEventListener('change', onChange);
-  return () => {
-    query?.removeEventListener('change', onChange);
-  };
-}
 
 /** The size of a pixel of a portrait, in pixels of the page. */
 const PORTRAIT_SCALE = 2;
@@ -36,7 +26,9 @@ interface PortraitProps {
  */
 export function Portrait({ sitter, name, isPerson = false }: PortraitProps) {
   const canvas = useRef<HTMLCanvasElement>(null);
-  const theme = useSyncExternalStore(subscribeToScheme, currentTheme, () => 'night' as const);
+  const theme = useSyncExternalStore(subscribeToWindowLook, currentTheme, () => 'night' as const);
+  // Two themes of the same mode still differ in their pigments.
+  const shown = useSyncExternalStore(subscribeToWindowLook, shownTheme, () => 'lamplight' as const);
   const look = lookOf(sitter);
   const lookKey = JSON.stringify(look);
 
@@ -61,7 +53,9 @@ export function Portrait({ sitter, name, isPerson = false }: PortraitProps) {
       Math.floor((element.width - picture.width) / 2),
       element.height - picture.height,
     );
-  }, [lookKey, theme]);
+    // `shown` is read so that a change of theme draws the portrait again.
+    void shown;
+  }, [lookKey, theme, shown]);
 
   return (
     <span

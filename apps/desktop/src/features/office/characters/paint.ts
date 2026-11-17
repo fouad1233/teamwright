@@ -1,4 +1,5 @@
 import type { Color } from '@/shared/api/types';
+import { isLightWindow } from '@/shared/theme/applyTheme';
 
 import { OUTFITS, type Look } from './characterModel';
 import {
@@ -45,12 +46,9 @@ export function readThemeColors(theme: Theme): ThemeColors {
   return { theme, pigments, brass: token('--brass', '#c9a96e') };
 }
 
-/** The theme the window shows now. */
+/** Whether the window is drawn on paper or at night now, whichever theme it has. */
 export function currentTheme(): Theme {
-  return typeof window.matchMedia === 'function' &&
-    window.matchMedia('(prefers-color-scheme: light)').matches
-    ? 'paper'
-    : 'night';
+  return isLightWindow() ? 'paper' : 'night';
 }
 
 /** The letters of the body each garment paints, and with what. */

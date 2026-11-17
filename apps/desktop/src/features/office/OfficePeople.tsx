@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 
+import { subscribeToWindowLook } from '@/shared/theme/applyTheme';
 import { usePrefersReducedMotion } from '@/shared/ui/motion';
 
 import { hashOf } from './characters/characterModel';
@@ -52,19 +53,16 @@ export function OfficePeople({ places }: OfficePeopleProps) {
     document.addEventListener('visibilitychange', onVisibility);
     onVisibility();
 
-    const scheme =
-      typeof window.matchMedia === 'function'
-        ? window.matchMedia('(prefers-color-scheme: light)')
-        : undefined;
-    const onScheme = () => {
+    // The room is drawn again in the colours of a new theme, or of the
+    // system's light or dark setting while the theme is Lamplight.
+    const stopListening = subscribeToWindowLook(() => {
       roomPainter.themeChanged();
-    };
-    scheme?.addEventListener('change', onScheme);
+    });
 
     return () => {
       observer.disconnect();
       document.removeEventListener('visibilitychange', onVisibility);
-      scheme?.removeEventListener('change', onScheme);
+      stopListening();
       roomPainter.dispose();
       painter.current = null;
     };

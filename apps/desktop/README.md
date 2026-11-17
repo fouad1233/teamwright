@@ -463,8 +463,25 @@ The interface follows the design philosophy in
 [`docs/design`](../../docs/design/README.md).
 
 - Every color, size and radius is a token in `shared/styles/tokens.css`.
-  Components never use raw values. The dark and the light theme are two sets
-  of values for the same tokens and follow the operating system.
+  Components never use raw values. Lamplight, the default theme, is those
+  tokens: a dark and a light set that follow the operating system.
+- **Themes** (decision 0028). `shared/styles/themes.css` gives the nine
+  other themes, one fixed mode each, as sets of the same tokens under
+  `data-theme` on the root; `shared/theme/themeContrast.test.ts` measures
+  their contrast with the pure functions of `shared/theme/contrast.ts`.
+  The four special palettes draw a pattern (`--pattern`, from
+  `tools/design/theme-patterns.mjs`) on the ground of the window, a little
+  stronger above the foot of the sidebar and in the band of an empty state
+  (the global class `pattern-band`). `features/appearance` is the chooser,
+  in the section Theme of the page Computers, and `useKeepTheme`, which
+  turns the window to the theme the backend keeps. The window remembers
+  its theme in `localStorage` (`teamwright.theme`), and
+  `public/remembered-theme.js` sets it on the root before anything is
+  drawn, so the window does not open in Lamplight and then turn. What
+  draws with its own colours listens for `subscribeToWindowLook`
+  (`shared/theme/applyTheme.ts`): the office and the portraits. A sheet
+  marked `data-paper` stays paper in every theme. In the demo,
+  `window.teamwrightTheme('tide')` shows a theme as the chooser does.
 - The gold has two tokens: `--brass` for marks (a rule, a block, a ring)
   and `--brass-text` for words. On paper the gold of a mark is too light to
   be read, so words in gold always use `--brass-text`.

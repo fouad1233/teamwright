@@ -7,6 +7,7 @@ import { Button, ValueButton } from '@/shared/ui/Button';
 import { Field, TextInput } from '@/shared/ui/Field';
 import { describeFailure } from '@/shared/ui/Toast';
 
+import { ThemeChooser } from '../appearance/ThemeChooser';
 import { NotificationSettings } from '../notifications/NotificationSettings';
 import { waitsForManager } from '../work/waitsForManager';
 import styles from './ComputersPlace.module.css';
@@ -48,6 +49,7 @@ export function ComputersPlace({ projects }: ComputersPlaceProps) {
           <InStep state={sync.data} projects={projects} />
         ))}
 
+      <ThemeChooser />
       <NotificationSettings />
     </section>
   );
