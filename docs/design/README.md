@@ -6,6 +6,7 @@ the logo, and the pictures that explain it.
 | File | What it is |
 |---|---|
 | [philosophy.md](philosophy.md) | *Joinery*, the design philosophy. Read this first. |
+| [themes.md](themes.md) | The ten themes of the window, and why their colours are what they are. |
 | [key-visual.png](key-visual.png) | *Plate 01*, the key visual: the philosophy expressed on one sheet. |
 | [`tools/design/key-visual.mjs`](../../tools/design/key-visual.mjs) | The program that draws the plate. |
 

@@ -43,6 +43,7 @@ was considered.
 | [0025](0025-the-project-as-a-workbook.md) | Give the manager the project as an Excel workbook, gathered in Rust and written by a crate of its own | Accepted |
 | [0026](0026-notifications.md) | Tell the manager through notifications of the system, off until allowed, worded by a rule in the application | Accepted |
 | [0027](0027-integrations.md) | Three integrations, set per computer: GitHub through the manager's own gh, a Slack channel, and web addresses that listen | Accepted |
+| [0028](0028-themes.md) | Ten themes as sets of the design tokens, chosen per computer, crossed into smoothly | Accepted |
 
 ## Template
 
