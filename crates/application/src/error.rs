@@ -213,6 +213,14 @@ pub enum ApplicationError {
         folder: String,
     },
 
+    /// A folder was named as one of Google Drive that is not among those
+    /// found on this computer.
+    #[error("the folder {folder} is not one that Google Drive keeps on this computer")]
+    NotAGoogleDriveFolder {
+        /// The folder, as it was given.
+        folder: String,
+    },
+
     /// The work folder and a reference folder were to be the same folder.
     #[error("the work folder and a reference folder cannot be the same folder: {work_folder}")]
     WorkFolderIsReference {
@@ -455,7 +463,7 @@ impl ApplicationError {
             | Self::UnfinishedStayInSprint
             | Self::SubtaskInAnotherArea { .. }
             | Self::ProjectWithoutAreas => "rule_broken",
-            Self::FolderNotFound { .. } => "folder_not_found",
+            Self::FolderNotFound { .. } | Self::NotAGoogleDriveFolder { .. } => "folder_not_found",
             Self::NotFound { .. } | Self::NothingAtPath { .. } => "not_found",
             Self::ProjectKeyTaken { .. } => "project_key_taken",
             Self::DifferentProjects

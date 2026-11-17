@@ -16,6 +16,7 @@ window or agent runtime.
 | `places` | `PlacesService`: the folders of a project: choose its work folder, add and take away reference folders, copy reference files into it |
 | `files` | `ProjectFilesService`: what lies in the folders of a project, for the files view: `list` a folder at a path inside it, `locate` an entry to open or show, each path checked first |
 | `work` | `WorkService`: let AI specialists work: start on a task, ask, reply, answer a specialist's question, list what waits for the manager, stop, follow every event, open a session in the desktop app, recover after a restart; `brief_for` and `instructions_for`. Its part `advisor`: plan a project with the Advisor (`advise`, `answer_interview`, `approve_proposal`); `ApprovedProposal`, `answers_in_words` and `instructions_for_advisor` |
+| `google_drive` | `GoogleDriveService`: the folder that Google Drive for desktop keeps on this computer (`find_drive_folders`, `look`, `prepare`), behind the port `DriveSurroundings`; see "Syncing through Google Drive" |
 | `sync` | `SyncService`: keep several computers of one manager in step through a folder the manager owns (`round`, `choose_folder`, `stop`, `rename_this_computer`, `accept`, `ignore`, `notices`, `dismiss`, `new_identity`); the ports `SyncFolder` and `SyncLedger`, and the operations that travel between computers |
 | `workbook` | `WorkbookService`: gather a project into a workbook of four sheets (summary, tasks, sprints, team) as plain data: `Workbook`, `Sheet`, `SheetContent`, `Section`, `Table`, `Column` and `Cell`, whose kind says whether it is text, a whole number, hours, a date or a status. Writing the file is done outside this crate ([decision 0025](../../docs/decisions/0025-the-project-as-a-workbook.md)) |
 | `ports` | The interfaces the services need: `ProjectRepository`, `TaskRepository`, `MemberRepository`, `ConversationRepository`, `PlanningRepository`, `PlacesRepository`, `SprintRepository`, `ViewRepository`, `AreaRepository`, `ProjectFolders`, `FileSystem`, `FolderReader`, `WorkListener`, `Clock` (which also tells the day a moment falls on) |
@@ -506,6 +507,26 @@ that hears it); `DeliveryService::deliver` sends through the port
 last ten deliveries of each address (`deliveries`); `test_channel` and
 `test_address` try them. It waits for answers, so the shell calls it on a
 thread of its own.
+
+## Syncing through Google Drive
+
+`GoogleDriveService` finds the folder that Google Drive for desktop keeps
+on this computer, so that the manager can sync through it in one press. It
+reads the disk and the environment only through `DriveSurroundings`, so the
+rule is tested on pretended computers.
+
+- **On Windows** a drive whose root holds `My Drive`, in one of the
+  languages Drive is most often set to; or, when the root carries Drive's
+  own hidden folder `.shortcut-targets-by-id`, the one folder there that is
+  neither hidden nor one of Drive's others (`Shared drives`, `Other
+  computers`, ...). Then `My Drive` and `Google Drive` in the home folder.
+- **On macOS** `~/Library/CloudStorage/GoogleDrive-<address>/My Drive` for
+  each account, with the address as `account`, then `~/Google Drive`.
+- **On Linux** nothing is looked for (`NotForThisSystem`).
+- `look` says what was found (`DriveFinding`) and which folder of Drive
+  holds the sync folder, compared in full form. `prepare` makes the folder
+  `Teamwright` inside a folder that was found, and refuses any other
+  (`folder_not_found`); choosing it is left to `SyncService`.
 
 ## Keeping computers in step
 

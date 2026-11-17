@@ -22,6 +22,7 @@ pub mod areas;
 pub mod clock;
 pub mod error;
 pub mod files;
+pub mod google_drive;
 pub mod in_memory;
 pub mod integrations;
 pub mod notifications;
@@ -51,6 +52,10 @@ pub use areas::AreaService;
 pub use clock::SystemClock;
 pub use error::ApplicationError;
 pub use files::{FolderListing, ProjectFilesService};
+pub use google_drive::{
+    DriveFinding, DriveFolder, DriveSurroundings, FOLDER_IN_DRIVE, GoogleDrive, GoogleDriveService,
+    OperatingSystem, find_drive_folders,
+};
 pub use integrations::delivery::{
     Deliveries, Delivery, DeliveryPorts, DeliveryService, Target, WebSender, targets_of,
 };
