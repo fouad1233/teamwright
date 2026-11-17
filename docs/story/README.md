@@ -36,3 +36,4 @@ two readers.
 | 8 | [The night shift](08-the-night-shift.md) | 13 November 2026 |
 | 9 | [The film](09-the-film.md) | 14 November 2026 |
 | 10 | [Every view](10-every-view.md) | 16 November 2026 |
+| 11 | [Ten themes and a release](11-ten-themes-and-a-release.md) | 18 November 2026 |
