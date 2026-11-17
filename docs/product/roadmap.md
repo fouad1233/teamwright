@@ -197,6 +197,17 @@ Several specialists working together with the manager in the loop.
   was tried against a listener on the same computer only. No real Slack
   channel and no real listener on the internet has received anything,
   and no real issue was opened
+- ✅ Ten themes, chosen on the page Computers and kept for that computer
+  ([decision 0028](../decisions/0028-themes.md),
+  [the reasoning](../design/themes.md)). Lamplight, the look the program
+  had, stays the default and follows the system. Five palettes are built
+  for the eyes and for long work, each with what it does said plainly
+  and its contrast ratios tested: Paper, Dusk, Slate, Clear and Even.
+  Four special palettes carry a pattern drawn in code: Blossom, Wing,
+  Fern and Tide. The window crosses from one theme to the next in 400
+  milliseconds. Seen in a browser on demo data; not seen in the built
+  program, where the crossing and the script that sets the theme before
+  the first paint were never tried
 - ✅ Areas: a project cut into the jobs inside it, shown at the side
   under the project, each showing only its tasks in every view
   ([decision 0022](../decisions/0022-areas-inside-a-project.md)).
@@ -241,7 +252,11 @@ Several specialists working together with the manager in the loop.
   without being loaded again. The troubles (a folder that cannot be
   reached, two computers under one identity) were seen on demo data only.
   Two real computers with a real cloud drive between them were never
-  tried
+  tried. "Sync with Google Drive" finds the folder that Google Drive for
+  desktop keeps on the computer and makes a folder for Teamwright in it
+  in one press, with no sign-in to Google and no token; run in the built
+  program against a pretended Drive folder, never with the real program
+  of Google, which this computer does not have
 - 🚧 Conflict handling: two changes to different fields of one thing both
   hold; a deletion is final, and the computer whose change was dropped is
   told in a notice; a task number or a project key used twice and two
@@ -255,7 +270,14 @@ Several specialists working together with the manager in the loop.
 
 ## M8 · Release ⬜
 
-- ⬜ Installer and updates
+- 🚧 Installers: a workflow builds them for Windows, macOS (Apple silicon
+  and Intel) and Linux and publishes them as a release when a version is
+  tagged. [Version 0.1.0](https://github.com/fouad1233/teamwright/releases/tag/v0.1.0)
+  was published on 18 November 2026 as a pre-release. The installers are
+  not signed, so Windows and macOS warn before they open; none of them
+  was installed and started by anybody yet, and the macOS and Linux
+  builds were never run at all. Updates from inside the program are not
+  built
 - ⬜ User manual
 - ⬜ Public demo in the browser
 - ✅ A website on GitHub Pages that explains the project, with the film

@@ -35,8 +35,10 @@ with a clear decision request whenever a choice is yours to make.
 > tasks, and nothing is created before you approve. What is still missing
 > is the team as a team: specialists that hand work to each other, and a
 > coordinator that starts tasks when the work they wait for is done.
-> There is no installer; the app can be
-> [built from source](docs/development/README.md).
+> Installers for Windows, macOS and Linux are in the
+> [releases](https://github.com/fouad1233/teamwright/releases); they are
+> not signed yet, so the system warns before it opens them. The app can
+> also be [built from source](docs/development/README.md).
 > The [roadmap](docs/product/roadmap.md) says exactly what is done.
 
 ## What it looks like today
