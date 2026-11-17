@@ -153,6 +153,14 @@ describe('the themes', () => {
     }
   });
 
+  it('shows the black form of a mark on a light ground and the white one on a dark ground', () => {
+    for (const theme of FIXED) {
+      const isDark = themes.get(theme)?.get('color-scheme') === 'dark';
+      expect(themes.get(theme)?.get('--mark-black'), theme).toBe(isDark ? 'none' : 'inline-block');
+      expect(themes.get(theme)?.get('--mark-white'), theme).toBe(isDark ? 'inline-block' : 'none');
+    }
+  });
+
   it('Slate is grey, not black, and of medium contrast', () => {
     const ground = colourOf('slate', '--ground');
     expect(luminance(ground)).toBeGreaterThan(0.015);

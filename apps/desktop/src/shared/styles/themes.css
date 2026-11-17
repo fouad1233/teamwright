@@ -19,6 +19,8 @@
 :root[data-theme='paper'],
 [data-theme-preview='paper'] {
   color-scheme: light;
+  --mark-black: inline-block;
+  --mark-white: none;
 
   --ground: #f1ece1;
   --ground-sunken: #e8e2d5;
@@ -86,6 +88,8 @@
 :root[data-theme='dusk'],
 [data-theme-preview='dusk'] {
   color-scheme: dark;
+  --mark-black: none;
+  --mark-white: inline-block;
 
   --ground: #1b1512;
   --ground-sunken: #15100d;
@@ -153,6 +157,8 @@
 :root[data-theme='slate'],
 [data-theme-preview='slate'] {
   color-scheme: dark;
+  --mark-black: none;
+  --mark-white: inline-block;
 
   --ground: #25272b;
   --ground-sunken: #1f2124;
@@ -220,6 +226,8 @@
 :root[data-theme='clear'],
 [data-theme-preview='clear'] {
   color-scheme: light;
+  --mark-black: inline-block;
+  --mark-white: none;
 
   --ground: #f7f7f5;
   --ground-sunken: #eeeeeb;
@@ -287,6 +295,8 @@
 :root[data-theme='even'],
 [data-theme-preview='even'] {
   color-scheme: dark;
+  --mark-black: none;
+  --mark-white: inline-block;
 
   --ground: #171614;
   --ground-sunken: #121110;
@@ -354,6 +364,8 @@
 :root[data-theme='blossom'],
 [data-theme-preview='blossom'] {
   color-scheme: light;
+  --mark-black: inline-block;
+  --mark-white: none;
 
   --ground: #f5efe9;
   --ground-sunken: #ede5de;
@@ -429,6 +441,8 @@
 :root[data-theme='wing'],
 [data-theme-preview='wing'] {
   color-scheme: dark;
+  --mark-black: none;
+  --mark-white: inline-block;
 
   --ground: #171b22;
   --ground-sunken: #12151b;
@@ -504,6 +518,8 @@
 :root[data-theme='fern'],
 [data-theme-preview='fern'] {
   color-scheme: light;
+  --mark-black: inline-block;
+  --mark-white: none;
 
   --ground: #eef0e5;
   --ground-sunken: #e5e8db;
@@ -579,6 +595,8 @@
 :root[data-theme='tide'],
 [data-theme-preview='tide'] {
   color-scheme: dark;
+  --mark-black: none;
+  --mark-white: inline-block;
 
   --ground: #0f1c20;
   --ground-sunken: #0b1619;

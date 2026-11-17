@@ -254,12 +254,23 @@
   --pattern-band: 0px;
   /* The height of a swatch in the chooser of themes. */
   --theme-swatch-height: 72px;
+
+  /* The mark of another company comes in a black form for a light ground
+     and a white one for a dark ground, never recoloured (ServiceMark).
+     Each theme shows the form that suits its ground; the other is hidden.
+     The size of a mark: smaller than the text beside it is tall. */
+  --mark-black: none;
+  --mark-white: inline-block;
+  --mark-size: 14px;
 }
 
 @media (prefers-color-scheme: light) {
   :root,
   [data-theme-preview='lamplight'] {
     color-scheme: light;
+
+    --mark-black: inline-block;
+    --mark-white: none;
 
     /* Paper */
     --ground: #ece5d7;
@@ -339,6 +350,9 @@
  */
 [data-paper] {
   color-scheme: light;
+
+  --mark-black: inline-block;
+  --mark-white: none;
 
   --ground: #ece5d7;
   --surface: #faf7f0;

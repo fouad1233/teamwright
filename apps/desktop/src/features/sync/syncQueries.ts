@@ -13,6 +13,9 @@ const STATE_KEY = ['sync', 'state'] as const;
 /** The name under which the notices of syncing are cached. */
 const NOTICES_KEY = ['sync', 'notices'] as const;
 
+/** The name under which what there is of Google Drive is cached. */
+const GOOGLE_DRIVE_KEY = ['sync', 'google-drive'] as const;
+
 /**
  * Where syncing stands. The backend sends the whole state after every
  * round, which takes its place here; a round can also bring notices, so
@@ -41,6 +44,15 @@ export function useSyncNotices() {
 }
 
 /**
+ * What there is of Google Drive on this computer, and whether syncing runs
+ * through it. Looked for again whenever a command changes the folder.
+ */
+export function useGoogleDrive() {
+  const backend = useBackend();
+  return useQuery({ queryKey: GOOGLE_DRIVE_KEY, queryFn: () => backend.googleDrive() });
+}
+
+/**
  * Asks again for whatever is shown of the projects in which another
  * computer changed something, so that the views show its work. It listens
  * once, for the whole window.
@@ -66,6 +78,13 @@ export interface SyncCommands {
   chooseFolder(folder: string, computerName: string): Promise<boolean>;
   /** Lets the manager pick a folder with the window of the system. */
   pickFolder(): Promise<string | null>;
+  /**
+   * Makes the folder `Teamwright` inside a folder of Google Drive, and
+   * resolves to it; to nothing if that was refused.
+   */
+  prepareGoogleDrive(driveFolder: string): Promise<string | null>;
+  /** Opens a web address in the manager's own browser. */
+  openWebAddress(address: string): Promise<void>;
   stop(): Promise<void>;
   syncNow(): Promise<void>;
   /** Renames this computer. Resolves to whether the name was taken. */
@@ -88,6 +107,7 @@ export function useSyncCommands(): SyncCommands {
       try {
         queryClient.setQueryData<SyncState>(STATE_KEY, await request());
         await queryClient.invalidateQueries({ queryKey: NOTICES_KEY });
+        await queryClient.invalidateQueries({ queryKey: GOOGLE_DRIVE_KEY });
         return true;
       } catch (failure) {
         notifier.showError(describeFailure(failure));
@@ -104,6 +124,21 @@ export function useSyncCommands(): SyncCommands {
         } catch (failure) {
           notifier.showError(describeFailure(failure));
           return null;
+        }
+      },
+      prepareGoogleDrive: async (driveFolder) => {
+        try {
+          return await backend.prepareGoogleDriveFolder(driveFolder);
+        } catch (failure) {
+          notifier.showError(describeFailure(failure));
+          return null;
+        }
+      },
+      openWebAddress: async (address) => {
+        try {
+          await backend.openWebAddress(address);
+        } catch (failure) {
+          notifier.showError(describeFailure(failure));
         }
       },
       stop: async () => {

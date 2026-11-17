@@ -1,0 +1,26 @@
+/* A mark of another company, at the size of a small icon. It keeps its
+   proportions and its colours; nothing is drawn around it. */
+.mark,
+.black,
+.white {
+  flex: none;
+  width: var(--mark-size);
+  height: var(--mark-size);
+  object-fit: contain;
+  vertical-align: middle;
+  user-select: none;
+}
+
+.pair {
+  display: inline-flex;
+  flex: none;
+}
+
+/* The theme says which of GitHub's two forms suits its ground. */
+.black {
+  display: var(--mark-black);
+}
+
+.white {
+  display: var(--mark-white);
+}

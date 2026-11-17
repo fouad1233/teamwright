@@ -10,6 +10,7 @@ import { DateField } from '@/shared/ui/DateField';
 import { Dialog } from '@/shared/ui/Dialog';
 import { ActionMenu, ChoiceMenu, type Choice } from '@/shared/ui/Menu';
 import { useLeaving } from '@/shared/ui/motion';
+import { ServiceMark, type MarkedService } from '@/shared/ui/ServiceMark';
 
 import {
   AssigneeAvatar,
@@ -323,7 +324,7 @@ export function TaskPanel({ project, task, tasks, onClose }: TaskPanelProps) {
           />
         </Section>
 
-        <Section title="GitHub">
+        <Section title="GitHub" mark="github">
           <TaskGitHub project={project} task={task} />
         </Section>
 
@@ -456,17 +457,26 @@ function Property({ label, children }: { label: string; children: ReactNode }) {
 
 interface SectionProps {
   title: string;
+  /** The official mark of the service the part is about, before its title. */
+  mark?: MarkedService;
   /** A control shown at the end of the heading, such as an add button. */
   action?: ReactNode;
   children: ReactNode;
 }
 
 /** A titled part of the panel. */
-function Section({ title, action, children }: SectionProps) {
+function Section({ title, mark, action, children }: SectionProps) {
   return (
     <section className={styles.section}>
       <header className={styles.sectionHeader}>
-        <h3 className="label">{title}</h3>
+        {mark === undefined ? (
+          <h3 className="label">{title}</h3>
+        ) : (
+          <h3 className={classNames('label', styles.markedTitle)}>
+            <ServiceMark service={mark} />
+            {title}
+          </h3>
+        )}
         {action}
       </header>
       {children}

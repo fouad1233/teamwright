@@ -10,6 +10,7 @@ import {
   lastNewsOf,
   noticeTarget,
   problemInWords,
+  roundInWords,
   sinceInWords,
   stateLineOf,
   waitsForRestart,
@@ -78,6 +79,30 @@ describe('sinceInWords', () => {
     expect(sinceInWords(new Date(2026, 10, 12, 23, 0).toISOString(), NOW)).toBe('yesterday');
     expect(sinceInWords(new Date(2026, 10, 9, 10, 0).toISOString(), NOW)).toBe('9 Nov');
     expect(sinceInWords(new Date(2025, 10, 9, 10, 0).toISOString(), NOW)).toBe('9 Nov 2025');
+  });
+});
+
+describe('roundInWords', () => {
+  it('says how the last round went', () => {
+    expect(roundInWords(state(), false, NOW)).toBe('In step. Last round 2 min ago.');
+    expect(roundInWords(state({ phase: 'writing' }), false, NOW)).toBe(
+      'Writing to the folder now.',
+    );
+    expect(roundInWords(state({ lastRound: null }), false, NOW)).toBe(
+      'No round since Teamwright started.',
+    );
+    expect(roundInWords(state({ problem: 'gone', phase: 'unreachable' }), false, NOW)).toBe(
+      'Last tried 2 min ago.',
+    );
+  });
+
+  it('says when it runs through Google Drive, "in step" only while it is', () => {
+    expect(roundInWords(state(), true, NOW)).toBe(
+      'In step through Google Drive. Last round 2 min ago.',
+    );
+    expect(roundInWords(state({ problem: 'gone', phase: 'unreachable' }), true, NOW)).toBe(
+      'Through Google Drive. Last tried 2 min ago.',
+    );
   });
 });
 

@@ -1,20 +1,22 @@
 import { FolderOpen, RefreshCw } from 'lucide-react';
 import { useState, type FormEvent, type KeyboardEvent } from 'react';
 
-import type { Project, SyncState } from '@/shared/api/types';
+import type { GoogleDrive, Project, SyncState } from '@/shared/api/types';
 import { classNames } from '@/shared/lib/classNames';
 import { Button, ValueButton } from '@/shared/ui/Button';
 import { Field, TextInput } from '@/shared/ui/Field';
+import { ServiceMark } from '@/shared/ui/ServiceMark';
 import { describeFailure } from '@/shared/ui/Toast';
 
 import { ThemeChooser } from '../appearance/ThemeChooser';
 import { NotificationSettings } from '../notifications/NotificationSettings';
 import { waitsForManager } from '../work/waitsForManager';
 import styles from './ComputersPlace.module.css';
+import { DRIVE_FOR_DESKTOP_ADDRESS, driveFolderInWords } from './googleDriveModel';
 import { OtherComputers } from './OtherComputers';
 import { SyncNotices } from './SyncNotices';
-import { isIdentityInUse, problemInWords, sinceInWords, waitsForRestart } from './syncModel';
-import { useSyncCommands, useSyncState, type SyncCommands } from './syncQueries';
+import { isIdentityInUse, problemInWords, roundInWords, waitsForRestart } from './syncModel';
+import { useGoogleDrive, useSyncCommands, useSyncState, type SyncCommands } from './syncQueries';
 import { useNow } from './useNow';
 
 interface ComputersPlaceProps {
@@ -61,7 +63,9 @@ export function ComputersPlace({ projects }: ComputersPlaceProps) {
  */
 function FirstSteps({ state }: { state: SyncState }) {
   const commands = useSyncCommands();
+  const drive = useGoogleDrive().data;
   const [folder, setFolder] = useState<string | null>(null);
+  const [isChoosingAccount, setChoosingAccount] = useState(false);
 
   async function pick() {
     const picked = await commands.pickFolder();
@@ -69,6 +73,16 @@ function FirstSteps({ state }: { state: SyncState }) {
       setFolder(picked);
     }
   }
+
+  async function throughDrive(driveFolder: string) {
+    const prepared = await commands.prepareGoogleDrive(driveFolder);
+    if (prepared !== null) {
+      setFolder(prepared);
+    }
+  }
+
+  const driveFolders = drive?.finding === 'found' ? drive.folders : [];
+  const [onlyDriveFolder] = driveFolders.length === 1 ? driveFolders : [];
 
   if (folder !== null) {
     return (
@@ -91,7 +105,7 @@ function FirstSteps({ state }: { state: SyncState }) {
         such as one that a cloud drive keeps in step. Each computer writes what changed into that
         folder and takes in what the others wrote; nothing goes anywhere else.
       </p>
-      <div>
+      <div className={styles.actions}>
         <Button
           variant="primary"
           icon={<FolderOpen />}
@@ -101,7 +115,105 @@ function FirstSteps({ state }: { state: SyncState }) {
         >
           Choose a folder
         </Button>
+        {driveFolders.length > 0 && (
+          <Button
+            icon={<ServiceMark service="google-drive" />}
+            aria-expanded={onlyDriveFolder === undefined ? isChoosingAccount : undefined}
+            onClick={() => {
+              if (onlyDriveFolder === undefined) {
+                setChoosingAccount(!isChoosingAccount);
+              } else {
+                void throughDrive(onlyDriveFolder.path);
+              }
+            }}
+          >
+            Sync with Google Drive
+          </Button>
+        )}
       </div>
+      {drive !== undefined && (
+        <DriveNote
+          drive={drive}
+          isChoosingAccount={isChoosingAccount}
+          onChoose={(driveFolder) => void throughDrive(driveFolder)}
+          onOpen={(address) => void commands.openWebAddress(address)}
+        />
+      )}
+    </div>
+  );
+}
+
+interface DriveNoteProps {
+  drive: GoogleDrive;
+  isChoosingAccount: boolean;
+  onChoose: (driveFolder: string) => void;
+  onOpen: (address: string) => void;
+}
+
+/**
+ * Under the buttons, what there is of Google Drive: the folder found, the
+ * accounts to choose from, or the way to Google's program.
+ */
+function DriveNote({ drive, isChoosingAccount, onChoose, onOpen }: DriveNoteProps) {
+  if (drive.finding === 'not_for_this_system') {
+    return (
+      <p className={styles.driveNote}>
+        Google Drive for desktop is not made for this system; a folder that another program keeps in
+        step serves as well.
+      </p>
+    );
+  }
+  if (drive.finding === 'not_installed') {
+    return (
+      <p className={styles.driveNote}>
+        Google Drive for desktop is not on this computer; with it, Teamwright syncs through your
+        Drive in one press.{' '}
+        <button
+          type="button"
+          className={styles.link}
+          onClick={() => {
+            onOpen(DRIVE_FOR_DESKTOP_ADDRESS);
+          }}
+        >
+          Get Google Drive for desktop
+        </button>
+      </p>
+    );
+  }
+  const [only] = drive.folders;
+  if (drive.folders.length === 1 && only !== undefined) {
+    return (
+      <p className={styles.driveNote}>
+        Google Drive for desktop keeps{' '}
+        <span className={styles.inlinePath} data-selectable>
+          {driveFolderInWords(only)}
+        </span>{' '}
+        on this computer. Teamwright keeps its files in a folder named Teamwright inside it.
+      </p>
+    );
+  }
+  return (
+    <div className={styles.driveNote}>
+      <p>
+        Google Drive for desktop keeps a folder for each of your accounts.
+        {isChoosingAccount && ' Choose the one to sync through.'}
+      </p>
+      {isChoosingAccount && (
+        <ul className={styles.accounts} aria-label="Accounts of Google Drive">
+          {drive.folders.map((folder) => (
+            <li key={folder.path}>
+              <ValueButton
+                title={folder.path}
+                onClick={() => {
+                  onChoose(folder.path);
+                }}
+              >
+                {driveFolderInWords(folder)}
+              </ValueButton>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
@@ -166,6 +278,7 @@ interface InStepProps {
 /** Once a folder is chosen: this computer, the folder, the others and the notices. */
 function InStep({ state, projects }: InStepProps) {
   const commands = useSyncCommands();
+  const isThroughDrive = Boolean(useGoogleDrive().data?.syncsThrough);
   const now = useNow();
   const [isSyncing, setIsSyncing] = useState(false);
   const identityInUse = isIdentityInUse(state);
@@ -202,14 +315,9 @@ function InStep({ state, projects }: InStepProps) {
             {state.folder}
           </p>
         )}
-        <p className={styles.round}>
-          {state.phase === 'writing'
-            ? 'Writing to the folder now.'
-            : state.lastRound === null
-              ? 'No round since Teamwright started.'
-              : state.problem === null
-                ? `In step. Last round ${sinceInWords(state.lastRound, now)}.`
-                : `Last tried ${sinceInWords(state.lastRound, now)}.`}
+        <p className={classNames(styles.round, isThroughDrive && styles.through)}>
+          {isThroughDrive && <ServiceMark service="google-drive" />}
+          {roundInWords(state, isThroughDrive, now)}
         </p>
         {state.problem !== null && !identityInUse && !restart && (
           <div className={styles.trouble} role="alert">

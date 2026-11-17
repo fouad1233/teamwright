@@ -29,6 +29,29 @@ export function sinceInWords(moment: Moment, now: Date = new Date()): string {
 }
 
 /**
+ * The line under the folder that says how the last round went. When the
+ * folder lies in Google Drive it says so, beside the mark of Drive.
+ */
+export function roundInWords(
+  state: Pick<SyncState, 'phase' | 'lastRound' | 'problem'>,
+  isThroughDrive: boolean,
+  now: Date = new Date(),
+): string {
+  const through = isThroughDrive ? 'Through Google Drive. ' : '';
+  if (state.phase === 'writing') {
+    return `${through}Writing to the folder now.`;
+  }
+  if (state.lastRound === null) {
+    return `${through}No round since Teamwright started.`;
+  }
+  if (state.problem !== null) {
+    return `${through}Last tried ${sinceInWords(state.lastRound, now)}.`;
+  }
+  const inStep = isThroughDrive ? 'In step through Google Drive' : 'In step';
+  return `${inStep}. Last round ${sinceInWords(state.lastRound, now)}.`;
+}
+
+/**
  * Whether syncing stopped because another computer writes under the
  * identity of this one: its data folder was copied there.
  */

@@ -260,6 +260,20 @@ The commands are in `commands/sync.rs`:
 | `sync_notices` | | `SyncNoticeDto[]`, newest first |
 | `dismiss_sync_notice` | `noticeId` | nothing |
 | `give_this_computer_a_new_identity` | | `SyncStateDto` |
+| `google_drive` | | `GoogleDriveDto` |
+| `prepare_google_drive_folder` | `folder` | the path of the folder `Teamwright` inside it |
+
+**Through Google Drive.** `commands/google_drive.rs` offers the folder that
+Google Drive for desktop keeps on this computer, so that the manager can
+sync through it in one press. `state.rs` builds `GoogleDriveService` with
+`LocalDriveSurroundings`, which reads the drive letters (`C:` to `Z:`), the
+home folder (`USERPROFILE`, or `HOME`) and the disk. `GoogleDriveDto` has
+`finding` (`found`, `not_installed`, `not_for_this_system`), `folders` and
+`syncsThrough`, each a folder with `path` and `account` (the address, when
+the path names it). `prepare_google_drive_folder` makes `Teamwright` inside
+a folder that was found and answers with it; the folder is then chosen with
+`choose_sync_folder`, as any other. There is no sign-in to Google: Google's
+own program does the syncing.
 
 `SyncStateDto` has `folder`, `thisComputer`, `computerName`,
 `suggestedName`, `phase` (`off`, `in_step`, `writing`, `unreachable`,
@@ -331,11 +345,12 @@ src/
     advisor/          Planning a project with the Advisor: its questions, its proposal
     areas/            The areas of a project: at the side, the open area, the dialog, the field of a task
     sprints/          The Backlog view, sprints and points, the burndown, the board of a sprint, completed sprints opened
-    sync/             Computers: syncing through a folder, the line at the foot of the sidebar, conversations elsewhere
+    sync/             Computers: syncing through a folder or Google Drive, the line at the foot of the sidebar, conversations elsewhere
     views/            The row of views and places, the chooser, the menu and filter of a view
   shared/
     api/              The Backend interface and its two implementations
-    ui/               Buttons, menus, dialogs, the calendar field, tooltips, a ground that is moved and zoomed
+    ui/               Buttons, menus, dialogs, the calendar field, tooltips, a ground that is moved and zoomed, the marks of other services
+    logos/            The official marks of GitHub and Google Drive, unaltered (their README says the rules)
     lib/              Formatting and ranking helpers
     styles/           Design tokens and document-wide styles
 ```
@@ -384,6 +399,22 @@ Rules of the interface:
   ago", are worked out in `syncModel.ts`. Whether another computer uses this
   one's identity is read from the words of the state's `problem`, because
   the state carries no code for it.
+- **Google Drive in one press.** On Computers, before a folder is chosen,
+  "Sync with Google Drive" stands beside "Choose a folder" when
+  `useGoogleDrive` found a folder of Drive; with several accounts the
+  manager picks one. It asks the backend to make `Teamwright` inside it and
+  goes on to the name of this computer as with any folder. Without Google
+  Drive for desktop a sentence and a link to Google's page for it stand
+  there instead. Once the folder lies in Drive, the line of the last round
+  says so beside Drive's mark (`roundInWords`). The part "Google Drive" of
+  the dialog "Integrations…" says how it works and leads to Computers;
+  nothing is set per project.
+- **Marks of other services.** `ServiceMark` (`shared/ui`) shows the
+  official mark of GitHub or Google Drive from `shared/logos/`, small,
+  before the name of the part it heads, never recoloured. GitHub's black or
+  white form is chosen by the tokens `--mark-black` and `--mark-white`,
+  which every theme sets after its ground. Slack has no mark: it is named
+  in words.
 - **A conversation is continued only where it runs.** A conversation whose
   `isHere` is false is read, never continued: `ConversationView`, the
   Advisor's page and the inbox leave out the reply box, Stop and Open in

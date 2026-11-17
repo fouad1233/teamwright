@@ -1,18 +1,23 @@
 import { ChevronDown, Trash2 } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 
+import { useNavigation } from '@/app/navigation';
 import type { Delivery, EventKind, Project, ProjectIntegrations } from '@/shared/api/types';
+import { classNames } from '@/shared/lib/classNames';
 import { formatMoment } from '@/shared/lib/format';
 import { Button, IconButton } from '@/shared/ui/Button';
 import { CheckMenu } from '@/shared/ui/CheckMenu';
 import { Dialog } from '@/shared/ui/Dialog';
 import { TextInput } from '@/shared/ui/Field';
 import { Refusal } from '@/shared/ui/Form';
+import { ServiceMark, type MarkedService } from '@/shared/ui/ServiceMark';
 import { describeFailure } from '@/shared/ui/Toast';
 
 import { GitHubItems } from '../github/GitHubItems';
 import { agoInWords, gitHubInWords, linkedInWords } from '../github/gitHubModel';
 import { useGitHubCommands, useGitHubOverview } from '../github/gitHubQueries';
+import { googleDriveFactInWords, googleDriveStateInWords } from '../sync/googleDriveModel';
+import { useGoogleDrive } from '../sync/syncQueries';
 import styles from './IntegrationsDialog.module.css';
 import {
   useDeliveryTests,
@@ -30,12 +35,13 @@ interface IntegrationsDialogProps {
 
 /**
  * The integrations of a project on this computer: GitHub, a Slack channel,
- * and web addresses that listen. What is set here stays on this computer.
+ * web addresses that listen, and whether this computer syncs through
+ * Google Drive. What is set here stays on this computer.
  */
 export function IntegrationsDialog({ open, project, onClose }: IntegrationsDialogProps) {
   return (
     <Dialog open={open} title={`Integrations of ${project.name}`} size="wide" onClose={onClose}>
-      <Integrations project={project} />
+      <Integrations project={project} onLeave={onClose} />
     </Dialog>
   );
 }
@@ -47,7 +53,7 @@ type Attempt = (work: () => Promise<void>) => Promise<boolean>;
  * The content of the dialog, a component of its own so that what it says
  * about the last refusal starts empty every time the dialog opens.
  */
-function Integrations({ project }: { project: Project }) {
+function Integrations({ project, onLeave }: { project: Project; onLeave: () => void }) {
   const integrations = useProjectIntegrations(project.id);
   const [refusal, setRefusal] = useState<string | null>(null);
 
@@ -82,6 +88,7 @@ function Integrations({ project }: { project: Project }) {
       <GitHubPart project={project} integrations={integrations.data} attempt={attempt} />
       <SlackPart project={project} integrations={integrations.data} attempt={attempt} />
       <WebAddressesPart project={project} integrations={integrations.data} attempt={attempt} />
+      <GoogleDrivePart onLeave={onLeave} />
       {refusal !== null && <Refusal>{refusal}</Refusal>}
     </div>
   );
@@ -93,11 +100,17 @@ interface PartProps {
   attempt: Attempt;
 }
 
-/** The head of a part: its name, and in one line whether it is on. */
-function PartHead({ name, state }: { name: string; state: string }) {
+/**
+ * The head of a part: its name, after the official mark of the service if
+ * it has one, and in one line whether it is on.
+ */
+function PartHead({ name, mark, state }: { name: string; mark?: MarkedService; state: string }) {
   return (
     <header className={styles.head}>
-      <h3 className="label">{name}</h3>
+      <h3 className={classNames('label', styles.name)}>
+        {mark !== undefined && <ServiceMark service={mark} />}
+        {name}
+      </h3>
       <span className={styles.state}>{state}</span>
     </header>
   );
@@ -113,7 +126,7 @@ function GitHubPart({ project, integrations, attempt }: PartProps) {
 
   return (
     <section className={styles.part} aria-label="GitHub">
-      <PartHead name="GitHub" state={data === undefined ? '' : gitHubInWords(data)} />
+      <PartHead name="GitHub" mark="github" state={data === undefined ? '' : gitHubInWords(data)} />
       <p className={styles.note}>
         The tasks of this project know the pull requests and issues that name their key, such as{' '}
         <code>{project.key}-4</code>. Teamwright asks GitHub’s own command line program, signed in
@@ -386,6 +399,45 @@ function WebAddressesPart({ project, integrations, attempt }: PartProps) {
           Add the address
         </Button>
       </form>
+    </section>
+  );
+}
+
+/**
+ * Google Drive: how syncing through it works, and whether this computer
+ * does. Nothing is set per project; the button leads to the page
+ * Computers, where it is chosen.
+ */
+function GoogleDrivePart({ onLeave }: { onLeave: () => void }) {
+  const drive = useGoogleDrive();
+  const navigation = useNavigation();
+
+  return (
+    <section className={styles.part} aria-label="Google Drive">
+      <PartHead
+        name="Google Drive"
+        mark="google-drive"
+        state={drive.data === undefined ? '' : googleDriveStateInWords(drive.data)}
+      />
+      <p className={styles.note}>
+        Google Drive for desktop keeps a folder of your Drive on each of your computers, and
+        Teamwright keeps all your projects in step through it. It is chosen once for this computer,
+        on the page Computers, not for each project.
+      </p>
+      {drive.data !== undefined && (
+        <p className={styles.fact}>{googleDriveFactInWords(drive.data)}</p>
+      )}
+      <div className={styles.row}>
+        <Button
+          variant="secondary"
+          onClick={() => {
+            onLeave();
+            navigation.openComputers();
+          }}
+        >
+          Go to Computers
+        </Button>
+      </div>
     </section>
   );
 }
