@@ -94,6 +94,10 @@ const ROLE_WORDS: readonly { role: Role; stems: readonly string[]; words: readon
     ],
     words: ['code', 'web', 'app', 'apps', 'devops', 'stack'],
   },
+  // After software: an "embedded systems developer" writes code. A systems
+  // engineer works with requirements, budgets and papers, as a researcher
+  // does.
+  { role: 'researcher', stems: ['requirement', 'architect'], words: ['system', 'systems'] },
 ];
 
 /** The words of a text, in lower case, without punctuation. */

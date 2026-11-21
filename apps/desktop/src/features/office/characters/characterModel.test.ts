@@ -1,10 +1,42 @@
 import { describe, expect, it } from 'vitest';
 
+import readyMade from '@/shared/api/readyMade.json';
+
 import { hashOf, lookOf, OUTFITS, roleOfMember, type Role } from './characterModel';
 import { HAIRS, SKINS } from './palette';
 import { HAIR_STYLES } from './sprites';
 
 const role = (name: string, responsibility = '') => roleOfMember({ name, responsibility });
+
+describe('the characters of the ready-made specialists', () => {
+  const expected: Record<string, Role> = {
+    'Systems engineer': 'researcher',
+    'Electronics designer': 'hardware',
+    'Firmware engineer': 'software',
+    'Mechanical designer': 'mechanical',
+    'Embedded test engineer': 'test',
+    'Front-end developer': 'software',
+    'Back-end developer': 'software',
+    'Interface designer': 'designer',
+    'Code reviewer': 'software',
+    'Technical writer': 'writer',
+    Researcher: 'researcher',
+    'Data analyst': 'researcher',
+  };
+
+  it.each(readyMade.specialists.map((specialist) => [specialist.name, specialist.description]))(
+    'gives "%s" the character of its role by its name alone',
+    (name, description) => {
+      expect(role(name)).toBe(expected[name]);
+      // What the member is on the team for does not change it.
+      expect(role(name, description)).toBe(expected[name]);
+    },
+  );
+
+  it('still sees an embedded systems developer as a developer', () => {
+    expect(role('Embedded systems developer')).toBe('software');
+  });
+});
 
 describe('roleOfMember', () => {
   it.each<[string, Role]>([
