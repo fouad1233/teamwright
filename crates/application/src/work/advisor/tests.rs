@@ -1046,6 +1046,55 @@ fn adds_the_members_to_the_team_and_creates_the_tasks_when_it_is_approved() {
 }
 
 #[test]
+fn a_proposed_member_named_as_a_ready_made_specialist_starts_with_its_instructions() {
+    let planning = planning();
+    let conversation = planning.proposed();
+
+    planning
+        .approve(&conversation, unchanged(proposal_of(&conversation)))
+        .unwrap();
+
+    let team = planning.members();
+    let firmware = team
+        .iter()
+        .find(|member| member.name().as_str() == FIRMWARE)
+        .unwrap();
+    let role = ReadyMadeSpecialist::named(FIRMWARE).unwrap();
+    assert_eq!(firmware.instructions().as_str(), role.instructions);
+    // What the Advisor chose for the member stays: only the instructions
+    // come from the role.
+    assert_eq!(
+        firmware.responsibility(),
+        proposal_of(&conversation).members()[1].responsibility
+    );
+    assert_eq!(firmware.effort(), None);
+    // "Hardware engineer" and "Mechanical engineer" are no ready-made
+    // specialist, so they start without instructions.
+    let others: Vec<_> = team
+        .iter()
+        .filter(|member| member.name().as_str() != FIRMWARE)
+        .collect();
+    assert_eq!(others.len(), 2);
+    assert!(others.iter().all(|member| member.instructions().is_empty()));
+}
+
+#[test]
+fn the_advisor_is_told_the_ready_made_specialists_by_their_exact_names() {
+    let planning = planning();
+
+    let instructions = instructions_for_advisor(&planning.project, &[], &[], &[]);
+
+    assert!(instructions.contains("give that member exactly its name below"));
+    for role in ReadyMadeSpecialist::ALL {
+        assert!(
+            instructions.contains(&format!("\n    {}: {}\n", role.name, role.description)),
+            "{}",
+            role.name
+        );
+    }
+}
+
+#[test]
 fn tells_its_listeners_when_a_proposal_is_approved() {
     let planning = planning();
     let conversation = planning.proposed();

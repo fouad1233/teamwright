@@ -26,6 +26,7 @@ pub mod member;
 pub mod planning;
 pub mod project;
 pub mod project_files;
+pub mod ready_made;
 pub mod sprint;
 pub mod task;
 pub mod task_history;
@@ -48,13 +49,14 @@ pub use ids::{
     ViewId,
 };
 pub use integration::{EventKind, EventKinds, RepositoryName, WebAddress};
-pub use member::{Effort, Member, MemberKind, MemberProfile, MemberSnapshot};
+pub use member::{Effort, Member, MemberInstructions, MemberKind, MemberProfile, MemberSnapshot};
 pub use planning::{
     Interview, InterviewAnswer, InterviewQuestion, InterviewSnapshot, Proposal, ProposalSnapshot,
     ProposedMember, ProposedOwner, ProposedTask,
 };
 pub use project::{Project, ProjectKey, ProjectSnapshot};
 pub use project_files::{EntryKind, FolderEntry, PathInFolder};
+pub use ready_made::ReadyMadeSpecialist;
 pub use sprint::{
     CountedTask, Sprint, SprintDates, SprintSnapshot, SprintState, SprintSummary, SprintUnit,
     StoryPoints,

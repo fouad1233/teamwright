@@ -112,6 +112,7 @@ const MEMBER_FIELDS: &[Field] = &[
     later("name", &["name"]),
     later("responsibility", &["responsibility"]),
     later("profile", &["model", "effort"]),
+    later("instructions", &["instructions"]),
     later("color", &["color"]),
     later("updated_at", &["updated_at"]),
 ];

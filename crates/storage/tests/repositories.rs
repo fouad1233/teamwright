@@ -23,11 +23,11 @@ use teamwright_application::{
 use teamwright_domain::{
     Assignee, CalendarDate, Color, ComputerId, Conversation, ConversationId, DecisionOption,
     DecisionRequest, Effort, Interview, InterviewAnswer, InterviewQuestion, Member, MemberId,
-    MemberKind, MemberName, MemberProfile, ModelName, Priority, Project, ProjectKey, ProjectName,
-    Proposal, ProposedMember, ProposedOwner, ProposedTask, Rank, Schedule, Sprint, SprintDates,
-    SprintId, SprintName, SprintSummary, SprintUnit, Status, StatusCategory, StatusId, StatusName,
-    StepContent, StoryPoints, Task, TaskDraft, TaskId, TaskTitle, Timestamp, TokenCounts,
-    ToolOutcome, Turn, TurnOrigin, TurnState, Workflow,
+    MemberInstructions, MemberKind, MemberName, MemberProfile, ModelName, Priority, Project,
+    ProjectKey, ProjectName, Proposal, ProposedMember, ProposedOwner, ProposedTask, Rank, Schedule,
+    Sprint, SprintDates, SprintId, SprintName, SprintSummary, SprintUnit, Status, StatusCategory,
+    StatusId, StatusName, StepContent, StoryPoints, Task, TaskDraft, TaskId, TaskTitle, Timestamp,
+    TokenCounts, ToolOutcome, Turn, TurnOrigin, TurnState, Workflow,
 };
 use teamwright_storage::{
     Database, Operation, SqliteConversationRepository, SqliteMemberRepository,
@@ -725,6 +725,39 @@ fn a_change_of_the_profile_is_logged_with_the_complete_new_state() {
     assert_eq!(states[1]["updated_at"], "2026-11-11T10:00:00.000Z");
     assert_eq!(states[2]["model"], serde_json::Value::Null);
     assert_eq!(states[2]["effort"], serde_json::Value::Null);
+}
+
+#[test]
+fn the_instructions_of_a_specialist_are_kept_with_their_lines_and_logged() {
+    let store = Store::in_memory();
+    let project = store.project("Smart sensor node");
+    let mut member = store.member(&project, "Hardware engineer");
+
+    member
+        .set_instructions(
+            MemberInstructions::parse("- Check the data sheet.\n- Never guess a pin.").unwrap(),
+            moment(10),
+        )
+        .unwrap();
+    store.members.save(&member).unwrap();
+
+    let found = store.members.find(member.id()).unwrap().unwrap();
+    assert_eq!(
+        found.instructions().as_str(),
+        "- Check the data sheet.\n- Never guess a pin."
+    );
+    assert_eq!(found, member);
+    let log = store.database.operations().unwrap();
+    let states: Vec<serde_json::Value> = log
+        .iter()
+        .filter(|op| op.entity.as_str() == "member")
+        .map(|op| serde_json::from_str(op.payload.as_deref().unwrap()).unwrap())
+        .collect();
+    assert_eq!(states[0]["instructions"], "");
+    assert_eq!(
+        states[1]["instructions"],
+        "- Check the data sheet.\n- Never guess a pin."
+    );
 }
 
 #[test]

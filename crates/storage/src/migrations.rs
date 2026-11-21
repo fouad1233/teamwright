@@ -27,6 +27,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("schema/0015_view_content.sql"),
     include_str!("schema/0016_turn_context.sql"),
     include_str!("schema/0017_integrations.sql"),
+    include_str!("schema/0020_member_instructions.sql"),
 ];
 
 /// Applies the migrations a database has not seen yet. Each one runs in its
@@ -207,6 +208,15 @@ mod tests {
         assert_eq!(name, "Hardware engineer");
         assert_eq!(model, None);
         assert_eq!(effort, None);
+        // A member from before instructions existed has none.
+        let instructions: String = connection
+            .query_row(
+                "SELECT instructions FROM members WHERE id = 'm1'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(instructions, "");
     }
 
     #[test]

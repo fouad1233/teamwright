@@ -211,6 +211,11 @@ pub enum DomainError {
     #[error("only an AI specialist has a model and an effort")]
     ProfileOfPerson,
 
+    /// A person was to be given instructions, which only an AI specialist
+    /// follows.
+    #[error("only an AI specialist has instructions")]
+    InstructionsOfPerson,
+
     /// A start date was later than the due date.
     #[error("the start date {start} is after the due date {due}")]
     StartAfterDue {

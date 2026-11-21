@@ -3,8 +3,8 @@
 use std::sync::Arc;
 
 use teamwright_domain::{
-    Assignee, Color, Effort, Member, MemberId, MemberKind, MemberName, MemberProfile, ModelName,
-    Project, ProjectId, Task, Timestamp, View,
+    Assignee, Color, Effort, Member, MemberId, MemberInstructions, MemberKind, MemberName,
+    MemberProfile, ModelName, Project, ProjectId, ReadyMadeSpecialist, Task, Timestamp, View,
 };
 
 use crate::error::ApplicationError;
@@ -185,6 +185,79 @@ impl TeamService {
         })
     }
 
+    /// Replaces the instructions of an AI specialist: how it works, what it
+    /// cares about, what it must never do. They reach every turn of the
+    /// specialist after Teamwright's own instructions. Text that is empty
+    /// or only whitespace takes them away.
+    ///
+    /// A person has none. Giving a person empty instructions is allowed and
+    /// changes nothing but the time of the last change.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if there is no such member, if the member is a
+    /// person and the instructions are not empty (`no_specialist`), if they
+    /// are longer than [`MemberInstructions::MAX_LENGTH`] characters, or if
+    /// storage fails.
+    pub fn set_instructions(
+        &self,
+        id: MemberId,
+        instructions: &str,
+    ) -> Result<Member, ApplicationError> {
+        let instructions = MemberInstructions::parse(instructions)?;
+        self.change(id, |member, _team, now| {
+            if member.kind() != MemberKind::Agent && !instructions.is_empty() {
+                return Err(ApplicationError::NotASpecialist {
+                    name: member.name().to_string(),
+                });
+            }
+            member.set_instructions(instructions, now)?;
+            Ok(())
+        })
+    }
+
+    /// Puts a ready-made specialist on the team of a project: an AI
+    /// specialist with the name, the description, the instructions, the
+    /// model and the effort of the role. If the team already has a member
+    /// of that name, the newcomer is numbered: "Firmware engineer 2".
+    ///
+    /// The member is an ordinary member from then on, and everything about
+    /// it can be changed.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if there is no such project or no ready-made
+    /// specialist with that key (`not_found`), or if storage fails.
+    pub fn add_ready_made(
+        &self,
+        project_id: ProjectId,
+        key: &str,
+    ) -> Result<Member, ApplicationError> {
+        let specialist =
+            ReadyMadeSpecialist::find(key).ok_or_else(|| ApplicationError::NotFound {
+                kind: "ready-made specialist",
+                id: key.to_owned(),
+            })?;
+        let project = self.require_project(project_id)?;
+        let team = self.members.list_for_project(project.id())?;
+        let name = free_name(&team, specialist.name)?;
+
+        let colors_in_use: Vec<Color> = team.iter().map(Member::color).collect();
+        let now = self.clock.now();
+        let mut member = Member::create(
+            project.id(),
+            name,
+            MemberKind::Agent,
+            specialist.description.to_owned(),
+            Member::color_for_newcomer(&colors_in_use),
+            now,
+        );
+        member.set_profile(profile_of_ready_made(specialist)?, now)?;
+        member.set_instructions(MemberInstructions::parse(specialist.instructions)?, now)?;
+        self.members.save(&member)?;
+        Ok(member)
+    }
+
     /// Takes a member off the team. The tasks that were given to the member
     /// are given to nobody. Its conversations stay on record, without it.
     /// A view that showed only its tasks shows everybody's again.
@@ -293,6 +366,42 @@ fn profile_for(
     Ok(MemberProfile {
         model: model.map(ModelName::parse).transpose()?,
         effort,
+    })
+}
+
+/// The model and the effort a ready-made specialist runs on.
+///
+/// # Errors
+///
+/// None in practice: the tests of the set prove that every model is a valid
+/// name.
+fn profile_of_ready_made(
+    specialist: &ReadyMadeSpecialist,
+) -> Result<MemberProfile, ApplicationError> {
+    Ok(MemberProfile {
+        model: Some(ModelName::parse(specialist.model)?),
+        effort: Some(specialist.effort),
+    })
+}
+
+/// The first name of the form "Name", "Name 2", "Name 3" and so on that
+/// nobody on the team has, capital and small letters counting as the same.
+fn free_name(team: &[Member], name: &str) -> Result<MemberName, ApplicationError> {
+    let taken = |candidate: &MemberName| refuse_name_in_use(team, candidate, None).is_err();
+    let first = MemberName::parse(name)?;
+    if !taken(&first) {
+        return Ok(first);
+    }
+    // A team of n members takes at most n of the numbered names, so one of
+    // the first n + 1 numbers after the plain name is free.
+    for number in 2..=team.len() + 2 {
+        let candidate = MemberName::parse(&format!("{name} {number}"))?;
+        if !taken(&candidate) {
+            return Ok(candidate);
+        }
+    }
+    Err(ApplicationError::MemberNameTaken {
+        name: first.to_string(),
     })
 }
 
@@ -768,6 +877,147 @@ mod tests {
         // nothing and is allowed.
         let unchanged = workspace.team.set_profile(dana.id(), None, None).unwrap();
         assert_eq!(unchanged.model(), None);
+    }
+
+    #[test]
+    fn a_specialist_is_given_instructions_of_its_own_and_they_are_stored() {
+        let workspace = workspace();
+        let project = workspace.project("Smart sensor node");
+        let member = workspace.agent(&project, "Hardware engineer");
+        assert!(member.instructions().is_empty());
+
+        let changed = workspace
+            .team
+            .set_instructions(member.id(), "  Check every pin.\r\nNever guess.  \n")
+            .unwrap();
+
+        assert_eq!(
+            changed.instructions().as_str(),
+            "Check every pin.\nNever guess."
+        );
+        assert_eq!(changed.updated_at(), workspace.clock.now());
+        assert_eq!(workspace.team.get(member.id()).unwrap(), changed);
+        let cleared = workspace
+            .team
+            .set_instructions(member.id(), " \n ")
+            .unwrap();
+        assert!(cleared.instructions().is_empty());
+    }
+
+    #[test]
+    fn instructions_longer_than_the_limit_are_refused_and_nothing_changes() {
+        let workspace = workspace();
+        let project = workspace.project("Smart sensor node");
+        let member = workspace.agent(&project, "Hardware engineer");
+
+        let error = workspace
+            .team
+            .set_instructions(member.id(), &"x".repeat(MemberInstructions::MAX_LENGTH + 1))
+            .unwrap_err();
+
+        assert_eq!(error.code(), "rule_broken");
+        assert!(error.to_string().contains("at most 4000 characters"));
+        assert!(
+            workspace
+                .team
+                .get(member.id())
+                .unwrap()
+                .instructions()
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn a_person_is_given_no_instructions() {
+        let workspace = workspace();
+        let project = workspace.project("Smart sensor node");
+        let dana = workspace
+            .team
+            .add(NewMember {
+                kind: MemberKind::Human,
+                ..new_agent(&project, "Dana")
+            })
+            .unwrap();
+
+        let error = workspace
+            .team
+            .set_instructions(dana.id(), "Be quick.")
+            .unwrap_err();
+
+        assert_eq!(error.code(), "no_specialist");
+        assert_eq!(error.to_string(), "Dana is not an AI specialist");
+        workspace.team.set_instructions(dana.id(), "").unwrap();
+    }
+
+    #[test]
+    fn a_ready_made_specialist_joins_with_everything_of_its_role() {
+        let workspace = workspace();
+        let project = workspace.project("Smart sensor node");
+        let role = ReadyMadeSpecialist::find("firmware-engineer").unwrap();
+
+        let member = workspace
+            .team
+            .add_ready_made(project.id(), "firmware-engineer")
+            .unwrap();
+
+        assert_eq!(member.name().as_str(), "Firmware engineer");
+        assert_eq!(member.kind(), MemberKind::Agent);
+        assert_eq!(member.responsibility(), role.description);
+        assert_eq!(member.instructions().as_str(), role.instructions);
+        assert_eq!(member.model().map(ModelName::as_str), Some(role.model));
+        assert_eq!(member.effort(), Some(role.effort));
+        assert_eq!(member.color(), Member::COLORS[0]);
+        assert_eq!(workspace.team.get(member.id()).unwrap(), member);
+    }
+
+    #[test]
+    fn a_second_ready_made_specialist_of_one_role_is_numbered() {
+        let workspace = workspace();
+        let project = workspace.project("Smart sensor node");
+        workspace.agent(&project, "RESEARCHER");
+        workspace.agent(&project, "Researcher 2");
+
+        let third = workspace
+            .team
+            .add_ready_made(project.id(), "researcher")
+            .unwrap();
+
+        assert_eq!(third.name().as_str(), "Researcher 3");
+    }
+
+    #[test]
+    fn a_ready_made_member_can_be_changed_like_any_other() {
+        let workspace = workspace();
+        let project = workspace.project("Smart sensor node");
+        let member = workspace
+            .team
+            .add_ready_made(project.id(), "technical-writer")
+            .unwrap();
+
+        workspace.team.rename(member.id(), "Manual writer").unwrap();
+        workspace.team.set_profile(member.id(), None, None).unwrap();
+        let changed = workspace
+            .team
+            .set_instructions(member.id(), "Write for a nurse.")
+            .unwrap();
+
+        assert_eq!(changed.name().as_str(), "Manual writer");
+        assert!(changed.profile().is_empty());
+        assert_eq!(changed.instructions().as_str(), "Write for a nurse.");
+    }
+
+    #[test]
+    fn an_unknown_ready_made_specialist_is_not_found() {
+        let workspace = workspace();
+        let project = workspace.project("Smart sensor node");
+
+        let error = workspace
+            .team
+            .add_ready_made(project.id(), "astronaut")
+            .unwrap_err();
+
+        assert_eq!(error.code(), "not_found");
+        assert!(workspace.names_on_team(&project).is_empty());
     }
 
     #[test]

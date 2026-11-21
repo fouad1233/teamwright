@@ -467,6 +467,35 @@ fn a_task_given_to_a_member_who_left_elsewhere_has_nobody() {
 }
 
 #[test]
+fn instructions_written_on_one_computer_and_a_rename_on_the_other_both_survive() {
+    let (desk, laptop, project, _) = desk_and_laptop();
+    let engineer = desk
+        .team
+        .add_ready_made(project.id(), "firmware-engineer")
+        .unwrap();
+    laptop.take_in_from(&desk);
+    assert_eq!(laptop.everything(), desk.everything());
+
+    desk.team
+        .set_instructions(engineer.id(), "Use the vendor's drivers.\nNever block.")
+        .unwrap();
+    laptop
+        .team
+        .rename(engineer.id(), "Sensor firmware engineer")
+        .unwrap();
+
+    keep_in_step(&desk, &laptop);
+
+    let merged = laptop.team.get(engineer.id()).unwrap();
+    assert_eq!(merged.name().as_str(), "Sensor firmware engineer");
+    assert_eq!(
+        merged.instructions().as_str(),
+        "Use the vendor's drivers.\nNever block."
+    );
+    assert_eq!(laptop.everything(), desk.everything());
+}
+
+#[test]
 fn after_a_stamp_from_the_future_the_next_change_here_is_later_still() {
     let (desk, laptop, project, _) = desk_and_laptop();
     let tomorrow = Utc::now().timestamp_millis() + 86_400_000;

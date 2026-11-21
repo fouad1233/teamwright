@@ -71,6 +71,56 @@ impl MemberProfile {
     }
 }
 
+/// What an AI specialist is told about how it works, in the manager's
+/// words: what it cares about, how it checks its work, what it must never
+/// do.
+///
+/// The instructions reach every turn of the specialist after the fixed
+/// instructions of Teamwright, and never instead of them. They may be
+/// empty. Line breaks inside are kept, because instructions are often a
+/// list; whitespace at both ends is removed, and every line break is
+/// written as a single `\n`.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
+pub struct MemberInstructions(String);
+
+impl MemberInstructions {
+    /// The largest number of characters instructions can have: about a
+    /// page, or a thousand tokens on every turn of the specialist.
+    pub const MAX_LENGTH: usize = 4_000;
+
+    /// Checks and tidies instructions.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DomainError::TextTooLong`] if the tidied text is longer
+    /// than [`Self::MAX_LENGTH`] characters.
+    pub fn parse(raw: &str) -> Result<Self, DomainError> {
+        let text = raw.replace("\r\n", "\n").replace('\r', "\n");
+        let text = text.trim();
+        let actual_length = text.chars().count();
+        if actual_length > Self::MAX_LENGTH {
+            return Err(DomainError::TextTooLong {
+                field: "instructions of a specialist",
+                max_length: Self::MAX_LENGTH,
+                actual_length,
+            });
+        }
+        Ok(Self(text.to_owned()))
+    }
+
+    /// The instructions as text. Empty if there are none.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    /// Whether there are no instructions.
+    #[must_use]
+    pub const fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+}
+
 /// The plain data of a team member, used to recreate one that was stored.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MemberSnapshot {
@@ -86,6 +136,8 @@ pub struct MemberSnapshot {
     pub responsibility: String,
     /// The model and the effort of an AI specialist. Empty for a person.
     pub profile: MemberProfile,
+    /// The instructions of an AI specialist. Empty for a person.
+    pub instructions: MemberInstructions,
     /// The color the member is shown in.
     pub color: Color,
     /// When the member joined the team.
@@ -107,6 +159,7 @@ pub struct Member {
     kind: MemberKind,
     responsibility: String,
     profile: MemberProfile,
+    instructions: MemberInstructions,
     color: Color,
     joined_at: Timestamp,
     updated_at: Timestamp,
@@ -140,7 +193,7 @@ impl Member {
     }
 
     /// Puts someone on the team of a project. The member starts with the
-    /// empty profile.
+    /// empty profile and without instructions.
     #[must_use]
     pub fn create(
         project_id: ProjectId,
@@ -157,6 +210,7 @@ impl Member {
             kind,
             responsibility,
             profile: MemberProfile::default(),
+            instructions: MemberInstructions::default(),
             color,
             joined_at: now,
             updated_at: now,
@@ -168,9 +222,12 @@ impl Member {
     /// # Errors
     ///
     /// Returns [`DomainError::ProfileOfPerson`] if the data describes a
-    /// person with a model or an effort.
+    /// person with a model or an effort, and
+    /// [`DomainError::InstructionsOfPerson`] if it describes a person with
+    /// instructions.
     pub fn restore(snapshot: MemberSnapshot) -> Result<Self, DomainError> {
         refuse_profile_of_person(snapshot.kind, &snapshot.profile)?;
+        refuse_instructions_of_person(snapshot.kind, &snapshot.instructions)?;
         Ok(Self {
             id: snapshot.id,
             project_id: snapshot.project_id,
@@ -178,6 +235,7 @@ impl Member {
             kind: snapshot.kind,
             responsibility: snapshot.responsibility,
             profile: snapshot.profile,
+            instructions: snapshot.instructions,
             color: snapshot.color,
             joined_at: snapshot.joined_at,
             updated_at: snapshot.updated_at,
@@ -233,6 +291,13 @@ impl Member {
         self.profile.effort
     }
 
+    /// The instructions of an AI specialist, in the manager's words. Empty
+    /// for a person, and for a specialist that has none.
+    #[must_use]
+    pub const fn instructions(&self) -> &MemberInstructions {
+        &self.instructions
+    }
+
     /// The color the member is shown in.
     #[must_use]
     pub const fn color(&self) -> Color {
@@ -279,6 +344,34 @@ impl Member {
         self.updated_at = now;
         Ok(())
     }
+
+    /// Replaces the instructions of the member.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DomainError::InstructionsOfPerson`] if the member is a
+    /// person and the instructions are not empty. Nothing is changed then.
+    pub fn set_instructions(
+        &mut self,
+        instructions: MemberInstructions,
+        now: Timestamp,
+    ) -> Result<(), DomainError> {
+        refuse_instructions_of_person(self.kind, &instructions)?;
+        self.instructions = instructions;
+        self.updated_at = now;
+        Ok(())
+    }
+}
+
+/// Refuses instructions for a person. Only an AI specialist follows them.
+fn refuse_instructions_of_person(
+    kind: MemberKind,
+    instructions: &MemberInstructions,
+) -> Result<(), DomainError> {
+    if kind == MemberKind::Human && !instructions.is_empty() {
+        return Err(DomainError::InstructionsOfPerson);
+    }
+    Ok(())
 }
 
 /// Refuses a model or an effort for a person. Only an AI specialist runs on
@@ -370,6 +463,7 @@ mod tests {
             kind: MemberKind::Human,
             responsibility: String::new(),
             profile: MemberProfile::default(),
+            instructions: MemberInstructions::default(),
             color: Color::Pink,
             joined_at: moment(9),
             updated_at: moment(12),
@@ -466,6 +560,7 @@ mod tests {
             kind: MemberKind::Human,
             responsibility: String::new(),
             profile: opus_at_high_effort(),
+            instructions: MemberInstructions::default(),
             color: Color::Pink,
             joined_at: moment(9),
             updated_at: moment(9),
@@ -474,6 +569,102 @@ mod tests {
         assert_eq!(
             Member::restore(snapshot).unwrap_err(),
             DomainError::ProfileOfPerson
+        );
+    }
+
+    fn never_guess_a_pin() -> MemberInstructions {
+        MemberInstructions::parse("Never guess a pin.\nAsk instead.").unwrap()
+    }
+
+    #[test]
+    fn a_new_member_has_no_instructions() {
+        assert!(hardware_engineer().instructions().is_empty());
+        assert_eq!(hardware_engineer().instructions().as_str(), "");
+    }
+
+    #[test]
+    fn a_specialist_can_be_given_instructions_and_lose_them_again() {
+        let mut member = hardware_engineer();
+
+        member
+            .set_instructions(never_guess_a_pin(), moment(10))
+            .unwrap();
+        assert_eq!(
+            member.instructions().as_str(),
+            "Never guess a pin.\nAsk instead."
+        );
+        assert_eq!(member.updated_at(), moment(10));
+
+        member
+            .set_instructions(MemberInstructions::default(), moment(11))
+            .unwrap();
+        assert!(member.instructions().is_empty());
+        assert_eq!(member.updated_at(), moment(11));
+    }
+
+    #[test]
+    fn a_person_has_no_instructions() {
+        let mut person = dana();
+
+        let error = person
+            .set_instructions(never_guess_a_pin(), moment(10))
+            .unwrap_err();
+
+        assert_eq!(error, DomainError::InstructionsOfPerson);
+        assert!(person.instructions().is_empty());
+        assert_eq!(person.updated_at(), moment(9));
+        person
+            .set_instructions(MemberInstructions::default(), moment(10))
+            .unwrap();
+    }
+
+    #[test]
+    fn stored_data_of_a_person_with_instructions_is_refused() {
+        let snapshot = MemberSnapshot {
+            id: MemberId::generate(),
+            project_id: ProjectId::generate(),
+            name: MemberName::parse("Dana").unwrap(),
+            kind: MemberKind::Human,
+            responsibility: String::new(),
+            profile: MemberProfile::default(),
+            instructions: never_guess_a_pin(),
+            color: Color::Pink,
+            joined_at: moment(9),
+            updated_at: moment(9),
+        };
+
+        assert_eq!(
+            Member::restore(snapshot).unwrap_err(),
+            DomainError::InstructionsOfPerson
+        );
+    }
+
+    #[test]
+    fn instructions_keep_their_lines_and_lose_the_space_around_them() {
+        let instructions =
+            MemberInstructions::parse("\r\n  - Check the units.\r\n- Say what you left out.\n\n")
+                .unwrap();
+
+        assert_eq!(
+            instructions.as_str(),
+            "- Check the units.\n- Say what you left out."
+        );
+        assert!(MemberInstructions::parse(" \n\t ").unwrap().is_empty());
+    }
+
+    #[test]
+    fn instructions_have_a_limit_of_length_counted_in_characters() {
+        let longest_allowed = "ü".repeat(MemberInstructions::MAX_LENGTH);
+        let too_long = "ü".repeat(MemberInstructions::MAX_LENGTH + 1);
+
+        assert!(MemberInstructions::parse(&longest_allowed).is_ok());
+        assert_eq!(
+            MemberInstructions::parse(&too_long).unwrap_err(),
+            DomainError::TextTooLong {
+                field: "instructions of a specialist",
+                max_length: MemberInstructions::MAX_LENGTH,
+                actual_length: MemberInstructions::MAX_LENGTH + 1,
+            }
         );
     }
 

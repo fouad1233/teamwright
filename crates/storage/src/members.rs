@@ -7,7 +7,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use teamwright_application::{MemberRepository, StorageError};
 use teamwright_domain::{
-    DomainError, Member, MemberId, MemberName, MemberProfile, MemberSnapshot, ModelName, ProjectId,
+    DomainError, Member, MemberId, MemberInstructions, MemberName, MemberProfile, MemberSnapshot,
+    ModelName, ProjectId,
 };
 
 use crate::codec;
@@ -16,17 +17,18 @@ use crate::error::DatabaseError;
 use crate::operations::{Entity, OperationRecorder};
 
 /// The columns of the `members` table that every query reads.
-const MEMBER_COLUMNS: &str =
-    "id, project_id, name, kind, responsibility, model, effort, color, joined_at, updated_at";
+const MEMBER_COLUMNS: &str = "id, project_id, name, kind, responsibility, model, effort, \
+     instructions, color, joined_at, updated_at";
 
 // The row is updated in place, like every row of this database.
 const UPSERT_MEMBER: &str = "
     INSERT INTO members (
-        id, project_id, name, kind, responsibility, model, effort, color, joined_at, updated_at
+        id, project_id, name, kind, responsibility, model, effort, instructions, color,
+        joined_at, updated_at
     )
     VALUES (
-        :id, :project_id, :name, :kind, :responsibility, :model, :effort, :color, :joined_at,
-        :updated_at
+        :id, :project_id, :name, :kind, :responsibility, :model, :effort, :instructions, :color,
+        :joined_at, :updated_at
     )
     ON CONFLICT (id) DO UPDATE SET
         project_id = excluded.project_id,
@@ -35,6 +37,7 @@ const UPSERT_MEMBER: &str = "
         responsibility = excluded.responsibility,
         model = excluded.model,
         effort = excluded.effort,
+        instructions = excluded.instructions,
         color = excluded.color,
         joined_at = excluded.joined_at,
         updated_at = excluded.updated_at";
@@ -51,6 +54,10 @@ struct MemberRecord {
     model: Option<String>,
     /// The effort of an AI specialist; `None` leaves it to the program.
     effort: Option<String>,
+    /// The instructions of an AI specialist; empty if there are none. A
+    /// state logged before instructions existed has none.
+    #[serde(default)]
+    instructions: String,
     color: String,
     joined_at: String,
     updated_at: String,
@@ -67,6 +74,7 @@ impl MemberRecord {
             responsibility: member.responsibility().to_owned(),
             model: member.model().map(ToString::to_string),
             effort: member.effort().map(|effort| effort.as_str().to_owned()),
+            instructions: member.instructions().as_str().to_owned(),
             color: member.color().to_string(),
             joined_at: codec::moment_to_text(member.joined_at()),
             updated_at: codec::moment_to_text(member.updated_at()),
@@ -83,6 +91,7 @@ impl MemberRecord {
             responsibility: row.get("responsibility")?,
             model: row.get("model")?,
             effort: row.get("effort")?,
+            instructions: row.get("instructions")?,
             color: row.get("color")?,
             joined_at: row.get("joined_at")?,
             updated_at: row.get("updated_at")?,
@@ -109,6 +118,7 @@ impl MemberRecord {
             kind: codec::parse(&self.kind)?,
             responsibility: self.responsibility,
             profile,
+            instructions: MemberInstructions::parse(&self.instructions).map_err(broken)?,
             color: codec::parse(&self.color)?,
             joined_at: codec::moment_from_text(&self.joined_at)?,
             updated_at: codec::moment_from_text(&self.updated_at)?,
@@ -226,6 +236,7 @@ fn write_rows(transaction: &Transaction<'_>, record: &MemberRecord) -> Result<()
             ":responsibility": record.responsibility,
             ":model": record.model,
             ":effort": record.effort,
+            ":instructions": record.instructions,
             ":color": record.color,
             ":joined_at": record.joined_at,
             ":updated_at": record.updated_at,
@@ -249,6 +260,7 @@ mod tests {
             responsibility: String::new(),
             model: Some("sonnet".to_owned()),
             effort: Some("high".to_owned()),
+            instructions: "Check every value against the data sheet.".to_owned(),
             color: "teal".to_owned(),
             joined_at: "2026-11-11T09:00:00.000Z".to_owned(),
             updated_at: "2026-11-11T09:00:00.000Z".to_owned(),
@@ -264,9 +276,45 @@ mod tests {
     }
 
     #[test]
+    fn stored_instructions_are_read_back() {
+        let member = stored_agent().into_member().unwrap();
+
+        assert_eq!(
+            member.instructions().as_str(),
+            "Check every value against the data sheet."
+        );
+    }
+
+    #[test]
+    fn a_state_logged_before_instructions_existed_has_none() {
+        let mut state = serde_json::to_value(stored_agent()).unwrap();
+        state.as_object_mut().unwrap().remove("instructions");
+
+        let record: MemberRecord = serde_json::from_value(state).unwrap();
+
+        assert!(record.into_member().unwrap().instructions().is_empty());
+    }
+
+    #[test]
+    fn a_stored_person_with_instructions_is_damaged_data() {
+        let record = MemberRecord {
+            kind: "human".to_owned(),
+            model: None,
+            effort: None,
+            ..stored_agent()
+        };
+
+        assert!(matches!(
+            record.into_member(),
+            Err(DatabaseError::Damaged(_))
+        ));
+    }
+
+    #[test]
     fn a_stored_person_with_a_profile_is_damaged_data() {
         let record = MemberRecord {
             kind: "human".to_owned(),
+            instructions: String::new(),
             ..stored_agent()
         };
 

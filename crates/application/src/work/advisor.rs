@@ -15,9 +15,9 @@ use std::path::PathBuf;
 
 use teamwright_domain::{
     Assignee, Conversation, ConversationId, Effort, InterviewAnswer, InterviewQuestion, Member,
-    MemberId, MemberKind, MemberName, MemberProfile, ModelName, Priority, Project, ProjectId,
-    Proposal, ProposedMember, ProposedOwner, ProposedTask, Rank, Schedule, Task, TaskDraft,
-    TaskTitle, Turn, TurnOrigin,
+    MemberId, MemberInstructions, MemberKind, MemberName, MemberProfile, ModelName, Priority,
+    Project, ProjectId, Proposal, ProposedMember, ProposedOwner, ProposedTask, Rank,
+    ReadyMadeSpecialist, Schedule, Task, TaskDraft, TaskTitle, Turn, TurnOrigin,
 };
 
 use super::{
@@ -274,6 +274,11 @@ impl WorkService {
                 },
                 now,
             )?;
+            // A member named as a ready-made specialist starts with the
+            // instructions written for that role (decision 0031).
+            if let Some(role) = ReadyMadeSpecialist::named(proposed.name.as_str()) {
+                member.set_instructions(MemberInstructions::parse(role.instructions)?, now)?;
+            }
             colors.push(color);
             by_name.insert(key, member.id());
             newcomers.push(member);
@@ -619,6 +624,12 @@ pub fn instructions_for_advisor(
             "- Propose the smallest team that can do the job. Every member costs tokens and adds \
              coordination. One specialist for each discipline the project really needs, never \
              two for the same discipline. A project with one discipline gets one specialist.",
+        ]
+        .map(str::to_owned),
+    );
+    lines.extend(ready_made_lines());
+    lines.extend(
+        [
             "- A specialist is an AI. It reads and writes files in the folder of the project. It \
              cannot run programs, cannot use the internet, and has no hands.",
             "- Work that needs hands, money or an account is the manager's: ordering parts, \
@@ -651,6 +662,25 @@ pub fn instructions_for_advisor(
         .map(str::to_owned),
     );
     lines.join("\n")
+}
+
+/// The lines that tell the Advisor about the ready-made specialists: a
+/// member it proposes under the exact name of one starts with the
+/// instructions written for that role (decision 0031).
+fn ready_made_lines() -> Vec<String> {
+    let mut lines = vec![
+        "- Teamwright has ready-made specialists, each with instructions written for its role. \
+         When one of them fits a member you propose, give that member exactly its name below; \
+         the member then starts with those instructions. Give a member another name only when \
+         none of these fits:"
+            .to_owned(),
+    ];
+    lines.extend(
+        ReadyMadeSpecialist::ALL
+            .iter()
+            .map(|role| format!("    {}: {}", role.name, role.description)),
+    );
+    lines
 }
 
 #[cfg(test)]
