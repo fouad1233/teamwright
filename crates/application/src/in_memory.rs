@@ -1004,3 +1004,86 @@ impl Clock for ManualClock {
         *lock(&self.now)
     }
 }
+
+/// Keeps the coordinators, their budgets and their records in memory.
+#[derive(Debug, Default)]
+pub struct InMemoryCoordinatorRepository {
+    coordinators: Mutex<BTreeMap<ProjectId, teamwright_domain::Coordinator>>,
+    budgets:
+        Mutex<BTreeMap<(ProjectId, teamwright_domain::BudgetScope), teamwright_domain::Budget>>,
+    entries: Mutex<Vec<teamwright_domain::CoordinatorEntry>>,
+}
+
+impl InMemoryCoordinatorRepository {
+    /// The entries of a project, the newest first.
+    fn entries_of(&self, project_id: ProjectId) -> Vec<teamwright_domain::CoordinatorEntry> {
+        let mut entries: Vec<_> = lock(&self.entries)
+            .iter()
+            .filter(|entry| entry.project_id == project_id)
+            .cloned()
+            .collect();
+        entries.sort_by_key(|entry| std::cmp::Reverse((entry.at, entry.id)));
+        entries
+    }
+}
+
+impl crate::ports::CoordinatorRepository for InMemoryCoordinatorRepository {
+    fn coordinator_of(
+        &self,
+        project_id: ProjectId,
+    ) -> Result<Option<teamwright_domain::Coordinator>, StorageError> {
+        Ok(lock(&self.coordinators).get(&project_id).cloned())
+    }
+
+    fn save_coordinator(
+        &self,
+        coordinator: &teamwright_domain::Coordinator,
+    ) -> Result<(), StorageError> {
+        lock(&self.coordinators).insert(coordinator.project_id(), coordinator.clone());
+        Ok(())
+    }
+
+    fn budgets_of_project(
+        &self,
+        project_id: ProjectId,
+    ) -> Result<Vec<teamwright_domain::Budget>, StorageError> {
+        Ok(lock(&self.budgets)
+            .values()
+            .filter(|budget| budget.project_id() == project_id)
+            .cloned()
+            .collect())
+    }
+
+    fn save_budget(&self, budget: &teamwright_domain::Budget) -> Result<(), StorageError> {
+        lock(&self.budgets).insert((budget.project_id(), budget.scope()), budget.clone());
+        Ok(())
+    }
+
+    fn latest_entries(
+        &self,
+        project_id: ProjectId,
+        most: usize,
+    ) -> Result<Vec<teamwright_domain::CoordinatorEntry>, StorageError> {
+        let mut entries = self.entries_of(project_id);
+        entries.truncate(most);
+        Ok(entries)
+    }
+
+    fn entries_since(
+        &self,
+        project_id: ProjectId,
+        since: Timestamp,
+    ) -> Result<Vec<teamwright_domain::CoordinatorEntry>, StorageError> {
+        let mut entries = self.entries_of(project_id);
+        entries.retain(|entry| entry.at >= since);
+        Ok(entries)
+    }
+
+    fn add_entries(
+        &self,
+        entries: &[teamwright_domain::CoordinatorEntry],
+    ) -> Result<(), StorageError> {
+        lock(&self.entries).extend(entries.iter().cloned());
+        Ok(())
+    }
+}

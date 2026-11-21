@@ -21,6 +21,7 @@ pub mod appearance;
 pub mod areas;
 pub mod checklists;
 pub mod clock;
+pub mod coordinator;
 pub mod digests;
 pub mod error;
 pub mod files;
@@ -58,6 +59,11 @@ pub use appearance::{AppearanceService, Theme, ThemeStore};
 pub use areas::AreaService;
 pub use checklists::ChecklistService;
 pub use clock::SystemClock;
+pub use coordinator::{
+    BudgetQuestionOfProject, CoordinatorPorts, CoordinatorService, CoordinatorState,
+    MESSAGE_TURNS_PER_HOUR, Plan, Situation, Spending, Start, WAKE_REQUEST, WaitReason, Waiting,
+    Wake, next_steps, spending_of,
+};
 pub use digests::{
     ConversationsOfFolder, DigestService, DigestToKeep, EarlierConversationCard, group_by_folder,
     newest_kept_first,
@@ -93,11 +99,11 @@ pub use notifications::{
 };
 pub use places::{ChosenPlaces, PlacesService, ProjectPlaces, REFERENCES_FOLDER};
 pub use ports::{
-    ApprovedPlan, AreaRepository, Clock, ConversationRepository, DigestRepository, DiskEntry,
-    EarlierConversations, FileSystem, FolderReader, FoundConversation, MemberRepository,
-    MemoryRepository, PlacesRepository, PlanningRepository, ProjectFolders, ProjectRepository,
-    SprintRepository, StorageError, TagRepository, TaskRepository, TeamworkRepository,
-    ViewRepository, WorkListener,
+    ApprovedPlan, AreaRepository, Clock, ConversationRepository, CoordinatorRepository,
+    DigestRepository, DiskEntry, EarlierConversations, FileSystem, FolderReader, FoundConversation,
+    MemberRepository, MemoryRepository, PlacesRepository, PlanningRepository, ProjectFolders,
+    ProjectRepository, SprintRepository, StorageError, TagRepository, TaskRepository,
+    TeamworkRepository, ViewRepository, WorkListener,
 };
 pub use project_events::{
     Agent, Happening, ProjectEvent, StatusOfEvent, TaskOfEvent, WaitsFor,

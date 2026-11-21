@@ -722,3 +722,78 @@ pub trait Clock: Send + Sync {
         moment.date_naive()
     }
 }
+
+/// Stores the coordinator of each project, its budgets and the record of
+/// what it did ([decision 0037](../../../docs/decisions/0037-the-coordinator.md)).
+pub trait CoordinatorRepository: Send + Sync {
+    /// The coordinator of a project, if the manager has ever changed it.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if stored data could not be read.
+    fn coordinator_of(
+        &self,
+        project_id: ProjectId,
+    ) -> Result<Option<teamwright_domain::Coordinator>, StorageError>;
+
+    /// Stores the coordinator of a project, replacing the stored one.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if it could not be written.
+    fn save_coordinator(
+        &self,
+        coordinator: &teamwright_domain::Coordinator,
+    ) -> Result<(), StorageError>;
+
+    /// Lists the budgets of a project, also those without tokens.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if stored data could not be read.
+    fn budgets_of_project(
+        &self,
+        project_id: ProjectId,
+    ) -> Result<Vec<teamwright_domain::Budget>, StorageError>;
+
+    /// Stores a budget, replacing the stored budget of the same scope.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if it could not be written.
+    fn save_budget(&self, budget: &teamwright_domain::Budget) -> Result<(), StorageError>;
+
+    /// Lists the latest entries of the record of a project's coordinator,
+    /// at most `most`, the newest first.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if stored data could not be read.
+    fn latest_entries(
+        &self,
+        project_id: ProjectId,
+        most: usize,
+    ) -> Result<Vec<teamwright_domain::CoordinatorEntry>, StorageError>;
+
+    /// Lists the entries of the record of a project's coordinator written
+    /// at `since` or later, the newest first.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if stored data could not be read.
+    fn entries_since(
+        &self,
+        project_id: ProjectId,
+        since: Timestamp,
+    ) -> Result<Vec<teamwright_domain::CoordinatorEntry>, StorageError>;
+
+    /// Adds entries to the record. An entry never changes.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if they could not be written.
+    fn add_entries(
+        &self,
+        entries: &[teamwright_domain::CoordinatorEntry],
+    ) -> Result<(), StorageError>;
+}
