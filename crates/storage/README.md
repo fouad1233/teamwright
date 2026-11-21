@@ -29,6 +29,7 @@ involved.
 | `planning` | The interviews and the proposals of the Advisor, as parts of their turns; `SqlitePlanningRepository`, which stores an approved plan |
 | `teamwork` | `SqliteTeamworkRepository`: the handoffs of tasks with their files, and the messages between specialists |
 | `memory` | `SqliteMemoryRepository`: the entries of the memory of the projects |
+| `digests` | `SqliteDigestRepository`: the digests of earlier conversations kept with a project (migration 0028, entity `digest`, merged whole, logged and synced; [decision 0041](../../docs/decisions/0041-earlier-conversations-as-digests.md)) |
 | `places` | `SqlitePlacesRepository`: the work folder and the reference folders chosen for each project |
 | `operations` | The operation log, the hybrid logical clock, and the recorder that keeps the stamps of the fields |
 | `merge` | How each kind of thing merges field by field, and `MergedState`, a row of `merged_states` |

@@ -167,6 +167,17 @@ The shell is where the work of an AI specialist meets the outside world
   decision and the contract of a handoff into entries, puts memory into the
   brief, and its simulated specialist searches memory and, on every other
   task, remembers a fact.
+- **Earlier conversations.** `commands/digests.rs` finds the conversations
+  held with Claude Code on this computer (`find_earlier_conversations`),
+  makes the digest of one (`draft_digest`), and keeps, lists and removes
+  digests (`keep_digest`, `list_digests`, `remove_digest`); the wire types
+  are in `dto/digests.rs`
+  ([decision 0041](../../docs/decisions/0041-earlier-conversations-as-digests.md)).
+  The Advisor place shows the kept digests under the form that starts
+  planning, and a dialog lists, filters and imports conversations
+  (`features/advisor/EarlierConversations.tsx`). The demo pretends to find
+  seven made-up conversations (`shared/api/demo/earlierConversations.ts`);
+  the empty demo finds none.
 - **What the agents spent.** `project_usage` answers with what every member,
   the Advisor and those who left have spent (`ProjectUsageDto`: the tokens
   by kind and in all, the turns that ended, the model of the latest turn,

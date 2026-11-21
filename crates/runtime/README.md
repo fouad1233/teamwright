@@ -21,6 +21,7 @@ format of its output.
 | `sign_in` | Reads the answer of `claude auth status --json` |
 | `team_bus` | The tool server through which a specialist asks the manager to decide, hands its result over, writes to a teammate, and remembers and searches in the memory of the project, and the Advisor interviews and proposes |
 | `memory_file` | `MemoryFile`: the current entries of the memory of a project in a file of their own for one turn, which the team bus reads (`entries_from`) and which is removed when the turn is dropped |
+| `earlier` | `EarlierConversationsOnDisk`: reads the conversations Claude Code keeps in `projects` of its settings folder, tolerant of lines it does not know, for digests ([decision 0041](../../docs/decisions/0041-earlier-conversations-as-digests.md)). The format is not published; the ignored test `reads_the_conversations_of_this_computer` reads the real ones and prints counts only |
 
 ## How a turn runs
 

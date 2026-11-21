@@ -51,6 +51,7 @@ was considered.
 | [0033](0033-work-in-progress-limits-and-templates.md) | Limits on the work in a status as a signal, and templates a project starts from | Accepted |
 | [0034](0034-what-happened-is-read-from-the-log.md) | Read what happened from the log, and tell the pace of the team as a range | Accepted |
 | [0036](0036-project-memory.md) | Project memory: decisions, facts and contracts that are replaced, never changed; a plain search; the bus reads memory from a file of the turn | Accepted |
+| [0041](0041-earlier-conversations-as-digests.md) | Import earlier Claude Code conversations as digests made by rules, kept by the manager, read by the Advisor only | Accepted |
 
 ## Template
 
