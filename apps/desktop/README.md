@@ -745,3 +745,16 @@ Run from the repository root.
 | Types, lints, formatting and tests | `npm run check` |
 
 See [development](../../docs/development/README.md) for the rest.
+
+## The coordinator
+
+The coordinator acts on a thread of its own (`src-tauri/src/coordinating.rs`),
+woken through a channel by the end of a turn, the task commands, its own
+commands, syncing, and the start of the program; afterwards the interface
+hears `coordinator-changed`. The interface is in `src/features/coordinator`:
+a section of the Team place (the switch, the limit, the budgets of the
+project and of each specialist, what waits with a press to accept, and the
+record), the budget in the panel of a task, and the questions about used-up
+budgets at the top of the inbox. The demo copies the rule in
+`shared/api/demo/coordinator.ts` and acts at once when nudged
+([decision 0037](../../docs/decisions/0037-the-coordinator.md)).

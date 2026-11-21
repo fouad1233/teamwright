@@ -111,7 +111,11 @@ sequenceDiagram
 
 Points to notice:
 
-- **The coordinator is code.** It decides what runs next from the task
+- **The coordinator is code** ([decision 0037](../decisions/0037-the-coordinator.md)):
+  the pure rule `next_steps` in the application, run by the shell on a
+  thread that waits for a nudge (a turn ended, a task changed, the manager
+  answered) and on the one computer where the manager switched it on. It
+  decides what runs next from the task
   dependencies, the state of each team member, and the budgets. It never asks
   a model.
 - **Asking does not block.** A team member that needs the manager records a

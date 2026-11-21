@@ -37,6 +37,7 @@ done with them. It does no input or output.
 | `secrets` | `hide_secrets`: replaces what looks like a secret (known tokens, long random runs, `password=…`, the word after `Bearer`, credentials in an address, private keys) by `[hidden]` |
 | `teamwork` | `Handoff`, `HandoffContent`: the result of a task for whoever builds on it (a summary, an interface contract, the files that hold it as `PathInFolder`s); `TeamMessage`, `MessageKind`, `MessageDelivery`: a question or a note from one specialist to another and when it reached its receiver; `SaidIn`: who said it, in which conversation and turn |
 | `memory` | `MemoryEntry`, `MemoryKind`, `MemoryContent`: an entry of the memory of a project, a decision, a fact or a contract, with a short title and a text; `MemoryOrigin`, `MemorySource`: where it came from (the manager, a specialist, an answered decision request, a handoff); `SearchWords`: the words of a search and whether an entry fits them ([decision 0036](../../docs/decisions/0036-project-memory.md)) |
+| `coordination` | `Coordinator` (off, or on one computer; `ConcurrencyLimit` 1 to 8, 2 at first), `TokenBudget` (1,000 to 10^12 tokens, with two raises in round numbers), `Budget` of a `BudgetScope` (project, member or task) with its `BudgetQuestion`, asked once until answered or changed; `CoordinatorEntry`, one sentence of the coordinator's record |
 | `error` | `DomainError`: every rule that can be broken |
 | `time` | `Timestamp`, `CalendarDate` |
 

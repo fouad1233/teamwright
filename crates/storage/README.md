@@ -510,3 +510,13 @@ in memory.
 SQLite is compiled from source into the program (`rusqlite` with the
 `bundled` feature), so a C compiler is needed to build this crate, but users
 need no database installed.
+
+## The coordinator (migration 26)
+
+`SqliteCoordinatorRepository` keeps the coordinator of each project
+(`coordinators`, entity `coordinator`, merging its limit and its switch as
+separate fields), its budgets (`budgets`, entity `budget`, merging tokens
+and question separately; the identifier is that of the project, member or
+task) and its record (`coordinator_entries`, entity `coordinator_entry`,
+never changed). All are logged and synced, and go with their project
+([decision 0037](../../docs/decisions/0037-the-coordinator.md)).
