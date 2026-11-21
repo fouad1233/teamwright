@@ -122,6 +122,36 @@ describe('the tasks a filter shows', () => {
   });
 });
 
+describe('a filter by tag', () => {
+  const tagged = [
+    task('emc', { tagIds: ['emc'] }),
+    task('both', { tagIds: ['power', 'emc'], statusId: 'shipped' }),
+    task('none'),
+    task('child', { parentId: 'none', tagIds: ['emc'] }),
+  ];
+  const byTag = { assignee: { kind: 'anyone' }, hidesFinished: false, tagId: 'emc' } as const;
+
+  it('shows the tasks that carry the tag, and a task for one of its subtasks', () => {
+    expect(isFiltered(byTag)).toBe(true);
+    expect(shown(tagged, byTag)).toEqual(['both', 'child', 'emc', 'none']);
+    expect(shown(tagged, { ...byTag, tagId: 'power' })).toEqual(['both']);
+    expect(shown(tagged, { ...byTag, hidesFinished: true })).toEqual(['child', 'emc', 'none']);
+  });
+
+  it('says the tag in words, and says so when the tag was removed', () => {
+    const tags = [{ id: 'emc', projectId: 'p', name: 'EMC', color: 'red' } as const];
+
+    expect(filterInWords(byTag, [], tags)).toBe('Shows the tasks tagged "EMC"');
+    expect(filterInWords({ ...byTag, assignee: { kind: 'manager' } }, [], tags)).toBe(
+      'Shows your tasks tagged "EMC". New ones are yours',
+    );
+    expect(filterInWords({ ...byTag, tagId: 'gone' }, [], tags)).toBe(
+      'Shows the tasks with a tag that was removed',
+    );
+    expect(filterInWords({ ...byTag, tagId: null }, [], tags)).toBeNull();
+  });
+});
+
 describe('a filter in words', () => {
   const members = [{ id: 'engineer', name: 'Firmware engineer' } as Member];
 

@@ -15,6 +15,8 @@ import type { View, ViewAssignee, ViewFilter } from '@/shared/api/types';
 import { classNames } from '@/shared/lib/classNames';
 import menuStyles from '@/shared/ui/Menu.module.css';
 
+import { TagChip } from '../tags/TagChip';
+import { useTags } from '../tags/tagQueries';
 import { AssigneeAvatar } from '../team/Assignee';
 import { useTeamMembers } from '../team/TeamContext';
 import { isFilterable } from './viewModel';
@@ -97,7 +99,7 @@ export function ViewMenu({
                   sideOffset={2}
                   aria-label="Which tasks the view shows"
                 >
-                  <FilterItems filter={view.filter} onFilter={onFilter} />
+                  <FilterItems view={view} onFilter={onFilter} />
                 </DropdownMenu.SubContent>
               </DropdownMenu.Portal>
             </DropdownMenu.Sub>
@@ -159,13 +161,21 @@ function keyOf(assignee: ViewAssignee): string {
 }
 
 interface FilterItemsProps {
-  filter: ViewFilter;
+  view: View;
   onFilter: (filter: ViewFilter) => void;
 }
 
-/** Whose tasks the view shows, and whether it hides the finished ones. */
-function FilterItems({ filter, onFilter }: FilterItemsProps) {
+/** The choice of a tag that stands for the tasks with any tag. */
+const ANY_TAG = 'any';
+
+/**
+ * Whose tasks the view shows, whether it hides the finished ones, and the
+ * tag the tasks carry, once the project has tags.
+ */
+function FilterItems({ view, onFilter }: FilterItemsProps) {
+  const filter = view.filter;
   const members = useTeamMembers();
+  const tags = useTags(view.projectId).data ?? [];
   const choices: { assignee: ViewAssignee; label: string; mark: ReactElement }[] = [
     { assignee: { kind: 'anyone' }, label: 'Everybody', mark: <UsersRound /> },
     {
@@ -230,6 +240,39 @@ function FilterItems({ filter, onFilter }: FilterItemsProps) {
         </span>
         <span className={menuStyles.label}>Hide finished tasks</span>
       </DropdownMenu.CheckboxItem>
+      {tags.length > 0 && (
+        <>
+          <DropdownMenu.Separator className={menuStyles.separator} />
+          <DropdownMenu.Label className={classNames('label', styles.menuHeading)}>
+            With the tag
+          </DropdownMenu.Label>
+          <DropdownMenu.RadioGroup
+            value={filter.tagId ?? ANY_TAG}
+            onValueChange={(chosen) => {
+              onFilter({ ...filter, tagId: chosen === ANY_TAG ? null : chosen });
+            }}
+          >
+            <DropdownMenu.RadioItem value={ANY_TAG} className={menuStyles.item}>
+              <span className={styles.mark} />
+              <span className={menuStyles.label}>Any tag, or none</span>
+              <DropdownMenu.ItemIndicator className={menuStyles.check}>
+                <Check />
+              </DropdownMenu.ItemIndicator>
+            </DropdownMenu.RadioItem>
+            {tags.map((tag) => (
+              <DropdownMenu.RadioItem key={tag.id} value={tag.id} className={menuStyles.item}>
+                <span className={styles.mark} />
+                <span className={menuStyles.label}>
+                  <TagChip tag={tag} size="regular" />
+                </span>
+                <DropdownMenu.ItemIndicator className={menuStyles.check}>
+                  <Check />
+                </DropdownMenu.ItemIndicator>
+              </DropdownMenu.RadioItem>
+            ))}
+          </DropdownMenu.RadioGroup>
+        </>
+      )}
     </>
   );
 }

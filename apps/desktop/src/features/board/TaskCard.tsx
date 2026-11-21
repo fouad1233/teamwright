@@ -8,6 +8,10 @@ import { classNames } from '@/shared/lib/classNames';
 import { formatDate, formatEstimate, isOverdue, taskReference } from '@/shared/lib/format';
 import { followPointer } from '@/shared/ui/lamplight';
 
+import { ChecklistProgressMark } from '../checklists/ChecklistProgress';
+import { TagChips } from '../tags/TagChip';
+import { tagsOf } from '../tags/tagModel';
+import { useTags } from '../tags/tagQueries';
 import { SubtaskFold } from '../tasks/SubtaskFold';
 import { PriorityFlag, StatusMark } from '../tasks/TaskBadges';
 import type { SubtaskFolds } from '../tasks/subtaskFolds';
@@ -80,6 +84,7 @@ export function TaskCard({
   const hasRaisedPriority = task.priority === 'urgent' || task.priority === 'high';
   const isBeingWorkedOn = useIsBeingWorkedOn(task.id);
   const waitsForManager = useWaitsForManager(task.id);
+  const tags = tagsOf(task, useTags(project.id).data ?? []);
 
   return (
     <div
@@ -102,6 +107,8 @@ export function TaskCard({
           )}
           {task.title}
         </p>
+
+        {tags.length > 0 && <TagChips className={styles.tags} tags={tags} most={3} />}
 
         <div className={styles.facts}>
           <span className={styles.reference}>{taskReference(project, task)}</span>
@@ -130,6 +137,7 @@ export function TaskCard({
               {formatEstimate(task.estimateMinutes)}
             </span>
           )}
+          <ChecklistProgressMark task={task} />
           <span className={styles.assignee}>
             {isBeingWorkedOn && (
               <span

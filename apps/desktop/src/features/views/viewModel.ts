@@ -3,6 +3,7 @@ import type {
   Id,
   Member,
   Status,
+  Tag,
   Task,
   View,
   ViewFilter,
@@ -50,7 +51,7 @@ export function kindsToOffer(kinds: readonly ViewKind[], views: readonly View[])
 
 /** Whether a filter leaves any task out. */
 export function isFiltered(filter: ViewFilter): boolean {
-  return filter.assignee.kind !== 'anyone' || filter.hidesFinished;
+  return filter.assignee.kind !== 'anyone' || filter.hidesFinished || Boolean(filter.tagId);
 }
 
 /**
@@ -71,7 +72,9 @@ export function shownTaskIds(
     statuses.filter((status) => status.category === 'done').map((status) => status.id),
   );
   const passes = (task: Task) =>
-    isGivenAsFiltered(task, filter) && !(filter.hidesFinished && doneStatuses.has(task.statusId));
+    isGivenAsFiltered(task, filter) &&
+    !(filter.hidesFinished && doneStatuses.has(task.statusId)) &&
+    (!filter.tagId || task.tagIds.includes(filter.tagId));
 
   const byId = new Map(tasks.map((task) => [task.id, task]));
   const rootOf = (task: Task): Id => {
@@ -130,15 +133,20 @@ function isGivenAsFiltered(task: Task, filter: ViewFilter): boolean {
  * A filter in one sentence, for the top of the view: "Shows the tasks of
  * Firmware engineer". Nothing for a filter that shows every task.
  */
-export function filterInWords(filter: ViewFilter, members: readonly Member[]): string | null {
+export function filterInWords(
+  filter: ViewFilter,
+  members: readonly Member[],
+  tags: readonly Tag[] = [],
+): string | null {
   if (!isFiltered(filter)) {
     return null;
   }
-  const tasks = filter.hidesFinished ? 'unfinished tasks' : 'tasks';
+  const tagged = filter.tagId ? ` ${taggedInWords(filter.tagId, tags)}` : '';
+  const tasks = `${filter.hidesFinished ? 'unfinished tasks' : 'tasks'}${tagged}`;
   const wanted = filter.assignee;
   switch (wanted.kind) {
     case 'anyone':
-      return 'Hides the finished tasks';
+      return tagged === '' ? 'Hides the finished tasks' : `Shows the ${tasks}`;
     case 'manager':
       return `Shows your ${tasks}. New ones are yours`;
     case 'member': {
@@ -150,6 +158,12 @@ export function filterInWords(filter: ViewFilter, members: readonly Member[]): s
     case 'nobody':
       return `Shows the ${tasks} given to nobody`;
   }
+}
+
+/** The tag of a filter in words: 'tagged "EMC"'. A tag that was removed says so. */
+function taggedInWords(tagId: Id, tags: readonly Tag[]): string {
+  const name = tags.find((tag) => tag.id === tagId)?.name;
+  return name === undefined ? 'with a tag that was removed' : `tagged "${name}"`;
 }
 
 /**

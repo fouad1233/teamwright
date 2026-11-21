@@ -20,6 +20,9 @@ import {
   NOBODY_NAME,
 } from '../team/Assignee';
 import { AreaChoice } from '../areas/AreaChoice';
+import { Checklist } from '../checklists/Checklist';
+import { progressInWords, progressOf } from '../checklists/checklistModel';
+import { TaskTags } from '../tags/TaskTags';
 import { showsAreas } from '../areas/areaModel';
 import { useAreas } from '../areas/areaQueries';
 import { PointsEditor } from '../sprints/PointsEditor';
@@ -271,6 +274,10 @@ export function TaskPanel({ project, task, tasks, onClose }: TaskPanelProps) {
               onChange={(points) => sprintCommands.setPoints(task.id, points)}
             />
           </Property>
+
+          <Property label="Tags" isWide>
+            <TaskTags project={project} task={task} />
+          </Property>
         </div>
 
         <Section title="Description">
@@ -279,6 +286,10 @@ export function TaskPanel({ project, task, tasks, onClose }: TaskPanelProps) {
             description={task.description}
             onDescribe={(description) => commands.describe(task.id, description)}
           />
+        </Section>
+
+        <Section title="Checklist" action={<ChecklistCount task={task} />}>
+          <Checklist task={task} />
         </Section>
 
         <Section title="Work">
@@ -378,6 +389,19 @@ export function TaskPanel({ project, task, tasks, onClose }: TaskPanelProps) {
   );
 }
 
+/** How many items of the checklist are done, beside its heading: "3 of 5". */
+function ChecklistCount({ task }: { task: Task }) {
+  const progress = progressOf(task);
+  if (progress === null) {
+    return null;
+  }
+  return (
+    <span className={styles.count} title={progressInWords(progress)}>
+      {progress.done} of {progress.total}
+    </span>
+  );
+}
+
 /** The value of the sprint menu that stands for the backlog. */
 const BACKLOG = 'backlog';
 
@@ -456,10 +480,17 @@ function assigneeOf(value: string): Assignee | null {
   return value === MANAGER ? { kind: 'manager' } : { kind: 'member', memberId: value };
 }
 
+interface PropertyProps {
+  label: string;
+  /** A property whose value can grow, such as the tags, takes a whole line of its own. */
+  isWide?: boolean;
+  children: ReactNode;
+}
+
 /** One property of the task: its name on the left, its value on the right. */
-function Property({ label, children }: { label: string; children: ReactNode }) {
+function Property({ label, isWide = false, children }: PropertyProps) {
   return (
-    <div className={styles.property}>
+    <div className={classNames(styles.property, isWide && styles.wideProperty)}>
       <span className={classNames('label', styles.propertyName)}>{label}</span>
       <div className={styles.propertyValue}>{children}</div>
     </div>

@@ -21,6 +21,7 @@ export type ColumnId =
   | 'due'
   | 'sprint'
   | 'area'
+  | 'tags'
   | 'waitsFor';
 
 export interface Column {
@@ -48,6 +49,7 @@ export const COLUMNS: readonly Column[] = [
   { id: 'due', label: 'Due', width: 112, isFigure: false, isFixed: false },
   { id: 'sprint', label: 'Sprint', width: 136, isFigure: false, isFixed: false },
   { id: 'area', label: 'Area', width: 128, isFigure: false, isFixed: false },
+  { id: 'tags', label: 'Tags', width: 208, isFigure: false, isFixed: false },
   { id: 'waitsFor', label: 'Waits for', width: 172, isFigure: false, isFixed: false },
 ];
 
@@ -173,6 +175,7 @@ const SORT_WORDS: Record<ColumnId, readonly [ascending: string, descending: stri
   due: ['earliest first', 'latest first'],
   sprint: ['in the order of the sprints', 'the sprints reversed'],
   area: ['in the order of the areas', 'the areas reversed'],
+  tags: ['A to Z', 'Z to A'],
   waitsFor: ['fewest first', 'most first'],
 };
 
@@ -193,6 +196,11 @@ export interface SortContext {
   areaOrder: ReadonlyMap<Id, number>;
   /** The name of whoever a task is given to. */
   assigneeName: (assignee: Assignee) => string;
+  /**
+   * The names of the tags a task carries, as they read in its cell, or
+   * nothing for a task without tags. Left out, no task has any.
+   */
+  tagNames?: (task: Task) => string | null;
 }
 
 /** The priorities from the most urgent on, as the menus of the program list them. */
@@ -232,6 +240,8 @@ export function sortValueOf(
       return task.sprintId === null ? null : (context.sprintOrder.get(task.sprintId) ?? null);
     case 'area':
       return context.areaOrder.get(task.areaId) ?? null;
+    case 'tags':
+      return context.tagNames?.(task) ?? null;
     case 'waitsFor':
       return task.blockedBy.length === 0 ? null : task.blockedBy.length;
   }

@@ -471,3 +471,14 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* The tags of a task stay on the one line of their row. */
+.tags {
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+
+/* The tags in the sheet of a cell stand on its raised surface. */
+.sheet {
+  --tags-ground: var(--surface-raised);
+}

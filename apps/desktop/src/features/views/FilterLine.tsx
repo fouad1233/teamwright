@@ -2,6 +2,7 @@ import { ListFilter } from 'lucide-react';
 
 import type { View } from '@/shared/api/types';
 
+import { useTags } from '../tags/tagQueries';
 import { useTeamMembers } from '../team/TeamContext';
 import styles from './FilterLine.module.css';
 import { filterInWords } from './viewModel';
@@ -18,7 +19,8 @@ interface FilterLineProps {
  */
 export function FilterLine({ view, onClear }: FilterLineProps) {
   const members = useTeamMembers();
-  const words = filterInWords(view.filter, members);
+  const tags = useTags(view.projectId).data;
+  const words = filterInWords(view.filter, members, tags);
   if (words === null) {
     return null;
   }

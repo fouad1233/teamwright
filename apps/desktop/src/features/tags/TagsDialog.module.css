@@ -1,0 +1,146 @@
+.editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.lead {
+  color: var(--ink-soft);
+}
+
+/*
+ * The list is a small table: the color, the name, how many tasks carry the
+ * tag, and a way to remove it. The headings and every row share these
+ * columns.
+ */
+.headings,
+.row {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr) 44px 26px;
+  align-items: center;
+  column-gap: var(--space-2);
+}
+
+.headings {
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--rule);
+}
+
+.headings > :nth-child(1) {
+  grid-column: 2;
+}
+
+.headings > :nth-child(2) {
+  grid-column: 3;
+  text-align: right;
+}
+
+.tags {
+  display: flex;
+  flex-direction: column;
+  max-height: 360px;
+  margin-top: calc(-1 * var(--space-3));
+  overflow-y: auto;
+}
+
+.tag {
+  border-bottom: 1px solid var(--rule);
+}
+
+.row {
+  height: 40px;
+}
+
+.none {
+  padding: var(--space-2) 0;
+  color: var(--ink-faint);
+}
+
+/* The color is a square of the pigment that opens the colors. */
+.color {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-control);
+  transition: background-color 100ms ease;
+}
+
+.color:hover {
+  background: var(--hover);
+}
+
+.swatch {
+  display: block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  background: var(--tone);
+}
+
+/* The name looks like plain text until the pointer is over it. */
+.name {
+  width: 100%;
+  height: 28px;
+  padding: 0 var(--space-2);
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--ink);
+  font-weight: 550;
+  text-overflow: ellipsis;
+  transition:
+    background-color 100ms ease,
+    border-color 100ms ease;
+}
+
+.name:hover {
+  background: var(--hover);
+}
+
+.name:focus-visible {
+  border-color: var(--brass);
+  outline: 2px solid var(--brass-soft);
+  outline-offset: 0;
+  background: var(--ground);
+}
+
+.count {
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-align: right;
+}
+
+/* The question a tag on tasks asks before it goes. */
+.question {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-2) var(--space-3) 34px;
+}
+
+.questionText {
+  color: var(--ink-soft);
+}
+
+.space {
+  flex: 1;
+}
+
+.add {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: var(--space-2);
+}
+
+.addMark {
+  justify-self: center;
+  width: 14px;
+  height: 14px;
+  color: var(--ink-faint);
+  stroke-width: 1.75;
+}

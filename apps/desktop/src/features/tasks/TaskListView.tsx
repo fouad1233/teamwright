@@ -5,6 +5,10 @@ import type { Project, Task } from '@/shared/api/types';
 import { classNames } from '@/shared/lib/classNames';
 import { formatDate, formatEstimate, isOverdue, taskReference } from '@/shared/lib/format';
 
+import { ChecklistProgressMark } from '../checklists/ChecklistProgress';
+import { TagChips } from '../tags/TagChip';
+import { tagsOf } from '../tags/tagModel';
+import { useTags } from '../tags/tagQueries';
 import { AssigneeAvatar, AssigneeName } from '../team/Assignee';
 import { SubtaskFold } from './SubtaskFold';
 import { PriorityFlag, StatusLabel, StatusMark } from './TaskBadges';
@@ -29,6 +33,7 @@ export function TaskListView({ project, tasks }: TaskListViewProps) {
   const navigation = useNavigation();
   const folds = useSubtaskFolds(project.id);
   const subtasksByParent = useMemo(() => indexSubtasks(tasks), [tasks]);
+  const tags = useTags(project.id).data ?? [];
 
   return (
     <div className={styles.list}>
@@ -86,6 +91,8 @@ export function TaskListView({ project, tasks }: TaskListViewProps) {
                           </span>
                         )}
                         <span className={styles.titleText}>{task.title}</span>
+                        <TagChips className={styles.tags} tags={tagsOf(task, tags)} most={3} />
+                        <ChecklistProgressMark task={task} />
                         {subtasks.length > 0 && (
                           <SubtaskFold
                             className={styles.fold}

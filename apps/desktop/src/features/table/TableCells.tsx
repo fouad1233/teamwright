@@ -10,13 +10,15 @@ import {
   type ReactNode,
 } from 'react';
 
-import type { CalendarDate, Id, Project, Sprint, Task } from '@/shared/api/types';
+import type { CalendarDate, Id, Project, Sprint, Tag, Task } from '@/shared/api/types';
 import { classNames } from '@/shared/lib/classNames';
 import { formatEstimate, taskReference } from '@/shared/lib/format';
 import { IconButton, ValueButton } from '@/shared/ui/Button';
 import { DateField } from '@/shared/ui/DateField';
 import { ChoiceMenu, type Choice } from '@/shared/ui/Menu';
 
+import { TagChips } from '../tags/TagChip';
+import { TaskTags } from '../tags/TaskTags';
 import { StatusMark } from '../tasks/TaskBadges';
 import { TaskPicker } from '../tasks/TaskPicker';
 import { statusOf } from '../tasks/taskModel';
@@ -270,6 +272,50 @@ export function InheritedText({ text, from }: { text: string; from: string }) {
     <span className={styles.inherited} title={`A subtask goes where ${from} goes`}>
       {text}
     </span>
+  );
+}
+
+interface TagsCellProps {
+  project: Project;
+  task: Task;
+  /** The tags the task carries, by name. */
+  tags: readonly Tag[];
+  focusIndex: FocusIndex;
+}
+
+/**
+ * The tags of a task, as many as fit and "+N" for the rest. A press opens a
+ * small sheet in which tags are put on, taken off, or made.
+ */
+export function TagsCell({ project, task, tags, focusIndex }: TagsCellProps) {
+  const reference = taskReference(project, task);
+  return (
+    <Popover.Root>
+      <Popover.Trigger asChild>
+        <ValueButton
+          className={styles.cellButton}
+          aria-label={`Tags of ${reference}`}
+          isEmpty={tags.length === 0}
+          tabIndex={focusIndex}
+          data-cell-target=""
+        >
+          {tags.length === 0 ? EMPTY : <TagChips tags={tags} most={2} className={styles.tags} />}
+        </ValueButton>
+      </Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Content
+          className={styles.sheet}
+          align="start"
+          sideOffset={4}
+          aria-label={`Tags of ${reference}`}
+        >
+          <header className={styles.sheetHead}>
+            <span className="label">Tags of {reference}</span>
+          </header>
+          <TaskTags project={project} task={task} />
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
   );
 }
 

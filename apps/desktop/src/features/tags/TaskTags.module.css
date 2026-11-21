@@ -1,0 +1,172 @@
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+  min-height: 30px;
+}
+
+/* A carried tag and the cross that takes it off sit together. The cross
+   lies over the end of the chip, on its wash, and shows when the pointer is
+   over the tag or the keyboard is on it. */
+.carried {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.takeOff {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 22px;
+  border-radius: 0 3px 3px 0;
+  /* The wash is see-through: laid on the ground the chip stands on, it
+     covers the end of the name. A sheet on a raised surface says so. */
+  background:
+    linear-gradient(var(--tone-wash), var(--tone-wash)), var(--tags-ground, var(--surface));
+  color: var(--tone-text);
+  opacity: 0;
+  transition: opacity 100ms ease;
+}
+
+.carried:hover .takeOff,
+.takeOff:focus-visible {
+  opacity: 1;
+}
+
+.takeOff svg {
+  width: 12px;
+  height: 12px;
+  stroke-width: 2;
+}
+
+/* With no tag yet, the button says what it does, in the faint hand of an
+   empty value. */
+.add {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 30px;
+  padding: 0 var(--space-2);
+  margin-left: calc(-1 * var(--space-2));
+  border-radius: var(--radius-control);
+  color: var(--ink-faint);
+  transition:
+    background-color 100ms ease,
+    color 100ms ease;
+}
+
+.add:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+
+.add svg {
+  width: 14px;
+  height: 14px;
+  stroke-width: 1.75;
+}
+
+.picker {
+  z-index: 150;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: 300px;
+  padding: var(--space-2);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius-overlay);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-overlay);
+  animation: appear 110ms ease-out;
+}
+
+@keyframes appear {
+  from {
+    transform: translateY(-3px);
+    opacity: 0;
+  }
+}
+
+.lines {
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.line {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  height: 30px;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-control);
+  text-align: left;
+}
+
+.highlighted {
+  background: var(--pressed);
+}
+
+.check {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  color: var(--ink);
+}
+
+.check svg {
+  width: 13px;
+  height: 13px;
+  stroke-width: 2;
+}
+
+.make {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink-soft);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.make strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.none {
+  padding: var(--space-2);
+  color: var(--ink-faint);
+}
+
+.edit {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 30px;
+  padding: 0 var(--space-2);
+  border-top: 1px solid var(--rule);
+  border-radius: 0 0 var(--radius-control) var(--radius-control);
+  color: var(--ink-faint);
+  text-align: left;
+}
+
+.edit:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+
+.edit svg {
+  width: 14px;
+  height: 14px;
+  stroke-width: 1.75;
+}

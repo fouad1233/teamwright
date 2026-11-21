@@ -141,3 +141,11 @@
   color: var(--danger);
   font-weight: 600;
 }
+
+/* The tags and the checklist of a task follow its title on the same line.
+   The tags stay on that line and give way before the title does. */
+.tags {
+  flex: 0 1 auto;
+  flex-wrap: nowrap;
+  overflow: hidden;
+}

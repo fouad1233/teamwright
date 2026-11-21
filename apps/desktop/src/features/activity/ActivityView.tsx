@@ -17,6 +17,7 @@ import { describeFailure } from '@/shared/ui/Toast';
 import { useOpenArea } from '../areas/AreaContext';
 import switchStyles from '../sprints/SprintBoard.module.css';
 import { changeAfterTaskName, changeInWords, type HistoryNames } from '../tasks/taskHistoryModel';
+import { useTags } from '../tags/tagQueries';
 import { useTeamMembers } from '../team/TeamContext';
 import type { KindProps } from '../views/viewKinds';
 import styles from './ActivityView.module.css';
@@ -53,6 +54,7 @@ const NARROWINGS: readonly { value: Narrowing; label: string }[] = [
 export function ActivityView({ project, tasks, everyTask }: KindProps) {
   const navigation = useNavigation();
   const members = useTeamMembers();
+  const tags = useTags(project.id).data;
   const openArea = useOpenArea();
   const log = useActivityLog(project.id);
   const [narrowing, setNarrowing] = useState<Narrowing>('everything');
@@ -68,8 +70,8 @@ export function ActivityView({ project, tasks, everyTask }: KindProps) {
   const todayDate = today();
 
   const names = useMemo<HistoryNames>(
-    () => ({ project, tasks: everyTask, members }),
-    [project, everyTask, members],
+    () => ({ project, tasks: everyTask, members, tags }),
+    [project, everyTask, members, tags],
   );
   // While one area is open, the log tells only what happened to its tasks.
   const taskIds = useMemo(

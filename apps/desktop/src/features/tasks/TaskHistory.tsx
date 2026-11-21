@@ -4,6 +4,7 @@ import type { Project, Task } from '@/shared/api/types';
 import { formatMoment } from '@/shared/lib/format';
 import { describeFailure } from '@/shared/ui/Toast';
 
+import { useTags } from '../tags/tagQueries';
 import { useTeamMembers } from '../team/TeamContext';
 import styles from './TaskHistory.module.css';
 import { changeInWords } from './taskHistoryModel';
@@ -32,6 +33,7 @@ interface TaskHistoryProps {
 export function TaskHistory({ project, task, tasks }: TaskHistoryProps) {
   const history = useTaskHistory(task);
   const members = useTeamMembers();
+  const tags = useTags(project.id).data;
   const [showsAll, setShowsAll] = useState(false);
 
   if (history.isError) {
@@ -61,7 +63,7 @@ export function TaskHistory({ project, task, tasks }: TaskHistoryProps) {
               {formatMoment(change.at)}
             </time>
             <span className={styles.what} data-selectable>
-              {changeInWords(change, { project, tasks, members })}
+              {changeInWords(change, { project, tasks, members, tags })}
             </span>
             {change.computer !== undefined && (
               // Only a change made on another computer says where: the

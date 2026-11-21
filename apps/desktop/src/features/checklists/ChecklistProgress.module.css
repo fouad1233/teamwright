@@ -1,0 +1,21 @@
+/* Counted, so set in the hand that counts. */
+.progress {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.mark {
+  flex: none;
+}
+
+/* Every item is done: the pigment of finished work. */
+.complete {
+  color: var(--tone-text);
+}

@@ -19,6 +19,8 @@ import type { Choice } from '@/shared/ui/Menu';
 
 import { useAreaCommands, useAreas } from '../areas/areaQueries';
 import { formatWork, parsePoints } from '../sprints/sprintModel';
+import { tagsOf } from '../tags/tagModel';
+import { useTags } from '../tags/tagQueries';
 import { useSprintCommands, useSprints } from '../sprints/sprintQueries';
 import {
   PRIORITIES,
@@ -49,6 +51,7 @@ import {
   InheritedText,
   MenuCell,
   TitleText,
+  TagsCell,
   WaitsForCell,
   estimateText,
   sprintChoices,
@@ -108,6 +111,7 @@ function TableSheet({ view, project, tasks, everyTask }: KindProps) {
   const areaCommands = useAreaCommands(project.id);
   const sprints = useSprints(project.id).data;
   const areas = useAreas(project.id).data;
+  const tags = useTags(project.id).data;
   const team = useTeamMembers();
   const [settings, changeSettings] = useTableSettings(view);
   const [active, setActive] = useState<CellKey | null>(null);
@@ -130,8 +134,12 @@ function TableSheet({ view, project, tasks, everyTask }: KindProps) {
         assignee.kind === 'manager'
           ? MANAGER_NAME
           : (team.find((member) => member.id === assignee.memberId)?.name ?? ''),
+      tagNames: (task) => {
+        const carried = tagsOf(task, tags ?? []);
+        return carried.length === 0 ? null : carried.map((tag) => tag.name).join(', ');
+      },
     }),
-    [project.statuses, sprints, areas, team],
+    [project.statuses, sprints, areas, tags, team],
   );
   const rows = useMemo(
     () => tableRows(tasks, settings.sort, context),
@@ -486,6 +494,16 @@ function TableSheet({ view, project, tasks, everyTask }: KindProps) {
           </MenuCell>
         );
       }
+
+      case 'tags':
+        return (
+          <TagsCell
+            project={project}
+            task={task}
+            tags={tagsOf(task, tags ?? [])}
+            focusIndex={focusIndex}
+          />
+        );
 
       case 'waitsFor':
         return (

@@ -1,0 +1,58 @@
+/* A tag is a label laid down flat in its pigment: a faint wash, the name in
+   the deep shade of the pigment, and a square of the full pigment in front,
+   which still reads where the wash is close to the ground. */
+.chip {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 5px;
+  max-width: 132px;
+  height: 18px;
+  padding: 0 6px 0 5px;
+  border-radius: 3px;
+  background: var(--tone-wash);
+  color: var(--tone-text);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.regular {
+  max-width: 220px;
+  height: 22px;
+  padding: 0 8px 0 7px;
+  font-size: var(--text-small);
+}
+
+.swatch {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 1.5px;
+  background: var(--tone);
+}
+
+.name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.row {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* The count of the tags that did not fit: counted, so in the hand that counts. */
+.more {
+  flex: none;
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
