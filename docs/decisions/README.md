@@ -45,6 +45,7 @@ was considered.
 | [0027](0027-integrations.md) | Three integrations, set per computer: GitHub through the manager's own gh, a Slack channel, and web addresses that listen | Accepted |
 | [0028](0028-themes.md) | Ten themes as sets of the design tokens, chosen per computer, crossed into smoothly | Accepted |
 | [0029](0029-handoffs-and-messages-between-specialists.md) | Handoffs and messages between specialists, through the team bus: the latest handoff of a task counts, a message comes with the receiver's next turn | Accepted |
+| [0030](0030-tags-and-checklists.md) | Tags that belong to a project, one checklist inside each task, each tag and item merging on its own | Accepted |
 | [0031](0031-instructions-and-ready-made-specialists.md) | Instructions of a specialist's own, after Teamwright's and never instead, and twelve ready-made specialists in code | Accepted |
 | [0032](0032-a-public-demo-in-the-browser.md) | Publish the interface on the demo backend as a page of the website | Accepted |
 

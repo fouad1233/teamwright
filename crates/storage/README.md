@@ -6,8 +6,8 @@ operation log.
 
 It implements the interfaces `ProjectRepository`, `TaskRepository`,
 `MemberRepository`, `ConversationRepository`, `PlanningRepository`,
-`PlacesRepository`, `SprintRepository`, `ViewRepository`, `AreaRepository` and
-`TeamworkRepository` that the
+`PlacesRepository`, `SprintRepository`, `ViewRepository`, `AreaRepository`,
+`TagRepository` and `TeamworkRepository` that the
 application crate declares. Nothing outside this crate knows that SQLite is
 involved.
 
@@ -23,6 +23,7 @@ involved.
 | `sprints` | `SqliteSprintRepository`: the sprints of the projects, each saved or deleted together with the tasks that change with it |
 | `views` | `SqliteViewRepository`: the views of the projects |
 | `areas` | `SqliteAreaRepository`: the areas of the projects |
+| `tags` | `SqliteTagRepository`: the tags of the projects |
 | `members` | `SqliteMemberRepository` |
 | `conversations` | `SqliteConversationRepository`: conversations, their turns, the steps of the turns and the questions they asked the manager |
 | `planning` | The interviews and the proposals of the Advisor, as parts of their turns; `SqlitePlanningRepository`, which stores an approved plan |
@@ -49,7 +50,8 @@ involved.
   `project_reference_folders`, `turn_interviews`, `turn_interview_questions`,
   `turn_interview_options`, `turn_proposals`, `turn_proposal_members`,
   `turn_proposal_tasks`, `turn_proposal_task_waits`, `sprints`, `views`,
-  `areas`, `handoffs`, `handoff_files`, `team_messages`.
+  `areas`, `handoffs`, `handoff_files`, `team_messages`, `tags`, `task_tags`,
+  `checklist_items`.
   The schema with its conventions is in
   [`schema/0001_initial.sql`](src/schema/0001_initial.sql); later files in
   that folder add to it.
@@ -197,6 +199,26 @@ involved.
   handoff waits for its task when it is taken in before it, and is dropped
   with a task deleted elsewhere; a task deleted by another computer takes
   the handoffs of this one with it, each removal logged.
+- **Tags and checklists** (version 19,
+  [decision 0030](../../docs/decisions/0030-tags-and-checklists.md)). A tag
+  has a row in `tags` (name, color) and is logged as the entity `tag` with
+  its whole state; it merges by name and by color. The tags a task carries
+  are rows of `task_tags`, and the items of its checklist rows of
+  `checklist_items` (text, done, rank). Both are written from the task,
+  like `task_dependencies`: rows are added and updated in place, and those
+  of a tag taken off or an item removed are deleted. In the logged state of
+  the task each is a key of its own: `tag:<id>`, true or false, and
+  `item:<id>`, the item as an object or null. Storing a task writes false
+  or null for a tag or an item its merged state still has and the task no
+  longer has, because a key left out keeps its value. No field of the
+  merge names these keys, so each merges on its own: two computers that
+  change different tags or items of one task both keep their change. The
+  filter of a view gains the column `tag_id` and the key `tag_id`, a field
+  of its own in the merge, with no reference enforced. Deleting a project
+  deletes and logs its tags after its views. Nothing is logged by the
+  migration: a task state logged before version 19 has none of these keys
+  and is read as a task without tags or a checklist, and a view state
+  without `tag_id` as a view of the tasks with any tag.
 - **An approved plan is one transaction.** `SqlitePlanningRepository`
   writes the project (with its next task number), every new member, every
   new task with what it waits for, and the turn with its approved proposal,
@@ -294,7 +316,7 @@ in one transaction:
    (`'never'`).
 3. An operation for a thing whose parent was deleted (a task of a deleted
    project) is dropped. One whose parent, or something its merged state
-   refers to (a task it waits for, its member, its sprint, its area), has not arrived
+   refers to (a task it waits for, its member, its sprint, its area, a tag it carries, the tag of a view), has not arrived
    yet waits (`'parent'`) and is tried again until a pass makes no progress.
 4. An upsert is merged into the merged state field by field: a field takes
    the incoming value if its stamp is later, and a field whose larger value
@@ -304,15 +326,18 @@ in one transaction:
    the workflow no longer has, is repaired as the rows are written, with a
    logged change of this computer: the task moves to the first status of
    the same category (else the first status), and loses its deleted parent,
-   blocker, member or sprint; a conversation about a deleted task is
+   blocker, member, sprint or tag; a conversation about a deleted task is
    deleted, and one with a deleted member forgets it, as does a view that
    showed only the tasks of a deleted member: it shows everybody's again
-   and keeps hiding finished tasks if it did. A view of a deleted project is
-   dropped like a task of one, and so is an area of a deleted project.
+   and keeps hiding finished tasks if it did, and a view that showed only
+   the tasks with a deleted tag shows the tasks with any tag again. A view
+   of a deleted project is dropped like a task of one, and so are an area
+   and a tag of a deleted project.
 5. A deletion first repairs, with logged changes of this computer, what
    still refers to the thing (the subtasks and the tasks that wait for a
    task, the conversations about it, the tasks given to a member and the
-   views that show only theirs, the tasks of a sprint), then removes its
+   views that show only theirs, the tasks of a sprint, the tasks that carry
+   a tag and the views that show only the tasks with it), then removes its
    rows. If it throws away a change this
    computer made that it had not seen, the manager gets a notice. Two
    deletions of one thing keep the earlier stamp.
@@ -335,6 +360,7 @@ in one transaction:
    | A project has no area left, because two computers each removed others | it gets "General" again, with the identifier of its starting area, or, if that was deleted, the next one `Area::general_again` gives | any computer |
    | A task is in an area its project no longer has, because it was removed on another computer | the task goes into the first area of the project | any computer |
    | A subtask is in another area than the task at the top of its chain of parts, because one computer moved the task and the other gave it the subtask | the subtask goes into that task's area | any computer |
+   | Two tags of a project have one name, whatever the capitals | the younger gets the name with the first free number from 2 on (`EMC` gives `EMC 2`); both keep their tasks | any computer |
 
    "Set later" is decided by the stamp of the field, and the creator of a
    thing is the computer of its first operation. A view is as old as its

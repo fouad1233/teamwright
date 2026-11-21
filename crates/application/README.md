@@ -12,6 +12,8 @@ window or agent runtime.
 | `sprints` | `SprintService`: list, plan, change, delete, start and complete the sprints of a project, and the report for the burndown chart of one (`SprintReport`) |
 | `views` | `ViewService`: list, add, rename, filter, give content to, move and remove the views of a project |
 | `areas` | `AreaService`: list, add, rename, move and remove the areas of a project, and move a task with its subtasks into another area |
+| `tags` | `TagService`: list, add, rename, recolor and remove the tags of a project, and put a tag on a task (by itself, or by its name, making it if need be) or take it off |
+| `checklists` | `ChecklistService`: add, rename, tick, move and remove the items of the checklist of a task, each answering with the task |
 | `team` | `TeamService`: put members on the team of a project, change them, take them off |
 | `places` | `PlacesService`: the folders of a project: choose its work folder, add and take away reference folders, copy reference files into it |
 | `files` | `ProjectFilesService`: what lies in the folders of a project, for the files view: `list` a folder at a path inside it, `locate` an entry to open or show, each path checked first |
@@ -20,11 +22,11 @@ window or agent runtime.
 | `google_drive` | `GoogleDriveService`: the folder that Google Drive for desktop keeps on this computer (`find_drive_folders`, `look`, `prepare`), behind the port `DriveSurroundings`; see "Syncing through Google Drive" |
 | `sync` | `SyncService`: keep several computers of one manager in step through a folder the manager owns (`round`, `choose_folder`, `stop`, `rename_this_computer`, `accept`, `ignore`, `notices`, `dismiss`, `new_identity`); the ports `SyncFolder` and `SyncLedger`, and the operations that travel between computers |
 | `workbook` | `WorkbookService`: gather a project into a workbook of four sheets (summary, tasks, sprints, team) as plain data: `Workbook`, `Sheet`, `SheetContent`, `Section`, `Table`, `Column` and `Cell`, whose kind says whether it is text, a whole number, hours, a date or a status. Writing the file is done outside this crate ([decision 0025](../../docs/decisions/0025-the-project-as-a-workbook.md)) |
-| `ports` | The interfaces the services need: `ProjectRepository`, `TaskRepository`, `MemberRepository`, `ConversationRepository`, `PlanningRepository`, `PlacesRepository`, `SprintRepository`, `ViewRepository`, `AreaRepository`, `TeamworkRepository`, `ProjectFolders`, `FileSystem`, `FolderReader`, `WorkListener`, `Clock` (which also tells the day a moment falls on) |
+| `ports` | The interfaces the services need: `ProjectRepository`, `TaskRepository`, `MemberRepository`, `ConversationRepository`, `PlanningRepository`, `PlacesRepository`, `SprintRepository`, `ViewRepository`, `AreaRepository`, `TagRepository`, `TeamworkRepository`, `ProjectFolders`, `FileSystem`, `FolderReader`, `WorkListener`, `Clock` (which also tells the day a moment falls on) |
 | `agent_runtime` | `AgentRuntime`: the interface to the program that runs a team member's session, and the data it speaks |
 | `error` | `ApplicationError`, with a stable `code()` for interfaces |
 | `clock` | `SystemClock`, the real clock |
-| `in_memory` | In-memory repositories (`InMemoryPlanningRepository` stores an approved plan into the others, `InMemorySprintRepository` stores the tasks that change with a sprint into the task repository, `InMemoryViewRepository`, `InMemoryAreaRepository`, `InMemoryTeamworkRepository`), fixed project folders, a pretended file system, a listener that records, a scripted agent runtime and a settable clock, for tests and demos |
+| `in_memory` | In-memory repositories (`InMemoryPlanningRepository` stores an approved plan into the others, `InMemorySprintRepository` stores the tasks that change with a sprint into the task repository, `InMemoryViewRepository`, `InMemoryAreaRepository`, `InMemoryTagRepository`, `InMemoryTeamworkRepository`), fixed project folders, a pretended file system, a listener that records, a scripted agent runtime and a settable clock, for tests and demos |
 
 ## How a use case is built
 
@@ -175,6 +177,34 @@ storage crate.
 - `TeamService::remove` makes every view that showed only the tasks of the
   member who leaves show everybody's again, and keeps it hiding finished
   tasks if it did.
+
+## Tags and checklists
+
+`TagService` and `ChecklistService` carry out
+[decision 0030](../../docs/decisions/0030-tags-and-checklists.md). The
+demo backend of the interface (`demoTags.test.ts`) is the specification;
+`tags/tests.rs` and the tests of `checklists.rs` follow its cases, with
+the same codes and messages.
+
+- A tag name is tidied and has at most 30 characters (`rule_broken`). Two
+  tags of a project do not share a name, whatever the capitals
+  (`tag_name_taken`); two projects may. A project has at most 100 tags
+  (`rule_broken`). Tags are listed by name, whatever the capitals.
+- A tag of another project is not put on a task, nor named by the filter
+  of a view (`different_projects`); a tag that does not exist is
+  `not_found`. `ViewService::new` takes the tags for that check.
+- `put_on_by_name` finds the tag of the project with that name, whatever
+  the capitals, or makes it with the next color in turn.
+- `remove` takes the tag off every task that carries it, then out of the
+  filter of every view that showed only the tasks with it, and then
+  removes it. Deleting a project leaves its tags to storage, which removes
+  and logs them with the project.
+- An item of a checklist is tidied and has at most 200 characters; a
+  checklist has at most 100 items (`rule_broken`). An item the task does
+  not have is `not_found`. A change that changes nothing, such as ticking
+  an item that is done, stores nothing.
+- `WorkbookService` names the tags of each task, by name, in the column
+  "Tags" of the Tasks sheet; its ports gain `tags`.
 
 ## The areas of a project
 

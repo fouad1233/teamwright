@@ -58,6 +58,23 @@ application crate mirrors its cases with the same codes and messages. A
 database with projects from before areas gives each of them the area
 "General", with all its tasks in it, when it is opened.
 
+**Tags and checklists**
+([decision 0030](../../docs/decisions/0030-tags-and-checklists.md)) are the
+commands in `commands/tags.rs` (`list_tags`, `add_tag`, `rename_tag`,
+`recolor_tag`, `remove_tag`, `put_tag_on_task`, `put_named_tag_on_task`,
+`take_tag_off_task`), served through `TagService`, and in
+`commands/checklists.rs` (`add_checklist_item`, `rename_checklist_item`,
+`tick_checklist_item`, `move_checklist_item`, `remove_checklist_item`),
+served through `ChecklistService`; each command of a checklist answers
+with the task. A tag on the wire has its `id`, `projectId`, `name` and
+`color`; `add_tag` takes a color or null for the next in turn, and
+`put_named_tag_on_task` answers with `{task, tag}`. A task carries its
+`tagIds` and its `checklist` (`id`, `text`, `done`, in order). The filter
+of a view gains `tagId`, which may be left out or null for the tasks with
+any tag. A change of the history may be `tagged` or `untagged` (with
+`tagId`) or `ticked` or `unticked` (with the `item`). `demoTags.test.ts`
+is the specification.
+
 **The project as an Excel workbook**
 ([decision 0025](../../docs/decisions/0025-the-project-as-a-workbook.md))
 is two commands in `commands/workbook.rs`. `export_workbook` takes the
@@ -379,6 +396,8 @@ src/
     inbox/            What waits for the manager in every project: questions to decide
     advisor/          Planning a project with the Advisor: its questions, its proposal
     areas/            The areas of a project: at the side, the open area, the dialog, the field of a task
+    tags/             The tags of a project: the chips, the line of tags of a task and its picker, the dialog
+    checklists/       The checklist of a task in its panel, and its progress on cards and rows
     sprints/          The Backlog view, sprints and points, the burndown, the board of a sprint, completed sprints opened
     sync/             Computers: syncing through a folder or Google Drive, the line at the foot of the sidebar, conversations elsewhere
     views/            The row of views and places, the chooser, the menu and filter of a view
@@ -407,7 +426,7 @@ Rules of the interface:
   `useProjectHistory`, `useSprintCommands`, `useViews`, `useViewCommands`,
   `useSetViewContent`,
   `useAreas`,
-  `useAreaCommands`). Nothing calls
+  `useAreaCommands`, `useTags`, `useTagCommands`, `useChecklistCommands`). Nothing calls
   Tauri directly except `shared/api/tauriBackend.ts`.
 - **The team of the open project is known everywhere.** `TeamProvider` puts
   it in a context, so a card, a row or a menu can show who a task is given

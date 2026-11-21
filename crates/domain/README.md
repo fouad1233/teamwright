@@ -9,8 +9,8 @@ done with them. It does no input or output.
 
 | Module | Concepts |
 |---|---|
-| `ids` | `ProjectId`, `StatusId`, `TaskId`, `SprintId`, `ViewId`, `AreaId`, `MemberId`, `ConversationId`, `TurnId`, `HandoffId`, `TeamMessageId`: one identifier type per kind of thing |
-| `text` | `ProjectName`, `StatusName`, `TaskTitle`, `SprintName`, `ViewName`, `AreaName`, `MemberName`: names that are never empty, never multi-line, never too long; `ModelName`: the name of a model |
+| `ids` | `ProjectId`, `StatusId`, `TaskId`, `SprintId`, `ViewId`, `AreaId`, `TagId`, `ChecklistItemId`, `MemberId`, `ConversationId`, `TurnId`, `HandoffId`, `TeamMessageId`: one identifier type per kind of thing |
+| `text` | `ProjectName`, `StatusName`, `TaskTitle`, `SprintName`, `ViewName`, `AreaName`, `TagName`, `ChecklistText`, `MemberName`: names that are never empty, never multi-line, never too long; `ModelName`: the name of a model |
 | `color` | `Color`: the named colors a status or a team member can have |
 | `workflow` | `Workflow`, `Status`, `StatusCategory` |
 | `project` | `Project`, `ProjectKey` |
@@ -19,6 +19,8 @@ done with them. It does no input or output.
 | `view` | `View`, `ViewKind`, `ViewFilter`, `ViewAssignee`: one way of looking at the tasks of a project, with a name, a filter and a place among the views of the project |
 | `project_files` | `PathInFolder`: a path inside a folder of a project that cannot leave it by how it is written (no `..`, no root, no drive, no colon); `FolderEntry`, `EntryKind`, `listing_of`: what a folder holds as the files view shows it (noise left out by `is_noise`, folders first, at most `MOST_ENTRIES`); `runs_as_program`: the endings Teamwright does not open |
 | `area` | `Area`: a part of a project with a job of its own, such as its firmware, with a name and a place among the areas of the project |
+| `tag` | `Tag`: a word of a project with a color, put on its tasks ([decision 0030](../../docs/decisions/0030-tags-and-checklists.md)) |
+| `checklist` | `Checklist` and `ChecklistItem`: the items of the checklist of a task, each a text that is done or not, in the order of their ranks |
 | `task_history` | `TaskChange`, `history_of`: what changed from one version of a task to the next |
 | `dependencies` | `DependencyGraph`: which task waits for which, for the tasks of a project or of a proposal |
 | `integration` | `EventKind` (with stable names such as `task.status_changed`): the kinds of events a Slack channel or a web address can hear; `WebAddress`: an https address whose `Debug` form and `shown()` hide all but the host, since it may be a secret; `RepositoryName`: `owner/name` of a GitHub repository, also read from a git remote (`of_remote`) |
@@ -85,9 +87,23 @@ done with them. It does no input or output.
   one. A project left with no areas by two computers gets "General" again,
   with an identifier that also follows from the project. Every task is in
   exactly one area; putting it into another keeps its status and its place.
+- A tag's name has at most 30 characters; a project has at most 100 tags
+  (`Tag::MOST_IN_A_PROJECT`, checked by the use case), and a new tag
+  without a color gets the next one of `Tag::COLORS_IN_TURN`. A task
+  carries a set of tags (`put_tag`, `take_tag_off`, each saying whether
+  anything changed). A task has one checklist: at most 100 items
+  (`ChecklistFull`) of at most 200 characters, added at the end, ticked,
+  renamed, moved and removed through the task (`NoSuchChecklistItem`,
+  code `not_found`, for an item it does not have). Moving an item gives
+  that item alone a new rank, unless no rank fits between its neighbours,
+  when every item is spaced out again. A view can be filtered by one tag
+  (`ViewFilter::tag`) and forgets a tag that was removed (`forget_tag`).
 - The history of a task is not recorded as such. It is read off the versions
   the task has had: that it was opened, and then what differs from one
   version to the next. A move up or down within a status is not a change.
+  A tag put on or taken off is (`Tagged`, `Untagged`), and so is an item
+  of the checklist ticked or unticked (`Ticked`, `Unticked`); adding,
+  renaming, moving or removing an item is not.
 - A newcomer to a team gets a color that no other member has, as long as
   there is one left. Gray, amber and red are never handed out.
 - Only an AI specialist has a model and an effort; a person's profile is

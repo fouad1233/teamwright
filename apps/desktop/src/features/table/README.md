@@ -1,13 +1,18 @@
 # The table view
 
 One task a row, every field a column: Task, Title, Status, Assignee,
-Priority, Points, Estimate, Start, Due, Sprint, Area and Waits for. Each
+Priority, Points, Estimate, Start, Due, Sprint, Area, Tags and Waits for. Each
 cell is changed where it stands, with the program's own controls: the
 menus of the task panel, the calendar field, the task picker.
 
 - **Rows.** Every row has the same height. A subtask stands under its task,
   set in one step for every task it is part of. Without a sort the rows are
   in the order of the board: by status in the workflow, then as arranged.
+- **Tags.** The cell shows as many tags as fit and "+N" for the rest; a
+  press opens a sheet with the line of tags of the task panel, where tags
+  are put on, taken off and made. Sorted, the column goes by the names of
+  the tags of each task. A table that keeps a list of columns from before
+  the column was added does not show it until it is turned on.
 - **Sorting.** A press on a head sorts by that column; a second press turns
   the order. Empty cells go last either way, and equal ones keep the order
   of the board. Priority sorts from the most urgent first. Subtasks are
