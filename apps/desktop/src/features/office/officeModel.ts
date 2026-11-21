@@ -151,6 +151,11 @@ const TOOL_WORDS: Readonly<Record<string, { verb: string; alone: string }>> = {
   WebSearch: { verb: 'Searches the web for', alone: 'Searches the web' },
   TodoWrite: { verb: 'Plans', alone: 'Plans its steps' },
   Task: { verb: 'Hands over', alone: 'Hands a part to a helper' },
+  mcp__teamwright__search_memory: {
+    verb: 'Searches the memory for',
+    alone: 'Searches the memory of the project',
+  },
+  mcp__teamwright__remember: { verb: 'Remembers', alone: 'Remembers a fact' },
 };
 
 /** The first sentence of a text, shortened to fit one line of a place. */

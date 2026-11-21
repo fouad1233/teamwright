@@ -1,9 +1,11 @@
-import type { Handoff, Project, Task } from '../types';
+import type { Handoff, MemoryEntry, Project, Task } from '../types';
+import { memoryInWords } from './memory';
 
 /**
  * Writes the brief an AI specialist gets when it starts on a task: what the
  * task is, what it belongs to, what it builds on and what those tasks
- * handed over, and what the manager expects back.
+ * handed over, what the memory of the project says about it, and what the
+ * manager expects back.
  *
  * The real brief is written by the application (`work.rs` in the application
  * crate). This is the demo's copy of it, word for word, so that the demo
@@ -14,6 +16,7 @@ export function briefFor(
   task: Task,
   tasks: readonly Task[],
   handoffs: readonly Handoff[] = [],
+  memory: readonly MemoryEntry[] = [],
 ): string {
   const reference = (other: Task) => `${project.key}-${other.number.toString()}`;
   const statusName = (other: Task) =>
@@ -62,6 +65,10 @@ export function briefFor(
   }
   if (task.dueOn !== null) {
     paragraphs.push(`It is due on ${task.dueOn}.`);
+  }
+  const remembered = memoryInWords(project, task, blockers, memory, tasks);
+  if (remembered !== undefined) {
+    paragraphs.push(remembered);
   }
   paragraphs.push(
     [

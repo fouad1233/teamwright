@@ -67,6 +67,8 @@ import type {
   TaskOnGitHub,
   TeamMessage,
   TeamTalk,
+  MemoryEntry,
+  NewMemoryFact,
   ThemeName,
   Turn,
   View,
@@ -82,6 +84,7 @@ import {
 import { isThemeName, rememberedTheme } from '@/shared/theme/themes';
 import { briefFor } from './brief';
 import { PretendedTeamTalk } from './teamwork';
+import { PretendedMemory, shorten } from './memory';
 import { PretendedGitHub } from './gitHub';
 import { PretendedIntegrations } from './integrations';
 import { freeName, isInside, isSameFolder, nameOf } from './places';
@@ -219,6 +222,11 @@ export interface DemoWorkspace {
   teamTalk?: TeamTalk;
   /** The tags of the projects. Left out, there are none. */
   tags?: Tag[];
+  /**
+   * The memory of the projects, by the identifier of the project. Left
+   * out, every memory is empty.
+   */
+  memory?: Record<Id, MemoryEntry[]>;
 }
 
 const browserEnvironment: DemoEnvironment = {
@@ -290,6 +298,8 @@ export class DemoBackend implements Backend {
   private readonly integrations = new PretendedIntegrations();
   /** The handoffs and the messages of the specialists. */
   private readonly teamwork: PretendedTeamTalk;
+  /** The memory of the projects: decisions, facts and contracts. */
+  private readonly memory: PretendedMemory;
   private readonly gitHub = new PretendedGitHub();
   /** The views of each project, in the order the manager gave them. */
   private readonly views = new Map<Id, View[]>();
@@ -366,6 +376,11 @@ export class DemoBackend implements Backend {
         const sender = this.members.get(message.fromId);
         return sender ? [{ projectId: sender.projectId, message }] : [];
       }),
+    );
+    this.memory = new PretendedMemory(
+      Object.entries(workspace?.memory ?? {}).flatMap(([projectId, entries]) =>
+        entries.map((entry) => ({ projectId, entry })),
+      ),
     );
     for (const sprint of workspace?.sprints ?? []) {
       this.sprints.set(sprint.id, structuredClone(sprint));
@@ -526,6 +541,7 @@ export class DemoBackend implements Backend {
       this.areas.delete(project.id);
       this.teamwork.forgetProject(project.id);
       this.tags.delete(project.id);
+      this.memory.forgetProject(project.id);
       for (const conversation of this.conversationsOf(project.id)) {
         this.forget(conversation);
       }
@@ -1218,6 +1234,56 @@ export class DemoBackend implements Backend {
     });
   }
 
+  projectMemory(projectId: Id): Promise<MemoryEntry[]> {
+    return this.answer(() => {
+      this.requireProject(projectId);
+      return this.memory.of(projectId);
+    });
+  }
+
+  searchMemory(projectId: Id, query: string): Promise<MemoryEntry[]> {
+    return this.answer(() => {
+      this.requireProject(projectId);
+      return this.memory.search(projectId, query);
+    });
+  }
+
+  addMemoryFact(fact: NewMemoryFact): Promise<MemoryEntry> {
+    return this.answer(() => {
+      const project = this.requireProject(fact.projectId);
+      if (fact.taskId !== null && this.tasks.get(fact.taskId)?.projectId !== project.id) {
+        throw new BackendError('not_found', 'there is no such task in the project');
+      }
+      return this.memory.record(
+        project.id,
+        {
+          kind: 'fact',
+          title: fact.title,
+          text: fact.text,
+          source: 'manager',
+          memberId: null,
+          conversationId: null,
+          turnId: null,
+          taskId: fact.taskId,
+        },
+        this.environment.newId(),
+        this.nowAsText(),
+      );
+    });
+  }
+
+  changeMemoryEntry(entryId: Id, title: string, text: string): Promise<MemoryEntry> {
+    return this.answer(() =>
+      this.memory.replace(entryId, title, text, this.environment.newId(), this.nowAsText()),
+    );
+  }
+
+  removeMemoryEntry(entryId: Id): Promise<void> {
+    return this.answer(() => {
+      this.memory.remove(entryId);
+    });
+  }
+
   startWork(taskId: Id): Promise<Conversation> {
     return this.answer(() => {
       const task = this.requireTask(taskId);
@@ -1255,6 +1321,7 @@ export class DemoBackend implements Backend {
           task,
           this.tasksOfProject(project.id),
           this.teamwork.handoffsOf(project.id),
+          this.memory.of(project.id),
         ),
         'brief',
         scriptForTask(task),
@@ -1325,6 +1392,24 @@ export class DemoBackend implements Backend {
         words,
         'decision',
         scriptAfterDecision(chosen?.label ?? 'in your own words'),
+      );
+      // The question and its answer become a decision in the memory of the
+      // project, as the application records them.
+      const asked = conversation.turns.find((turn) => turn.decision === decision);
+      this.memory.record(
+        conversation.projectId,
+        {
+          kind: 'decision',
+          title: shorten(decision.question.trim().split('\n')[0] ?? '', 120),
+          text: `Asked: ${decision.question}\n\n${words}`,
+          source: 'decision_request',
+          memberId: member.id,
+          conversationId: conversation.id,
+          turnId: asked?.id ?? null,
+          taskId: conversation.taskId,
+        },
+        this.environment.newId(),
+        this.nowAsText(),
       );
       return conversation;
     });
@@ -2268,6 +2353,45 @@ export class DemoBackend implements Backend {
           files: [...act.files],
           publishedAt: at,
         });
+        // Its interface contract becomes the contract of the task in memory.
+        const task = this.tasks.get(conversation.taskId);
+        if (act.contract.trim() !== '' && task) {
+          const project = this.requireProject(conversation.projectId);
+          this.memory.recordContract(
+            conversation.projectId,
+            {
+              kind: 'contract',
+              title: shorten(`Interface of ${referenceOf(project, task)}: ${task.title}`, 120),
+              text: act.contract,
+              source: 'handoff',
+              memberId: conversation.memberId,
+              conversationId: conversation.id,
+              turnId: turn.id,
+              taskId: task.id,
+            },
+            this.environment.newId(),
+            at,
+          );
+        }
+      }
+    } else if (act.kind === 'remember') {
+      // A turn remembers at most three facts, as the team bus allows.
+      if (conversation.memberId !== null && this.memory.factsOfTurn(turn.id) < 3) {
+        this.memory.record(
+          conversation.projectId,
+          {
+            kind: 'fact',
+            title: act.title,
+            text: act.text,
+            source: 'specialist',
+            memberId: conversation.memberId,
+            conversationId: conversation.id,
+            turnId: turn.id,
+            taskId: conversation.taskId,
+          },
+          this.environment.newId(),
+          at,
+        );
       }
     } else if (act.kind === 'use') {
       turn.steps.push({

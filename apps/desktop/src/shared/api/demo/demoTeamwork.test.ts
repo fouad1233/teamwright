@@ -69,7 +69,15 @@ describe('handoffs and messages in the DemoBackend', () => {
     const conversation = await backend.startWork(drivers.id);
 
     const brief = conversation.turns[0]?.request ?? '';
-    expect(brief).toBe(briefFor(project, waiting, await backend.listTasks(project.id), handoffs));
+    expect(brief).toBe(
+      briefFor(
+        project,
+        waiting,
+        await backend.listTasks(project.id),
+        handoffs,
+        await backend.projectMemory(project.id),
+      ),
+    );
     expect(brief).toContain('What the tasks it builds on handed over:');
     expect(brief).toContain('- define-the-pin-map.md');
   });

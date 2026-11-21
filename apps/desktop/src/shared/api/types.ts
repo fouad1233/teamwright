@@ -777,6 +777,51 @@ export interface TeamTalk {
   messages: TeamMessage[];
 }
 
+/** What an entry of project memory is. */
+export type MemoryKind = 'decision' | 'fact' | 'contract';
+
+/**
+ * Where an entry of project memory came from: the manager wrote it, a
+ * specialist remembered it, the manager answered a specialist's decision
+ * request, or a specialist published a handoff with an interface contract.
+ */
+export type MemorySource = 'manager' | 'specialist' | 'decision_request' | 'handoff';
+
+/**
+ * An entry of the memory of a project: what the team should not have to ask
+ * twice. It never changes in place: a newer entry replaces it, and then it
+ * says which (decision 0036).
+ */
+export interface MemoryEntry {
+  id: Id;
+  kind: MemoryKind;
+  /** A short title of one line. */
+  title: string;
+  text: string;
+  source: MemorySource;
+  /**
+   * The specialist, conversation and turn it came from; all null when the
+   * manager wrote it. The specialist may have left the team since.
+   */
+  memberId: Id | null;
+  conversationId: Id | null;
+  turnId: Id | null;
+  /** The task it belongs to, or null for the whole project. The task may be gone. */
+  taskId: Id | null;
+  recordedAt: Moment;
+  /** The newer entry that replaced it, or null while it is current. */
+  replacedBy: Id | null;
+}
+
+/** A fact the manager adds to the memory of a project. */
+export interface NewMemoryFact {
+  projectId: Id;
+  title: string;
+  text: string;
+  /** The task it belongs to, or null for the whole project. */
+  taskId: Id | null;
+}
+
 /**
  * A thread of work with one AI specialist: about a task, or a question the
  * manager asked. Or a thread with the Advisor, in which a project is

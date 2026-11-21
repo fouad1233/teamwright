@@ -1,0 +1,262 @@
+.view {
+  height: 100%;
+  padding: 0 var(--space-5) var(--space-6);
+  overflow-y: auto;
+}
+
+/* One column of reading width: entries are read, not scanned in a grid. */
+.sheet {
+  display: flex;
+  flex-direction: column;
+  max-width: 820px;
+}
+
+/* The bar stays in view while the entries scroll under it. */
+.bar {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--rule);
+  background: var(--ground);
+}
+
+.search {
+  position: relative;
+  display: flex;
+  flex: 0 1 280px;
+  align-items: center;
+  min-width: 180px;
+}
+
+.searchMark {
+  position: absolute;
+  left: var(--space-2);
+  width: 14px;
+  height: 14px;
+  color: var(--ink-faint);
+  pointer-events: none;
+}
+
+.searchInput {
+  width: 100%;
+  padding-left: calc(var(--space-2) + 14px + var(--space-2));
+}
+
+.switch {
+  display: inline-flex;
+  flex: none;
+  padding: 2px;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius-control);
+}
+
+.choice {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  height: 22px;
+  padding: 0 var(--space-2);
+  border-radius: 3px;
+  color: var(--ink-faint);
+  font-size: var(--text-small);
+  font-weight: 550;
+  line-height: 22px;
+  transition:
+    background-color 100ms ease,
+    color 100ms ease;
+}
+
+.choice:hover {
+  color: var(--ink);
+}
+
+.chosen,
+.chosen:hover {
+  background: var(--pressed);
+  color: var(--ink);
+}
+
+/* Counted, so it is set in the monospace. */
+.count {
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+}
+
+.space {
+  flex: 1;
+}
+
+.note {
+  padding: var(--space-3) 0;
+  color: var(--danger);
+}
+
+.empty {
+  max-width: 560px;
+  padding: var(--space-6) 0;
+  color: var(--ink-soft);
+  line-height: 1.55;
+}
+
+.entries {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.entry {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-4) 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.heading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  min-height: var(--control-height);
+}
+
+/* The kind in its pigment, with a small square of it: the color only tells
+   the kinds apart, and the word says the same. */
+.kind {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  width: 84px;
+  color: var(--tone-text);
+}
+
+.kind::before {
+  width: 7px;
+  height: 7px;
+  background: var(--tone);
+  content: '';
+}
+
+.decision {
+  --tone: var(--pigment-purple);
+  --tone-text: var(--pigment-purple-text);
+}
+
+.fact {
+  --tone: var(--pigment-teal);
+  --tone-text: var(--pigment-teal-text);
+}
+
+.contract {
+  --tone: var(--pigment-blue);
+  --tone-text: var(--pigment-blue-text);
+}
+
+.title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink);
+  font-size: var(--text-body);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The text and its origin stand under the title, past the column of the kind. */
+.text,
+.origin {
+  padding-left: calc(84px + var(--space-3));
+}
+
+.text {
+  color: var(--ink);
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* An interface is exact: names, pins, numbers. It is set in the monospace. */
+.contract.text {
+  font-family: var(--font-mono);
+  font-size: var(--text-small);
+  line-height: 1.6;
+}
+
+/* Where and when, in parts set apart by a dot in the color of the rules. */
+.origin {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: var(--space-2);
+  color: var(--ink-faint);
+  font-size: var(--text-small);
+}
+
+/* An inline block, so that the underline of a task does not run under it. */
+.origin > * + *::before {
+  display: inline-block;
+  margin-right: var(--space-2);
+  color: var(--rule-strong);
+  content: '·';
+}
+
+.task {
+  color: var(--ink-soft);
+  font-size: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--rule-strong);
+  text-underline-offset: 2px;
+}
+
+.task:hover {
+  color: var(--ink);
+}
+
+.moment {
+  font-family: var(--font-mono);
+}
+
+/* An entry a newer one replaced stays readable, a step back. */
+.replaced .title,
+.replaced .text {
+  color: var(--ink-faint);
+}
+
+.replacedNote {
+  color: var(--ink-soft);
+}
+
+.replacedSwitch {
+  align-self: flex-start;
+  margin-top: var(--space-4);
+  color: var(--ink-soft);
+  font-size: var(--text-small);
+  text-decoration: underline;
+  text-decoration-color: var(--rule-strong);
+  text-underline-offset: 2px;
+}
+
+.replacedSwitch:hover {
+  color: var(--ink);
+}
+
+.warning {
+  color: var(--ink-soft);
+  overflow-wrap: anywhere;
+}
+
+.dialogActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}

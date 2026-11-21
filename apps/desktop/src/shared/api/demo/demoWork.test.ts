@@ -140,13 +140,17 @@ describe('the work of specialists in the DemoBackend', () => {
       environment.passAll();
 
       const kinds = seen.map((conversation) => conversation.turns[0]?.steps.at(-1)?.kind);
-      // The handoff before the report is told as well; it adds no step.
+      // A search of the memory is a tool. The fact it remembers and the
+      // handoff before the report are told as well; they add no step.
       expect(kinds).toEqual([
         'notice',
         'text',
         'tool',
         'tool',
+        'tool',
+        'tool',
         'text',
+        'tool',
         'tool',
         'tool',
         'tool',

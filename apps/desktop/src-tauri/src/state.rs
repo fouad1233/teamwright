@@ -139,6 +139,8 @@ pub struct AppState {
     pub work: WorkService,
     /// What the specialists hand each other: handoffs and messages.
     pub teamwork: teamwright_application::TeamworkService,
+    /// The memory of the projects: decisions, facts and contracts.
+    pub memory: teamwright_application::MemoryService,
     /// The use cases for keeping this computer in step with the manager's
     /// other computers.
     pub sync: SyncService,
@@ -248,7 +250,7 @@ impl AppState {
             conversations: conversation_repository.clone(),
             planning: planning_repository,
             teamwork: teamwork_repository.clone(),
-            memory: memory_repository,
+            memory: memory_repository.clone(),
             folders: folders.clone(),
             places: places_repository.clone(),
             file_system: file_system.clone(),
@@ -267,6 +269,12 @@ impl AppState {
             project_repository.clone(),
             member_repository.clone(),
             teamwork_repository,
+        );
+        let memory = teamwright_application::MemoryService::new(
+            project_repository.clone(),
+            task_repository.clone(),
+            memory_repository,
+            clock.clone(),
         );
         let workbook = WorkbookService::new(WorkbookPorts {
             projects: project_repository.clone(),
@@ -339,6 +347,7 @@ impl AppState {
                 clock,
             ),
             teamwork,
+            memory,
             work,
             sync,
             google_drive: GoogleDriveService::new(Arc::new(LocalDriveSurroundings)),

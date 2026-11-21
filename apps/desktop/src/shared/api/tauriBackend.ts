@@ -60,6 +60,8 @@ import type {
   TaskChange,
   TaskOnGitHub,
   TeamTalk,
+  MemoryEntry,
+  NewMemoryFact,
   ThemeName,
   View,
   ViewFilter,
@@ -450,6 +452,26 @@ export class TauriBackend implements Backend {
 
   teamTalk(projectId: Id): Promise<TeamTalk> {
     return call('team_talk', { projectId });
+  }
+
+  projectMemory(projectId: Id): Promise<MemoryEntry[]> {
+    return call('project_memory', { projectId });
+  }
+
+  searchMemory(projectId: Id, query: string): Promise<MemoryEntry[]> {
+    return call('search_memory', { projectId, query });
+  }
+
+  addMemoryFact(fact: NewMemoryFact): Promise<MemoryEntry> {
+    return call('add_memory_fact', { input: fact });
+  }
+
+  changeMemoryEntry(entryId: Id, title: string, text: string): Promise<MemoryEntry> {
+    return call('change_memory_entry', { entryId, title, text });
+  }
+
+  removeMemoryEntry(entryId: Id): Promise<void> {
+    return call('remove_memory_entry', { entryId });
   }
 
   startWork(taskId: Id): Promise<Conversation> {

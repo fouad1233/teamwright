@@ -8,6 +8,7 @@ import type {
   Id,
   Member,
   MemberProfile,
+  MemoryEntry,
   Priority,
   Project,
   Sprint,
@@ -567,7 +568,114 @@ export function sampleWorkspace(today: Date = new Date()): DemoWorkspace {
     areas,
     tags,
     teamTalk: sampleTeamTalk(today),
+    memory: { [project.id]: sampleMemory(today) },
   };
+}
+
+/**
+ * What the sample project remembers: decisions the manager made when the
+ * hardware engineer asked, the contracts the handoffs left, facts the team
+ * recorded, one fact the manager wrote, and one fact that a newer one
+ * replaced.
+ */
+function sampleMemory(today: Date): MemoryEntry[] {
+  const hoursAgo = (hours: number) =>
+    new Date(today.getTime() - hours * 60 * 60 * 1000).toISOString();
+  const sample = (name: string) => `demo-sample-${name}`;
+  const fromSpecialist = (memberId: Id, conversation: string, turn: string) => ({
+    memberId,
+    conversationId: sample(conversation),
+    turnId: sample(turn),
+  });
+  const fromManager = { memberId: null, conversationId: null, turnId: null };
+  return [
+    {
+      id: sample('memory-microcontroller'),
+      kind: 'decision',
+      title: 'Which microcontroller should the sensor node use?',
+      text:
+        'Asked: Which microcontroller should the sensor node use?\n\n' +
+        'Decision: ESP32-C3\n\nWi-Fi on the chip matters more than the lowest price.',
+      source: 'decision_request',
+      ...fromSpecialist(
+        TEAM.hardware.id,
+        'conversation-microcontroller',
+        'turn-microcontroller-asks',
+      ),
+      taskId: taskId(2),
+      recordedAt: hoursAgo(54),
+      replacedBy: null,
+    },
+    {
+      id: sample('memory-microcontroller-contract'),
+      kind: 'contract',
+      title: 'Interface of SSN-2: Choose the microcontroller',
+      text:
+        '3.3 V supply, 350 mA at the peak of a Wi-Fi burst.\nI2C on GPIO 4 (SDA) and GPIO 5 ' +
+        '(SCL).\nSPI2 for the display: GPIO 6 (SCK), 7 (MOSI), 10 (CS).\nProgrammed over USB ' +
+        'on GPIO 18 and 19.',
+      source: 'handoff',
+      ...fromSpecialist(TEAM.hardware.id, 'conversation-microcontroller', 'turn-microcontroller'),
+      taskId: taskId(2),
+      recordedAt: hoursAgo(50),
+      replacedBy: null,
+    },
+    {
+      id: sample('memory-enclosure-old'),
+      kind: 'fact',
+      title: 'Height of the enclosure',
+      text: 'The enclosure may be up to 15 mm high.',
+      source: 'specialist',
+      ...fromSpecialist(TEAM.mechanical.id, 'conversation-enclosure', 'turn-enclosure-first'),
+      taskId: taskId(10),
+      recordedAt: hoursAgo(40),
+      replacedBy: sample('memory-enclosure'),
+    },
+    {
+      id: sample('memory-enclosure'),
+      kind: 'fact',
+      title: 'Height of the enclosure',
+      text: 'The enclosure must stay under 12 mm, so that it fits behind a picture frame.',
+      source: 'manager',
+      ...fromManager,
+      taskId: taskId(10),
+      recordedAt: hoursAgo(30),
+      replacedBy: null,
+    },
+    {
+      id: sample('memory-sensors-contract'),
+      kind: 'contract',
+      title: 'Interface of SSN-3: Select the sensors and the display',
+      text: 'SCD41 at I2C address 0x62, BME680 at 0x76. Both on the one I2C bus.',
+      source: 'handoff',
+      ...fromSpecialist(TEAM.hardware.id, 'conversation-sensors', 'turn-sensors'),
+      taskId: taskId(3),
+      recordedAt: hoursAgo(26),
+      replacedBy: null,
+    },
+    {
+      id: sample('memory-display'),
+      kind: 'fact',
+      title: 'The display bus',
+      text: 'The e-paper display is on SPI2 and has the bus to itself.',
+      source: 'specialist',
+      ...fromSpecialist(TEAM.hardware.id, 'conversation-sensors', 'turn-sensors'),
+      taskId: taskId(3),
+      recordedAt: hoursAgo(25),
+      replacedBy: null,
+    },
+    {
+      id: sample('memory-pull-ups'),
+      kind: 'fact',
+      title: 'Pull-ups on the I2C lines',
+      text: 'The board has 4.7 kΩ pull-ups on SDA and SCL. The internal pull-ups stay off.',
+      source: 'specialist',
+      ...fromSpecialist(TEAM.hardware.id, 'conversation-sensors', 'turn-sensors-again'),
+      taskId: null,
+      recordedAt: hoursAgo(5),
+      replacedBy: null,
+    },
+  ];
 }
 
 /**

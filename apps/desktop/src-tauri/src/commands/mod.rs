@@ -11,6 +11,7 @@ pub mod files;
 pub mod github;
 pub mod google_drive;
 pub mod integrations;
+pub mod memory;
 pub mod notifications;
 pub mod places;
 pub mod projects;

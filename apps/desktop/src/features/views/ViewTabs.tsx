@@ -39,6 +39,7 @@ const DRAG_START_DISTANCE = 6;
 const PLACE_LABELS: Record<ProjectPlace, string> = {
   team: 'Team',
   office: 'Office',
+  memory: 'Memory',
   advisor: 'Advisor',
 };
 

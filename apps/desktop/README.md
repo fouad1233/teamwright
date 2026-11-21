@@ -152,6 +152,21 @@ The shell is where the work of an AI specialist meets the outside world
   sample handoffs and messages, delivers a waiting message with the
   receiver's next turn, and its simulated specialist hands its result over
   before it reports.
+- **Project memory** ([decision 0036](../../docs/decisions/0036-project-memory.md)).
+  `commands/memory.rs` gives every entry of a project (`project_memory`,
+  `MemoryEntryDto`), a search by the rule the specialists search by
+  (`search_memory`), and adding a fact, changing an entry (a newer entry
+  replaces it) and removing one. The fixed place **Memory**, between Office
+  and Advisor (`features/memory`), lists the current entries the newest
+  first, by kind, with where each came from and its task; it searches, adds,
+  changes, removes, and shows the replaced entries on request. A turn shows
+  the facts it remembered among its steps, and a search of memory reads as
+  "Memory · searched for …". The memory is asked for again whenever a
+  conversation of the project changes. The demo backend keeps it in
+  `shared/api/demo/memory.ts`, starts with sample entries, turns an answered
+  decision and the contract of a handoff into entries, puts memory into the
+  brief, and its simulated specialist searches memory and, on every other
+  task, remembers a fact.
 - **What the agents spent.** `project_usage` answers with what every member,
   the Advisor and those who left have spent (`ProjectUsageDto`: the tokens
   by kind and in all, the turns that ended, the model of the latest turn,

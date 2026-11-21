@@ -9,6 +9,8 @@ import { Button } from '@/shared/ui/Button';
 import { Prose } from '@/shared/ui/Prose';
 
 import { RunsElsewhere, useComputerOf } from '../sync/RunsElsewhere';
+import { toolStepInWords } from '../memory/memoryModel';
+import { RememberedInTurn } from '../memory/RememberedInTurn';
 import { TalkOfTurnView } from '../teamwork/TalkOfTurnView';
 import { talkOfTurn } from '../teamwork/teamworkModel';
 import { MemberAvatar } from '../team/Assignee';
@@ -215,6 +217,7 @@ export function TurnView({ turn, reportTitle = 'Report', children }: TurnViewPro
       )}
 
       <TalkOfTurnView talk={talk} part="said" />
+      <RememberedInTurn turnId={turn.id} />
 
       {/* A turn ends in a report or in a question. What a specialist says
           next to its question is no report, so it gets no such title. */}
@@ -270,16 +273,19 @@ function StepView({ step }: { step: Step }) {
           <Prose text={step.text} />
         </div>
       );
-    case 'tool':
+    case 'tool': {
+      // The tools of memory are named in words; any other tool by its name.
+      const shown = toolStepInWords(step.tool, step.summary);
       return (
         <p className={styles.tool}>
-          <span className={classNames('label', styles.toolName)}>{step.tool}</span>
+          <span className={classNames('label', styles.toolName)}>{shown.name}</span>
           <span className={styles.toolSummary} data-selectable>
-            {step.summary}
+            {shown.summary}
           </span>
           <ToolOutcome outcome={step.outcome} />
         </p>
       );
+    }
     case 'denied':
       return (
         <p className={classNames(styles.tool, styles.denied)}>

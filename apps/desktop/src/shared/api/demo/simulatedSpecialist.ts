@@ -25,7 +25,12 @@ export type Act =
   /** Finishes the use of a tool that was begun. */
   | { kind: 'finish'; id: string }
   /** Hands the result of the task over, with the tool publish_handoff. */
-  | { kind: 'handoff'; summary: string; contract: string; files: string[] };
+  | { kind: 'handoff'; summary: string; contract: string; files: string[] }
+  /** Records a fact in the memory of the project, with the tool remember. */
+  | { kind: 'remember'; title: string; text: string };
+
+/** The name of the tool search_memory as a session of Claude Code calls it. */
+export const SEARCH_MEMORY_TOOL = 'mcp__teamwright__search_memory';
 
 /** An act, and how long after the act before it happens, in milliseconds. */
 export interface TimedAct {
@@ -143,6 +148,21 @@ export function scriptForTask(task: Task): Script {
     return scriptForChoice(task);
   }
   const file = `${fileNameFor(task.title)}.md`;
+  // Now and then, on every other task, the specialist learns something the
+  // team will need and remembers it, as its instructions ask.
+  const remembers: TimedAct[] =
+    task.number % 2 === 1
+      ? [
+          {
+            after: 600,
+            act: {
+              kind: 'remember',
+              title: `Where ${task.title.toLowerCase()} is written down`,
+              text: `The result of "${task.title}" is in ${file}, in the folder of the project. Build on it rather than starting again.`,
+            },
+          },
+        ]
+      : [];
   return {
     acts: [
       { after: 0, act: { kind: 'note', message: WHAT_THIS_IS } },
@@ -150,6 +170,18 @@ export function scriptForTask(task: Task): Script {
         after: 700,
         act: { kind: 'say', text: 'I am reading the task and what the project already has.' },
       },
+      // As the instructions ask, it looks in the memory of the project
+      // before it decides anything that may have been decided.
+      {
+        after: 500,
+        act: {
+          kind: 'use',
+          id: 'search',
+          tool: SEARCH_MEMORY_TOOL,
+          summary: searchWordsFor(task.title),
+        },
+      },
+      { after: 500, act: { kind: 'finish', id: 'search' } },
       { after: 600, act: { kind: 'use', id: 'read', tool: 'Read', summary: 'README.md' } },
       { after: 500, act: { kind: 'finish', id: 'read' } },
       {
@@ -158,6 +190,7 @@ export function scriptForTask(task: Task): Script {
       },
       { after: 700, act: { kind: 'use', id: 'write', tool: 'Write', summary: file } },
       { after: 900, act: { kind: 'finish', id: 'write' } },
+      ...remembers,
       // As the instructions of a specialist ask, it hands the result over
       // before its report, for whoever builds on the task.
       {
@@ -197,6 +230,15 @@ export function scriptForMessage(member: Member): Script {
     tokens: { input: 18, output: 120, cacheRead: 22_300, cacheWritten: 310 },
     contextAdded: 9800,
   };
+}
+
+/** A few words to search memory with, from the title of a task: its longer words. */
+function searchWordsFor(title: string): string {
+  const words = title
+    .toLowerCase()
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter((word) => word.length > 3);
+  return (words.length > 0 ? words : [title.toLowerCase()]).slice(0, 3).join(' ');
 }
 
 /** A file name made from a title: small letters and digits, joined by hyphens. */

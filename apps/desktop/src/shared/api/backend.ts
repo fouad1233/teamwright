@@ -55,6 +55,8 @@ import type {
   TaskChange,
   TaskOnGitHub,
   TeamTalk,
+  MemoryEntry,
+  NewMemoryFact,
   ThemeName,
   View,
   ViewFilter,
@@ -464,6 +466,30 @@ export interface Backend {
    * they are asked for again when a conversation changes.
    */
   teamTalk(projectId: Id): Promise<TeamTalk>;
+  /**
+   * Every entry of the memory of a project, current and replaced, the
+   * newest first. Entries arrive while specialists work and when the
+   * manager answers a question, so they are asked for again when a
+   * conversation changes.
+   */
+  projectMemory(projectId: Id): Promise<MemoryEntry[]>;
+  /**
+   * The current entries of a project that fit a few words, the newest
+   * first: each word begins a word of the title or the text, whatever the
+   * capitals. Blank words give every current entry. The specialists search
+   * by the same rule. Too many words are refused (`rule_broken`).
+   */
+  searchMemory(projectId: Id, query: string): Promise<MemoryEntry[]>;
+  /** Adds a fact the manager writes. Returns the new entry. */
+  addMemoryFact(fact: NewMemoryFact): Promise<MemoryEntry>;
+  /**
+   * Changes an entry: the words become a newer entry of the same kind and
+   * task that replaces it, and the older one stays and says so. An entry
+   * replaced already is refused (`rule_broken`). Returns the newer entry.
+   */
+  changeMemoryEntry(entryId: Id, title: string, text: string): Promise<MemoryEntry>;
+  /** Removes an entry from memory. */
+  removeMemoryEntry(entryId: Id): Promise<void>;
   /**
    * What the specialists and the Advisor of a project have spent, in tokens
    * of every kind, and how full the context of each is. Worked out from the

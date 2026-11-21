@@ -7,7 +7,7 @@ import type { Id } from '@/shared/api/types';
  * belong to the manager, they are about the project itself and are always
  * there.
  */
-export const PROJECT_PLACES = ['team', 'office', 'advisor'] as const;
+export const PROJECT_PLACES = ['team', 'office', 'memory', 'advisor'] as const;
 
 export type ProjectPlace = (typeof PROJECT_PLACES)[number];
 
@@ -65,7 +65,7 @@ export interface Navigation extends Location {
   showView: (viewId: Id) => void;
   /** Shows the first view of the open project, whatever it is. */
   showFirstView: () => void;
-  /** Shows one of the places of the open project: its team, its office or its Advisor. */
+  /** Shows one of the places of the open project: its team, its office, its memory or its Advisor. */
   showPlace: (place: ProjectPlace) => void;
   openTask: (taskId: Id) => void;
   /** Opens a task of any project, for example from the inbox. */

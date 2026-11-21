@@ -2525,6 +2525,62 @@ impl From<&teamwright_domain::TeamMessage> for TeamMessageDto {
     }
 }
 
+/// An entry of the memory of a project: a decision, a fact or a contract.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MemoryEntryDto {
+    id: String,
+    /// "decision", "fact" or "contract".
+    kind: &'static str,
+    title: String,
+    text: String,
+    /// Where it came from: "manager", "specialist", "decision_request" or
+    /// "handoff".
+    source: &'static str,
+    /// The specialist, conversation and turn it came from; all null when
+    /// the manager wrote it. The specialist may have left the team.
+    member_id: Option<String>,
+    conversation_id: Option<String>,
+    turn_id: Option<String>,
+    /// The task it belongs to, or null for the whole project. The task may
+    /// have been deleted since.
+    task_id: Option<String>,
+    recorded_at: String,
+    /// The newer entry that replaced it, or null while it is current.
+    replaced_by: Option<String>,
+}
+
+impl From<&teamwright_domain::MemoryEntry> for MemoryEntryDto {
+    fn from(entry: &teamwright_domain::MemoryEntry) -> Self {
+        let origin = entry.origin();
+        let said_in = origin.said_in();
+        Self {
+            id: entry.id().to_string(),
+            kind: entry.kind().as_str(),
+            title: entry.title().to_owned(),
+            text: entry.text().to_owned(),
+            source: origin.source().as_str(),
+            member_id: said_in.map(|said| said.member_id.to_string()),
+            conversation_id: said_in.map(|said| said.conversation_id.to_string()),
+            turn_id: said_in.map(|said| said.turn_id.to_string()),
+            task_id: entry.task_id().map(|id| id.to_string()),
+            recorded_at: moment_to_text(entry.recorded_at()),
+            replaced_by: entry.replaced_by().map(|id| id.to_string()),
+        }
+    }
+}
+
+/// A fact the manager adds to the memory of a project.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NewMemoryFactInput {
+    pub project_id: String,
+    pub title: String,
+    pub text: String,
+    /// The task it belongs to, or null for the whole project.
+    pub task_id: Option<String>,
+}
+
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used)]
@@ -2681,5 +2737,37 @@ mod tests {
             read(serde_json::json!({ "kind": "prioritize", "task": 0, "priority": "huge" }))
                 .is_err()
         );
+    }
+
+    #[test]
+    fn an_entry_of_memory_goes_out_with_where_it_came_from() {
+        use teamwright_domain::{
+            ConversationId, MemberId, MemoryContent, MemoryEntry, MemoryKind, MemoryOrigin,
+            ProjectId, SaidIn, TurnId,
+        };
+
+        let said_in = SaidIn {
+            member_id: MemberId::generate(),
+            conversation_id: ConversationId::generate(),
+            turn_id: TurnId::generate(),
+        };
+        let entry = MemoryEntry::record(
+            ProjectId::generate(),
+            MemoryKind::Decision,
+            MemoryContent::new("Power", "Battery only.").unwrap(),
+            MemoryOrigin::DecisionRequest(said_in),
+            None,
+            chrono::Utc.with_ymd_and_hms(2026, 11, 21, 9, 0, 0).unwrap(),
+        );
+
+        let sent = serde_json::to_value(MemoryEntryDto::from(&entry)).unwrap();
+
+        assert_eq!(sent["kind"], "decision");
+        assert_eq!(sent["source"], "decision_request");
+        assert_eq!(sent["memberId"], said_in.member_id.to_string());
+        assert_eq!(sent["turnId"], said_in.turn_id.to_string());
+        assert_eq!(sent["taskId"], serde_json::Value::Null);
+        assert_eq!(sent["replacedBy"], serde_json::Value::Null);
+        assert_eq!(sent["recordedAt"], "2026-11-21T09:00:00.000Z");
     }
 }
