@@ -12,8 +12,9 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use chrono::TimeDelta;
 use teamwright_domain::{
     Area, AreaId, Conversation, ConversationId, Digest, DigestId, EarlierConversation, Handoff,
-    HandoffId, Member, MemberId, MemoryEntry, MemoryEntryId, Project, ProjectId, Sprint, SprintId,
-    Tag, TagId, Task, TaskId, TeamMessage, TeamMessageId, Timestamp, Turn, TurnId, View, ViewId,
+    HandoffId, Member, MemberId, MemoryEntry, MemoryEntryId, Project, ProjectId, Release, Sprint,
+    SprintId, Tag, TagId, Task, TaskId, TeamMessage, TeamMessageId, Timestamp, Turn, TurnId, View,
+    ViewId,
 };
 
 use crate::agent_runtime::{
@@ -30,6 +31,7 @@ use crate::ports::{
     StorageError, TagRepository, TaskRepository, TeamworkRepository, ViewRepository, WorkListener,
 };
 use crate::project_events::ProjectEvent;
+use crate::updates::{UpdateChoice, UpdateChoiceStore};
 
 /// Locks a mutex, and keeps working even if another thread panicked while it
 /// held the lock. The values guarded here are valid after every single
@@ -68,6 +70,37 @@ impl ThemeStore for InMemoryThemeStore {
 
     fn set_theme(&self, theme: Theme) -> Result<(), StorageError> {
         *lock(&self.theme) = theme;
+        Ok(())
+    }
+}
+
+/// Keeps the choice about looking for newer versions in memory.
+#[derive(Debug, Default)]
+pub struct InMemoryUpdateChoice {
+    choice: Mutex<UpdateChoice>,
+}
+
+impl UpdateChoiceStore for InMemoryUpdateChoice {
+    fn choice(&self) -> Result<UpdateChoice, StorageError> {
+        Ok(lock(&self.choice).clone())
+    }
+
+    fn set_on(&self, is_on: bool) -> Result<(), StorageError> {
+        lock(&self.choice).is_on = is_on;
+        Ok(())
+    }
+
+    fn record_look(
+        &self,
+        at: Timestamp,
+        answer: Option<Option<&Release>>,
+    ) -> Result<(), StorageError> {
+        let mut choice = lock(&self.choice);
+        choice.last_look = Some(at);
+        choice.last_look_failed = answer.is_none();
+        if let Some(offered) = answer {
+            choice.offered = offered.cloned();
+        }
         Ok(())
     }
 }

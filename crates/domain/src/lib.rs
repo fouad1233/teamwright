@@ -34,6 +34,7 @@ pub mod planning;
 pub mod project;
 pub mod project_files;
 pub mod ready_made;
+pub mod release;
 pub mod secrets;
 pub mod sprint;
 pub mod sprint_course;
@@ -90,6 +91,7 @@ pub use planning::{
 pub use project::{Project, ProjectKey, ProjectSnapshot};
 pub use project_files::{EntryKind, FolderEntry, PathInFolder};
 pub use ready_made::ReadyMadeSpecialist;
+pub use release::{Release, Version, newer_release};
 pub use secrets::hide_secrets;
 pub use sprint::{
     CountedTask, Sprint, SprintDates, SprintSnapshot, SprintState, SprintSummary, SprintUnit,
