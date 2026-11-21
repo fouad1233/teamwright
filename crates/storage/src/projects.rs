@@ -9,7 +9,7 @@ use serde_json::{Map, Value};
 use teamwright_application::{ProjectRepository, StorageError};
 use teamwright_domain::{
     DomainError, Project, ProjectId, ProjectKey, ProjectName, ProjectSnapshot, Status, StatusName,
-    Workflow,
+    WorkInProgressLimit, Workflow,
 };
 
 use crate::codec;
@@ -41,14 +41,15 @@ const UPSERT_PROJECT: &str = "
         archived_at = excluded.archived_at";
 
 const UPSERT_STATUS: &str = "
-    INSERT INTO statuses (id, project_id, position, name, category, color)
-    VALUES (:id, :project_id, :position, :name, :category, :color)
+    INSERT INTO statuses (id, project_id, position, name, category, color, task_limit)
+    VALUES (:id, :project_id, :position, :name, :category, :color, :task_limit)
     ON CONFLICT (id) DO UPDATE SET
         project_id = excluded.project_id,
         position = excluded.position,
         name = excluded.name,
         category = excluded.category,
-        color = excluded.color";
+        color = excluded.color,
+        task_limit = excluded.task_limit";
 
 /// A status as the database and the operation log keep it.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -57,6 +58,11 @@ struct StatusRecord {
     name: String,
     category: String,
     color: String,
+    /// The work-in-progress limit, if the status has one. A state logged
+    /// before limits existed has no such key, and is read as a status
+    /// without a limit.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    limit: Option<i64>,
 }
 
 impl StatusRecord {
@@ -67,19 +73,27 @@ impl StatusRecord {
             name: status.name().to_string(),
             category: status.category().to_string(),
             color: status.color().to_string(),
+            limit: status.limit().map(|limit| i64::from(limit.value())),
         }
     }
 
     /// Rebuilds the status, checking the stored values against the rules.
     fn into_status(self) -> Result<Status, DatabaseError> {
-        let name = StatusName::parse(&self.name)
-            .map_err(|reason| codec::damaged_record("status", &self.id, &reason))?;
-        Ok(Status::restore(
+        let broken = |reason: DomainError| codec::damaged_record("status", &self.id, &reason);
+        let name = StatusName::parse(&self.name).map_err(broken)?;
+        let limit = self
+            .limit
+            .map(WorkInProgressLimit::new)
+            .transpose()
+            .map_err(broken)?;
+        Status::restore(
             codec::parse(&self.id)?,
             name,
             codec::parse(&self.category)?,
             codec::parse(&self.color)?,
-        ))
+        )
+        .with_limit(limit)
+        .map_err(broken)
     }
 }
 
@@ -431,6 +445,7 @@ fn upsert_statuses(
                 ":name": status.name,
                 ":category": status.category,
                 ":color": status.color,
+                ":task_limit": status.limit,
             },
         )?;
     }
@@ -466,7 +481,7 @@ fn statuses_of(
     project_id: &str,
 ) -> Result<Vec<StatusRecord>, DatabaseError> {
     let mut statement = connection.prepare(
-        "SELECT id, name, category, color
+        "SELECT id, name, category, color, task_limit
          FROM statuses
          WHERE project_id = :project_id
          ORDER BY position",
@@ -483,7 +498,7 @@ fn statuses_of_all_projects(
     connection: &Connection,
 ) -> Result<HashMap<String, Vec<StatusRecord>>, DatabaseError> {
     let mut statement = connection.prepare(
-        "SELECT project_id, id, name, category, color
+        "SELECT project_id, id, name, category, color, task_limit
          FROM statuses
          ORDER BY project_id, position",
     )?;
@@ -510,5 +525,6 @@ fn status_from_row(row: &Row<'_>) -> rusqlite::Result<StatusRecord> {
         name: row.get("name")?,
         category: row.get("category")?,
         color: row.get("color")?,
+        limit: row.get("task_limit")?,
     })
 }

@@ -2843,3 +2843,51 @@ fn status_named(project: &Project, name: &str) -> StatusId {
         .unwrap()
         .id()
 }
+
+#[test]
+fn the_limit_of_a_status_is_stored_found_again_and_logged_with_the_project() {
+    let store = Store::in_memory();
+    let mut project = store.project("Smart sensor node");
+    let active = project
+        .workflow()
+        .first_in(StatusCategory::Active)
+        .unwrap()
+        .id();
+    project
+        .set_status_limit(
+            active,
+            Some(teamwright_domain::WorkInProgressLimit::new(3).unwrap()),
+        )
+        .unwrap();
+
+    store.projects.save(&project).unwrap();
+
+    assert_eq!(
+        store.projects.find(project.id()).unwrap(),
+        Some(project.clone())
+    );
+    assert_eq!(store.projects.list().unwrap(), [project.clone()]);
+    let log = store.database.operations().unwrap();
+    let state: serde_json::Value =
+        serde_json::from_str(log.last().unwrap().payload.as_deref().unwrap()).unwrap();
+    let limits: Vec<serde_json::Value> = state["statuses"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|status| status["limit"].clone())
+        .collect();
+    assert_eq!(
+        limits,
+        [
+            serde_json::Value::Null,
+            serde_json::json!(3),
+            serde_json::Value::Null,
+            serde_json::Value::Null,
+            serde_json::Value::Null
+        ]
+    );
+
+    project.set_status_limit(active, None).unwrap();
+    store.projects.save(&project).unwrap();
+    assert_eq!(store.projects.find(project.id()).unwrap(), Some(project));
+}

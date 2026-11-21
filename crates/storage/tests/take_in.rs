@@ -17,8 +17,8 @@ use teamwright_application::{
     TeamService, ViewRepository, ViewService, WorkflowTemplate,
 };
 use teamwright_domain::{
-    Area, AreaId, Assignee, ComputerId, MemberKind, Priority, Project, Task, Timestamp, View,
-    ViewAssignee, ViewFilter, ViewKind,
+    Area, AreaId, Assignee, ComputerId, MemberKind, Priority, Project, StatusCategory, Task,
+    Timestamp, View, ViewAssignee, ViewFilter, ViewKind,
 };
 use teamwright_storage::{
     Database, SqliteAreaRepository, SqliteConversationRepository, SqliteMemberRepository,
@@ -1671,4 +1671,50 @@ fn deleting_a_project_on_one_computer_removes_its_tags_on_the_other() {
 
     assert!(laptop.projects.list().unwrap().is_empty());
     assert_eq!(desk.everything(), laptop.everything());
+}
+
+#[test]
+fn a_limit_set_on_one_computer_reaches_the_other() {
+    let (desk, laptop, project, _) = desk_and_laptop();
+    let in_test = project
+        .workflow()
+        .first_in(StatusCategory::Review)
+        .unwrap()
+        .id();
+    desk.projects
+        .set_status_limit(project.id(), in_test, Some(2))
+        .unwrap();
+
+    keep_in_step(&desk, &laptop);
+
+    let limit_on_laptop = laptop
+        .projects
+        .get(project.id())
+        .unwrap()
+        .workflow()
+        .status(in_test)
+        .unwrap()
+        .limit()
+        .map(teamwright_domain::WorkInProgressLimit::value);
+    assert_eq!(limit_on_laptop, Some(2));
+    assert_eq!(laptop.everything(), desk.everything());
+}
+
+#[test]
+fn a_project_made_from_a_template_reaches_the_other_computer_whole() {
+    let desk = Computer::new();
+    let laptop = Computer::new();
+    for template in WorkflowTemplate::ALL {
+        desk.projects
+            .create(NewProject {
+                name: format!("Made from {template:?}"),
+                workflow: template,
+                ..NewProject::default()
+            })
+            .unwrap();
+    }
+
+    keep_in_step(&desk, &laptop);
+
+    assert_eq!(laptop.everything(), desk.everything());
 }

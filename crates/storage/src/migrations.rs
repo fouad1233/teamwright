@@ -30,6 +30,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("schema/0020_member_instructions.sql"),
     include_str!("schema/0018_teamwork.sql"),
     include_str!("schema/0019_tags_and_checklists.sql"),
+    include_str!("schema/0022_status_limits.sql"),
 ];
 
 /// Applies the migrations a database has not seen yet. Each one runs in its
@@ -720,6 +721,43 @@ mod tests {
             )
             .unwrap();
         assert_eq!(merged, 1);
+    }
+
+    #[test]
+    fn statuses_from_before_limits_are_read_without_a_limit() {
+        let before_limits = MIGRATIONS
+            .iter()
+            .position(|migration| migration.contains("ADD COLUMN task_limit"))
+            .unwrap();
+        let mut connection = Connection::open_in_memory().unwrap();
+        testing::migrate_to(&mut connection, before_limits);
+        let project = "0196f3a2-7c1e-7d53-9b6f-2f1a4c8e9d10";
+        connection
+            .execute_batch(&format!(
+                "INSERT INTO projects (id, key, name, description, next_task_number, created_at)
+                 VALUES ('{project}', 'SSN', 'Smart sensor node', '', 1,
+                         '2026-11-11T09:00:00.000Z');
+                 INSERT INTO statuses (id, project_id, position, name, category, color)
+                 VALUES ('0196f3a2-8000-7abc-9def-0000000000a1', '{project}', 0, 'To do',
+                         'todo', 'gray'),
+                        ('0196f3a2-8000-7abc-9def-0000000000a2', '{project}', 1, 'Done',
+                         'done', 'green');"
+            ))
+            .unwrap();
+
+        migrate(&mut connection).unwrap();
+
+        let found = crate::projects::find_project(&connection, project)
+            .unwrap()
+            .unwrap();
+        assert_eq!(found.workflow().statuses().len(), 2);
+        assert!(
+            found
+                .workflow()
+                .statuses()
+                .iter()
+                .all(|status| status.limit().is_none())
+        );
     }
 
     #[test]
