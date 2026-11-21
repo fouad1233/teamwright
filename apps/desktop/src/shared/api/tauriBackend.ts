@@ -58,6 +58,7 @@ import type {
   Tag,
   TaggedTask,
   Task,
+  TaskActual,
   TaskChange,
   TaskOnGitHub,
   TeamTalk,
@@ -187,6 +188,10 @@ export class TauriBackend implements Backend {
 
   listTaskHistory(taskId: Id): Promise<TaskChange[]> {
     return call('list_task_history', { taskId });
+  }
+
+  listTaskActuals(projectId: Id): Promise<TaskActual[]> {
+    return call('list_task_actuals', { projectId });
   }
 
   listProjectHistory(projectId: Id, limit: number, before?: Moment): Promise<ProjectChange[]> {

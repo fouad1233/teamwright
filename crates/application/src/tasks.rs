@@ -3,11 +3,27 @@
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
+use teamwright_domain::{ActualDates, Timing, actual_dates_of, timing_of};
 use teamwright_domain::{
     AreaId, Assignee, CalendarDate, ComputerId, DependencyGraph, Priority, Project, ProjectId,
     Rank, Schedule, SprintId, Status, StatusId, StoryPoints, Task, TaskChange, TaskDraft, TaskId,
     TaskTitle, Timestamp, changes_between, history_of,
 };
+
+/// What really happened to a task, against its plan.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TaskActual {
+    /// The task.
+    pub task_id: TaskId,
+    /// When work on it began and ended, read from its versions.
+    pub dates: ActualDates,
+    /// The day work began, where the program runs.
+    pub started_on: Option<CalendarDate>,
+    /// The day it was finished, where the program runs.
+    pub finished_on: Option<CalendarDate>,
+    /// How that compares with its planned start and due day.
+    pub timing: Timing,
+}
 
 /// One change of a task, with the computer that made it, if it is known.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -294,6 +310,42 @@ impl TaskService {
             }));
         }
         Ok(history)
+    }
+
+    /// Tells what really happened to every task of a project, subtasks
+    /// included, against its plan: when work on it began (it first went
+    /// into a status of a started category) and when it was finished (it
+    /// reached the category done), and whether that was late. It is read off
+    /// the versions of each task in the log, one read for each task, by
+    /// the categories of the statuses and never their names.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if there is no such project or if storage fails.
+    pub fn actual_dates(&self, project_id: ProjectId) -> Result<Vec<TaskActual>, ApplicationError> {
+        let project = self.require_project(project_id)?;
+        let today = self.clock.day_of(self.clock.now());
+        let mut tasks = self.tasks.list_for_project(project.id())?;
+        tasks.sort_by_key(Task::number);
+        tasks
+            .into_iter()
+            .map(|task| {
+                let mut versions = self.tasks.versions_of(task.id())?;
+                if versions.is_empty() {
+                    versions.push(task.clone());
+                }
+                let dates = actual_dates_of(&versions, project.workflow());
+                let started_on = dates.started_at.map(|moment| self.clock.day_of(moment));
+                let finished_on = dates.finished_at.map(|moment| self.clock.day_of(moment));
+                Ok(TaskActual {
+                    task_id: task.id(),
+                    dates,
+                    started_on,
+                    finished_on,
+                    timing: timing_of(task.schedule(), started_on, finished_on, today),
+                })
+            })
+            .collect()
     }
 
     /// Tells what happened to the tasks of a project, the newest change
@@ -1750,6 +1802,36 @@ mod tests {
                 },
             ]
         );
+    }
+
+    #[test]
+    fn the_actual_dates_of_a_task_are_read_from_its_versions_and_compared_with_its_plan() {
+        let workspace = workspace();
+        let project = workspace.project("Smart sensor node");
+        let active = status_in(&project, StatusCategory::Active);
+        let done = status_in(&project, StatusCategory::Done);
+        let late = workspace.task(&project, "Draw the schematic");
+        let unplanned = workspace.task(&project, "Order the parts");
+        workspace
+            .tasks
+            .reschedule(late.id(), Some(day(10)), Some(day(11)))
+            .unwrap();
+        workspace.tasks.move_to(late.id(), active, 0).unwrap();
+        workspace.clock.advance(TimeDelta::days(2));
+        workspace.tasks.move_to(unplanned.id(), done, 0).unwrap();
+
+        let actuals = workspace.tasks.actual_dates(project.id()).unwrap();
+
+        assert_eq!(actuals.len(), 2);
+        let (late_one, unplanned_one) = (actuals[0], actuals[1]);
+        assert_eq!(late_one.task_id, late.id());
+        assert_eq!(late_one.started_on, Some(day(11)));
+        assert_eq!(late_one.finished_on, None);
+        assert_eq!(late_one.timing.started_late, Some(1));
+        assert_eq!(late_one.timing.running_late, Some(2));
+        assert_eq!(unplanned_one.started_on, Some(day(13)));
+        assert_eq!(unplanned_one.finished_on, Some(day(13)));
+        assert_eq!(unplanned_one.timing, Timing::default());
     }
 
     #[test]

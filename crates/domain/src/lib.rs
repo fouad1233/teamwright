@@ -15,6 +15,7 @@
 
 mod macros;
 
+pub mod actual_dates;
 pub mod area;
 pub mod checklist;
 pub mod color;
@@ -43,6 +44,7 @@ pub mod view;
 pub mod work_in_progress;
 pub mod workflow;
 
+pub use actual_dates::{ActualDates, Timing, actual_dates_of, timing_of};
 pub use area::{Area, AreaSnapshot};
 pub use checklist::{Checklist, ChecklistItem};
 pub use color::Color;

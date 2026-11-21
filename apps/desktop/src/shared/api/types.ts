@@ -390,6 +390,30 @@ export interface MovedOn {
 }
 
 /**
+ * What really happened to a task against its plan, read from the log: when
+ * work on it began (it first went into a status of a started category) and
+ * when it was finished (it reached the category done), and how late, in
+ * days. A late count is null when it does not apply.
+ */
+export interface TaskActual {
+  taskId: Id;
+  startedAt: Moment | null;
+  /** Null while it is not done; a task opened again counts from its last finish. */
+  finishedAt: Moment | null;
+  startedOn: CalendarDate | null;
+  finishedOn: CalendarDate | null;
+  /** Whether it was finished once and opened again. */
+  reopened: boolean;
+  /** Began this many days after its planned start, or has not begun so many days after it. */
+  startedLateDays: number | null;
+  /** Whether it has not begun while it is late to begin. */
+  notStarted: boolean;
+  finishedLateDays: number | null;
+  /** Not finished, and its due day was this many days ago. */
+  runningLateDays: number | null;
+}
+
+/**
  * The pace of a team, read from its completed sprints: the least and the
  * most it finished in each of its last sprints, never one number. With
  * fewer than three completed sprints it is too early to tell.

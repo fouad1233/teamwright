@@ -16,7 +16,7 @@ use teamwright_application::{
     NamedTask, NewMember, NewProject, NewSprint, NewTask, NewView, NotificationChoice,
     NotificationKind, NotificationPermission, ProjectChange, ProjectIntegrations, ProjectPlaces,
     ProjectUsage, SprintChanges, SprintForecast, SprintReport, SprintStart, StatusProperties,
-    SyncNotice, SyncState, TaskOnGitHub, WorkflowTemplate, sign_in_problem,
+    SyncNotice, SyncState, TaskActual, TaskOnGitHub, WorkflowTemplate, sign_in_problem,
 };
 use teamwright_domain::{
     Area, Assignee, CalendarDate, Color, ComputerId, ContextUse, Conversation, DecisionOption,
@@ -550,6 +550,40 @@ impl From<&SprintForecast> for SprintForecastDto {
                 most_sprints: forecast.ahead.sprints.and_then(|sprints| sprints.most),
                 without_points: named(&forecast.ahead.without_points),
             },
+        }
+    }
+}
+
+/// What really happened to a task against its plan, as the interface sees
+/// it: when work began and ended, the days of each, and how late, in days.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskActualDto {
+    task_id: String,
+    started_at: Option<String>,
+    finished_at: Option<String>,
+    started_on: Option<String>,
+    finished_on: Option<String>,
+    reopened: bool,
+    started_late_days: Option<u32>,
+    not_started: bool,
+    finished_late_days: Option<u32>,
+    running_late_days: Option<u32>,
+}
+
+impl From<&TaskActual> for TaskActualDto {
+    fn from(actual: &TaskActual) -> Self {
+        Self {
+            task_id: actual.task_id.to_string(),
+            started_at: actual.dates.started_at.map(moment_to_text),
+            finished_at: actual.dates.finished_at.map(moment_to_text),
+            started_on: actual.started_on.map(date_to_text),
+            finished_on: actual.finished_on.map(date_to_text),
+            reopened: actual.dates.reopened,
+            started_late_days: actual.timing.started_late,
+            not_started: actual.timing.not_started,
+            finished_late_days: actual.timing.finished_late,
+            running_late_days: actual.timing.running_late,
         }
     }
 }

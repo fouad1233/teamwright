@@ -53,6 +53,7 @@ import type {
   Tag,
   TaggedTask,
   Task,
+  TaskActual,
   TaskChange,
   TaskOnGitHub,
   TeamTalk,
@@ -234,6 +235,11 @@ export interface Backend {
   deleteTask(taskId: Id): Promise<void>;
   /** Lists what has happened to a task since it was opened, the oldest change first. */
   listTaskHistory(taskId: Id): Promise<TaskChange[]>;
+  /**
+   * Tells what really happened to every task of a project against its plan:
+   * when work began and ended, read from the log, and how late.
+   */
+  listTaskActuals(projectId: Id): Promise<TaskActual[]>;
   /**
    * Tells what happened to the tasks of a project, the newest change first:
    * at most `limit` changes (never more than 200) older than the moment

@@ -109,7 +109,9 @@ pub use sync::{
     SyncSettings, SyncState, TakeInReport,
 };
 pub use tags::TagService;
-pub use tasks::{HistoryEntry, MOST_PROJECT_CHANGES, NewTask, ProjectChange, TaskService};
+pub use tasks::{
+    HistoryEntry, MOST_PROJECT_CHANGES, NewTask, ProjectChange, TaskActual, TaskService,
+};
 pub use team::{NewMember, TeamService};
 pub use teamwork::{
     TeamTalk, TeamworkService, handoffs_in_words, latest_handoff_of, messages_in_words,

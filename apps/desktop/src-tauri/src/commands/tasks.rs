@@ -5,8 +5,8 @@ use teamwright_application::{ProjectEvent, event_of_created_task, event_of_moved
 use teamwright_domain::{Assignee, ComputerId, Member, Project, ProjectId};
 
 use crate::dto::{
-    AssigneeDto, NewTaskInput, ProjectChangeDto, TaskChangeDto, TaskDto, parse_id, parse_moment,
-    parse_optional_date, parse_priority,
+    AssigneeDto, NewTaskInput, ProjectChangeDto, TaskActualDto, TaskChangeDto, TaskDto, parse_id,
+    parse_moment, parse_optional_date, parse_priority,
 };
 use crate::error::CommandError;
 use crate::events;
@@ -219,4 +219,15 @@ pub async fn list_task_history(
         .iter()
         .map(|entry| TaskChangeDto::from(&entry.change).made_on(name_of(entry.computer)))
         .collect())
+}
+
+/// Tells what really happened to every task of a project against its plan:
+/// when work began and ended, read from the log, and how late.
+#[tauri::command]
+pub async fn list_task_actuals(
+    state: State<'_, AppState>,
+    project_id: String,
+) -> Result<Vec<TaskActualDto>, CommandError> {
+    let actuals = state.tasks.actual_dates(parse_id(&project_id)?)?;
+    Ok(actuals.iter().map(TaskActualDto::from).collect())
 }

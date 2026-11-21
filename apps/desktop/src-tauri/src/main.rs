@@ -82,6 +82,7 @@ fn main() -> ExitCode {
             commands::tasks::remove_task_dependency,
             commands::tasks::delete_task,
             commands::tasks::list_task_history,
+            commands::tasks::list_task_actuals,
             commands::tasks::list_project_history,
             commands::sprints::list_sprints,
             commands::sprints::create_sprint,

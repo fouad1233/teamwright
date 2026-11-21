@@ -64,6 +64,7 @@ import type {
   Tag,
   TaggedTask,
   Task,
+  TaskActual,
   TaskChange,
   TaskOnGitHub,
   TeamMessage,
@@ -128,6 +129,7 @@ import {
   tidyChecklistText,
   tidyTagName,
 } from './tags';
+import { actualOf } from './actualDates';
 import { historyOf, pretendedPastOf, projectHistoryOf } from './taskHistory';
 import { contextAfter, usageOfConversations } from './usage';
 import {
@@ -2495,6 +2497,25 @@ export class DemoBackend implements Backend {
     return this.answer(() => {
       this.requireTask(taskId);
       return historyOf(this.versions.get(taskId) ?? []);
+    });
+  }
+
+  listTaskActuals(projectId: Id): Promise<TaskActual[]> {
+    return this.answer(() => {
+      const project = this.requireProject(projectId);
+      const today = dayOfMoment(this.nowAsText());
+      const categoryOf = (statusId: Id) =>
+        project.statuses.find((status) => status.id === statusId)?.category;
+      return this.tasksOfProject(project.id)
+        .sort((first, second) => first.number - second.number)
+        .flatMap((task) => {
+          // The latest change may not be among the noted versions yet.
+          const noted = this.versions.get(task.id) ?? [];
+          const versions =
+            JSON.stringify(noted.at(-1)) === JSON.stringify(task) ? noted : [...noted, task];
+          const actual = actualOf(versions, categoryOf, today);
+          return actual ? [actual] : [];
+        });
     });
   }
 
