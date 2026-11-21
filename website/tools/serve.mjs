@@ -7,6 +7,10 @@
  * /teamwright/, as it will on GitHub Pages, so that the page that answers
  * an unknown address (404.html) can be tried with its real links.
  *
+ * The demo at /teamwright/demo/ is the interface built for it, from
+ * apps/desktop/dist-demo, as the workflow puts it into the published site.
+ * Build it first with `npm run build:demo --workspace @teamwright/desktop`.
+ *
  * Nothing is needed but Node.js. It answers range requests, which a
  * browser uses to play a video, and sends no headers that keep a file in a
  * cache, so that a change shows at the next reload.
@@ -19,6 +23,9 @@ import { fileURLToPath } from 'node:url';
 
 const WEBSITE = join(dirname(fileURLToPath(import.meta.url)), '..');
 const BASE = '/teamwright/';
+/* The demo: where it is in the site, and the folder it is built into. */
+const DEMO_BASE = `${BASE}demo/`;
+const DEMO = join(WEBSITE, '..', 'apps', 'desktop', 'dist-demo');
 const PORT = Number(process.argv[2] || process.env.PORT || 4321);
 
 const TYPES = {
@@ -36,16 +43,18 @@ const TYPES = {
   '.webp': 'image/webp',
   '.ico': 'image/x-icon',
   '.woff2': 'font/woff2',
+  '.woff': 'font/woff',
   '.mp4': 'video/mp4',
   '.bin': 'application/octet-stream',
 };
 
-/** The file under website/ that a path names, or null. */
+/** The file under website/, or of the demo, that a path names, or null. */
 function fileFor(path) {
-  let relative = decodeURIComponent(path.slice(BASE.length));
+  const [root, base] = path.startsWith(DEMO_BASE) ? [DEMO, DEMO_BASE] : [WEBSITE, BASE];
+  let relative = decodeURIComponent(path.slice(base.length));
   if (relative === '' || relative.endsWith('/')) relative += 'index.html';
-  const file = normalize(join(WEBSITE, relative));
-  if (!file.startsWith(WEBSITE + sep)) return null;
+  const file = normalize(join(root, relative));
+  if (!file.startsWith(root + sep)) return null;
   // The tools are not part of the published site.
   if (file.startsWith(join(WEBSITE, 'tools') + sep)) return null;
   try {
@@ -85,8 +94,8 @@ function send(response, status, file, request) {
 
 const server = createServer((request, response) => {
   const path = new URL(request.url, 'http://localhost').pathname;
-  if (path === '/' || path === '/teamwright') {
-    response.writeHead(302, { Location: BASE });
+  if (path === '/' || path === '/teamwright' || path === DEMO_BASE.slice(0, -1)) {
+    response.writeHead(302, { Location: path === '/' || path === '/teamwright' ? BASE : DEMO_BASE });
     response.end();
     return;
   }

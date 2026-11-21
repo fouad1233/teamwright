@@ -373,6 +373,14 @@ code {
   }
 }
 
+/* The demo is made for a larger screen; on a phone the way to it is in
+   "Get it", where it says so. Its button would push the others out. */
+@media (max-width: 539px) {
+  .masthead-demo {
+    display: none;
+  }
+}
+
 /*
  * The film.
  *

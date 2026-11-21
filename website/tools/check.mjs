@@ -18,6 +18,10 @@
  *
  * The film's media (website/media/film) is not in git and is not checked
  * here: the page works without it.
+ *
+ * Nor is the demo (website/demo/ when published): the publishing workflow
+ * builds it from the interface. A page may link into it only while the
+ * workflow does that, and the interface has the script to build it.
  */
 
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
@@ -84,6 +88,9 @@ for (const line of film.lines) {
 /* ---- The pages. ---- */
 
 const PAGES = ['index.html', '404.html'];
+/* Where the publishing workflow puts the demo, and whether a page links to it. */
+const DEMO_FOLDER = join(WEBSITE, 'demo');
+let linksToDemo = false;
 const SITE_ROOT = new URL(ADDRESS).pathname; // "/teamwright/"
 
 /** The file of the site that an address in a page names, or null if the address is elsewhere. */
@@ -108,6 +115,11 @@ function checkAddress(address, where) {
   }
   // The film's media is fetched at publishing, and is not in git.
   if (local.file.startsWith(join(WEBSITE, 'media') + sep)) return null;
+  // The demo is built at publishing, and is checked below.
+  if (local.file.startsWith(DEMO_FOLDER + sep)) {
+    linksToDemo = true;
+    return null;
+  }
   if (!existsSync(local.file)) fail(`${where}: ${address} does not exist`);
   return local.file;
 }
@@ -184,6 +196,22 @@ for (const name of ['robots.txt', 'sitemap.xml']) {
   if (!readFileSync(join(WEBSITE, name), 'utf8').includes(ADDRESS)) fail(`${name} does not name ${ADDRESS}`);
 }
 if (!readFileSync(FILM_DATA, 'utf8').includes(`"address": "${ADDRESS}"`)) fail(`film.json does not name ${ADDRESS}`);
+
+/* ---- The demo is built where the pages expect it. ---- */
+
+if (linksToDemo) {
+  const REPOSITORY = join(WEBSITE, '..');
+  const workflow = readFileSync(join(REPOSITORY, '.github', 'workflows', 'pages.yml'), 'utf8');
+  const desktop = JSON.parse(readFileSync(join(REPOSITORY, 'apps', 'desktop', 'package.json'), 'utf8'));
+  if (!desktop.scripts?.['build:demo']) fail('a page links to demo/, but apps/desktop has no script build:demo');
+  if (!workflow.includes('npm run build:demo --workspace @teamwright/desktop')) {
+    fail('a page links to demo/, but pages.yml does not build the demo');
+  }
+  if (!workflow.includes('cp -r apps/desktop/dist-demo "$RUNNER_TEMP/site/demo"')) {
+    fail('a page links to demo/, but pages.yml does not put the demo into the site at demo/');
+  }
+}
+if (existsSync(DEMO_FOLDER)) fail('website/demo is made by the publishing workflow; remove the folder');
 
 /* ---- Weights. ---- */
 

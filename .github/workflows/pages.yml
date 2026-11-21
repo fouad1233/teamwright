@@ -1,6 +1,11 @@
 # Publishes the website (website/) to GitHub Pages. See website/README.md,
 # section "Publish it".
 #
+# The public demo is the interface of the desktop program, built for the
+# browser (npm run build:demo) and put into the site at demo/, so that it
+# is served at https://fouad1233.github.io/teamwright/demo/ (decision 0032).
+# A change to the interface therefore publishes the site again.
+#
 # The film's frames and video are not in git. If the repository has a
 # release with the tag "website-film" and the file "website-film.zip"
 # attached to it, that file is unpacked into website/media/film before the
@@ -13,6 +18,15 @@ on:
     paths:
       - 'website/**'
       - '.github/workflows/pages.yml'
+      # What the demo is built from.
+      - 'apps/desktop/src/**'
+      - 'apps/desktop/public/**'
+      - 'apps/desktop/index.html'
+      - 'apps/desktop/vite.config.ts'
+      - 'apps/desktop/tsconfig.json'
+      - 'apps/desktop/package.json'
+      - 'package.json'
+      - 'package-lock.json'
   release:
     types: [published, edited]
   workflow_dispatch:
@@ -36,9 +50,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
 
       - name: Check the website
         run: node website/tools/check.mjs
+
+      - name: Build the demo
+        run: |
+          npm ci
+          npm run build:demo --workspace @teamwright/desktop
 
       - name: Fetch the film from the release "website-film", if there is one
         env:
@@ -60,6 +80,10 @@ jobs:
           mkdir -p "$RUNNER_TEMP/site"
           cp -r website/. "$RUNNER_TEMP/site/"
           rm -rf "$RUNNER_TEMP/site/tools" "$RUNNER_TEMP/site/README.md"
+          rm -rf "$RUNNER_TEMP/site/demo"
+          cp -r apps/desktop/dist-demo "$RUNNER_TEMP/site/demo"
+          test -f "$RUNNER_TEMP/site/demo/index.html"
+          echo "The demo is in: $(du -sh "$RUNNER_TEMP/site/demo" | cut -f1)"
 
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
