@@ -63,7 +63,7 @@ message reaches its receiver, and what a "registered artifact" is.
   back in the stream; a call the bus refused is reported as an ordinary
   tool use that failed. This differs from `ask_manager`, whose call the
   decoder judges by itself, because only the bus can look at the disk.
-- **Both are stored on their own** (migration 18: `handoffs`,
+- **Both are stored on their own** (migration 19: `handoffs`,
   `handoff_files`, `team_messages`), each write through the recorder, so
   they are logged and reach the other computers. A handoff merges whole; a
   message merges by field, so that its delivery, the one thing that

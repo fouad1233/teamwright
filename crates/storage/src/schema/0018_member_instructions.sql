@@ -1,4 +1,4 @@
--- Teamwright database, version 20: the instructions of a specialist.
+-- Teamwright database, version 18: the instructions of a specialist.
 --
 -- The conventions of version 1 hold.
 

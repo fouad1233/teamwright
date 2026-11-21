@@ -87,7 +87,7 @@ on, and travels. Only that computer acts; the others show where it runs,
 and switching it on there moves it. Two computers can only both start one
 task in the seconds before the move reaches the other.
 
-**Storage** (migration 26): `coordinators`, `budgets` and
+**Storage** (migration 24): `coordinators`, `budgets` and
 `coordinator_entries`, all logged and synced. The limit and the switch
 merge as separate fields; a budget's tokens and question too; an entry
 never changes. Identifiers follow from the project, member or task, so two

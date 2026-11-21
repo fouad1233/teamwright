@@ -263,7 +263,7 @@ struct TurnRecord {
     #[serde(default)]
     context_window_tokens: Option<i64>,
     /// Whether the turn ended because the limit of the Claude plan was
-    /// reached. A turn logged before version 32 has no such field, and did
+    /// reached. A turn logged before version 28 has no such field, and did
     /// not; one that did is written only when it is true, so that the
     /// logged state of every other turn stays as it was.
     #[serde(default, skip_serializing_if = "is_false")]

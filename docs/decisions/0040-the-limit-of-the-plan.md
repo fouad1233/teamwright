@@ -99,7 +99,7 @@ and from tonight's words); and whether a refused turn always carries a
    (decisions 0026 and 0028). Another computer may run another account. The
    mark on a turn is logged with the turn, because it says how that turn
    ended; it is written only when true, so every other turn is logged as
-   before. Migration 0032 adds its column.
+   before. Migration 0028 adds its column.
 5. **Told once.** Eight turns that end at the same limit change what is
    known once: one notification of the kind "stopped", "The limit of your
    Claude plan is reached" with "It resets at 22:40. No new work starts

@@ -154,7 +154,7 @@ is now, for the two kinds that draw groups.
 
 - **The setting.** A board and a list keep a grouping: status (as before,
   and the default), assignee, priority, area, tag or sprint. It is stored
-  with the view like its filter, in a column of its own (migration 0030),
+  with the view like its filter, in a column of its own (migration 0026),
   and it merges and syncs with it. Any other kind stays grouped by status
   and refuses another grouping (`rule_broken`).
 - **The rule is in the domain** (`group_tasks`), and a use case gathers

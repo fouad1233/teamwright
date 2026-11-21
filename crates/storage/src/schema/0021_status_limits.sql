@@ -1,4 +1,4 @@
--- Teamwright database, version 22: the work-in-progress limits of statuses.
+-- Teamwright database, version 21: the work-in-progress limits of statuses.
 --
 -- The conventions of version 1 hold.
 --

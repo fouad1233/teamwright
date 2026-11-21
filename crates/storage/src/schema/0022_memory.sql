@@ -11,7 +11,7 @@
 -- belongs to is not enforced: a decision or a contract stays true of the
 -- project after the task it came from is deleted. Neither are the
 -- specialist, conversation and turn it came from, nor the entry that
--- replaced it, for the same reasons as a handoff's (version 18).
+-- replaced it, for the same reasons as a handoff's (version 19).
 
 CREATE TABLE memory_entries (
     id              TEXT PRIMARY KEY,

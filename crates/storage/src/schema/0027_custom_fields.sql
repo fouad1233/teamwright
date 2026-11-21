@@ -1,4 +1,4 @@
--- Teamwright database, version 24: the custom fields of the projects, their
+-- Teamwright database, version 27: the custom fields of the projects, their
 -- choices, the values the tasks hold, and views that show only the tasks
 -- holding one value of a field.
 --

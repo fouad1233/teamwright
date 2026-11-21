@@ -12,7 +12,7 @@
 -- Only the project is enforced as a reference: a request goes with its
 -- project, and the program removes and logs it first. The specialist, the
 -- conversation, the turns and the task are not, for the same reasons as a
--- handoff's (version 18): what was asked and allowed stays readable.
+-- handoff's (version 19): what was asked and allowed stays readable.
 --
 -- `answered_on` is the computer the manager answered on. An allowed
 -- permission holds only there: a command is a command of that computer

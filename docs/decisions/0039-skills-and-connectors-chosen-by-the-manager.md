@@ -32,7 +32,7 @@ tools for the turn that uses it.
 1. **A library per project, a kit per specialist.** The manager adds
    skills and connectors to the library of the project, and gives each
    specialist some of them. Both are project data: logged (entities
-   `skill`, `connector`, `member_kit`, migration 27), synced, merged whole.
+   `skill`, `connector`, `member_kit`, migration 25), synced, merged whole.
    The ready-made specialists suggest nothing, and no connector of a third
    party ships with Teamwright.
 2. **A skill is copied, and the copy belongs to the computer.** As a

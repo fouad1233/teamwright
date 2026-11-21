@@ -1,4 +1,4 @@
--- Teamwright database, version 26: the coordinator of each project, its
+-- Teamwright database, version 24: the coordinator of each project, its
 -- budgets in tokens, and the record of what it did (decision 0037).
 --
 -- The conventions of version 1 hold.

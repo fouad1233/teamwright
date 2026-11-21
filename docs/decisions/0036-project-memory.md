@@ -61,7 +61,7 @@ can answer a search with data.
   database, nothing about SQLite or its locks reaches it, and it searches by
   the same rule the application uses. A file that cannot be read gives a
   search that finds nothing; the other tools still work.
-- **Storage** (migration 0025): `memory_entries`, every write logged as
+- **Storage** (migration 0022): `memory_entries`, every write logged as
   `memory_entry` and merged by field, with one field, `replaced_by`, the only
   thing that changes. An entry **outlives the task it came from**, because a
   decision or a contract stays true of the project when its task is deleted;

@@ -1,4 +1,4 @@
--- Teamwright database, version 18: what specialists hand each other.
+-- Teamwright database, version 19: what specialists hand each other.
 --
 -- The conventions of version 1 hold.
 --

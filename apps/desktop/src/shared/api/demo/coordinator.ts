@@ -506,7 +506,7 @@ interface Switch {
 /**
  * The coordinators of the projects of the demo, with their budgets and
  * their records, kept in memory, and what they do, by the rule above. The
- * real application keeps them in its database (migration 26) and acts on
+ * real application keeps them in its database (migration 24) and acts on
  * a thread of its own; the demo acts at once when it is nudged.
  */
 export class PretendedCoordinators {

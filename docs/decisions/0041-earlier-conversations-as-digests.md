@@ -74,7 +74,7 @@ kept with a project travels to the other computers through the sync folder
   manager sees exactly what will be kept, with one sentence that says so,
   before it is kept.
 - **A digest is the manager's data.** It is stored in the table `digests`
-  (migration 0028), through `Database::write`, logged as the entity
+  (migration 0023), through `Database::write`, logged as the entity
   `digest` and merged whole, so it reaches the other computers. The
   conversation it was made from is never stored or synced.
 - **The Advisor gets the digests with its first turn.** When a conversation

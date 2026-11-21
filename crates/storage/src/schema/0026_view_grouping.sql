@@ -1,4 +1,4 @@
--- Teamwright database, version 30: what a view groups its tasks by.
+-- Teamwright database, version 26: what a view groups its tasks by.
 --
 -- The conventions of version 1 hold.
 --

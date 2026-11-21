@@ -1,4 +1,4 @@
--- Teamwright database, version 19: the tags of the projects, the tags of
+-- Teamwright database, version 20: the tags of the projects, the tags of
 -- the tasks, the checklists of the tasks, and views that show only the
 -- tasks with one tag.
 --

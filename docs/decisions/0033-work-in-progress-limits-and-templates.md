@@ -69,7 +69,7 @@ cuts into areas ([decision 0022](0022-areas-inside-a-project.md)).
 - **The dashboard says it in a sentence** among the sentences worked out by
   rules ([decision 0020](0020-a-dashboard-worked-out-not-written.md)):
   "In progress is over its limit, with 4 tasks for 3."
-- **It is stored with the status** (column `task_limit`, migration 0022),
+- **It is stored with the status** (column `task_limit`, migration 0021),
   and is part of the state of the project in the operation log, like the
   name and the color of a status. It is logged, merged and synced with the
   workflow, which merges as one field: a limit changed on one computer and a

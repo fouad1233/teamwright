@@ -1,5 +1,5 @@
 //! Stores the libraries of skills and connectors of the projects, and the
-//! kits of the specialists (version 27,
+//! kits of the specialists (version 25,
 //! [decision 0039](../../../docs/decisions/0039-skills-and-connectors-chosen-by-the-manager.md)).
 //!
 //! Every write is logged: a skill as the entity `skill`, a connector as

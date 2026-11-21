@@ -191,7 +191,7 @@ refused.
 
 ### Storage
 
-Migration 31 adds `permission_requests`: who asked, in which conversation,
+Migration 29 adds `permission_requests`: who asked, in which conversation,
 turn and task, what and why, and the answer (allowed with a scope and the
 rule, or refused; the word; when; on which computer; the turn it started;
 when it was taken back). Every write goes through `Database::write` and is

@@ -30,7 +30,7 @@ involved.
 | `planning` | The interviews and the proposals of the Advisor, as parts of their turns; `SqlitePlanningRepository`, which stores an approved plan |
 | `teamwork` | `SqliteTeamworkRepository`: the handoffs of tasks with their files, and the messages between specialists |
 | `memory` | `SqliteMemoryRepository`: the entries of the memory of the projects |
-| `digests` | `SqliteDigestRepository`: the digests of earlier conversations kept with a project (migration 0028, entity `digest`, merged whole, logged and synced; [decision 0041](../../docs/decisions/0041-earlier-conversations-as-digests.md)) |
+| `digests` | `SqliteDigestRepository`: the digests of earlier conversations kept with a project (migration 0023, entity `digest`, merged whole, logged and synced; [decision 0041](../../docs/decisions/0041-earlier-conversations-as-digests.md)) |
 | `permissions` | `SqlitePermissionRepository`: the permission requests of the specialists, with the manager's answers |
 | `places` | `SqlitePlacesRepository`: the work folder and the reference folders chosen for each project |
 | `operations` | The operation log, the hybrid logical clock, and the recorder that keeps the stamps of the fields |
@@ -191,12 +191,12 @@ involved.
   a turn. A window without what was held is damaged. Nothing is logged by
   the migration: a turn state logged before version 16 has neither and is
   read as a turn without a context.
-- **A turn at the limit of the plan** (migration `0032_plan_limit_turns.sql`,
+- **A turn at the limit of the plan** (migration `0028_plan_limit_turns.sql`,
   [decision 0040](../../docs/decisions/0040-the-limit-of-the-plan.md)) is
   marked by the column `plan_limit_reached` of `turns` (1 or 0). The logged
   state of a turn carries the key only when it is true, so every other turn
   is logged as before, and a state without it is read as 0.
-- **Handoffs and messages** (version 18,
+- **Handoffs and messages** (version 19,
   [decision 0029](../../docs/decisions/0029-handoffs-and-messages-between-specialists.md)).
   A handoff has a row in `handoffs` and its files a row each in
   `handoff_files`, by position; it is logged as the entity `handoff` with
@@ -212,7 +212,7 @@ involved.
   handoff waits for its task when it is taken in before it, and is dropped
   with a task deleted elsewhere; a task deleted by another computer takes
   the handoffs of this one with it, each removal logged.
-- **Tags and checklists** (version 19,
+- **Tags and checklists** (version 20,
   [decision 0030](../../docs/decisions/0030-tags-and-checklists.md)). A tag
   has a row in `tags` (name, color) and is logged as the entity `tag` with
   its whole state; it merges by name and by color. The tags a task carries
@@ -229,10 +229,10 @@ involved.
   filter of a view gains the column `tag_id` and the key `tag_id`, a field
   of its own in the merge, with no reference enforced. Deleting a project
   deletes and logs its tags after its views. Nothing is logged by the
-  migration: a task state logged before version 19 has none of these keys
+  migration: a task state logged before version 20 has none of these keys
   and is read as a task without tags or a checklist, and a view state
   without `tag_id` as a view of the tasks with any tag.
-- **Project memory** (migration `0025_memory.sql`,
+- **Project memory** (migration `0022_memory.sql`,
   [decision 0036](../../docs/decisions/0036-project-memory.md)). An entry
   has a row in `memory_entries` and is logged as the entity `memory_entry`
   with its whole state. It merges by field with one field, `replaced_by`,
@@ -246,7 +246,7 @@ involved.
   It is a field of its own in the merge, because a key that no field names
   merges on its own. Nothing is logged by the migration: a view state
   without `grouping` is read as a view grouped by status.
-- **Custom fields** (version 24,
+- **Custom fields** (version 27,
   [decision 0035](../../docs/decisions/0035-custom-fields.md)). A field has
   a row in `fields` (name, kind, unit, position) and its choices rows in
   `field_choices`; it is logged as the entity `field`, merging by name,
@@ -264,7 +264,7 @@ involved.
   filters by them, and number fields, and choices of one field, given one
   name on two computers. Deleting a project deletes and logs its fields
   after its tasks and views. Nothing is logged by the migration.
-- **Permission requests** (migration `0031_permission_requests.sql`,
+- **Permission requests** (migration `0029_permission_requests.sql`,
   [decision 0038](../../docs/decisions/0038-permission-requests-routed-to-the-manager.md)).
   A request has a row in `permission_requests` and is logged as the entity
   `permission_request` with its whole state. It merges by field: the
@@ -290,11 +290,11 @@ domain is reported as damaged data and never turned into an invalid object.
 The model and the effort of a specialist are the columns `model` and
 `effort` of `members` (version 4), NULL when they are left to the program; a
 person with either is damaged data. Its instructions are the column
-`instructions` (migration 0020), empty when it has none, with lines
+`instructions` (migration 0018), empty when it has none, with lines
 separated by a line feed; they merge as a field of their own, and a state
 logged before they existed reads as having none. A person with
 instructions is damaged data. The work-in-progress limit of a status is the
-column `task_limit` of `statuses` (migration 0022), NULL when it has none,
+column `task_limit` of `statuses` (migration 0021), NULL when it has none,
 and the key `limit` of the status in the logged state of its project, left
 out when it has none; a state logged before limits reads as statuses
 without one. A limit out of range, or on a status of the category done, is
@@ -302,7 +302,7 @@ damaged data.
 
 ## Skills, connectors and kits
 
-Version 27 ([decision 0039](../../docs/decisions/0039-skills-and-connectors-chosen-by-the-manager.md)):
+Version 25 ([decision 0039](../../docs/decisions/0039-skills-and-connectors-chosen-by-the-manager.md)):
 `skills`, `connectors` (how it starts and its tools as JSON) and
 `member_kits` (keyed by the member), each logged with its whole state as
 `skill`, `connector` and `member_kit`, merged whole, synced; their parent is
@@ -565,7 +565,7 @@ SQLite is compiled from source into the program (`rusqlite` with the
 `bundled` feature), so a C compiler is needed to build this crate, but users
 need no database installed.
 
-## The coordinator (migration 26)
+## The coordinator (migration 24)
 
 `SqliteCoordinatorRepository` keeps the coordinator of each project
 (`coordinators`, entity `coordinator`, merging its limit and its switch as
