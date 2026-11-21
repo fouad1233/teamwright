@@ -175,9 +175,14 @@ The instructions of the turn list them in words.
 decision 0011. A command rule names `Bash` in `--tools` (restricted mode
 removes it otherwise), stops denying `Bash` as a whole, adds the rule to
 `--allowedTools`, denies the programs that change files by name in
-`--disallowedTools`, and passes
-`--settings {"permissions":{"blockReadsOutsideWorkingDirectories":true}}`,
-so that a read-only command outside the folders prompts, and so is denied.
+`--disallowedTools`, and adds
+`"permissions":{"blockReadsOutsideWorkingDirectories":true}` to the one
+`--settings` object every confined turn has (decision 0039), so that a
+read-only command outside the folders prompts, and so is denied. One object
+and not a second `--settings`, so that neither can replace the other. If
+the installed program refused a key of that object, it might ignore the
+whole object, this key with it; the keys were taken from the documentation
+and never seen in a run.
 A domain rule names `WebFetch`. The mode (`acceptEdits`),
 `--permission-prompts none`, `--restricted` and `--strict-mcp-config` do not
 change, and the rules go into the arguments only: nothing in a prompt can

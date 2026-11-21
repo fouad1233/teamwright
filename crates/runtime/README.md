@@ -234,9 +234,9 @@ reaches the arguments like any other: `Bash` among `--tools` when a command
 is allowed, `WebFetch` when a domain is, each rule in `--allowedTools`
 (`Bash(npm test)`, `Bash(cargo test *)`, `WebFetch(domain:docs.rs)`), the
 programs that change files in `--disallowedTools` (`Bash(rm *)`, …), and,
-for commands, `--settings` with
-`{"permissions":{"blockReadsOutsideWorkingDirectories":true}}`
-(`READS_BLOCKED_SETTINGS`), so that a command that reads outside the
+for commands, `"permissions":{"blockReadsOutsideWorkingDirectories":true}`
+(`READS_BLOCKED_SETTINGS`) joined to the one `--settings` object of a
+confined turn (`settings_of`), so that a command that reads outside the
 folders would need approval, which is denied. `--permission-mode
 acceptEdits`, `--permission-prompts none`, `--restricted` and
 `--strict-mcp-config` stay. These flags and rules were read in
