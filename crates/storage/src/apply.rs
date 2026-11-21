@@ -22,6 +22,7 @@ use crate::kits;
 use crate::members;
 use crate::memory;
 use crate::operations::{Entity, OperationRecorder};
+use crate::permissions;
 use crate::planning;
 use crate::projects;
 use crate::sprints;
@@ -62,6 +63,7 @@ pub(crate) fn write_state(
         Entity::Connector => kits::write_connector_state(transaction, state),
         Entity::MemberKit => kits::write_kit_state(transaction, state),
         Entity::Field => fields::write_state(transaction, state),
+        Entity::PermissionRequest => permissions::write_request_state(transaction, state),
         Entity::Conversation => conversations::write_conversation_state(transaction, state),
         Entity::Turn => conversations::write_turn_state(transaction, state),
         Entity::TurnStep => conversations::write_step_state(transaction, state),
@@ -130,6 +132,9 @@ pub(crate) fn remove(
         Entity::MemberKit => kits::remove_kit_row(transaction, entity_id)?,
         Entity::Field => {
             fields::remove_field(transaction, entity_id)?;
+        }
+        Entity::PermissionRequest => {
+            permissions::remove_request(transaction, entity_id)?;
         }
         Entity::Conversation => {
             conversations::remove_conversation(transaction, operations, entity_id)?;

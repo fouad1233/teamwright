@@ -250,6 +250,13 @@ pub(crate) fn remove_project(
     delete_rows_of_project(
         transaction,
         operations,
+        "permission_requests",
+        Entity::PermissionRequest,
+        id,
+    )?;
+    delete_rows_of_project(
+        transaction,
+        operations,
         "team_messages",
         Entity::TeamMessage,
         id,

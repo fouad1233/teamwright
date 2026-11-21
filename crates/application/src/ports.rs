@@ -10,8 +10,8 @@ use std::path::{Path, PathBuf};
 use teamwright_domain::{
     Area, AreaId, CalendarDate, ComputerId, Conversation, ConversationId, Digest, DigestId,
     EarlierConversation, Field, FieldId, Handoff, Member, MemberId, MemoryEntry, MemoryEntryId,
-    Project, ProjectId, Sprint, SprintId, Tag, TagId, Task, TaskId, TeamMessage, Timestamp, Turn,
-    View, ViewId,
+    PermissionRequest, PermissionRequestId, Project, ProjectId, Sprint, SprintId, Tag, TagId, Task,
+    TaskId, TeamMessage, Timestamp, Turn, View, ViewId,
 };
 
 use crate::places::ChosenPlaces;
@@ -468,6 +468,38 @@ pub trait TeamworkRepository: Send + Sync {
     ///
     /// Returns an error if stored data could not be read.
     fn messages_of_project(&self, project_id: ProjectId) -> Result<Vec<TeamMessage>, StorageError>;
+}
+
+/// Stores the permission requests of the specialists, with the manager's
+/// answers (decision 0038).
+pub trait PermissionRepository: Send + Sync {
+    /// Stores a request, replacing a stored request with the same
+    /// identifier.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the request could not be written.
+    fn save_request(&self, request: &PermissionRequest) -> Result<(), StorageError>;
+
+    /// Lists the requests of a project, the oldest first.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if stored data could not be read.
+    fn requests_of_project(
+        &self,
+        project_id: ProjectId,
+    ) -> Result<Vec<PermissionRequest>, StorageError>;
+
+    /// Finds a request by its identifier.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if stored data could not be read.
+    fn find_request(
+        &self,
+        id: PermissionRequestId,
+    ) -> Result<Option<PermissionRequest>, StorageError>;
 }
 
 /// Stores the memory of the projects: decisions, facts and contracts.

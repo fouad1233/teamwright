@@ -106,11 +106,15 @@ pub(crate) enum Entity {
     /// A custom field of a project, with its choices. The values the tasks
     /// hold are a part of the state of each task.
     Field,
+    /// A specialist's request for a permission, with the manager's answer.
+    /// The answer is written once, and only whether it was taken back
+    /// changes after it.
+    PermissionRequest,
 }
 
 impl Entity {
     /// Every kind of thing whose changes are logged.
-    pub(crate) const ALL: [Self; 25] = [
+    pub(crate) const ALL: [Self; 26] = [
         Self::Project,
         Self::Task,
         Self::Member,
@@ -136,6 +140,7 @@ impl Entity {
         Self::Connector,
         Self::MemberKit,
         Self::Field,
+        Self::PermissionRequest,
     ];
 
     /// The entity of a name in the log, if this version knows it.
@@ -171,6 +176,7 @@ impl Entity {
             Self::Connector => "connector",
             Self::MemberKit => "member_kit",
             Self::Field => "field",
+            Self::PermissionRequest => "permission_request",
         }
     }
 }

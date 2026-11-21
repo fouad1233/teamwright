@@ -182,6 +182,25 @@ const FIELD_FIELDS: &[Field] = &[
     later("position", &["position"]),
 ];
 
+// A permission request merges by field: the answer, written once, and
+// whether it was taken back, which comes after it.
+const PERMISSION_REQUEST_FIELDS: &[Field] = &[
+    later(
+        "answer",
+        &[
+            "decision",
+            "scope",
+            "allowed_kind",
+            "allowed_what",
+            "note",
+            "answered_at",
+            "answered_on",
+            "next_turn_id",
+        ],
+    ),
+    later("withdrawn", &["withdrawn_at"]),
+];
+
 const CONVERSATION_FIELDS: &[Field] = &[
     later("member", &["member_id"]),
     later("task", &["task_id"]),
@@ -210,6 +229,7 @@ pub(crate) const fn merging_of(entity: Entity) -> Merging {
         Entity::MemoryEntry => Merging::ByField(MEMORY_ENTRY_FIELDS),
         Entity::Coordinator => Merging::ByField(COORDINATOR_FIELDS),
         Entity::Budget => Merging::ByField(BUDGET_FIELDS),
+        Entity::PermissionRequest => Merging::ByField(PERMISSION_REQUEST_FIELDS),
         Entity::Turn
         | Entity::TurnStep
         | Entity::Decision

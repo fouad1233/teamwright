@@ -384,7 +384,8 @@ fn parents_of(
         | Entity::CoordinatorEntry
         | Entity::Skill
         | Entity::Connector
-        | Entity::MemberKit => {
+        | Entity::MemberKit
+        | Entity::PermissionRequest => {
             text_of(state, "project_id").map(|id| (Entity::Project, id.to_owned()))
         }
         // A handoff cannot exist without its task, which cannot exist

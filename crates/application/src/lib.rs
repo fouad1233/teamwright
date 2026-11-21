@@ -119,9 +119,9 @@ pub use plan_limit::{
 pub use ports::{
     ApprovedPlan, AreaRepository, Clock, ConversationRepository, CoordinatorRepository,
     DigestRepository, DiskEntry, EarlierConversations, FieldRepository, FileSystem, FolderReader,
-    FoundConversation, MemberRepository, MemoryRepository, PlacesRepository, PlanningRepository,
-    ProjectFolders, ProjectRepository, SprintRepository, StorageError, TagRepository,
-    TaskRepository, TeamworkRepository, ViewRepository, WorkListener,
+    FoundConversation, MemberRepository, MemoryRepository, PermissionRepository, PlacesRepository,
+    PlanningRepository, ProjectFolders, ProjectRepository, SprintRepository, StorageError,
+    TagRepository, TaskRepository, TeamworkRepository, ViewRepository, WorkListener,
 };
 pub use project_events::{
     Agent, Happening, ProjectEvent, StatusOfEvent, TaskOfEvent, WaitsFor,

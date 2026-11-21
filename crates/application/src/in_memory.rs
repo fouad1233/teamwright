@@ -12,9 +12,9 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use chrono::TimeDelta;
 use teamwright_domain::{
     Area, AreaId, Conversation, ConversationId, Digest, DigestId, EarlierConversation, Field,
-    FieldId, Handoff, HandoffId, Member, MemberId, MemoryEntry, MemoryEntryId, Project, ProjectId,
-    Release, Sprint, SprintId, Tag, TagId, Task, TaskId, TeamMessage, TeamMessageId, Timestamp,
-    Turn, TurnId, View, ViewId,
+    FieldId, Handoff, HandoffId, Member, MemberId, MemoryEntry, MemoryEntryId, PermissionRequest,
+    PermissionRequestId, Project, ProjectId, Release, Sprint, SprintId, Tag, TagId, Task, TaskId,
+    TeamMessage, TeamMessageId, Timestamp, Turn, TurnId, View, ViewId,
 };
 
 use crate::agent_runtime::{
@@ -28,9 +28,9 @@ use crate::plan_limit::{PlanLimitState, PlanLimitStore, PlanReport};
 use crate::ports::{
     ApprovedPlan, AreaRepository, Clock, ConversationRepository, DigestRepository,
     EarlierConversations, FieldRepository, FileSystem, FoundConversation, MemberRepository,
-    MemoryRepository, PlacesRepository, PlanningRepository, ProjectFolders, ProjectRepository,
-    SprintRepository, StorageError, TagRepository, TaskRepository, TeamworkRepository,
-    ViewRepository, WorkListener,
+    MemoryRepository, PermissionRepository, PlacesRepository, PlanningRepository, ProjectFolders,
+    ProjectRepository, SprintRepository, StorageError, TagRepository, TaskRepository,
+    TeamworkRepository, ViewRepository, WorkListener,
 };
 use crate::project_events::ProjectEvent;
 use crate::updates::{UpdateChoice, UpdateChoiceStore};
@@ -628,6 +628,39 @@ impl TeamworkRepository for InMemoryTeamworkRepository {
             .collect();
         messages.sort_by_key(|message| (message.sent_at(), message.id()));
         Ok(messages)
+    }
+}
+
+/// Keeps the permission requests of the projects in memory.
+#[derive(Debug, Default)]
+pub struct InMemoryPermissionRepository {
+    requests: Mutex<BTreeMap<PermissionRequestId, PermissionRequest>>,
+}
+
+impl PermissionRepository for InMemoryPermissionRepository {
+    fn save_request(&self, request: &PermissionRequest) -> Result<(), StorageError> {
+        lock(&self.requests).insert(request.id(), request.clone());
+        Ok(())
+    }
+
+    fn requests_of_project(
+        &self,
+        project_id: ProjectId,
+    ) -> Result<Vec<PermissionRequest>, StorageError> {
+        let mut requests: Vec<PermissionRequest> = lock(&self.requests)
+            .values()
+            .filter(|request| request.project_id() == project_id)
+            .cloned()
+            .collect();
+        requests.sort_by_key(|request| (request.asked_at(), request.id()));
+        Ok(requests)
+    }
+
+    fn find_request(
+        &self,
+        id: PermissionRequestId,
+    ) -> Result<Option<PermissionRequest>, StorageError> {
+        Ok(lock(&self.requests).get(&id).cloned())
     }
 }
 
