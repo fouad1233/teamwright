@@ -1,4 +1,11 @@
-import type { CustomField, FieldChoice, FieldKind, FieldValue, Id, Task } from '@/shared/api/types';
+import type {
+  CustomField,
+  FieldChoice,
+  FieldFilter,
+  FieldKind,
+  FieldValue,
+  Task,
+} from '@/shared/api/types';
 import { formatDate } from '@/shared/lib/format';
 
 /**
@@ -133,12 +140,34 @@ export function sortValueOfField(field: CustomField, task: Task): string | numbe
   }
 }
 
+/** The fields a view can be filtered by: a choice field with choices, and a yes-or-no field. */
+export function filteringFields(fields: readonly CustomField[]): CustomField[] {
+  return inOrder(fields).filter(
+    (field) => field.kind === 'yes_no' || (field.kind === 'choice' && field.choices.length > 0),
+  );
+}
+
+/** A filter by a field as one value of a menu, and back. */
+export function filterKey(filter: FieldFilter): string {
+  return filter.kind === 'choice'
+    ? `${filter.fieldId}/choice/${filter.choiceId}`
+    : `${filter.fieldId}/yes_no/${filter.yes ? 'yes' : 'no'}`;
+}
+
+/** The filter a value of the menu stands for; nothing for one that names none. */
+export function filterOfKey(key: string): FieldFilter | null {
+  const [fieldId, kind, rest] = key.split('/');
+  if (!fieldId || !rest) {
+    return null;
+  }
+  if (kind === 'choice') {
+    return { kind: 'choice', fieldId, choiceId: rest };
+  }
+  return kind === 'yes_no' ? { kind: 'yes_no', fieldId, yes: rest === 'yes' } : null;
+}
+
 /** Whether a task holds the value a filter by a field asks for. A box nobody ticked reads as no. */
-export function holdsFiltered(
-  task: Task,
-  filter:
-    { kind: 'choice'; fieldId: Id; choiceId: Id } | { kind: 'yes_no'; fieldId: Id; yes: boolean },
-): boolean {
+export function holdsFiltered(task: Task, filter: FieldFilter): boolean {
   const value = task.fieldValues[filter.fieldId];
   if (filter.kind === 'choice') {
     return value?.kind === 'choice' && value.choiceId === filter.choiceId;

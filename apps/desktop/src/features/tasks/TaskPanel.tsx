@@ -23,6 +23,7 @@ import { AreaChoice } from '../areas/AreaChoice';
 import { Checklist } from '../checklists/Checklist';
 import { progressInWords, progressOf } from '../checklists/checklistModel';
 import { TaskTags } from '../tags/TaskTags';
+import { TaskFields } from '../fields/TaskFields';
 import { showsAreas } from '../areas/areaModel';
 import { useAreas } from '../areas/areaQueries';
 import { PointsEditor } from '../sprints/PointsEditor';
@@ -291,6 +292,10 @@ export function TaskPanel({ project, task, tasks, onClose }: TaskPanelProps) {
 
         <Section title="Checklist" action={<ChecklistCount task={task} />}>
           <Checklist task={task} />
+        </Section>
+
+        <Section title="Fields">
+          <TaskFields project={project} task={task} />
         </Section>
 
         <Section title="Work">

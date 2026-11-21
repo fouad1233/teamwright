@@ -1,0 +1,111 @@
+/* A typed value looks like plain text until the pointer is over it. */
+.typed {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  width: 100%;
+  border-radius: var(--radius-control);
+  transition: background-color 100ms ease;
+}
+
+.typed:hover {
+  background: var(--hover);
+}
+
+.typed:focus-within {
+  outline: 2px solid var(--brass-soft);
+  outline-offset: 0;
+  background: var(--ground);
+}
+
+.input {
+  flex: 1;
+  min-width: 0;
+  height: 28px;
+  padding: 0 var(--space-2);
+  border: none;
+  background: transparent;
+  color: var(--ink);
+  text-overflow: ellipsis;
+}
+
+.input::placeholder {
+  color: var(--ink-faint);
+}
+
+.input:focus-visible {
+  outline: none;
+}
+
+.notUnderstood,
+.notUnderstood:focus-visible {
+  border-radius: var(--radius-control);
+  outline: 2px solid var(--danger);
+  outline-offset: 0;
+}
+
+/* The unit follows the number, quieter than it. */
+.unit {
+  flex: none;
+  padding-right: var(--space-2);
+  color: var(--ink-faint);
+}
+
+/* A number is in the monospace, so that its figures line up. */
+.figure .input {
+  font-family: var(--font-mono);
+  font-size: var(--text-small);
+  font-variant-numeric: tabular-nums;
+}
+
+/* In the panel the unit follows the figures closely: the line is as wide
+   as what is typed in it, where the web view can tell. */
+.panel.figure .input {
+  flex: 0 1 auto;
+  min-width: 6ch;
+  field-sizing: content;
+}
+
+.panel.figure .unit {
+  padding-left: 0;
+}
+
+/* In a cell a number stands to the right. */
+.cell.figure .input {
+  text-align: right;
+}
+
+/* In the panel the value lines up with the values around it. */
+.panel.typed {
+  margin-left: calc(-1 * var(--space-2));
+  width: calc(100% + var(--space-2));
+}
+
+.button {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.cell.button {
+  width: 100%;
+}
+
+.swatch {
+  display: block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  background: var(--tone);
+}
+
+.link {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+  width: 100%;
+}
+
+.open {
+  flex: none;
+}

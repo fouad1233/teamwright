@@ -1,0 +1,37 @@
+.fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.none {
+  color: var(--ink-faint);
+}
+
+/* Each field is a line: its name on the left, its value on the right, as
+   the properties of the task above. */
+.list {
+  display: flex;
+  flex-direction: column;
+}
+
+.line {
+  display: grid;
+  grid-template-columns: minmax(0, 132px) minmax(0, 1fr);
+  align-items: center;
+  column-gap: var(--space-3);
+  min-height: 32px;
+}
+
+.name {
+  overflow: hidden;
+  color: var(--ink-soft);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.value {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}

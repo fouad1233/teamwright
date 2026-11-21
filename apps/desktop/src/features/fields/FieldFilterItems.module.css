@@ -1,0 +1,15 @@
+/* A choice in the filter menu: the name of its field, then the choice. */
+.fieldChoice {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.fieldName {
+  overflow: hidden;
+  max-width: 140px;
+  color: var(--ink-soft);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

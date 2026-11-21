@@ -16,6 +16,7 @@ import type { Grouping, View, ViewAssignee, ViewFilter } from '@/shared/api/type
 import { classNames } from '@/shared/lib/classNames';
 import menuStyles from '@/shared/ui/Menu.module.css';
 
+import { FieldFilterItems } from '../fields/FieldFilterItems';
 import { TagChip } from '../tags/TagChip';
 import { useTags } from '../tags/tagQueries';
 import { AssigneeAvatar } from '../team/Assignee';
@@ -319,6 +320,7 @@ function FilterItems({ view, onFilter }: FilterItemsProps) {
           </DropdownMenu.RadioGroup>
         </>
       )}
+      <FieldFilterItems view={view} onFilter={onFilter} />
     </>
   );
 }
