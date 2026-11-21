@@ -31,10 +31,12 @@ on:
     types: [published, edited]
   workflow_dispatch:
 
+# Nothing is allowed by default beyond reading the repository. Each job
+# asks for what it needs: the job that runs npm and builds the demo can only
+# read, and only the job that publishes may write to Pages and ask for the
+# token that proves where it runs.
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 # One publishing at a time; a running one is let finish.
 concurrency:
@@ -45,6 +47,8 @@ jobs:
   build:
     name: Put the site together
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -85,7 +89,6 @@ jobs:
           test -f "$RUNNER_TEMP/site/demo/index.html"
           echo "The demo is in: $(du -sh "$RUNNER_TEMP/site/demo" | cut -f1)"
 
-      - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
           path: ${{ runner.temp }}/site
@@ -94,9 +97,15 @@ jobs:
     name: Publish
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      # Reads the settings of Pages, which needs the right to write to it,
+      # so it runs here and not in the job that builds.
+      - uses: actions/configure-pages@v5
       - id: deployment
         uses: actions/deploy-pages@v4
