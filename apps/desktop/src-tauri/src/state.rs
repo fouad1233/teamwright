@@ -16,18 +16,19 @@ use teamwright_application::{
     GitHubService, GoogleDriveService, GroupingService, IntegrationSettings, NotificationService,
     OperatingSystem, PlacesService, ProjectEvent, ProjectFilesService, ProjectFolders,
     ProjectService, RoundReport, SprintService, StorageError, SyncPorts, SyncService, SystemClock,
-    TagService, TaskService, TeamService, ViewService, WorkListener, WorkPorts, WorkService,
-    WorkbookPorts, WorkbookService,
+    TagService, TaskService, TeamService, UpdateService, ViewService, WorkListener, WorkPorts,
+    WorkService, WorkbookPorts, WorkbookService,
 };
 use teamwright_domain::{ComputerId, Conversation, Project, Turn};
-use teamwright_integrations::{GhCommandLine, GhLocator, HttpsSender};
+use teamwright_integrations::{GhCommandLine, GhLocator, GitHubReleases, HttpsSender};
 use teamwright_runtime::{ClaudeCode, EarlierConversationsOnDisk};
 use teamwright_storage::{
     Database, FolderOfComputers, SqliteAreaRepository, SqliteConversationRepository,
     SqliteCoordinatorRepository, SqliteDigestRepository, SqliteIntegrationStore,
     SqliteMemberRepository, SqliteNotificationChoice, SqlitePlacesRepository,
     SqlitePlanningRepository, SqliteProjectRepository, SqliteSprintRepository, SqliteSyncLedger,
-    SqliteTagRepository, SqliteTaskRepository, SqliteThemeStore, SqliteViewRepository,
+    SqliteTagRepository, SqliteTaskRepository, SqliteThemeStore, SqliteUpdateChoice,
+    SqliteViewRepository,
 };
 
 use crate::coordinating::{CoordinatorNudge, start_coordinating};
@@ -169,6 +170,8 @@ pub struct AppState {
     pub notifications: NotificationService,
     /// The theme of this computer.
     pub appearance: AppearanceService,
+    /// Noticing that a newer version of the program is out.
+    pub updates: UpdateService,
     /// The settings of the integrations of each project on this computer.
     pub integrations: IntegrationSettings,
     /// GitHub, through the manager's own `gh`.
@@ -239,6 +242,12 @@ impl AppState {
         let appearance = AppearanceService::new(Arc::new(SqliteThemeStore::new(database.clone())));
         let notifications =
             NotificationService::new(Arc::new(SqliteNotificationChoice::new(database.clone())));
+        let updates = UpdateService::new(
+            env!("CARGO_PKG_VERSION"),
+            Arc::new(SqliteUpdateChoice::new(database.clone())),
+            Arc::new(GitHubReleases::of_teamwright()),
+            clock.clone(),
+        );
         let integration_store = Arc::new(SqliteIntegrationStore::new(database));
         let integrations =
             IntegrationSettings::new(project_repository.clone(), integration_store.clone());
@@ -437,6 +446,7 @@ impl AppState {
             project_report,
             notifications,
             appearance,
+            updates,
             integrations,
             exported_workbooks: Mutex::new(Vec::new()),
             this_computer,

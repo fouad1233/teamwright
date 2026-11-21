@@ -11,11 +11,13 @@
 mod command;
 mod github;
 mod locate;
+mod releases;
 mod signature;
 mod web;
 
 pub use github::GhCommandLine;
 pub use locate::GhLocator;
+pub use releases::{GitHubReleases, REPOSITORY, releases_in};
 pub use signature::{hex, hmac_sha256, sha256};
 pub use web::{
     HttpsSender, SENDER_HEADER, SIGNATURE_HEADER, VERSION_HEADER, channel_body, event_request,

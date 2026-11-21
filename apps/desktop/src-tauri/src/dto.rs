@@ -16,7 +16,8 @@ use teamwright_application::{
     NamedTask, NewMember, NewProject, NewSprint, NewTask, NewView, NotificationChoice,
     NotificationKind, NotificationPermission, ProjectChange, ProjectIntegrations, ProjectPlaces,
     ProjectUsage, SprintChanges, SprintForecast, SprintReport, SprintStart, StatusProperties,
-    SyncNotice, SyncState, TaskActual, TaskOnGitHub, WorkflowTemplate, sign_in_problem,
+    SyncNotice, SyncState, TaskActual, TaskOnGitHub, UpdateStatus, WorkflowTemplate,
+    sign_in_problem,
 };
 use teamwright_application::{DueOutcome, ProjectReport, ReportTask, UsageLine, WorkShare};
 use teamwright_domain::{
@@ -3176,6 +3177,51 @@ impl CoordinatorDto {
     }
 }
 
+/// A newer version of the program that is out, and where to get it.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NewerVersionDto {
+    /// The version, without a `v`: `0.2.0`.
+    pub version: String,
+    /// Whether the publisher marked it a pre-release.
+    pub is_pre_release: bool,
+    /// The page of the release, an `https` address.
+    pub address: String,
+}
+
+/// What the interface shows about versions: this one, the choice to look
+/// by itself, the last look, and a newer version if one is known.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateStatusDto {
+    /// The version of this program.
+    pub this_version: String,
+    /// Whether the program looks by itself. Off until switched on.
+    pub is_on: bool,
+    /// When it last looked, if it ever did.
+    pub last_look: Option<String>,
+    /// Whether the last look got no answer.
+    pub last_look_failed: bool,
+    /// The newer version that is known, if any.
+    pub newer: Option<NewerVersionDto>,
+}
+
+impl From<UpdateStatus> for UpdateStatusDto {
+    fn from(status: UpdateStatus) -> Self {
+        Self {
+            this_version: status.this_version,
+            is_on: status.is_on,
+            last_look: status.last_look.map(moment_to_text),
+            last_look_failed: status.last_look_failed,
+            newer: status.newer.map(|release| NewerVersionDto {
+                version: release.version.text(),
+                is_pre_release: release.is_pre_release,
+                address: release.address.as_str().to_owned(),
+            }),
+        }
+    }
+}
+
 /// A fact the manager adds to the memory of a project.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -3772,6 +3818,39 @@ mod tests {
         let broken: MemberKitDto =
             serde_json::from_value(serde_json::json!({ "skills": ["not an id"] })).unwrap();
         assert!(broken.into_choice().is_err());
+    }
+
+    #[test]
+    fn the_status_of_versions_goes_out_in_camel_case() {
+        let status = UpdateStatus {
+            this_version: "0.1.0".to_owned(),
+            is_on: false,
+            last_look: Some(chrono::Utc.with_ymd_and_hms(2026, 11, 21, 8, 0, 0).unwrap()),
+            last_look_failed: false,
+            newer: Some(teamwright_domain::Release {
+                version: teamwright_domain::Version::parse("v0.2.0").unwrap(),
+                is_pre_release: true,
+                address: teamwright_domain::WebAddress::parse(
+                    "https://example.com/releases/tag/v0.2.0",
+                    "release",
+                )
+                .unwrap(),
+            }),
+        };
+        assert_eq!(
+            serde_json::to_value(UpdateStatusDto::from(status)).unwrap(),
+            serde_json::json!({
+                "thisVersion": "0.1.0",
+                "isOn": false,
+                "lastLook": "2026-11-21T08:00:00.000Z",
+                "lastLookFailed": false,
+                "newer": {
+                    "version": "0.2.0",
+                    "isPreRelease": true,
+                    "address": "https://example.com/releases/tag/v0.2.0"
+                }
+            })
+        );
     }
 
     #[test]

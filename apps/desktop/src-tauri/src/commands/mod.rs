@@ -25,6 +25,7 @@ pub mod tags;
 pub mod tasks;
 pub mod team;
 pub mod teamwork;
+pub mod updates;
 pub mod views;
 pub mod web;
 pub mod work;

@@ -48,6 +48,7 @@ mod take_in;
 mod tasks;
 mod teamwork;
 mod theme;
+mod update_choice;
 mod views;
 
 pub use areas::SqliteAreaRepository;
@@ -71,4 +72,5 @@ pub use tags::SqliteTagRepository;
 pub use tasks::SqliteTaskRepository;
 pub use teamwork::SqliteTeamworkRepository;
 pub use theme::SqliteThemeStore;
+pub use update_choice::SqliteUpdateChoice;
 pub use views::SqliteViewRepository;
