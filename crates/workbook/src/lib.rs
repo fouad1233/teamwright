@@ -18,6 +18,10 @@ use rust_xlsxwriter::{
 use teamwright_application::{Cell, Section, Sheet, SheetContent, Table, Workbook};
 use teamwright_domain::{CalendarDate, Color};
 
+mod whole_file;
+
+pub use whole_file::write_whole_file;
+
 /// The typeface of every cell. Excel has it, and LibreOffice and Google
 /// Sheets put a typeface of the same widths in its place.
 const TYPEFACE: &str = "Calibri";

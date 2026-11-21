@@ -82,3 +82,15 @@ the project into lines.
   is not so ([decision 0020](0020-a-dashboard-worked-out-not-written.md)).
 - **Merging the turns and answers into the latest activity on the
   dashboard alone.** It would be a second rule beside the Activity view's.
+
+## Note of 21 November 2026: the file is written without following a link, after a review
+
+The report is saved by default in the work folder of the project, where a
+specialist can write. A specialist could place a symbolic link there under
+the name the save window suggests, and a plain write would have followed it
+and overwritten the file it points at. The report is now written to a
+temporary file of a unique name in the same folder, flushed, and renamed to
+the wanted name, so that a half-written report is never left. A link that
+stands at the name is refused with a plain message. The writer is
+`write_whole_file` in the workbook crate, next to the one that writes
+workbooks.

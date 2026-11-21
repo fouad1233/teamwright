@@ -120,8 +120,10 @@ in `types.ts`, every sentence and figure the application's).
 name `report_file_name` gives (`Smart sensor node report 2026-11-21.md`),
 so that the save window opens there and the report stays with the work.
 `save_project_report` writes `report_in_markdown` to the path the manager
-chose, in one go, and answers with the path; a file that could not be
-written is refused with `file_not_written` and the reason. In the demo
+chose, through a temporary file that is then renamed (so that a half-written
+report is never left), and answers with the path. A symbolic link at the
+name is refused, since a specialist can write in the work folder. A file that
+could not be written is refused with `file_not_written` and the reason. In the demo
 the report is gathered by `demo/projectReport.ts`, which follows the same
 rules sentence for sentence, and saving is `not_available`.
 

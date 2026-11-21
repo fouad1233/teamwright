@@ -3,11 +3,11 @@
 //! gathering it for the interface to draw, and keeping it as a Markdown
 //! file, by default in the work folder of the project.
 
-use std::fs;
 use std::path::PathBuf;
 
 use tauri::State;
 use teamwright_application::{Clock, SystemClock, report_file_name, report_in_markdown};
+use teamwright_workbook::write_whole_file;
 
 use crate::dto::{ProjectReportDto, parse_id};
 use crate::error::CommandError;
@@ -43,7 +43,10 @@ pub fn suggested_report_path(
 
 /// Writes the report of a project as Markdown to the file the manager
 /// chose in the save window, and answers with its path. The text is made
-/// whole first and written in one go.
+/// whole first and written through a temporary file that is then renamed,
+/// so that a half-written report is never left. A link at the name is
+/// refused: the work folder is one a specialist can write in, and a link
+/// placed there must not lead the report onto another file.
 #[tauri::command(async)]
 pub fn save_project_report(
     state: State<'_, AppState>,
@@ -52,7 +55,7 @@ pub fn save_project_report(
 ) -> Result<String, CommandError> {
     let report = state.project_report.report_of(parse_id(&project_id)?)?;
     let path = PathBuf::from(path);
-    fs::write(&path, report_in_markdown(&report)).map_err(|error| {
+    write_whole_file(&path, report_in_markdown(&report).as_bytes()).map_err(|error| {
         CommandError::not_written(format!("{} could not be written: {error}", path.display()))
     })?;
     Ok(path.display().to_string())
