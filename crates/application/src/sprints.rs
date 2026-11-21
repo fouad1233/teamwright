@@ -9,9 +9,9 @@ use std::cmp::{Ordering, Reverse};
 use std::sync::Arc;
 
 use teamwright_domain::{
-    CalendarDate, CountedTask, MovedOn, Project, ProjectId, ScopeChange, Sprint, SprintDates,
-    SprintId, SprintName, SprintState, SprintSummary, SprintUnit, StatusCategory, Task, TaskPast,
-    course_of,
+    CalendarDate, CountedTask, Load, MovedOn, Project, ProjectId, ScopeChange, Sprint, SprintDates,
+    SprintId, SprintName, SprintState, SprintSummary, SprintUnit, SprintsNeeded, StatusCategory,
+    Task, TaskId, TaskPast, Velocity, course_of,
 };
 
 use crate::error::ApplicationError;
@@ -114,6 +114,59 @@ pub struct SprintReport {
     pub changes: Vec<ScopeChange>,
     /// The tasks that moved on when the sprint was completed.
     pub moved_on: Vec<MovedOn>,
+}
+
+/// A task named in a forecast: one whose work the forecast cannot count.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NamedTask {
+    /// The task.
+    pub task_id: TaskId,
+    /// Its number in the project.
+    pub number: u32,
+    /// Its title.
+    pub title: String,
+}
+
+/// How the work of a planned sprint compares with the pace of the team.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PlannedLoad {
+    /// The planned sprint.
+    pub sprint_id: SprintId,
+    /// The work put into it, in the unit of the pace.
+    pub work: u32,
+    /// How that compares with the pace. Nothing while no pace can be told.
+    pub load: Option<Load>,
+    /// Its tasks without points, which the work does not count.
+    pub without_points: Vec<NamedTask>,
+}
+
+/// The work of the project not yet finished, and how long it would take.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WorkAhead {
+    /// The work of the unfinished tasks: in the backlog, in planned sprints
+    /// and in the running one, in the unit of the pace.
+    pub work: u32,
+    /// How many unfinished tasks there are.
+    pub tasks: usize,
+    /// How many sprints that would take at the pace. Nothing while no pace
+    /// can be told.
+    pub sprints: Option<SprintsNeeded>,
+    /// The unfinished tasks without points, which the work does not count.
+    pub without_points: Vec<NamedTask>,
+}
+
+/// What the completed sprints of a project say about the work ahead.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SprintForecast {
+    /// The pace of the team, or why none can be told yet.
+    pub velocity: Velocity,
+    /// What the work is counted in: the unit of the pace, or without one,
+    /// points if any unfinished task has points.
+    pub unit: SprintUnit,
+    /// Each planned sprint against the pace, in the order they are listed.
+    pub planned: Vec<PlannedLoad>,
+    /// The rest of the work.
+    pub ahead: WorkAhead,
 }
 
 /// The use cases that plan, change, remove, start and complete sprints.
@@ -413,6 +466,100 @@ impl SprintService {
                 .collect(),
             changes: course.changes,
             moved_on: course.moved_on,
+        })
+    }
+
+    /// Tells what the completed sprints of a project say about the work
+    /// ahead: the pace of the team as a range, how the work put into each
+    /// planned sprint compares with it, and how many sprints the unfinished
+    /// work would take at that pace.
+    ///
+    /// The pace is read from the summaries the completed sprints kept
+    /// ([`Velocity::of`]). Subtasks are part of their task and are not
+    /// counted. While the work is counted in points, the unfinished tasks
+    /// without points weigh nothing, and they are named so that the manager
+    /// can give them points.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if there is no such project or if storage fails.
+    pub fn forecast(&self, project_id: ProjectId) -> Result<SprintForecast, ApplicationError> {
+        let project = self.require_project(project_id)?;
+        let sprints = self.list_for_project(project.id())?;
+        let summaries: Vec<SprintSummary> = sprints
+            .iter()
+            .filter(|sprint| sprint.state() == SprintState::Completed)
+            .filter_map(Sprint::summary)
+            .collect();
+        let velocity = Velocity::of(&summaries);
+        let pace = velocity.pace();
+
+        let mut unfinished: Vec<Task> = self
+            .tasks
+            .list_for_project(project.id())?
+            .into_iter()
+            .filter(|task| task.parent_id().is_none() && !is_finished(&project, task))
+            .collect();
+        unfinished.sort_by_key(Task::number);
+        let unit = velocity.unit().unwrap_or_else(|| {
+            if unfinished.iter().any(|task| task.points().is_some()) {
+                SprintUnit::Points
+            } else {
+                SprintUnit::Tasks
+            }
+        });
+        let weigh = |tasks: &[&Task]| -> (u32, Vec<NamedTask>) {
+            let work = unit.work_of_all(
+                &tasks
+                    .iter()
+                    .map(|task| counted(&project, task))
+                    .collect::<Vec<_>>(),
+            );
+            let without_points = if unit == SprintUnit::Points {
+                tasks
+                    .iter()
+                    .filter(|task| task.points().is_none())
+                    .map(|task| NamedTask {
+                        task_id: task.id(),
+                        number: task.number(),
+                        title: task.title().to_string(),
+                    })
+                    .collect()
+            } else {
+                Vec::new()
+            };
+            (work, without_points)
+        };
+
+        let planned = sprints
+            .iter()
+            .filter(|sprint| sprint.state() == SprintState::Planned)
+            .map(|sprint| {
+                let of_sprint: Vec<&Task> = unfinished
+                    .iter()
+                    .filter(|task| task.sprint_id() == Some(sprint.id()))
+                    .collect();
+                let (work, without_points) = weigh(&of_sprint);
+                PlannedLoad {
+                    sprint_id: sprint.id(),
+                    work,
+                    load: pace.map(|pace| pace.load_of(work)),
+                    without_points,
+                }
+            })
+            .collect();
+        let all: Vec<&Task> = unfinished.iter().collect();
+        let (work, without_points) = weigh(&all);
+        Ok(SprintForecast {
+            velocity,
+            unit,
+            planned,
+            ahead: WorkAhead {
+                work,
+                tasks: unfinished.len(),
+                sprints: pace.map(|pace| pace.sprints_for(work)),
+                without_points,
+            },
         })
     }
 

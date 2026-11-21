@@ -97,3 +97,10 @@
   border-bottom: 1px solid var(--rule);
   color: var(--ink-faint);
 }
+
+/* What the pace of the team says: quiet prose under the facts. */
+.note {
+  max-width: 72ch;
+  color: var(--ink-soft);
+  line-height: 1.5;
+}

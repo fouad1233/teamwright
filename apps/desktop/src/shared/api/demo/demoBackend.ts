@@ -52,6 +52,7 @@ import type {
   Sprint,
   SprintChanges,
   SprintCompletion,
+  SprintForecast,
   SprintReport,
   SprintStart,
   Status,
@@ -109,6 +110,7 @@ import {
   asListed,
   dayOfMoment,
   reportOf,
+  forecastOf,
   requirePoints,
   requireStartNotAfterEnd,
   summaryOf,
@@ -2731,6 +2733,19 @@ export class DemoBackend implements Backend {
         pasts,
         dayOfMoment(this.nowAsText()),
       );
+    });
+  }
+
+  sprintForecast(projectId: Id): Promise<SprintForecast> {
+    return this.answer(() => {
+      const project = this.requireProject(projectId);
+      const sprints = [...this.sprints.values()]
+        .filter((sprint) => sprint.projectId === project.id)
+        .sort(asListed);
+      const unfinished = this.tasksOfProject(project.id)
+        .filter((task) => task.parentId === null && this.categoryOf(task) !== 'done')
+        .sort((first, second) => first.number - second.number);
+      return forecastOf(sprints, unfinished);
     });
   }
 

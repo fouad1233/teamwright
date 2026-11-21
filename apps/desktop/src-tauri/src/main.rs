@@ -92,6 +92,7 @@ fn main() -> ExitCode {
             commands::sprints::plan_task,
             commands::sprints::set_task_points,
             commands::sprints::sprint_report,
+            commands::sprints::sprint_forecast,
             commands::views::list_views,
             commands::views::add_view,
             commands::views::rename_view,

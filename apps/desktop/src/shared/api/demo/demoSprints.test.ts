@@ -824,6 +824,87 @@ describe('sprints and the backlog in the DemoBackend', () => {
     });
   });
 
+  describe('the forecast of a project', () => {
+    async function pointed(title: string, points: number, sprint?: Sprint): Promise<Task> {
+      const made = await task(title);
+      await backend.setTaskPoints(made.id, points);
+      if (sprint) {
+        await backend.planTask(made.id, sprint.id);
+      }
+      return now(made.id);
+    }
+
+    /** A sprint completed with one finished task of so many points, and one of one point that moves on. */
+    async function sprintThatFinished(points: number): Promise<void> {
+      const sprint = await backend.createSprint({ projectId: project.id });
+      const done = await pointed('Finished work', points, sprint);
+      await pointed('Work that moves on', 1, sprint);
+      await backend.startSprint(sprint.id, {
+        name: sprint.name,
+        goal: '',
+        startOn: '2026-11-11',
+        endOn: '2026-11-17',
+      });
+      await finish(done.id);
+      await backend.completeSprint(sprint.id, { moveUnfinishedTo: null });
+      environment.pass(1);
+    }
+
+    it('says it is too early with fewer than three completed sprints', async () => {
+      await sprintThatFinished(5);
+      await sprintThatFinished(8);
+
+      const forecast = await backend.sprintForecast(project.id);
+
+      expect(forecast.velocity).toEqual({
+        state: 'too_early',
+        finished: [8, 5],
+        low: null,
+        high: null,
+        sprints: null,
+      });
+      expect(forecast.ahead.fewestSprints).toBeNull();
+      expect([forecast.ahead.work, forecast.ahead.tasks]).toEqual([2, 2]);
+    });
+
+    it('compares a planned sprint with the pace and names tasks without points', async () => {
+      for (const points of [5, 11, 8]) {
+        await sprintThatFinished(points);
+      }
+      const planned = await backend.createSprint({ projectId: project.id });
+      await pointed('Route the board', 8, planned);
+      await pointed('Write the drivers', 5, planned);
+      const unpointed = await task('Order the parts');
+      await backend.planTask(unpointed.id, planned.id);
+
+      const forecast = await backend.sprintForecast(project.id);
+
+      expect([forecast.velocity.low, forecast.velocity.high]).toEqual([5, 11]);
+      expect(forecast.planned).toHaveLength(1);
+      expect(forecast.planned[0]).toMatchObject({ sprintId: planned.id, work: 13, load: 'above' });
+      expect(forecast.planned[0]?.withoutPoints[0]?.taskId).toBe(unpointed.id);
+      expect(forecast.ahead).toMatchObject({
+        work: 16,
+        tasks: 6,
+        fewestSprints: 2,
+        mostSprints: 4,
+      });
+      expect(forecast.ahead.withoutPoints).toHaveLength(1);
+    });
+
+    it('counts tasks in a project without points', async () => {
+      await task('Draw the schematic');
+      await task('Route the board');
+
+      const forecast = await backend.sprintForecast(project.id);
+
+      expect(forecast.velocity.state).toBe('no_sprints');
+      expect(forecast.unit).toBe('tasks');
+      expect(forecast.ahead.work).toBe(2);
+      expect(forecast.ahead.withoutPoints).toEqual([]);
+    });
+  });
+
   describe('removing what sprints are made of', () => {
     it('removes the sprints of a project with the project', async () => {
       const sprint = await backend.createSprint({ projectId: project.id });

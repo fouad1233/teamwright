@@ -305,6 +305,16 @@ export function reportVersionOf(tasks: readonly Task[], sprintId: Id): string {
 }
 
 /**
+ * A text that changes whenever a task or a sprint of a project changes, for
+ * asking the forecast again.
+ */
+export function forecastVersionOf(tasks: readonly Task[], sprints: readonly Sprint[]): string {
+  const latest = tasks.reduce((last, task) => (task.updatedAt > last ? task.updatedAt : last), '');
+  const states = sprints.map((sprint) => `${sprint.id}=${sprint.state}`).join(',');
+  return `${tasks.length.toString()}:${latest}:${states}`;
+}
+
+/**
  * Reads story points the way people type them: digits. Returns the number,
  * `null` for an empty field (no points), or `undefined` for anything else.
  * Whether the number is allowed is for the backend to say.

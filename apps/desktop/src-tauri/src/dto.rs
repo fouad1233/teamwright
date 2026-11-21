@@ -13,18 +13,18 @@ use teamwright_application::{
     Acceptance, AgentProgram, AgentUsage, ApprovedMember, ApprovedOwner, ApprovedProposal,
     ApprovedTask, ConversationWithTurns, Deliveries, Delivery, DriveFinding, DriveFolder,
     GitHubItem, GitHubOverview, GitHubSignIn, GoogleDrive, ItemKind, ItemState, KnownComputer,
-    NewMember, NewProject, NewSprint, NewTask, NewView, NotificationChoice, NotificationKind,
-    NotificationPermission, ProjectChange, ProjectIntegrations, ProjectPlaces, ProjectUsage,
-    SprintChanges, SprintReport, SprintStart, StatusProperties, SyncNotice, SyncState,
-    TaskOnGitHub, WorkflowTemplate, sign_in_problem,
+    NamedTask, NewMember, NewProject, NewSprint, NewTask, NewView, NotificationChoice,
+    NotificationKind, NotificationPermission, ProjectChange, ProjectIntegrations, ProjectPlaces,
+    ProjectUsage, SprintChanges, SprintForecast, SprintReport, SprintStart, StatusProperties,
+    SyncNotice, SyncState, TaskOnGitHub, WorkflowTemplate, sign_in_problem,
 };
 use teamwright_domain::{
     Area, Assignee, CalendarDate, Color, ComputerId, ContextUse, Conversation, DecisionOption,
     DecisionRequest, DomainError, Effort, EventKind, EventKinds, Fill, Interview, InterviewAnswer,
     Member, MemberKind, Priority, Project, ProjectTemplate, Proposal, ProposedOwner, Schedule,
     ScopeTask, Sprint, SprintSummary, Status, StatusCategory, StatusLoad, Step, StepContent,
-    StoryPoints, Tag, Task, TaskChange, TaskChangeKind, Timestamp, TokenCounts, Turn, View,
-    ViewAssignee, ViewFilter, ViewKind, WorkInProgressLimit, context_of,
+    StoryPoints, Tag, Task, TaskChange, TaskChangeKind, Timestamp, TokenCounts, Turn, Velocity,
+    View, ViewAssignee, ViewFilter, ViewKind, WorkInProgressLimit, context_of,
 };
 
 use crate::error::CommandError;
@@ -434,6 +434,122 @@ impl From<&SprintReport> for SprintReportDto {
                     to_sprint_id: moved.to.map(|sprint| sprint.to_string()),
                 })
                 .collect(),
+        }
+    }
+}
+
+/// What the completed sprints of a project say about the work ahead, as
+/// the interface sees it. `velocity.state` is `no_sprints`, `too_early` or
+/// `known`.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SprintForecastDto {
+    velocity: VelocityDto,
+    unit: &'static str,
+    planned: Vec<PlannedLoadDto>,
+    ahead: WorkAheadDto,
+}
+
+/// The pace of a team, or why none can be told yet.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VelocityDto {
+    state: &'static str,
+    /// What each completed sprint read finished, the latest first; filled
+    /// while it is too early.
+    finished: Vec<u32>,
+    /// The least and the most finished in one sprint, once known.
+    low: Option<u32>,
+    high: Option<u32>,
+    /// How many sprints the pace is read from, once known.
+    sprints: Option<usize>,
+}
+
+/// A task a forecast cannot count, by its number and title.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NamedTaskDto {
+    task_id: String,
+    number: u32,
+    title: String,
+}
+
+/// A planned sprint against the pace.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlannedLoadDto {
+    sprint_id: String,
+    work: u32,
+    load: Option<&'static str>,
+    without_points: Vec<NamedTaskDto>,
+}
+
+/// The rest of the work, and how many sprints it would take.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkAheadDto {
+    work: u32,
+    tasks: usize,
+    fewest_sprints: Option<u32>,
+    most_sprints: Option<u32>,
+    without_points: Vec<NamedTaskDto>,
+}
+
+impl From<&SprintForecast> for SprintForecastDto {
+    fn from(forecast: &SprintForecast) -> Self {
+        let named = |tasks: &[NamedTask]| {
+            tasks
+                .iter()
+                .map(|task| NamedTaskDto {
+                    task_id: task.task_id.to_string(),
+                    number: task.number,
+                    title: task.title.clone(),
+                })
+                .collect()
+        };
+        let velocity = match &forecast.velocity {
+            Velocity::NoSprints => VelocityDto {
+                state: "no_sprints",
+                finished: Vec::new(),
+                low: None,
+                high: None,
+                sprints: None,
+            },
+            Velocity::TooEarly { finished, .. } => VelocityDto {
+                state: "too_early",
+                finished: finished.clone(),
+                low: None,
+                high: None,
+                sprints: None,
+            },
+            Velocity::Known(pace) => VelocityDto {
+                state: "known",
+                finished: Vec::new(),
+                low: Some(pace.low),
+                high: Some(pace.high),
+                sprints: Some(pace.sprints),
+            },
+        };
+        Self {
+            velocity,
+            unit: forecast.unit.as_str(),
+            planned: forecast
+                .planned
+                .iter()
+                .map(|planned| PlannedLoadDto {
+                    sprint_id: planned.sprint_id.to_string(),
+                    work: planned.work,
+                    load: planned.load.map(|load| load.as_str()),
+                    without_points: named(&planned.without_points),
+                })
+                .collect(),
+            ahead: WorkAheadDto {
+                work: forecast.ahead.work,
+                tasks: forecast.ahead.tasks,
+                fewest_sprints: forecast.ahead.sprints.map(|sprints| sprints.fewest),
+                most_sprints: forecast.ahead.sprints.and_then(|sprints| sprints.most),
+                without_points: named(&forecast.ahead.without_points),
+            },
         }
     }
 }

@@ -37,12 +37,15 @@ import {
   finishedOf,
   formatDaysLeft,
   formatSprintDates,
+  formatWork,
   layoutOf,
   openSprints,
+  forecastVersionOf,
   reportVersionOf,
   rowsOf,
 } from './sprintModel';
-import { useSprintCommands, useSprintReport, useSprints } from './sprintQueries';
+import { aheadInWords, loadInWords, paceInWords, withoutPointsInWords } from './forecastModel';
+import { useSprintCommands, useSprintForecast, useSprintReport, useSprints } from './sprintQueries';
 
 /** How far the pointer must move before a press becomes a drag, in pixels. */
 const DRAG_START_DISTANCE = 6;
@@ -71,6 +74,7 @@ export function BacklogView({ project, tasks }: BacklogViewProps) {
   // Today is read once when the view opens, like the rest of what it shows.
   const [today] = useState(() => todayWhereTheUserIs());
 
+  const forecast = useSprintForecast(project.id, forecastVersionOf(tasks, sprints.data ?? [])).data;
   const tasksById = useMemo(() => indexById(tasks), [tasks]);
   const layout = layoutOf(sprints.data ?? []);
   const destinations = openSprints(sprints.data ?? []);
@@ -154,6 +158,28 @@ export function BacklogView({ project, tasks }: BacklogViewProps) {
   const activeRows = active ? rowsOfSprint(active) : [];
   const finishedInActive = finishedOf(project, activeRows).length;
   const draggedTask = draggedId === null ? undefined : tasksById.get(draggedId);
+  // What the pace of the team says: each planned sprint against it, and
+  // under the backlog how long the rest would take.
+  const plannedNotesOf = (sprintId: Id): string[] => {
+    const load = forecast?.planned.find((each) => each.sprintId === sprintId);
+    if (!forecast || !load) {
+      return [];
+    }
+    const against = loadInWords(load, forecast);
+    const unpointed = withoutPointsInWords(project, load.withoutPoints);
+    return [
+      ...(against === null ? [] : [`${formatWork(load.work, forecast.unit)} planned: ${against}.`]),
+      ...(unpointed === null ? [] : [unpointed]),
+    ];
+  };
+  const pace = forecast ? paceInWords(forecast) : null;
+  const unpointedAhead = forecast
+    ? withoutPointsInWords(project, forecast.ahead.withoutPoints)
+    : null;
+  const backlogNotes =
+    forecast && pace !== null
+      ? [`${pace} ${aheadInWords(forecast)}`, ...(unpointedAhead === null ? [] : [unpointedAhead])]
+      : [];
   const dialogSprint = (kind: 'change' | 'start' | 'complete' | 'delete') =>
     dialog?.kind === kind ? dialog.sprint : null;
 
@@ -214,6 +240,7 @@ export function BacklogView({ project, tasks }: BacklogViewProps) {
               name={sprint.name}
               state={<span className="label">Planned</span>}
               facts={[formatSprintDates(sprint)]}
+              notes={plannedNotesOf(sprint.id)}
               rows={rowsOfSprint(sprint)}
               actions={
                 <>
@@ -238,6 +265,7 @@ export function BacklogView({ project, tasks }: BacklogViewProps) {
             {...shared}
             sprint={null}
             name="Backlog"
+            notes={backlogNotes}
             rows={rowsOf(project, tasks, null)}
             actions={
               <Button

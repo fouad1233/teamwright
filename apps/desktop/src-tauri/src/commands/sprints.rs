@@ -5,8 +5,8 @@ use teamwright_application::{ProjectEvent, event_of_completed_sprint, event_of_s
 use teamwright_domain::{Project, Sprint};
 
 use crate::dto::{
-    NewSprintInput, SprintChangesInput, SprintCompletionInput, SprintDto, SprintReportDto,
-    SprintStartInput, TaskDto, parse_id,
+    NewSprintInput, SprintChangesInput, SprintCompletionInput, SprintDto, SprintForecastDto,
+    SprintReportDto, SprintStartInput, TaskDto, parse_id,
 };
 use crate::error::CommandError;
 use crate::events;
@@ -140,4 +140,16 @@ pub async fn sprint_report(
 ) -> Result<SprintReportDto, CommandError> {
     let report = state.sprints.report(parse_id(&sprint_id)?)?;
     Ok(SprintReportDto::from(&report))
+}
+
+/// Tells what the completed sprints of a project say about the work ahead:
+/// the pace of the team, each planned sprint against it, and how many
+/// sprints the unfinished work would take.
+#[tauri::command]
+pub async fn sprint_forecast(
+    state: State<'_, AppState>,
+    project_id: String,
+) -> Result<SprintForecastDto, CommandError> {
+    let forecast = state.sprints.forecast(parse_id(&project_id)?)?;
+    Ok(SprintForecastDto::from(&forecast))
 }

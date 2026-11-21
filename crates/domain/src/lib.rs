@@ -38,6 +38,7 @@ pub mod teamwork;
 pub mod template;
 pub mod text;
 pub mod time;
+pub mod velocity;
 pub mod view;
 pub mod work_in_progress;
 pub mod workflow;
@@ -89,6 +90,9 @@ pub use text::{
     StatusName, TagName, TaskTitle, ViewName,
 };
 pub use time::{CalendarDate, Timestamp};
+pub use velocity::{
+    FEWEST_SPRINTS_FOR_A_PACE, Load, MOST_SPRINTS_FOR_A_PACE, Pace, SprintsNeeded, Velocity,
+};
 pub use view::{View, ViewAssignee, ViewFilter, ViewKind, ViewSnapshot};
 pub use work_in_progress::{Fill, StatusLoad, WorkInProgressLimit};
 pub use workflow::{Status, StatusCategory, Workflow};

@@ -647,6 +647,17 @@ chart the day is said in words, such as *19 Nov 1 task joined, 3 points;
 were. New points on a task already in the sprint are said too
 (*re-estimated, +3 points*).
 
+**The pace of the team.** Once three sprints are completed, the backlog
+says how many points the team finished in a sprint, as a range from the
+least to the most over its last sprints (up to six): *The team finished
+5–11 points a sprint over its last 3 sprints.* It then says how many
+sprints the work not yet finished would take at that pace, and names the
+tasks without points, which it cannot count. A planned sprint says how
+what you put into it compares: *16 points planned: more than the team has
+finished in a sprint (5–11 points).* With fewer than three completed
+sprints it says that it is too early to tell. The pace is worked out from
+the completed sprints, not guessed.
+
 **Completed sprints** keep what they took on and what they finished:
 *13 of 15 points*. The bar beside it shows the same on one scale for all
 of them, so you can see the pace from sprint to sprint.

@@ -1161,6 +1161,122 @@ mod the_report_follows_the_scope_of_a_sprint {
     }
 }
 
+mod the_forecast_of_a_project {
+    use teamwright_domain::{Load, SprintsNeeded, Velocity};
+
+    use super::*;
+
+    impl Backlog {
+        /// A task with points, in a sprint or in the backlog.
+        fn pointed(&self, title: &str, points: f64, sprint: Option<&Sprint>) -> Task {
+            let task = self.task(title);
+            self.tasks.set_points(task.id(), Some(points)).unwrap();
+            if let Some(sprint) = sprint {
+                self.tasks.plan(task.id(), Some(sprint.id())).unwrap();
+            }
+            self.now(task.id())
+        }
+
+        /// A sprint that is started and completed with one finished task of
+        /// so many points, and one unfinished of one point that moves on to
+        /// the backlog.
+        fn sprint_that_finished(&self, points: f64) {
+            let sprint = self.new_sprint();
+            let done = self.pointed("Finished work", points, Some(&sprint));
+            self.pointed("Work that moves on", 1.0, Some(&sprint));
+            self.sprints
+                .start(
+                    sprint.id(),
+                    SprintStart {
+                        name: sprint.name().to_string(),
+                        goal: String::new(),
+                        start_on: day(11),
+                        end_on: day(17),
+                    },
+                )
+                .unwrap();
+            self.finish(done.id());
+            self.sprints.complete(sprint.id(), None).unwrap();
+            self.pass(1);
+        }
+    }
+
+    #[test]
+    fn says_it_is_too_early_with_fewer_than_three_completed_sprints() {
+        let backlog = backlog();
+        backlog.sprint_that_finished(5.0);
+        backlog.sprint_that_finished(8.0);
+
+        let forecast = backlog.sprints.forecast(backlog.project.id()).unwrap();
+
+        assert_eq!(
+            forecast.velocity,
+            Velocity::TooEarly {
+                unit: SprintUnit::Points,
+                finished: vec![8, 5]
+            }
+        );
+        assert_eq!(forecast.ahead.sprints, None);
+        // The two tasks that moved on, of one point each.
+        assert_eq!((forecast.ahead.work, forecast.ahead.tasks), (2, 2));
+    }
+
+    #[test]
+    fn compares_a_planned_sprint_with_the_pace_and_names_tasks_without_points() {
+        let backlog = backlog();
+        for points in [5.0, 11.0, 8.0] {
+            backlog.sprint_that_finished(points);
+        }
+        let planned = backlog.new_sprint();
+        backlog.pointed("Route the board", 8.0, Some(&planned));
+        backlog.pointed("Write the drivers", 5.0, Some(&planned));
+        let unpointed = backlog.task("Order the parts");
+        backlog
+            .tasks
+            .plan(unpointed.id(), Some(planned.id()))
+            .unwrap();
+
+        let forecast = backlog.sprints.forecast(backlog.project.id()).unwrap();
+
+        assert_eq!(
+            forecast.velocity.pace().map(|pace| (pace.low, pace.high)),
+            Some((5, 11))
+        );
+        assert_eq!(forecast.planned.len(), 1);
+        let load = &forecast.planned[0];
+        assert_eq!(load.sprint_id, planned.id());
+        assert_eq!(load.work, 13);
+        assert_eq!(load.load, Some(Load::Above));
+        assert_eq!(load.without_points[0].task_id, unpointed.id());
+        // Three tasks that moved on, of one point each, and the 13 points
+        // planned: 16 points in 2 to 4 sprints.
+        assert_eq!(forecast.ahead.work, 16);
+        assert_eq!(forecast.ahead.tasks, 6);
+        assert_eq!(
+            forecast.ahead.sprints,
+            Some(SprintsNeeded {
+                fewest: 2,
+                most: Some(4)
+            })
+        );
+        assert_eq!(forecast.ahead.without_points.len(), 1);
+    }
+
+    #[test]
+    fn counts_tasks_in_a_project_without_points() {
+        let backlog = backlog();
+        backlog.task("Draw the schematic");
+        backlog.task("Route the board");
+
+        let forecast = backlog.sprints.forecast(backlog.project.id()).unwrap();
+
+        assert_eq!(forecast.velocity, Velocity::NoSprints);
+        assert_eq!(forecast.unit, SprintUnit::Tasks);
+        assert_eq!(forecast.ahead.work, 2);
+        assert_eq!(forecast.ahead.without_points, []);
+    }
+}
+
 mod removing_what_sprints_are_made_of {
     use super::*;
 

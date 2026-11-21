@@ -43,6 +43,7 @@ import type {
   Sprint,
   SprintChanges,
   SprintCompletion,
+  SprintForecast,
   SprintReport,
   SprintStart,
   StatusLoad,
@@ -284,6 +285,12 @@ export interface Backend {
   setTaskPoints(taskId: Id, points: number | null): Promise<Task>;
   /** Tells how much work remained in a sprint at the end of each of its days. */
   sprintReport(sprintId: Id): Promise<SprintReport>;
+  /**
+   * Tells what the completed sprints of a project say about the work ahead:
+   * the pace of the team as a range, each planned sprint against it, and
+   * how many sprints the unfinished work would take.
+   */
+  sprintForecast(projectId: Id): Promise<SprintForecast>;
 
   /**
    * Lists the views of a project in the order the manager gave them. A new

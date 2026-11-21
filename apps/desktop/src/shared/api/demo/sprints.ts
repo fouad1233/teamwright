@@ -5,6 +5,10 @@ import { BackendError } from '../backend';
 import type {
   CalendarDate,
   Id,
+  NamedTask,
+  PlannedLoad,
+  SprintForecast,
+  Velocity,
   MovedOn,
   ScopeChange,
   ScopeTask,
@@ -297,4 +301,113 @@ export function dayOfMoment(moment: string): CalendarDate {
 
 function minimumOf(first: CalendarDate, second: CalendarDate): CalendarDate {
   return first < second ? first : second;
+}
+
+/** How many completed sprints a pace needs before it is told. */
+export const FEWEST_SPRINTS_FOR_A_PACE = 3;
+
+/** How many of the latest completed sprints a pace is read from. */
+export const MOST_SPRINTS_FOR_A_PACE = 6;
+
+/**
+ * The pace of a team from the summaries of its completed sprints, the latest
+ * first, as the domain crate reads it (`velocity.rs`): the sprints counted
+ * in the unit of the latest one, at most six of them, and at least three.
+ */
+export function velocityOf(latestFirst: readonly SprintSummary[]): Velocity {
+  const latest = latestFirst[0];
+  if (!latest) {
+    return { state: 'no_sprints', finished: [], low: null, high: null, sprints: null };
+  }
+  const finished = latestFirst
+    .filter((summary) => summary.unit === latest.unit)
+    .slice(0, MOST_SPRINTS_FOR_A_PACE)
+    .map((summary) => summary.completed);
+  if (finished.length < FEWEST_SPRINTS_FOR_A_PACE) {
+    return { state: 'too_early', finished, low: null, high: null, sprints: null };
+  }
+  return {
+    state: 'known',
+    finished: [],
+    low: Math.min(...finished),
+    high: Math.max(...finished),
+    sprints: finished.length,
+  };
+}
+
+/**
+ * What the completed sprints of a project say about the work ahead, as the
+ * application crate tells it (`SprintService::forecast`). `sprints` are
+ * listed as `asListed` orders them, and `unfinished` are the unfinished
+ * tasks that are not subtasks, by their number.
+ */
+export function forecastOf(
+  sprints: readonly Sprint[],
+  unfinished: readonly Task[],
+): SprintForecast {
+  const velocity = velocityOf(
+    sprints.flatMap((sprint) =>
+      sprint.state === 'completed' && sprint.summary ? [sprint.summary] : [],
+    ),
+  );
+  const unit: SprintUnit =
+    velocity.state === 'no_sprints'
+      ? unfinished.some((task) => task.points !== null)
+        ? 'points'
+        : 'tasks'
+      : (sprints.find((sprint) => sprint.state === 'completed' && sprint.summary)?.summary?.unit ??
+        'tasks');
+  const weigh = (tasks: readonly Task[]) => ({
+    work: tasks.reduce((sum, task) => sum + (unit === 'points' ? (task.points ?? 0) : 1), 0),
+    withoutPoints:
+      unit === 'points'
+        ? tasks
+            .filter((task) => task.points === null)
+            .map((task): NamedTask => ({ taskId: task.id, number: task.number, title: task.title }))
+        : [],
+  });
+  const loadOf = (work: number): PlannedLoad['load'] =>
+    velocity.state !== 'known'
+      ? null
+      : work < velocity.low
+        ? 'below'
+        : work > velocity.high
+          ? 'above'
+          : 'within';
+
+  const planned = sprints
+    .filter((sprint) => sprint.state === 'planned')
+    .map((sprint): PlannedLoad => {
+      const { work, withoutPoints } = weigh(
+        unfinished.filter((task) => task.sprintId === sprint.id),
+      );
+      return { sprintId: sprint.id, work, load: loadOf(work), withoutPoints };
+    });
+  const { work, withoutPoints } = weigh(unfinished);
+  const sprintsAt = (perSprint: number) => Math.ceil(work / perSprint);
+  const known = velocity.state === 'known';
+  return {
+    velocity,
+    unit,
+    planned,
+    ahead: {
+      work,
+      tasks: unfinished.length,
+      fewestSprints: !known
+        ? null
+        : work === 0
+          ? 0
+          : velocity.high === 0
+            ? null
+            : sprintsAt(velocity.high),
+      mostSprints: !known
+        ? null
+        : work === 0
+          ? 0
+          : velocity.low === 0
+            ? null
+            : sprintsAt(velocity.low),
+      withoutPoints,
+    },
+  };
 }

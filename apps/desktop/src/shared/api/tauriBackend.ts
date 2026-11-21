@@ -48,6 +48,7 @@ import type {
   Sprint,
   SprintChanges,
   SprintCompletion,
+  SprintForecast,
   SprintReport,
   SprintStart,
   StatusLoad,
@@ -226,6 +227,10 @@ export class TauriBackend implements Backend {
 
   sprintReport(sprintId: Id): Promise<SprintReport> {
     return call('sprint_report', { sprintId });
+  }
+
+  sprintForecast(projectId: Id): Promise<SprintForecast> {
+    return call('sprint_forecast', { projectId });
   }
 
   listViews(projectId: Id): Promise<View[]> {

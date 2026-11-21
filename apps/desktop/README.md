@@ -427,7 +427,7 @@ src/
     areas/            The areas of a project: at the side, the open area, the dialog, the field of a task
     tags/             The tags of a project: the chips, the line of tags of a task and its picker, the dialog
     checklists/       The checklist of a task in its panel, and its progress on cards and rows
-    sprints/          The Backlog view, sprints and points, the burndown, the board of a sprint, completed sprints opened
+    sprints/          The Backlog view, sprints and points, the burndown with the scope that joined or left, the pace of the team, the board of a sprint, completed sprints opened
     sync/             Computers: syncing through a folder or Google Drive, the line at the foot of the sidebar, conversations elsewhere
     views/            The row of views and places, the chooser, the menu and filter of a view
   shared/
@@ -581,7 +581,8 @@ Rules of the interface:
 - **Logic is tested without rendering.** Pure functions live in `*Model.ts`
   and `shared/lib`, next to their tests. The Gantt chart, the calendar and
   the burndown chart only draw what `ganttModel.ts`, `calendarModel.ts` and
-  `burndownModel.ts` work out.
+  `burndownModel.ts` work out. The pace of the team is the backend's
+  (`sprintForecast`); `forecastModel.ts` only puts it into words.
 - **The dashboard is worked out, not written**
   ([decision 0020](../../docs/decisions/0020-a-dashboard-worked-out-not-written.md)).
   Its sentences, numbers and bars come from `dashboardModel.ts`, from the

@@ -98,7 +98,10 @@ pub use project_events::{
     event_of_started_sprint,
 };
 pub use projects::{NewProject, ProjectService, StatusProperties, WorkflowTemplate};
-pub use sprints::{NewSprint, SprintChanges, SprintDay, SprintReport, SprintService, SprintStart};
+pub use sprints::{
+    NamedTask, NewSprint, PlannedLoad, SprintChanges, SprintDay, SprintForecast, SprintReport,
+    SprintService, SprintStart, WorkAhead,
+};
 pub use sync::{
     Acceptance, CLOCK_AHEAD_LIMIT_MILLIS, ComputerCard, ExchangedChange, ExchangedOperation,
     FileContent, FoundComputer, KnownComputer, NoticeKind, RESTART_NEEDED, RoundReport,

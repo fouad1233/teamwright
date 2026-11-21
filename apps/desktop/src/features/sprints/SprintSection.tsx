@@ -24,6 +24,8 @@ interface SprintSectionProps {
   /** The tasks of the section, as rows. */
   rows: readonly Task[];
   destinations: readonly Sprint[];
+  /** Sentences under the facts, such as what the pace of the team says. */
+  notes?: readonly string[];
   /** What stands next to the heading: the burndown of the active sprint. */
   chart?: ReactNode;
   /** The buttons that do something with the sprint. */
@@ -48,6 +50,7 @@ export function SprintSection({
   name,
   state,
   facts = [],
+  notes = [],
   rows,
   destinations,
   chart,
@@ -82,6 +85,11 @@ export function SprintSection({
             ))}
           </p>
           {sprint && sprint.goal !== '' && <p className={styles.goal}>{sprint.goal}</p>}
+          {notes.map((note) => (
+            <p key={note} className={styles.note}>
+              {note}
+            </p>
+          ))}
         </div>
         {chart}
         {actions && <div className={styles.actions}>{actions}</div>}

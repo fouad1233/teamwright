@@ -390,6 +390,55 @@ export interface MovedOn {
 }
 
 /**
+ * The pace of a team, read from its completed sprints: the least and the
+ * most it finished in each of its last sprints, never one number. With
+ * fewer than three completed sprints it is too early to tell.
+ */
+export type Velocity =
+  | { state: 'no_sprints'; finished: []; low: null; high: null; sprints: null }
+  /** `finished`: what each completed sprint finished, the latest first. */
+  | { state: 'too_early'; finished: number[]; low: null; high: null; sprints: null }
+  /** `sprints`: how many of the latest completed sprints the range is read from. */
+  | { state: 'known'; finished: []; low: number; high: number; sprints: number };
+
+/** A task a forecast cannot count: it has no points while the work is counted in points. */
+export interface NamedTask {
+  taskId: Id;
+  number: number;
+  title: string;
+}
+
+/** How the work put into a planned sprint compares with the pace of the team. */
+export interface PlannedLoad {
+  sprintId: Id;
+  /** The work in it, in the unit of the forecast. */
+  work: number;
+  /** Below, within or above the range the team has finished; null while no pace can be told. */
+  load: 'below' | 'within' | 'above' | null;
+  withoutPoints: NamedTask[];
+}
+
+/** What the completed sprints of a project say about the work ahead. */
+export interface SprintForecast {
+  velocity: Velocity;
+  /** What the work is counted in. */
+  unit: SprintUnit;
+  /** Each planned sprint against the pace, in the order they are listed. */
+  planned: PlannedLoad[];
+  /** The unfinished work of the project: backlog, planned sprints and what remains of the running one. */
+  ahead: {
+    work: number;
+    /** How many unfinished tasks there are. */
+    tasks: number;
+    /** How many sprints it would take at the best and at the worst pace; null while no pace can be told. */
+    fewestSprints: number | null;
+    /** Null as well when the team once finished nothing in a sprint: at that pace it never ends. */
+    mostSprints: number | null;
+    withoutPoints: NamedTask[];
+  };
+}
+
+/**
  * The course of a sprint, for its burndown chart. It is read off every
  * version the tasks of the project have had, so it follows the tasks that
  * joined or left the sprint while it ran.

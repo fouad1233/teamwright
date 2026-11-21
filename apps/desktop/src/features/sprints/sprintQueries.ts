@@ -47,6 +47,19 @@ export function useSprintReport(sprintId: Id, version: string) {
 }
 
 /**
+ * What the completed sprints of a project say about the work ahead.
+ * `version` changes whenever a task or a sprint of the project changes, so
+ * the forecast is asked for again then.
+ */
+export function useSprintForecast(projectId: Id, version: string) {
+  const backend = useBackend();
+  return useQuery({
+    queryKey: ['sprint-forecast', projectId, version] as const,
+    queryFn: () => backend.sprintForecast(projectId),
+  });
+}
+
+/**
  * Everything the interface can do with the sprints of one project.
  *
  * What is done in a dialog throws the refusal of the backend to the dialog,
