@@ -114,3 +114,14 @@ itself: nothing until the manager allows it.
   itself, so an answer that is wrong cannot send the manager elsewhere.
 - **Keeping the choice in the log of operations.** It would sync, and a
   choice to call out is about one computer.
+
+## Note of 21 November 2026: the tag must be the version, after a review
+
+`Version::parse` drops everything after a `+`, but the address of a release
+was written from the whole tag. A tag such as
+`v9.9.9+/%2e%2e/%2e%2e/x/y/releases/download/z/setup.exe` could therefore
+lead the notice to another repository on the same site. Now a tag counts
+only if its text is exactly the version as parsed, with or without a `v`
+before it, so it holds only numbers, letters, dots and one hyphen. Any other
+tag, such as one with build text after a `+`, is left out like `nightly`. The
+address is written from the repository and that checked tag.

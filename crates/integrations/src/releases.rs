@@ -59,9 +59,12 @@ struct Entry {
 }
 
 /// The releases in an answer. A tag that is not a version is left out, and
-/// so is a draft. The address of a release is written from the repository
-/// and the tag, which the version has checked to be only numbers, letters
-/// and a few marks; the address the answer gives is not used.
+/// so is a draft. A tag counts only if it is exactly the version as parsed,
+/// with or without a `v` before it: `v1.0.0+anything` is refused, since
+/// the part the version drops could steer the address somewhere else. The
+/// address of a release is written from the repository and that checked
+/// tag, which holds only numbers, letters, dots and one hyphen; the address
+/// the answer gives is not used.
 ///
 /// # Errors
 ///
@@ -73,9 +76,13 @@ pub fn releases_in(body: &str, page: &str) -> Result<Vec<Release>, String> {
         .into_iter()
         .filter(|entry| !entry.draft)
         .filter_map(|entry| {
-            let version = Version::parse(&entry.tag_name)?;
-            let address =
-                WebAddress::parse(&format!("{page}{}", entry.tag_name.trim()), "release").ok()?;
+            let tag = entry.tag_name.trim();
+            let version = Version::parse(tag)?;
+            let canonical = version.text();
+            if tag != canonical && tag.strip_prefix('v') != Some(canonical.as_str()) {
+                return None;
+            }
+            let address = WebAddress::parse(&format!("{page}{tag}"), "release").ok()?;
             Some(Release {
                 version,
                 is_pre_release: entry.prerelease,
@@ -138,6 +145,29 @@ mod tests {
         assert_eq!(
             releases[0].address.as_str(),
             "https://github.com/fouad1233/teamwright/releases/tag/v0.2.0"
+        );
+    }
+
+    #[test]
+    fn a_tag_that_is_more_than_its_version_is_refused() {
+        let body = r#"[
+            {"tag_name": "v9.9.9+/%2e%2e/%2e%2e/x/y/releases/download/z/setup.exe"},
+            {"tag_name": "v9.9.9+build5"},
+            {"tag_name": "v1.0.0-RC.1"},
+            {"tag_name": "vv1.0.0"},
+            {"tag_name": "1.2.3"},
+            {"tag_name": " v1.2.4 "},
+            {"tag_name": "v1.3.0-rc.1"}
+        ]"#;
+        let releases = releases_in(body, PAGE).unwrap();
+        let addresses: Vec<_> = releases.iter().map(|r| r.address.as_str()).collect();
+        assert_eq!(
+            addresses,
+            [
+                "https://github.com/fouad1233/teamwright/releases/tag/1.2.3",
+                "https://github.com/fouad1233/teamwright/releases/tag/v1.2.4",
+                "https://github.com/fouad1233/teamwright/releases/tag/v1.3.0-rc.1",
+            ]
         );
     }
 
