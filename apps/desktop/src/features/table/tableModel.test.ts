@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type { Task } from '@/shared/api/types';
+import type { CustomField, Task } from '@/shared/api/types';
 
 import {
   COLUMNS,
@@ -8,6 +8,7 @@ import {
   assigneeOf,
   assigneeValue,
   describeSort,
+  fieldColumnId,
   formatHours,
   nextCell,
   parseSettings,
@@ -330,5 +331,70 @@ describe('the assignee menu', () => {
     ]) {
       expect(assigneeOf(assigneeValue(assignee))).toEqual(assignee);
     }
+  });
+});
+
+describe('the columns of custom fields', () => {
+  const cost: CustomField = {
+    id: 'cost',
+    projectId: 'p',
+    name: 'Unit cost',
+    kind: 'number',
+    unit: '€',
+    position: 1,
+    choices: [],
+  };
+  const supplier: CustomField = {
+    ...cost,
+    id: 'supplier',
+    name: 'Supplier',
+    kind: 'choice',
+    position: 0,
+  };
+  const fields = [cost, supplier];
+
+  it('shows every field after the other columns until the manager chooses', () => {
+    const ids = shownColumns(DEFAULT_SETTINGS, fields).map((column) => column.id);
+    expect(ids.slice(-3)).toEqual(['waitsFor', fieldColumnId('supplier'), fieldColumnId('cost')]);
+    const kept = parseSettings('{"version":1,"columns":["reference","title","due"],"sort":null}');
+    expect(shownColumns(kept, fields).map((column) => column.id)).toEqual([
+      'reference',
+      'title',
+      'due',
+      fieldColumnId('supplier'),
+      fieldColumnId('cost'),
+    ]);
+  });
+
+  it('keeps the fields chosen once one is turned off, and a new field stays hidden', () => {
+    const hidden = withColumnToggled(DEFAULT_SETTINGS, fieldColumnId('cost'), fields);
+    const read = parseSettings(serializeSettings(hidden));
+    const later = [...fields, { ...cost, id: 'new', name: 'New', position: 2 }];
+    expect(read.fieldsChosen).toBe(true);
+    expect(shownColumns(read, later).map((column) => column.id)).toContain(
+      fieldColumnId('supplier'),
+    );
+    expect(shownColumns(read, later).map((column) => column.id)).not.toContain(
+      fieldColumnId('cost'),
+    );
+    expect(shownColumns(read, later).map((column) => column.id)).not.toContain(
+      fieldColumnId('new'),
+    );
+  });
+
+  it('sorts by a field and says so', () => {
+    const tasks = [
+      task({ id: 'cheap', fieldValues: { cost: { kind: 'number', number: 2 } } }),
+      task({ id: 'none' }),
+      task({ id: 'dear', fieldValues: { cost: { kind: 'number', number: 40 } } }),
+    ];
+    const sort: TableSort = { column: fieldColumnId('cost'), direction: 'descending' };
+    expect(tableRows(tasks, sort, { ...context, fields }).map((row) => row.task.id)).toEqual([
+      'dear',
+      'cheap',
+      'none',
+    ]);
+    expect(describeSort(sort, fields)).toBe('Unit cost, largest first');
+    expect(describeSort(sort)).toBe('A field that was removed, last to first');
   });
 });

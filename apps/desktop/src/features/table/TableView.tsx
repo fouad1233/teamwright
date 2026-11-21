@@ -10,7 +10,7 @@ import {
 } from 'react';
 
 import { useNavigation } from '@/app/navigation';
-import type { Id, Priority } from '@/shared/api/types';
+import type { FieldValue, Id, Priority } from '@/shared/api/types';
 import { classNames } from '@/shared/lib/classNames';
 import { isOverdue, parseEstimate, taskReference } from '@/shared/lib/format';
 import { Button } from '@/shared/ui/Button';
@@ -21,6 +21,8 @@ import { useAreaCommands, useAreas } from '../areas/areaQueries';
 import { formatWork, parsePoints } from '../sprints/sprintModel';
 import { tagsOf } from '../tags/tagModel';
 import { useTags } from '../tags/tagQueries';
+import { useFieldCommands, useFields } from '../fields/fieldQueries';
+import { FieldValueControl } from '../fields/FieldValueControl';
 import { useSprintCommands, useSprints } from '../sprints/sprintQueries';
 import {
   PRIORITIES,
@@ -60,6 +62,8 @@ import {
 import styles from './TableView.module.css';
 import {
   COLUMNS,
+  columnsOf,
+  fieldIdOf,
   MANAGER,
   UNASSIGNED,
   assigneeOf,
@@ -112,6 +116,8 @@ function TableSheet({ view, project, tasks, everyTask }: KindProps) {
   const sprints = useSprints(project.id).data;
   const areas = useAreas(project.id).data;
   const tags = useTags(project.id).data;
+  const fields = useFields(project.id).data;
+  const fieldCommands = useFieldCommands(project.id);
   const team = useTeamMembers();
   const [settings, changeSettings] = useTableSettings(view);
   const [active, setActive] = useState<CellKey | null>(null);
@@ -122,7 +128,7 @@ function TableSheet({ view, project, tasks, everyTask }: KindProps) {
   const grid = useRef<HTMLTableElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
 
-  const columns = shownColumns(settings);
+  const columns = shownColumns(settings, fields ?? []);
   const tasksById = useMemo(() => indexById(everyTask), [everyTask]);
 
   const context = useMemo<SortContext>(
@@ -138,8 +144,9 @@ function TableSheet({ view, project, tasks, everyTask }: KindProps) {
         const carried = tagsOf(task, tags ?? []);
         return carried.length === 0 ? null : carried.map((tag) => tag.name).join(', ');
       },
+      fields,
     }),
-    [project.statuses, sprints, areas, tags, team],
+    [project.statuses, sprints, areas, tags, fields, team],
   );
   const rows = useMemo(
     () => tableRows(tasks, settings.sort, context),
@@ -522,6 +529,39 @@ function TableSheet({ view, project, tasks, everyTask }: KindProps) {
             onOpen={navigation.openTask}
           />
         );
+
+      default: {
+        // The column of a custom field.
+        const field = fields?.find((candidate) => candidate.id === fieldIdOf(column.id));
+        if (!field) {
+          return null;
+        }
+        const value = task.fieldValues[field.id];
+        const change = (next: FieldValue | null) => fieldCommands.setValue(task.id, field.id, next);
+        if (field.kind === 'date') {
+          return (
+            <DateCell
+              label={`${field.name} of ${reference}`}
+              value={value?.kind === 'date' ? value.date : null}
+              earliest={null}
+              latest={null}
+              onChange={(date) => {
+                void change(date === null ? null : { kind: 'date', date });
+              }}
+            />
+          );
+        }
+        return (
+          <FieldValueControl
+            field={field}
+            value={value}
+            label={`${field.name} of ${reference}`}
+            look="cell"
+            tabIndex={focusIndex}
+            onChange={change}
+          />
+        );
+      }
     }
   }
 
@@ -533,7 +573,8 @@ function TableSheet({ view, project, tasks, everyTask }: KindProps) {
     return (column.id === 'sprint' || column.id === 'area') && row.task.parentId !== null;
   }
 
-  const hiddenCount = COLUMNS.length - columns.length;
+  const allColumns = columnsOf(fields ?? []);
+  const hiddenCount = allColumns.length - columns.length;
   const fixedWidth = COLUMNS.filter((column) => column.isFixed).reduce(
     (sum, column) => sum + column.width,
     0,
@@ -550,7 +591,10 @@ function TableSheet({ view, project, tasks, everyTask }: KindProps) {
           ) : (
             <>
               <span className={styles.orderNote}>
-                Sorted by <span className={styles.orderValue}>{describeSort(settings.sort)}</span>
+                Sorted by{' '}
+                <span className={styles.orderValue}>
+                  {describeSort(settings.sort, fields ?? [])}
+                </span>
               </span>
               <Button
                 variant="ghost"
@@ -567,21 +611,21 @@ function TableSheet({ view, project, tasks, everyTask }: KindProps) {
 
         <CheckMenu
           label="Columns"
-          items={COLUMNS.map((column) => ({
+          items={allColumns.map((column) => ({
             value: column.id,
             label: column.label,
-            isChecked: column.isFixed || settings.columns.includes(column.id),
+            isChecked: columns.some((shown) => shown.id === column.id),
             isDisabled: column.isFixed,
           }))}
           onToggle={(id) => {
-            changeSettings((current) => withColumnToggled(current, id));
+            changeSettings((current) => withColumnToggled(current, id, fields ?? []));
           }}
         >
           <Button variant="ghost" className={styles.barButton}>
             Columns
             {hiddenCount > 0 && (
               <span className={styles.count}>
-                {columns.length.toString()}/{COLUMNS.length.toString()}
+                {columns.length.toString()}/{allColumns.length.toString()}
               </span>
             )}
             <ChevronDown aria-hidden />

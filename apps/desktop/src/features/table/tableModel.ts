@@ -1,5 +1,6 @@
-import type { Assignee, Id, Priority, Task } from '@/shared/api/types';
+import type { Assignee, CustomField, Id, Priority, Task } from '@/shared/api/types';
 
+import { inOrder as fieldsInOrder, sortValueOfField } from '../fields/fieldModel';
 import { asArranged } from '../tasks/taskModel';
 
 /**
@@ -8,8 +9,27 @@ import { asArranged } from '../tasks/taskModel';
  * the arrow keys lead. Pure functions, so that they can be tested alone.
  */
 
-/** The columns of the table, by the name they are kept under. */
-export type ColumnId =
+/** The columns of the table, by the name they are kept under: one of every task, or a custom field. */
+export type ColumnId = BuiltInColumnId | FieldColumnId;
+
+/** The column of a custom field: `field:` and the identifier of the field. */
+export type FieldColumnId = `field:${string}`;
+
+/** The start of the name a column of a custom field is kept under. */
+const FIELD_COLUMN = 'field:';
+
+/** The column of a custom field. */
+export function fieldColumnId(fieldId: Id): FieldColumnId {
+  return `${FIELD_COLUMN}${fieldId}`;
+}
+
+/** The field a column shows, if it is the column of a custom field. */
+export function fieldIdOf(column: ColumnId): Id | null {
+  return column.startsWith(FIELD_COLUMN) ? column.slice(FIELD_COLUMN.length) : null;
+}
+
+/** The columns every task has. */
+export type BuiltInColumnId =
   | 'reference'
   | 'title'
   | 'status'
@@ -53,10 +73,40 @@ export const COLUMNS: readonly Column[] = [
   { id: 'waitsFor', label: 'Waits for', width: 172, isFigure: false, isFixed: false },
 ];
 
+/** How wide the column of a field of each kind is. */
+const FIELD_WIDTHS: Record<CustomField['kind'], number> = {
+  text: 200,
+  number: 120,
+  date: 128,
+  yes_no: 96,
+  choice: 160,
+  link: 200,
+};
+
+/** The column of a custom field: its name in the head, after the columns every task has. */
+export function fieldColumn(field: CustomField): Column {
+  return {
+    id: fieldColumnId(field.id),
+    label: field.name,
+    width: FIELD_WIDTHS[field.kind],
+    isFigure: field.kind === 'number',
+    isFixed: false,
+  };
+}
+
+/** Every column a table of a project can show: those of every task, then one for each field. */
+export function columnsOf(fields: readonly CustomField[] = []): Column[] {
+  return [...COLUMNS, ...fieldsInOrder(fields).map(fieldColumn)];
+}
+
 const COLUMN_IDS: ReadonlySet<string> = new Set(COLUMNS.map((column) => column.id));
 
 function isColumnId(value: unknown): value is ColumnId {
-  return typeof value === 'string' && COLUMN_IDS.has(value);
+  return (
+    typeof value === 'string' &&
+    (COLUMN_IDS.has(value) ||
+      (value.startsWith(FIELD_COLUMN) && value.length > FIELD_COLUMN.length))
+  );
 }
 
 export type SortDirection = 'ascending' | 'descending';
@@ -69,10 +119,19 @@ export interface TableSort {
 
 /** What a table view keeps of its own, in `View.content`. */
 export interface TableSettings {
-  /** The columns that are shown, in the order of `COLUMNS`. The fixed ones are always among them. */
+  /**
+   * The columns that are shown, in the order of `columnsOf`. The fixed ones
+   * are always among them. A column of a field that is gone is passed over.
+   */
   columns: ColumnId[];
   /** Nothing keeps the rows in the order the manager arranged the tasks. */
   sort: TableSort | null;
+  /**
+   * Whether the manager chose which fields the table shows. Left out, it
+   * shows every field, a new one too: so does a table that kept its columns
+   * before there were fields.
+   */
+  fieldsChosen?: true;
 }
 
 /** A new table shows every column, in the order the manager arranged the tasks. */
@@ -81,12 +140,26 @@ export const DEFAULT_SETTINGS: TableSettings = {
   sort: null,
 };
 
-/** The columns, in their order, that are among the ones named. The fixed ones always are. */
-function inOrder(named: Iterable<ColumnId>): ColumnId[] {
+/**
+ * The columns, in their order, that are among the ones named. The fixed ones
+ * always are. A field column keeps its place after the others, in the order
+ * of the fields when they are known.
+ */
+function inOrder(named: Iterable<ColumnId>, fields?: readonly CustomField[]): ColumnId[] {
   const wanted = new Set(named);
-  return COLUMNS.filter((column) => column.isFixed || wanted.has(column.id)).map(
+  const builtIn = COLUMNS.filter((column) => column.isFixed || wanted.has(column.id)).map(
     (column) => column.id,
   );
+  const ofFields = [...wanted].filter((id) => fieldIdOf(id) !== null);
+  if (fields) {
+    const order = new Map(fieldsInOrder(fields).map((field, index) => [field.id, index]));
+    ofFields.sort(
+      (first, second) =>
+        (order.get(fieldIdOf(first) ?? '') ?? Number.MAX_SAFE_INTEGER) -
+        (order.get(fieldIdOf(second) ?? '') ?? Number.MAX_SAFE_INTEGER),
+    );
+  }
+  return [...builtIn, ...ofFields];
 }
 
 /**
@@ -107,7 +180,11 @@ export function parseSettings(content: string | null): TableSettings {
   if (typeof stored !== 'object' || stored === null) {
     return DEFAULT_SETTINGS;
   }
-  const { columns, sort } = stored as { columns?: unknown; sort?: unknown };
+  const { columns, sort, fieldsChosen } = stored as {
+    columns?: unknown;
+    sort?: unknown;
+    fieldsChosen?: unknown;
+  };
 
   const keptColumns = Array.isArray(columns)
     ? inOrder(columns.filter(isColumnId))
@@ -120,31 +197,57 @@ export function parseSettings(content: string | null): TableSettings {
       keptSort = { column, direction };
     }
   }
-  return { columns: keptColumns, sort: keptSort };
+  return {
+    columns: keptColumns,
+    sort: keptSort,
+    ...(fieldsChosen === true ? { fieldsChosen: true } : {}),
+  };
 }
 
 /** Writes what a table view keeps, for `View.content`. */
 export function serializeSettings(settings: TableSettings): string {
-  return JSON.stringify({ version: 1, columns: settings.columns, sort: settings.sort });
+  return JSON.stringify({
+    version: 1,
+    columns: settings.columns,
+    sort: settings.sort,
+    ...(settings.fieldsChosen ? { fieldsChosen: true } : {}),
+  });
 }
 
-/** The columns that are shown. */
-export function shownColumns(settings: TableSettings): Column[] {
+/** The columns that are shown: those of every task that are, then the fields that are. */
+export function shownColumns(
+  settings: TableSettings,
+  fields: readonly CustomField[] = [],
+): Column[] {
   const shown = new Set(settings.columns);
-  return COLUMNS.filter((column) => column.isFixed || shown.has(column.id));
+  return columnsOf(fields).filter(
+    (column) =>
+      column.isFixed ||
+      shown.has(column.id) ||
+      (fieldIdOf(column.id) !== null && settings.fieldsChosen !== true),
+  );
 }
 
-/** The settings with a column shown that was hidden, or hidden that was shown. A fixed one stays. */
-export function withColumnToggled(settings: TableSettings, id: ColumnId): TableSettings {
-  const shown = new Set(settings.columns);
+/**
+ * The settings with a column shown that was hidden, or hidden that was
+ * shown. A fixed one stays. The first time a field is turned on or off, the
+ * fields shown until then are written down, so that the choice is kept.
+ */
+export function withColumnToggled(
+  settings: TableSettings,
+  id: ColumnId,
+  fields: readonly CustomField[] = [],
+): TableSettings {
+  const shown = new Set(shownColumns(settings, fields).map((column) => column.id));
   if (!shown.delete(id)) {
     shown.add(id);
   }
-  const columns = inOrder(shown);
+  const columns = inOrder(shown, fields);
   // Rows sorted by a column that is no longer shown would be in an order
   // nobody can see the reason for.
   const sort = settings.sort && columns.includes(settings.sort.column) ? settings.sort : null;
-  return { columns, sort };
+  const fieldsChosen = settings.fieldsChosen === true || fieldIdOf(id) !== null;
+  return fieldsChosen ? { columns, sort, fieldsChosen: true } : { columns, sort };
 }
 
 /**
@@ -163,7 +266,7 @@ export function withSortBy(settings: TableSettings, id: ColumnId): TableSettings
 }
 
 /** The words for the two ways a column can be sorted, by what its values are. */
-const SORT_WORDS: Record<ColumnId, readonly [ascending: string, descending: string]> = {
+const SORT_WORDS: Record<BuiltInColumnId, readonly [ascending: string, descending: string]> = {
   reference: ['oldest first', 'newest first'],
   title: ['A to Z', 'Z to A'],
   status: ['in the order of the workflow', 'the workflow reversed'],
@@ -179,11 +282,31 @@ const SORT_WORDS: Record<ColumnId, readonly [ascending: string, descending: stri
   waitsFor: ['fewest first', 'most first'],
 };
 
+/** The words for the two ways the column of a field of each kind can be sorted. */
+const FIELD_SORT_WORDS: Record<CustomField['kind'], readonly [string, string]> = {
+  text: ['A to Z', 'Z to A'],
+  number: ['smallest first', 'largest first'],
+  date: ['earliest first', 'latest first'],
+  yes_no: ['no first', 'yes first'],
+  choice: ['in the order of the choices', 'the choices reversed'],
+  link: ['A to Z', 'Z to A'],
+};
+
 /** Says how the rows are sorted, in a few words: "Due, earliest first". */
-export function describeSort(sort: TableSort): string {
-  const column = COLUMNS.find((candidate) => candidate.id === sort.column);
-  const [ascending, descending] = SORT_WORDS[sort.column];
-  return `${column?.label ?? sort.column}, ${sort.direction === 'ascending' ? ascending : descending}`;
+export function describeSort(sort: TableSort, fields: readonly CustomField[] = []): string {
+  const fieldId = fieldIdOf(sort.column);
+  let label: string;
+  let words: readonly [string, string];
+  if (fieldId === null) {
+    label = COLUMNS.find((candidate) => candidate.id === sort.column)?.label ?? sort.column;
+    words = SORT_WORDS[sort.column as BuiltInColumnId];
+  } else {
+    const field = fields.find((candidate) => candidate.id === fieldId);
+    label = field?.name ?? 'A field that was removed';
+    words = field ? FIELD_SORT_WORDS[field.kind] : ['first to last', 'last to first'];
+  }
+  const [ascending, descending] = words;
+  return `${label}, ${sort.direction === 'ascending' ? ascending : descending}`;
 }
 
 /** What a sort needs to know beyond the tasks: the orders and names the project gives. */
@@ -201,6 +324,8 @@ export interface SortContext {
    * nothing for a task without tags. Left out, no task has any.
    */
   tagNames?: (task: Task) => string | null;
+  /** The custom fields of the project, to sort by the column of one. Left out, there are none. */
+  fields?: readonly CustomField[];
 }
 
 /** The priorities from the most urgent on, as the menus of the program list them. */
@@ -244,6 +369,11 @@ export function sortValueOf(
       return context.tagNames?.(task) ?? null;
     case 'waitsFor':
       return task.blockedBy.length === 0 ? null : task.blockedBy.length;
+    default: {
+      const fieldId = fieldIdOf(column);
+      const field = context.fields?.find((candidate) => candidate.id === fieldId);
+      return field ? sortValueOfField(field, task) : null;
+    }
   }
 }
 

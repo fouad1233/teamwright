@@ -22,6 +22,8 @@ interface FieldValueControlProps {
   onChange: (value: FieldValue | null) => Promise<boolean>;
   /** `panel` for the panel of a task, `cell` for a cell of the table. */
   look: 'panel' | 'cell';
+  /** In the table, which cell the keyboard reaches with Tab: 0 for the one it stands on, -1 for the others. */
+  tabIndex?: number;
 }
 
 /** The value of "nothing" in the menus of a choice and of yes or no. */
@@ -33,7 +35,14 @@ const NONE = 'none';
  * link, the calendar of the program for a date, and a menu for yes or no
  * and for a choice. Every control can clear the value.
  */
-export function FieldValueControl({ field, value, label, onChange, look }: FieldValueControlProps) {
+export function FieldValueControl({
+  field,
+  value,
+  label,
+  onChange,
+  look,
+  tabIndex,
+}: FieldValueControlProps) {
   switch (field.kind) {
     case 'text':
       return (
@@ -42,6 +51,7 @@ export function FieldValueControl({ field, value, label, onChange, look }: Field
           stored={value?.kind === 'text' ? value.text : ''}
           label={label}
           look={look}
+          tabIndex={tabIndex}
           maxLength={200}
           read={(typed) => ({ kind: 'text', text: typed })}
           onChange={onChange}
@@ -55,6 +65,7 @@ export function FieldValueControl({ field, value, label, onChange, look }: Field
           stored={stored}
           label={label}
           look={look}
+          tabIndex={tabIndex}
           maxLength={24}
           isFigure
           unit={field.unit}
@@ -69,7 +80,15 @@ export function FieldValueControl({ field, value, label, onChange, look }: Field
       );
     }
     case 'link':
-      return <LinkValue value={value} label={label} look={look} onChange={onChange} />;
+      return (
+        <LinkValue
+          value={value}
+          label={label}
+          look={look}
+          tabIndex={tabIndex}
+          onChange={onChange}
+        />
+      );
     case 'date':
       return (
         <DateField
@@ -100,6 +119,7 @@ export function FieldValueControl({ field, value, label, onChange, look }: Field
             className={classNames(styles.button, styles[look])}
             isEmpty={current === NONE}
             aria-label={label}
+            tabIndex={tabIndex}
             data-cell-target=""
           >
             {current === NONE
@@ -136,6 +156,7 @@ export function FieldValueControl({ field, value, label, onChange, look }: Field
             className={classNames(styles.button, styles[look])}
             isEmpty={chosen === null}
             aria-label={label}
+            tabIndex={tabIndex}
             data-cell-target=""
           >
             {chosen === null ? (
@@ -161,6 +182,7 @@ interface TypedValueProps {
   stored: string;
   label: string;
   look: 'panel' | 'cell';
+  tabIndex?: number;
   maxLength: number;
   /** A number is set to the right in a cell, so that the units stand under each other. */
   isFigure?: boolean;
@@ -188,6 +210,7 @@ function TypedValue({
   inputMode,
   read,
   hint,
+  tabIndex,
   onChange,
 }: TypedValueProps) {
   const [draft, setDraft] = useState(stored);
@@ -230,6 +253,7 @@ function TypedValue({
         aria-label={label}
         aria-invalid={!isUnderstood}
         title={isUnderstood ? undefined : hint}
+        tabIndex={tabIndex}
         data-cell-target=""
         data-escape-undoes
         onChange={(event) => {
@@ -247,6 +271,7 @@ interface LinkValueProps {
   value: FieldValue | undefined;
   label: string;
   look: 'panel' | 'cell';
+  tabIndex?: number;
   onChange: (value: FieldValue | null) => Promise<boolean>;
 }
 
@@ -255,7 +280,7 @@ interface LinkValueProps {
  * browser of the computer, through the same checked path as every other
  * address the program opens.
  */
-function LinkValue({ value, label, look, onChange }: LinkValueProps) {
+function LinkValue({ value, label, look, tabIndex, onChange }: LinkValueProps) {
   const backend = useBackend();
   const notifier = useNotifier();
   const address = value?.kind === 'link' ? value.address : '';
@@ -267,6 +292,7 @@ function LinkValue({ value, label, look, onChange }: LinkValueProps) {
         label={label}
         look={look}
         maxLength={2000}
+        tabIndex={tabIndex}
         read={(typed) => ({ kind: 'link', address: typed.trim() })}
         onChange={onChange}
       />
@@ -274,6 +300,7 @@ function LinkValue({ value, label, look, onChange }: LinkValueProps) {
         <IconButton
           label={`Open ${shortAddress(address)}`}
           className={styles.open}
+          tabIndex={tabIndex}
           onClick={() => {
             backend.openWebAddress(address).catch((failure: unknown) => {
               notifier.showError(describeFailure(failure));
