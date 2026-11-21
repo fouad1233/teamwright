@@ -4,6 +4,7 @@ import type {
   Area,
   Assignee,
   CalendarDate,
+  Color,
   Conversation,
   DataChanged,
   Deliveries,
@@ -46,6 +47,8 @@ import type {
   StatusProperties,
   SyncNotice,
   SyncState,
+  Tag,
+  TaggedTask,
   Task,
   TaskChange,
   TaskOnGitHub,
@@ -338,6 +341,65 @@ export interface Backend {
    * (`subtask_moved_alone`). Answers with the task.
    */
   moveTaskToArea(taskId: Id, areaId: Id): Promise<Task>;
+
+  /**
+   * Lists the tags of a project by name, whatever the capitals. Refused for
+   * a project that does not exist (`not_found`).
+   */
+  listTags(projectId: Id): Promise<Tag[]>;
+  /**
+   * Adds a tag to a project. Its name is trimmed and put on one line; it is
+   * not empty and has at most 30 characters (`rule_broken`), and no other
+   * tag of the project has it, whatever the capitals (`tag_name_taken`). A
+   * project has at most 100 tags (`rule_broken`). Without a color, the tag
+   * gets the next color in turn: blue, green, amber, purple, teal, pink,
+   * red, gray.
+   */
+  addTag(projectId: Id, name: string, color?: Color): Promise<Tag>;
+  /** Renames a tag, by the same rules as a name given when it is added. */
+  renameTag(tagId: Id, name: string): Promise<Tag>;
+  /** Gives a tag another color. */
+  recolorTag(tagId: Id, color: Color): Promise<Tag>;
+  /**
+   * Removes a tag. It comes off every task that carries it, which their
+   * history says, and a view that showed only the tasks with it shows the
+   * tasks with any tag again.
+   */
+  removeTag(tagId: Id): Promise<void>;
+  /**
+   * Puts a tag of its project on a task (`different_projects` for a tag of
+   * another project), and answers with the task. A tag the task carries
+   * already changes nothing.
+   */
+  putTagOnTask(taskId: Id, tagId: Id): Promise<Task>;
+  /**
+   * Puts a tag on a task by its name, as the manager types it: the tag of
+   * the project with that name, whatever the capitals, or a new tag by the
+   * rules of `addTag`. Answers with the task and the tag.
+   */
+  putNamedTagOnTask(taskId: Id, name: string): Promise<TaggedTask>;
+  /** Takes a tag off a task, and answers with the task. */
+  takeTagOffTask(taskId: Id, tagId: Id): Promise<Task>;
+
+  /**
+   * Adds an item, not done, at the end of the checklist of a task. Its text
+   * is trimmed and put on one line; it is not empty and has at most 200
+   * characters, and a checklist has at most 100 items (`rule_broken`).
+   * Every change to a checklist answers with the task.
+   */
+  addChecklistItem(taskId: Id, text: string): Promise<Task>;
+  /** Gives an item another text, by the same rules (`not_found` for an item the task does not have). */
+  renameChecklistItem(taskId: Id, itemId: Id, text: string): Promise<Task>;
+  /** Marks an item done or not done. Ticking it shows in the history of the task. */
+  tickChecklistItem(taskId: Id, itemId: Id, done: boolean): Promise<Task>;
+  /**
+   * Moves an item to another place in the checklist. Index 0 is the first
+   * place; an index past the end means the last, one before the start the
+   * first.
+   */
+  moveChecklistItem(taskId: Id, itemId: Id, index: number): Promise<Task>;
+  /** Removes an item from the checklist. */
+  removeChecklistItem(taskId: Id, itemId: Id): Promise<Task>;
 
   /** Lists the team of a project. The member who joined first comes first. */
   listMembers(projectId: Id): Promise<Member[]>;

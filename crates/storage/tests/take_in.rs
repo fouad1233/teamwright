@@ -10,11 +10,11 @@ use std::sync::Arc;
 use chrono::{TimeZone, Utc};
 use teamwright_application::in_memory::ManualClock;
 use teamwright_application::{
-    AreaRepository, AreaService, ChosenPlaces, ConversationRepository, ExchangedChange,
-    ExchangedOperation, MemberRepository, NewMember, NewProject, NewSprint, NewTask, NewView,
-    NoticeKind, PlacesRepository, ProjectRepository, ProjectService, SprintRepository,
-    SprintService, SprintStart, TaskRepository, TaskService, TeamService, ViewRepository,
-    ViewService, WorkflowTemplate,
+    AreaRepository, AreaService, ChecklistService, ChosenPlaces, ConversationRepository,
+    ExchangedChange, ExchangedOperation, MemberRepository, NewMember, NewProject, NewSprint,
+    NewTask, NewView, NoticeKind, PlacesRepository, ProjectRepository, ProjectService,
+    SprintRepository, SprintService, SprintStart, TagService, TaskRepository, TaskService,
+    TeamService, ViewRepository, ViewService, WorkflowTemplate,
 };
 use teamwright_domain::{
     Area, AreaId, Assignee, ComputerId, MemberKind, Priority, Project, Task, Timestamp, View,
@@ -22,8 +22,8 @@ use teamwright_domain::{
 };
 use teamwright_storage::{
     Database, SqliteAreaRepository, SqliteConversationRepository, SqliteMemberRepository,
-    SqlitePlacesRepository, SqliteProjectRepository, SqliteSprintRepository, SqliteTaskRepository,
-    SqliteViewRepository,
+    SqlitePlacesRepository, SqliteProjectRepository, SqliteSprintRepository, SqliteTagRepository,
+    SqliteTaskRepository, SqliteViewRepository,
 };
 
 /// One computer: its database and the use cases on it.
@@ -35,6 +35,8 @@ struct Computer {
     sprints: SprintService,
     views: ViewService,
     areas: AreaService,
+    tags: TagService,
+    checklists: ChecklistService,
     places: SqlitePlacesRepository,
 }
 
@@ -53,6 +55,7 @@ impl Computer {
         let sprints = Arc::new(SqliteSprintRepository::new(database.clone()));
         let views = Arc::new(SqliteViewRepository::new(database.clone()));
         let area_store = Arc::new(SqliteAreaRepository::new(database.clone()));
+        let tag_store = Arc::new(SqliteTagRepository::new(database.clone()));
         let clock = Arc::new(ManualClock::starting_at(moment()));
         Self {
             projects: ProjectService::new(
@@ -76,7 +79,20 @@ impl Computer {
                 clock.clone(),
             ),
             sprints: SprintService::new(projects.clone(), tasks.clone(), sprints, clock.clone()),
-            views: ViewService::new(projects.clone(), members.clone(), views.clone()),
+            views: ViewService::new(
+                projects.clone(),
+                members.clone(),
+                views.clone(),
+                tag_store.clone(),
+            ),
+            tags: TagService::new(
+                projects.clone(),
+                tasks.clone(),
+                views.clone(),
+                tag_store,
+                clock.clone(),
+            ),
+            checklists: ChecklistService::new(tasks.clone(), clock.clone()),
             areas: AreaService::new(projects.clone(), tasks.clone(), area_store, clock.clone()),
             team: TeamService::new(projects, members, tasks, conversations, views, clock),
             places: SqlitePlacesRepository::new(database.clone()),
@@ -127,6 +143,9 @@ impl Computer {
             }
             for area in self.areas.list_for_project(project.id()).unwrap() {
                 text.push_str(&format!("  {area:?}\n"));
+            }
+            for tag in self.tags.list_for_project(project.id()).unwrap() {
+                text.push_str(&format!("  {tag:?}\n"));
             }
         }
         text
@@ -876,6 +895,7 @@ fn a_view_that_showed_a_member_who_left_elsewhere_shows_everybody_again() {
             ViewFilter {
                 assignee: ViewAssignee::Member(engineer.id()),
                 hides_finished: true,
+                tag: None,
             },
         )
         .unwrap();
@@ -886,6 +906,7 @@ fn a_view_that_showed_a_member_who_left_elsewhere_shows_everybody_again() {
     let shown = ViewFilter {
         assignee: ViewAssignee::Anyone,
         hides_finished: true,
+        tag: None,
     };
     assert_eq!(view_named(&desk, &project, "Board").filter(), shown);
     assert_eq!(view_named(&laptop, &project, "Board").filter(), shown);
@@ -1453,4 +1474,201 @@ fn a_proposal_changed_before_approval_reaches_the_other_computer_as_it_reads() {
     );
     assert!(proposal.tasks()[2].waits_for.is_empty());
     assert_eq!(laptop.everything(), desk.everything());
+}
+
+/// The names of the tags a task carries on a computer, by name.
+fn tag_names(computer: &Computer, project: &Project, task: &Task) -> Vec<String> {
+    let task = computer.task(task).unwrap();
+    let mut names: Vec<String> = computer
+        .tags
+        .list_for_project(project.id())
+        .unwrap()
+        .into_iter()
+        .filter(|tag| task.tags().contains(&tag.id()))
+        .map(|tag| tag.name().to_string())
+        .collect();
+    names.sort();
+    names
+}
+
+/// The items of the checklist of a task on a computer: their text, and
+/// whether they are done.
+fn checklist_of(computer: &Computer, task: &Task) -> Vec<(String, bool)> {
+    computer
+        .task(task)
+        .unwrap()
+        .checklist()
+        .items()
+        .iter()
+        .map(|item| (item.text().to_string(), item.is_done()))
+        .collect()
+}
+
+#[test]
+fn two_computers_that_put_different_tags_on_one_task_both_keep_theirs() {
+    let (desk, laptop, project, task) = desk_and_laptop();
+    let emc = desk.tags.add(project.id(), "EMC", None).unwrap();
+    let power = desk.tags.add(project.id(), "Power", None).unwrap();
+    desk.tags.put_on(task.id(), power.id()).unwrap();
+    keep_in_step(&desk, &laptop);
+
+    desk.tags.put_on(task.id(), emc.id()).unwrap();
+    laptop.tags.take_off(task.id(), power.id()).unwrap();
+    laptop
+        .tags
+        .put_on_by_name(task.id(), "Waiting for parts")
+        .unwrap();
+    keep_in_step(&desk, &laptop);
+
+    assert_eq!(
+        tag_names(&desk, &project, &task),
+        ["EMC", "Waiting for parts"]
+    );
+    assert_eq!(desk.everything(), laptop.everything());
+}
+
+#[test]
+fn two_computers_that_change_different_items_of_one_checklist_both_keep_theirs() {
+    let (desk, laptop, _, task) = desk_and_laptop();
+    desk.checklists
+        .add_item(task.id(), "Order the stencil")
+        .unwrap();
+    let both = desk
+        .checklists
+        .add_item(task.id(), "Bake the board")
+        .unwrap();
+    let [stencil, bake] = [0, 1].map(|index| both.checklist().items()[index].id());
+    keep_in_step(&desk, &laptop);
+
+    desk.checklists.tick_item(task.id(), stencil, true).unwrap();
+    desk.checklists
+        .add_item(task.id(), "Check the joints")
+        .unwrap();
+    laptop
+        .checklists
+        .rename_item(task.id(), bake, "Bake it at 240 degrees")
+        .unwrap();
+    laptop.checklists.move_item(task.id(), bake, 0).unwrap();
+    keep_in_step(&desk, &laptop);
+
+    assert_eq!(
+        checklist_of(&desk, &task),
+        [
+            ("Bake it at 240 degrees".to_owned(), false),
+            ("Order the stencil".to_owned(), true),
+            ("Check the joints".to_owned(), false),
+        ]
+    );
+    assert_eq!(desk.everything(), laptop.everything());
+}
+
+#[test]
+fn an_item_removed_on_one_computer_stays_removed_on_the_other() {
+    let (desk, laptop, _, task) = desk_and_laptop();
+    let added = desk
+        .checklists
+        .add_item(task.id(), "Order the stencil")
+        .unwrap();
+    let item = added.checklist().items()[0].id();
+    keep_in_step(&desk, &laptop);
+
+    laptop.checklists.remove_item(task.id(), item).unwrap();
+    desk.checklists
+        .add_item(task.id(), "Bake the board")
+        .unwrap();
+    keep_in_step(&desk, &laptop);
+
+    assert_eq!(
+        checklist_of(&desk, &task),
+        [("Bake the board".to_owned(), false)]
+    );
+    assert_eq!(desk.everything(), laptop.everything());
+}
+
+#[test]
+fn a_tag_removed_on_one_computer_comes_off_a_task_the_other_put_it_on() {
+    let (desk, laptop, project, task) = desk_and_laptop();
+    let emc = desk.tags.add(project.id(), "EMC", None).unwrap();
+    let board = view_named(&desk, &project, "Board");
+    desk.views
+        .set_filter(
+            board.id(),
+            ViewFilter {
+                tag: Some(emc.id()),
+                ..ViewFilter::EVERY_TASK
+            },
+        )
+        .unwrap();
+    keep_in_step(&desk, &laptop);
+
+    desk.tags.remove(emc.id()).unwrap();
+    laptop.tags.put_on(task.id(), emc.id()).unwrap();
+    keep_in_step(&desk, &laptop);
+
+    assert!(desk.task(&task).unwrap().tags().is_empty());
+    assert!(desk.tags.list_for_project(project.id()).unwrap().is_empty());
+    assert_eq!(
+        view_named(&desk, &project, "Board").filter(),
+        ViewFilter::EVERY_TASK
+    );
+    assert_eq!(desk.everything(), laptop.everything());
+}
+
+#[test]
+fn two_tags_given_one_name_on_two_computers_are_told_apart_by_a_number() {
+    let (desk, laptop, project, _) = desk_and_laptop();
+    desk.tags.add(project.id(), "EMC", None).unwrap();
+    laptop.tags.add(project.id(), "emc", None).unwrap();
+
+    keep_in_step(&desk, &laptop);
+
+    let names: Vec<String> = desk
+        .tags
+        .list_for_project(project.id())
+        .unwrap()
+        .iter()
+        .map(|tag| tag.name().to_string())
+        .collect();
+    assert_eq!(names, ["EMC", "emc 2"]);
+    assert_eq!(desk.everything(), laptop.everything());
+}
+
+#[test]
+fn the_history_taken_in_says_when_a_tag_was_put_on_and_an_item_ticked() {
+    let (desk, laptop, project, task) = desk_and_laptop();
+    let (_, emc) = desk.tags.put_on_by_name(task.id(), "EMC").unwrap();
+    let added = desk
+        .checklists
+        .add_item(task.id(), "Order the stencil")
+        .unwrap();
+    let item = added.checklist().items()[0].id();
+    desk.checklists.tick_item(task.id(), item, true).unwrap();
+    keep_in_step(&desk, &laptop);
+
+    let kinds: Vec<teamwright_domain::TaskChangeKind> = laptop
+        .tasks
+        .history(task.id())
+        .unwrap()
+        .into_iter()
+        .map(|change| change.kind)
+        .collect();
+
+    assert!(kinds.contains(&teamwright_domain::TaskChangeKind::Tagged { tag: emc.id() }));
+    assert!(kinds.contains(&teamwright_domain::TaskChangeKind::Ticked {
+        item: teamwright_domain::ChecklistText::parse("Order the stencil").unwrap()
+    }));
+    let _ = project;
+}
+
+#[test]
+fn deleting_a_project_on_one_computer_removes_its_tags_on_the_other() {
+    let (desk, laptop, project, task) = desk_and_laptop();
+    desk.tags.put_on_by_name(task.id(), "EMC").unwrap();
+    keep_in_step(&desk, &laptop);
+
+    desk.projects.delete(project.id()).unwrap();
+    keep_in_step(&desk, &laptop);
+
+    assert!(laptop.projects.list().unwrap().is_empty());
+    assert_eq!(desk.everything(), laptop.everything());
 }

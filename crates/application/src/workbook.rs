@@ -24,9 +24,10 @@ use teamwright_domain::{
 use crate::error::ApplicationError;
 use crate::ports::{
     AreaRepository, Clock, ConversationRepository, MemberRepository, ProjectRepository,
-    SprintRepository, TaskRepository,
+    SprintRepository, TagRepository, TaskRepository,
 };
 use crate::sprints::{as_listed, counted, is_finished};
+use crate::tags::tags_of;
 
 /// A workbook: its sheets, in order.
 #[derive(Debug, Clone, PartialEq)]
@@ -179,6 +180,8 @@ pub struct WorkbookPorts {
     pub sprints: Arc<dyn SprintRepository>,
     /// Where the areas of the projects are stored.
     pub areas: Arc<dyn AreaRepository>,
+    /// Where the tags of the projects are stored.
+    pub tags: Arc<dyn TagRepository>,
     /// Where the members of the teams are stored.
     pub members: Arc<dyn MemberRepository>,
     /// Where conversations and their turns are stored, for the tokens used.
@@ -235,6 +238,10 @@ impl WorkbookService {
             .into_iter()
             .map(|area| (area.id(), area.name().to_string()))
             .collect();
+        let tag_names: HashMap<_, _> = tags_of(ports.tags.as_ref(), project_id)?
+            .into_iter()
+            .map(|tag| (tag.id(), tag.name().to_string()))
+            .collect();
         let tokens = self.tokens_by_user(project_id)?;
         let today = ports.clock.day_of(ports.clock.now());
 
@@ -244,6 +251,7 @@ impl WorkbookService {
             sprints: &sprints,
             members: &members,
             area_names: &area_names,
+            tag_names: &tag_names,
             today,
             clock: ports.clock.as_ref(),
         };
@@ -312,6 +320,8 @@ struct Gathered<'a> {
     /// The members, in the order they joined.
     members: &'a [Member],
     area_names: &'a HashMap<teamwright_domain::AreaId, String>,
+    /// The names of the tags of the project.
+    tag_names: &'a HashMap<teamwright_domain::TagId, String>,
     today: CalendarDate,
     /// The clock, which tells on which day a moment falls where the program runs.
     clock: &'a dyn Clock,
@@ -495,6 +505,7 @@ impl Gathered<'_> {
                     self.area_names
                         .get(&task.area_id())
                         .map_or(Cell::Empty, |name| Cell::text(name)),
+                    Cell::text(&self.tags_in_words(task)),
                     Cell::text(
                         &waits_for
                             .iter()
@@ -524,6 +535,7 @@ impl Gathered<'_> {
                 Column::named("Due"),
                 Column::named("Sprint"),
                 Column::named("Area"),
+                Column::wrapping("Tags"),
                 Column::named("Waits for"),
                 Column::named("Part of"),
                 Column::named("Created"),
@@ -531,6 +543,22 @@ impl Gathered<'_> {
             ],
             rows,
         }
+    }
+
+    /// The names of the tags a task carries, by name, whatever the
+    /// capitals: "EMC, Power". A tag that is gone is left out.
+    fn tags_in_words(&self, task: &Task) -> String {
+        let mut names: Vec<&String> = task
+            .tags()
+            .iter()
+            .filter_map(|tag| self.tag_names.get(tag))
+            .collect();
+        names.sort_by_key(|name| name.to_lowercase());
+        names
+            .into_iter()
+            .map(String::as_str)
+            .collect::<Vec<_>>()
+            .join(", ")
     }
 
     /// The tasks in the order of an outline: the tasks that are part of no

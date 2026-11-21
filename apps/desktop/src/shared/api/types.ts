@@ -184,6 +184,29 @@ export interface Area {
   name: string;
 }
 
+/**
+ * A short colored word the manager puts on tasks of a project, such as "EMC"
+ * or "Waiting for parts". Tags belong to one project.
+ */
+export interface Tag {
+  id: Id;
+  projectId: Id;
+  /** Unique within the project, whatever the capitals. At most 30 characters. */
+  name: string;
+  color: Color;
+}
+
+/**
+ * An item of the checklist of a task: a short text, done or not done. An
+ * item has no owner, no status and no dates; it is lighter than a subtask.
+ */
+export interface ChecklistItem {
+  id: Id;
+  /** At most 200 characters, on one line. */
+  text: string;
+  done: boolean;
+}
+
 export interface Task {
   id: Id;
   projectId: Id;
@@ -218,6 +241,10 @@ export interface Task {
   dueOn: CalendarDate | null;
   /** The position among the tasks of the same status. Lower comes first. */
   rank: number;
+  /** The tags of its project the task carries, in no particular order. */
+  tagIds: Id[];
+  /** The items of its checklist, in their order. Empty when it has none. */
+  checklist: ChecklistItem[];
   createdAt: Moment;
   updatedAt: Moment;
   completedAt: Moment | null;
@@ -338,6 +365,11 @@ export interface ViewFilter {
   assignee: ViewAssignee;
   /** Whether tasks in a status of the category done are left out. */
   hidesFinished: boolean;
+  /**
+   * The tag the tasks carry, if only the tasks with one tag are shown.
+   * Nothing, or left out, shows the tasks with any tag.
+   */
+  tagId?: Id | null;
 }
 
 /**
@@ -816,7 +848,19 @@ export type TaskChange = {
   /** The task began to wait for another task, which may have been removed since. */
   | { kind: 'now_waits_for'; taskId: Id }
   | { kind: 'no_longer_waits_for'; taskId: Id }
+  /** A tag was put on the task or taken off. The tag may have been removed since. */
+  | { kind: 'tagged'; tagId: Id }
+  | { kind: 'untagged'; tagId: Id }
+  /** An item of the checklist was ticked, or is not done any more. */
+  | { kind: 'ticked'; item: string }
+  | { kind: 'unticked'; item: string }
 );
+
+/** A task with a tag put on it by name, and that tag, which may be new. */
+export interface TaggedTask {
+  task: Task;
+  tag: Tag;
+}
 
 /**
  * One change in the history of a project: a change of one of its tasks, as

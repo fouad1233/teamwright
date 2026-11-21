@@ -18,8 +18,8 @@ use rusqlite::{ErrorCode, OptionalExtension, Transaction, named_params};
 use serde_json::{Map, Value};
 use teamwright_application::{ExchangedChange, ExchangedOperation, NoticeKind, TakeInReport};
 use teamwright_domain::{
-    Area, AreaName, Assignee, Project, Sprint, Status, StatusCategory, Task, TaskId, View,
-    ViewAssignee, ViewName,
+    Area, AreaName, Assignee, Project, Sprint, Status, StatusCategory, TagId, TagName, Task,
+    TaskId, View, ViewAssignee, ViewName,
 };
 
 use crate::apply;
@@ -32,6 +32,7 @@ use crate::notices;
 use crate::operations::{Entity, OperationRecorder, Stamp, latest_changes_seen, wall_clock_millis};
 use crate::projects;
 use crate::sprints;
+use crate::tags;
 use crate::tasks;
 use crate::teamwork;
 use crate::views;
@@ -47,13 +48,14 @@ pub(crate) const DAMAGED: &str = "damaged";
 pub(crate) const NEVER: &str = "never";
 
 /// The kinds of things whose dropped changes the manager is told about.
-const TOLD_WHEN_DROPPED: [Entity; 7] = [
+const TOLD_WHEN_DROPPED: [Entity; 8] = [
     Entity::Project,
     Entity::Task,
     Entity::Member,
     Entity::Sprint,
     Entity::View,
     Entity::Area,
+    Entity::Tag,
     Entity::Conversation,
 ];
 
@@ -369,6 +371,7 @@ fn parents_of(
         | Entity::Sprint
         | Entity::View
         | Entity::Area
+        | Entity::Tag
         | Entity::Conversation
         | Entity::TeamMessage => {
             text_of(state, "project_id").map(|id| (Entity::Project, id.to_owned()))
@@ -391,8 +394,9 @@ fn parents_of(
 }
 
 /// The other things a state refers to: what a task waits for, its parent,
-/// who it is given to, its sprint; the member and the task of a
-/// conversation; the member whose tasks a view shows.
+/// who it is given to, its sprint, its area, the tags it carries; the
+/// member and the task of a conversation; the member whose tasks a view
+/// shows, and the tag.
 fn references_of(entity: Entity, state: &Map<String, Value>) -> Vec<(Entity, String)> {
     let mut references = Vec::new();
     match entity {
@@ -419,6 +423,10 @@ fn references_of(entity: Entity, state: &Map<String, Value>) -> Vec<(Entity, Str
             if let Some(area) = text_of(state, "area_id") {
                 references.push((Entity::Area, area.to_owned()));
             }
+            references.extend(state.iter().filter_map(|(key, value)| {
+                let tag = key.strip_prefix(tasks::TAG_KEY)?;
+                (*value == Value::Bool(true)).then(|| (Entity::Tag, tag.to_owned()))
+            }));
         }
         Entity::Conversation => {
             if let Some(member) = text_of(state, "member_id") {
@@ -433,6 +441,9 @@ fn references_of(entity: Entity, state: &Map<String, Value>) -> Vec<(Entity, Str
                 && let Some(member) = text_of(state, "assignee_member_id")
             {
                 references.push((Entity::Member, member.to_owned()));
+            }
+            if let Some(tag) = text_of(state, "tag_id") {
+                references.push((Entity::Tag, tag.to_owned()));
             }
         }
         _ => {}
@@ -692,6 +703,15 @@ impl Round {
                     view.forget_member(member_id);
                     return views::store_view(transaction, operations, &view);
                 }
+                if let Some(tag_id) = view.filter().tag
+                    && presence(transaction, Entity::Tag, &tag_id.to_string())? == Presence::Deleted
+                {
+                    // A view that shows only the tasks with a tag removed on
+                    // another computer shows the tasks with any tag again,
+                    // as it does when the tag is removed here.
+                    view.forget_tag(tag_id);
+                    return views::store_view(transaction, operations, &view);
+                }
                 views::write_state(transaction, state)
             }
             other => apply::write_state(transaction, other, state),
@@ -699,8 +719,8 @@ impl Round {
     }
 
     /// Repairs what a task refers to that is gone: a status the workflow no
-    /// longer has, a deleted parent, task it waits for, member or sprint.
-    /// Says whether anything was repaired.
+    /// longer has, a deleted parent, task it waits for, member, sprint or
+    /// tag. Says whether anything was repaired.
     fn repair_references_of_task(
         &mut self,
         transaction: &Transaction<'_>,
@@ -744,6 +764,13 @@ impl Round {
         {
             task.plan_into(None, now);
             repaired = true;
+        }
+        let tags: Vec<TagId> = task.tags().iter().copied().collect();
+        for tag in tags {
+            if presence(transaction, Entity::Tag, &tag.to_string())? == Presence::Deleted {
+                task.take_tag_off(tag, now);
+                repaired = true;
+            }
         }
         Ok(repaired)
     }
@@ -895,6 +922,7 @@ impl Round {
             Entity::Sprint => format!("the sprint \"{name}\""),
             Entity::View => format!("the view \"{name}\""),
             Entity::Area => format!("the area \"{name}\""),
+            Entity::Tag => format!("the tag \"{name}\""),
             _ => "a conversation".to_owned(),
         };
         let project_id = match entity {
@@ -919,7 +947,8 @@ impl Round {
     /// thing about to be deleted: the tasks, conversations and views of a
     /// member,
     /// the tasks of a sprint, the subtasks of a task, the tasks that wait
-    /// for it and the conversations about it. What the same batch deletes
+    /// for it and the conversations about it, the tasks that carry a tag
+    /// and the views that show only the tasks with it. What the same batch deletes
     /// itself is left to its own deletion.
     fn release_references_to(
         &mut self,
@@ -1027,6 +1056,31 @@ impl Round {
                     }
                 }
             }
+            Entity::Tag => {
+                let tag_id: TagId = codec::parse(id)?;
+                let project_id: Option<String> = transaction
+                    .query_row(
+                        "SELECT project_id FROM tags WHERE id = :id",
+                        named_params! { ":id": id },
+                        |row| row.get(0),
+                    )
+                    .optional()?;
+                if let Some(project_id) = project_id {
+                    for mut task in tasks::tasks_of_project(transaction, &project_id)? {
+                        if !going(Entity::Task, &task.id().to_string())
+                            && task.take_tag_off(tag_id, now)
+                        {
+                            tasks::store_task(transaction, operations, &task)?;
+                        }
+                    }
+                }
+                for mut view in views::views_showing_tag(transaction, id)? {
+                    if !going(Entity::View, &view.id().to_string()) {
+                        view.forget_tag(tag_id);
+                        views::store_view(transaction, operations, &view)?;
+                    }
+                }
+            }
             _ => {}
         }
         Ok(())
@@ -1102,6 +1156,7 @@ impl Round {
             | Entity::Sprint
             | Entity::View
             | Entity::Area
+            | Entity::Tag
             | Entity::Conversation => state
                 .and_then(|state| text_of(state, "project_id"))
                 .map(str::to_owned),
@@ -1253,7 +1308,50 @@ impl Round {
         self.give_a_board_if_no_view_is_left(transaction, operations, project_id)?;
         self.repair_area_names(transaction, operations, project_id)?;
         self.give_general_if_no_area_is_left(transaction, operations, project_id)?;
-        self.put_tasks_into_areas(transaction, operations, project_id)
+        self.put_tasks_into_areas(transaction, operations, project_id)?;
+        self.repair_tag_names(transaction, operations, project_id)
+    }
+
+    /// Repairs the names of the tags of a project after two computers made
+    /// or renamed tags at the same time. Of two tags with one name, whatever
+    /// the capitals, the older keeps it and the younger gets the name with
+    /// the first free number from 2 on. A tag is as old as its first change
+    /// in the log. The two tags stay two: each keeps the tasks that carry
+    /// it, and the manager can remove the one they do not want.
+    fn repair_tag_names(
+        &mut self,
+        transaction: &Transaction<'_>,
+        operations: &mut OperationRecorder<'_>,
+        project_id: &str,
+    ) -> Result<(), DatabaseError> {
+        let mut aged = Vec::new();
+        for tag in tags::tags_of_project(transaction, project_id)? {
+            let created = first_stamp(transaction, Entity::Tag, &tag.id().to_string())?;
+            aged.push((created, tag));
+        }
+        aged.sort_by(|(one_created, one), (other_created, other)| {
+            one_created
+                .cmp(other_created)
+                .then_with(|| one.id().cmp(&other.id()))
+        });
+        let mut taken: BTreeSet<String> = aged
+            .iter()
+            .map(|(_, tag)| tag.name().as_str().to_lowercase())
+            .collect();
+        let mut names_kept = BTreeSet::new();
+        for (_, mut tag) in aged {
+            if names_kept.insert(tag.name().as_str().to_lowercase()) {
+                continue;
+            }
+            let renamed = TagName::numbered(tag.name().as_str(), &|candidate: &str| {
+                !taken.contains(&candidate.to_lowercase())
+            });
+            taken.insert(renamed.as_str().to_lowercase());
+            names_kept.insert(renamed.as_str().to_lowercase());
+            tag.rename(renamed);
+            tags::store_tag(transaction, operations, &tag)?;
+        }
+        Ok(())
     }
 
     /// Repairs the names of the areas of a project after two computers

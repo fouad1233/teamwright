@@ -67,7 +67,14 @@ fn workspace() -> Workspace {
             views.clone(),
             clock,
         ),
-        views: ViewService::new(projects, members, views),
+        views: ViewService::new(
+            projects,
+            members,
+            views,
+            Arc::new(teamwright_storage::SqliteTagRepository::new(
+                database.clone(),
+            )),
+        ),
         projects: project_service,
         project,
         database,
@@ -123,6 +130,7 @@ fn every_change_to_a_view_is_stored_and_logged() {
     let filter = ViewFilter {
         assignee: ViewAssignee::Nobody,
         hides_finished: true,
+        tag: None,
     };
     workspace.views.set_filter(added.id(), filter).unwrap();
     workspace.views.move_to(added.id(), 0).unwrap();
@@ -245,6 +253,7 @@ fn a_member_who_leaves_is_forgotten_by_the_stored_views() {
             ViewFilter {
                 assignee: ViewAssignee::Member(engineer.id()),
                 hides_finished: true,
+                tag: None,
             },
         )
         .unwrap();
@@ -256,6 +265,7 @@ fn a_member_who_leaves_is_forgotten_by_the_stored_views() {
         ViewFilter {
             assignee: ViewAssignee::Anyone,
             hides_finished: true,
+            tag: None,
         }
     );
 }

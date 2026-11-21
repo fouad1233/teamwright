@@ -175,7 +175,11 @@ export function refuseRemovingLast(view: View, views: readonly View[]): void {
   }
 }
 
-/** A filter as it is kept: only the fields it has, so that nothing else travels with it. */
+/**
+ * A filter as it is kept: only the fields it has, so that nothing else
+ * travels with it. A filter without a tag leaves `tagId` out, as a filter
+ * from before there were tags does.
+ */
 export function tidyFilter(filter: ViewFilter): ViewFilter {
   const assignee = filter.assignee;
   return {
@@ -184,5 +188,6 @@ export function tidyFilter(filter: ViewFilter): ViewFilter {
         ? { kind: 'member', memberId: assignee.memberId }
         : { kind: assignee.kind },
     hidesFinished: filter.hidesFinished,
+    ...(filter.tagId ? { tagId: filter.tagId } : {}),
   };
 }

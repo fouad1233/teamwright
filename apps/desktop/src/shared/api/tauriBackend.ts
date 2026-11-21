@@ -9,6 +9,7 @@ import type {
   Area,
   Assignee,
   CalendarDate,
+  Color,
   Conversation,
   FolderListing,
   DataChanged,
@@ -51,6 +52,8 @@ import type {
   StatusProperties,
   SyncNotice,
   SyncState,
+  Tag,
+  TaggedTask,
   Task,
   TaskChange,
   TaskOnGitHub,
@@ -259,6 +262,58 @@ export class TauriBackend implements Backend {
 
   moveTaskToArea(taskId: Id, areaId: Id): Promise<Task> {
     return call('move_task_to_area', { taskId, areaId });
+  }
+
+  listTags(projectId: Id): Promise<Tag[]> {
+    return call('list_tags', { projectId });
+  }
+
+  addTag(projectId: Id, name: string, color?: Color): Promise<Tag> {
+    return call('add_tag', { projectId, name, color: color ?? null });
+  }
+
+  renameTag(tagId: Id, name: string): Promise<Tag> {
+    return call('rename_tag', { tagId, name });
+  }
+
+  recolorTag(tagId: Id, color: Color): Promise<Tag> {
+    return call('recolor_tag', { tagId, color });
+  }
+
+  removeTag(tagId: Id): Promise<void> {
+    return call('remove_tag', { tagId });
+  }
+
+  putTagOnTask(taskId: Id, tagId: Id): Promise<Task> {
+    return call('put_tag_on_task', { taskId, tagId });
+  }
+
+  putNamedTagOnTask(taskId: Id, name: string): Promise<TaggedTask> {
+    return call('put_named_tag_on_task', { taskId, name });
+  }
+
+  takeTagOffTask(taskId: Id, tagId: Id): Promise<Task> {
+    return call('take_tag_off_task', { taskId, tagId });
+  }
+
+  addChecklistItem(taskId: Id, text: string): Promise<Task> {
+    return call('add_checklist_item', { taskId, text });
+  }
+
+  renameChecklistItem(taskId: Id, itemId: Id, text: string): Promise<Task> {
+    return call('rename_checklist_item', { taskId, itemId, text });
+  }
+
+  tickChecklistItem(taskId: Id, itemId: Id, done: boolean): Promise<Task> {
+    return call('tick_checklist_item', { taskId, itemId, done });
+  }
+
+  moveChecklistItem(taskId: Id, itemId: Id, index: number): Promise<Task> {
+    return call('move_checklist_item', { taskId, itemId, index });
+  }
+
+  removeChecklistItem(taskId: Id, itemId: Id): Promise<Task> {
+    return call('remove_checklist_item', { taskId, itemId });
   }
 
   projectPlaces(projectId: Id): Promise<ProjectPlaces> {

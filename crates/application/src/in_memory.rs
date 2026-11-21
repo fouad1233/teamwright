@@ -12,8 +12,8 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use chrono::TimeDelta;
 use teamwright_domain::{
     Area, AreaId, Conversation, ConversationId, Handoff, HandoffId, Member, MemberId, Project,
-    ProjectId, Sprint, SprintId, Task, TaskId, TeamMessage, TeamMessageId, Timestamp, Turn, TurnId,
-    View, ViewId,
+    ProjectId, Sprint, SprintId, Tag, TagId, Task, TaskId, TeamMessage, TeamMessageId, Timestamp,
+    Turn, TurnId, View, ViewId,
 };
 
 use crate::agent_runtime::{
@@ -26,7 +26,7 @@ use crate::places::ChosenPlaces;
 use crate::ports::{
     ApprovedPlan, AreaRepository, Clock, ConversationRepository, FileSystem, MemberRepository,
     PlacesRepository, PlanningRepository, ProjectFolders, ProjectRepository, SprintRepository,
-    StorageError, TaskRepository, TeamworkRepository, ViewRepository, WorkListener,
+    StorageError, TagRepository, TaskRepository, TeamworkRepository, ViewRepository, WorkListener,
 };
 use crate::project_events::ProjectEvent;
 
@@ -268,6 +268,39 @@ impl AreaRepository for InMemoryAreaRepository {
 
     fn delete(&self, id: AreaId) -> Result<(), StorageError> {
         lock(&self.areas).remove(&id);
+        Ok(())
+    }
+}
+
+/// Keeps the tags of the projects in memory.
+#[derive(Debug, Default)]
+pub struct InMemoryTagRepository {
+    tags: Mutex<BTreeMap<TagId, Tag>>,
+}
+
+impl TagRepository for InMemoryTagRepository {
+    fn save_all(&self, tags: &[Tag]) -> Result<(), StorageError> {
+        let mut stored = lock(&self.tags);
+        for tag in tags {
+            stored.insert(tag.id(), tag.clone());
+        }
+        Ok(())
+    }
+
+    fn find(&self, id: TagId) -> Result<Option<Tag>, StorageError> {
+        Ok(lock(&self.tags).get(&id).cloned())
+    }
+
+    fn list_for_project(&self, project_id: ProjectId) -> Result<Vec<Tag>, StorageError> {
+        Ok(lock(&self.tags)
+            .values()
+            .filter(|tag| tag.project_id() == project_id)
+            .cloned()
+            .collect())
+    }
+
+    fn delete(&self, id: TagId) -> Result<(), StorageError> {
+        lock(&self.tags).remove(&id);
         Ok(())
     }
 }

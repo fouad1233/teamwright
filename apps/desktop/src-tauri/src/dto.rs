@@ -22,7 +22,7 @@ use teamwright_domain::{
     Area, Assignee, CalendarDate, Color, ComputerId, ContextUse, Conversation, DecisionOption,
     DecisionRequest, DomainError, Effort, EventKind, EventKinds, Interview, InterviewAnswer,
     Member, MemberKind, Priority, Project, Proposal, ProposedOwner, Schedule, Sprint,
-    SprintSummary, Status, StatusCategory, Step, StepContent, StoryPoints, Task, TaskChange,
+    SprintSummary, Status, StatusCategory, Step, StepContent, StoryPoints, Tag, Task, TaskChange,
     TaskChangeKind, Timestamp, TokenCounts, Turn, View, ViewAssignee, ViewFilter, ViewKind,
     context_of,
 };
@@ -106,9 +106,66 @@ pub struct TaskDto {
     start_on: Option<String>,
     due_on: Option<String>,
     rank: f64,
+    /// The tags of its project the task carries.
+    tag_ids: Vec<String>,
+    /// The items of its checklist, in their order.
+    checklist: Vec<ChecklistItemDto>,
     created_at: String,
     updated_at: String,
     completed_at: Option<String>,
+}
+
+/// An item of the checklist of a task as the interface sees it.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChecklistItemDto {
+    id: String,
+    text: String,
+    done: bool,
+}
+
+/// A tag of a project as the interface sees it.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TagDto {
+    id: String,
+    project_id: String,
+    name: String,
+    color: &'static str,
+}
+
+impl From<&Tag> for TagDto {
+    fn from(tag: &Tag) -> Self {
+        Self {
+            id: tag.id().to_string(),
+            project_id: tag.project_id().to_string(),
+            name: tag.name().to_string(),
+            color: tag.color().as_str(),
+        }
+    }
+}
+
+/// A task with a tag put on it by name, and that tag, which may be new.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaggedTaskDto {
+    task: TaskDto,
+    tag: TagDto,
+}
+
+impl TaggedTaskDto {
+    /// The task and its tag.
+    pub fn of(task: &Task, tag: &Tag) -> Self {
+        Self {
+            task: TaskDto::from(task),
+            tag: TagDto::from(tag),
+        }
+    }
+}
+
+/// Reads the name of a color, such as `"blue"`.
+pub fn parse_color(text: &str) -> Result<Color, CommandError> {
+    Ok(text.parse::<Color>()?)
 }
 
 impl From<&Task> for TaskDto {
@@ -131,6 +188,17 @@ impl From<&Task> for TaskDto {
             start_on: task.schedule().start_on().map(date_to_text),
             due_on: task.schedule().due_on().map(date_to_text),
             rank: task.rank().value(),
+            tag_ids: task.tags().iter().map(ToString::to_string).collect(),
+            checklist: task
+                .checklist()
+                .items()
+                .iter()
+                .map(|item| ChecklistItemDto {
+                    id: item.id().to_string(),
+                    text: item.text().to_string(),
+                    done: item.is_done(),
+                })
+                .collect(),
             created_at: moment_to_text(task.created_at()),
             updated_at: moment_to_text(task.updated_at()),
             completed_at: task.completed_at().map(moment_to_text),
@@ -277,12 +345,15 @@ impl From<&Area> for AreaDto {
 }
 
 /// Which tasks a view shows:
-/// `{"assignee": {"kind": "anyone"}, "hidesFinished": false}`.
+/// `{"assignee": {"kind": "anyone"}, "hidesFinished": false, "tagId": null}`.
+/// A filter without `tagId` shows the tasks with any tag.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ViewFilterDto {
     assignee: ViewAssigneeDto,
     hides_finished: bool,
+    #[serde(default)]
+    tag_id: Option<String>,
 }
 
 impl From<ViewFilter> for ViewFilterDto {
@@ -290,6 +361,7 @@ impl From<ViewFilter> for ViewFilterDto {
         Self {
             assignee: ViewAssigneeDto::from(filter.assignee),
             hides_finished: filter.hides_finished,
+            tag_id: filter.tag.map(|tag| tag.to_string()),
         }
     }
 }
@@ -301,6 +373,7 @@ impl TryFrom<ViewFilterDto> for ViewFilter {
         Ok(Self {
             assignee: ViewAssignee::try_from(filter.assignee)?,
             hides_finished: filter.hides_finished,
+            tag: filter.tag_id.as_deref().map(parse_id).transpose()?,
         })
     }
 }
@@ -436,6 +509,26 @@ pub enum TaskChangeKindDto {
         /// The task it waited for.
         task_id: String,
     },
+    /// A tag was put on it.
+    Tagged {
+        /// The tag, which may have been removed since.
+        tag_id: String,
+    },
+    /// A tag was taken off it.
+    Untagged {
+        /// The tag, which may have been removed since.
+        tag_id: String,
+    },
+    /// An item of its checklist was ticked.
+    Ticked {
+        /// The text of the item.
+        item: String,
+    },
+    /// An item of its checklist is not done any more.
+    Unticked {
+        /// The text of the item.
+        item: String,
+    },
 }
 
 /// The dates of a task: when it starts and when it is due.
@@ -489,6 +582,18 @@ impl From<&TaskChange> for TaskChangeDto {
             },
             TaskChangeKind::NoLongerWaitsFor { blocker } => TaskChangeKindDto::NoLongerWaitsFor {
                 task_id: blocker.to_string(),
+            },
+            TaskChangeKind::Tagged { tag } => TaskChangeKindDto::Tagged {
+                tag_id: tag.to_string(),
+            },
+            TaskChangeKind::Untagged { tag } => TaskChangeKindDto::Untagged {
+                tag_id: tag.to_string(),
+            },
+            TaskChangeKind::Ticked { item } => TaskChangeKindDto::Ticked {
+                item: item.to_string(),
+            },
+            TaskChangeKind::Unticked { item } => TaskChangeKindDto::Unticked {
+                item: item.to_string(),
             },
         };
         Self {

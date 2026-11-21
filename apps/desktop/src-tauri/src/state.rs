@@ -10,12 +10,13 @@ use std::{env, fs, thread};
 use chrono::Utc;
 use tauri::{AppHandle, Emitter, Manager};
 use teamwright_application::{
-    AgentRuntime, AppearanceService, ApplicationError, AreaService, DeliveryPorts, DeliveryService,
-    DiskEntry, DriveSurroundings, FileSystem, FolderReader, GitHubPorts, GitHubService,
-    GoogleDriveService, IntegrationSettings, NotificationService, OperatingSystem, PlacesService,
-    ProjectEvent, ProjectFilesService, ProjectFolders, ProjectService, RoundReport, SprintService,
-    StorageError, SyncPorts, SyncService, SystemClock, TaskService, TeamService, ViewService,
-    WorkListener, WorkPorts, WorkService, WorkbookPorts, WorkbookService,
+    AgentRuntime, AppearanceService, ApplicationError, AreaService, ChecklistService,
+    DeliveryPorts, DeliveryService, DiskEntry, DriveSurroundings, FileSystem, FolderReader,
+    GitHubPorts, GitHubService, GoogleDriveService, IntegrationSettings, NotificationService,
+    OperatingSystem, PlacesService, ProjectEvent, ProjectFilesService, ProjectFolders,
+    ProjectService, RoundReport, SprintService, StorageError, SyncPorts, SyncService, SystemClock,
+    TagService, TaskService, TeamService, ViewService, WorkListener, WorkPorts, WorkService,
+    WorkbookPorts, WorkbookService,
 };
 use teamwright_domain::{ComputerId, Conversation, Project, Turn};
 use teamwright_integrations::{GhCommandLine, GhLocator, HttpsSender};
@@ -24,8 +25,8 @@ use teamwright_storage::{
     Database, FolderOfComputers, SqliteAreaRepository, SqliteConversationRepository,
     SqliteIntegrationStore, SqliteMemberRepository, SqliteNotificationChoice,
     SqlitePlacesRepository, SqlitePlanningRepository, SqliteProjectRepository,
-    SqliteSprintRepository, SqliteSyncLedger, SqliteTaskRepository, SqliteThemeStore,
-    SqliteViewRepository,
+    SqliteSprintRepository, SqliteSyncLedger, SqliteTagRepository, SqliteTaskRepository,
+    SqliteThemeStore, SqliteViewRepository,
 };
 
 use crate::dto::{ConversationDto, DataChangedDto, SyncStateDto};
@@ -124,6 +125,10 @@ pub struct AppState {
     pub views: ViewService,
     /// The use cases for the areas of a project.
     pub areas: AreaService,
+    /// The use cases for the tags of a project.
+    pub tags: TagService,
+    /// The use cases for the checklists of tasks.
+    pub checklists: ChecklistService,
     /// The use cases for the team of a project.
     pub team: TeamService,
     /// The use cases for the folders of a project.
@@ -182,6 +187,7 @@ impl AppState {
         let sprint_repository = Arc::new(SqliteSprintRepository::new(database.clone()));
         let view_repository = Arc::new(SqliteViewRepository::new(database.clone()));
         let area_repository = Arc::new(SqliteAreaRepository::new(database.clone()));
+        let tag_repository = Arc::new(SqliteTagRepository::new(database.clone()));
         let conversation_repository = Arc::new(SqliteConversationRepository::new(database.clone()));
         let planning_repository = Arc::new(SqlitePlanningRepository::new(database.clone()));
         let teamwork_repository = Arc::new(teamwright_storage::SqliteTeamworkRepository::new(
@@ -263,6 +269,7 @@ impl AppState {
             tasks: task_repository.clone(),
             sprints: sprint_repository.clone(),
             areas: area_repository.clone(),
+            tags: tag_repository.clone(),
             members: member_repository.clone(),
             conversations: conversation_repository.clone(),
             clock: clock.clone(),
@@ -309,7 +316,16 @@ impl AppState {
                 project_repository.clone(),
                 member_repository.clone(),
                 view_repository.clone(),
+                tag_repository.clone(),
             ),
+            tags: TagService::new(
+                project_repository.clone(),
+                task_repository.clone(),
+                view_repository.clone(),
+                tag_repository,
+                clock.clone(),
+            ),
+            checklists: ChecklistService::new(task_repository.clone(), clock.clone()),
             team: TeamService::new(
                 project_repository,
                 member_repository,

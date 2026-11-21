@@ -13,10 +13,11 @@ use super::*;
 use crate::in_memory::{
     InMemoryAreaRepository, InMemoryConversationRepository, InMemoryMemberRepository,
     InMemoryPlacesRepository, InMemoryProjectRepository, InMemorySprintRepository,
-    InMemoryTaskRepository, InMemoryViewRepository, ManualClock,
+    InMemoryTagRepository, InMemoryTaskRepository, InMemoryViewRepository, ManualClock,
 };
 use crate::projects::{NewProject, ProjectService};
 use crate::sprints::{NewSprint, SprintService, SprintStart};
+use crate::tags::TagService;
 use crate::tasks::{NewTask, TaskService};
 use crate::team::{NewMember, TeamService};
 
@@ -26,6 +27,7 @@ struct Fixture {
     tasks: TaskService,
     sprints: SprintService,
     team: TeamService,
+    tags: TagService,
     conversations: Arc<InMemoryConversationRepository>,
     workbook: WorkbookService,
     project: Project,
@@ -48,6 +50,7 @@ fn fixture() -> Fixture {
     let sprints_store = Arc::new(InMemorySprintRepository::new(tasks_store.clone()));
     let areas_store = Arc::new(InMemoryAreaRepository::default());
     let views_store = Arc::new(InMemoryViewRepository::default());
+    let tags_store = Arc::new(InMemoryTagRepository::default());
     let clock = Arc::new(ManualClock::starting_at(moment()));
     let projects = ProjectService::new(
         projects_store.clone(),
@@ -80,7 +83,14 @@ fn fixture() -> Fixture {
         members_store.clone(),
         tasks_store.clone(),
         conversations.clone(),
+        views_store.clone(),
+        clock.clone(),
+    );
+    let tags = TagService::new(
+        projects_store.clone(),
+        tasks_store.clone(),
         views_store,
+        tags_store.clone(),
         clock.clone(),
     );
     let workbook = WorkbookService::new(WorkbookPorts {
@@ -88,6 +98,7 @@ fn fixture() -> Fixture {
         tasks: tasks_store,
         sprints: sprints_store,
         areas: areas_store,
+        tags: tags_store,
         members: members_store,
         conversations: conversations.clone(),
         clock,
@@ -104,6 +115,7 @@ fn fixture() -> Fixture {
         tasks,
         sprints,
         team,
+        tags,
         conversations,
         workbook,
         project,
@@ -474,6 +486,21 @@ fn a_task_of_nobody_has_an_empty_assignee_and_one_of_the_manager_says_you() {
 
     assert_eq!(cell(&tasks, 0, "Assignee"), text("You"));
     assert_eq!(cell(&tasks, 1, "Assignee"), Cell::Empty);
+}
+
+#[test]
+fn the_tags_of_a_task_are_named_by_name_and_a_task_without_any_has_none() {
+    let fixture = fixture();
+    let tagged = fixture.task("Shield the radio");
+    fixture.task("Write the brief");
+    for name in ["Power", "emc"] {
+        fixture.tags.put_on_by_name(tagged.id(), name).unwrap();
+    }
+
+    let tasks = fixture.list("Tasks");
+
+    assert_eq!(cell(&tasks, 0, "Tags"), text("emc, Power"));
+    assert_eq!(cell(&tasks, 1, "Tags"), Cell::Empty);
 }
 
 #[test]

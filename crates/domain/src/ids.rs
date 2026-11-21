@@ -103,6 +103,19 @@ define_id!(
 );
 
 define_id!(
+    /// Identifies a tag of a project: a short colored word the manager puts
+    /// on tasks.
+    TagId,
+    kind = "tag identifier"
+);
+
+define_id!(
+    /// Identifies an item of the checklist of a task.
+    ChecklistItemId,
+    kind = "checklist item identifier"
+);
+
+define_id!(
     /// Identifies a conversation with an AI specialist.
     ConversationId,
     kind = "conversation identifier"

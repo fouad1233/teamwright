@@ -391,6 +391,26 @@ pub enum ApplicationError {
     #[error("the project has no areas")]
     ProjectWithoutAreas,
 
+    /// A tag was to get a name that another tag of its project has,
+    /// whatever the capitals.
+    #[error("the project already has a tag called \"{name}\"")]
+    TagNameTaken {
+        /// The name that was requested, tidied.
+        name: String,
+    },
+
+    /// A tag was to be added to a project that has as many as it may.
+    #[error("a project has at most {max} tags")]
+    TooManyTags {
+        /// The most tags a project may have.
+        max: usize,
+    },
+
+    /// A tag of one project was to be put on a task of another, or to
+    /// filter a view of another.
+    #[error("a tag can only be used in its own project")]
+    TagOfAnotherProject,
+
     /// A file to copy was named by a path that has no file name, such as
     /// the root of a drive.
     #[error("a file to copy has no name")]
@@ -472,6 +492,7 @@ impl ApplicationError {
             | Self::ProposedMemberOnTeam { .. }
             | Self::UnfinishedStayInSprint
             | Self::SubtaskInAnotherArea { .. }
+            | Self::TooManyTags { .. }
             | Self::ProjectWithoutAreas => "rule_broken",
             Self::FolderNotFound { .. } | Self::NotAGoogleDriveFolder { .. } => "folder_not_found",
             Self::NotFound { .. } | Self::NothingAtPath { .. } => "not_found",
@@ -480,7 +501,8 @@ impl ApplicationError {
             | Self::SprintOfAnotherProject
             | Self::UnfinishedToAnotherProject
             | Self::AreaOfAnotherProject
-            | Self::TasksToAreaOfAnotherProject => "different_projects",
+            | Self::TasksToAreaOfAnotherProject
+            | Self::TagOfAnotherProject => "different_projects",
             Self::AnotherSprintActive { .. } => "another_sprint_active",
             Self::SprintEmpty { .. } => "sprint_empty",
             Self::SubtaskPlannedAlone { .. } => "subtask_planned_alone",
@@ -491,6 +513,7 @@ impl ApplicationError {
             Self::AreaNameTaken { .. } => "area_name_taken",
             Self::LastArea { .. } => "last_area",
             Self::AreaInUse { .. } => "area_in_use",
+            Self::TagNameTaken { .. } => "tag_name_taken",
             Self::SubtaskMovedAlone { .. } => "subtask_moved_alone",
             Self::DependencyCycle { .. } => "dependency_cycle",
             Self::MemberNameTaken { .. } => "member_name_taken",

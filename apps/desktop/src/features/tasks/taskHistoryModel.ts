@@ -1,4 +1,4 @@
-import type { Assignee, Id, Member, Project, Task, TaskChange } from '@/shared/api/types';
+import type { Assignee, Id, Member, Project, Tag, Task, TaskChange } from '@/shared/api/types';
 import { formatDate, formatEstimate, taskReference } from '@/shared/lib/format';
 
 import { priorityLabel } from './TaskBadges';
@@ -10,6 +10,8 @@ export interface HistoryNames {
   tasks: readonly Task[];
   /** The team of the project, to name who a task was given to. */
   members: readonly Member[];
+  /** The tags of the project, to name a tag put on or taken off. */
+  tags?: readonly Tag[];
 }
 
 /**
@@ -99,7 +101,20 @@ function wordingOf(change: TaskChange, names: HistoryNames): Wording {
       return { joinedBy: null, words: `now waits for ${taskName(names, change.taskId)}` };
     case 'no_longer_waits_for':
       return { joinedBy: null, words: `no longer waits for ${taskName(names, change.taskId)}` };
+    case 'tagged':
+      return { joinedBy: 'was', words: `tagged ${tagName(names, change.tagId)}` };
+    case 'untagged':
+      return { joinedBy: 'had its', words: `tag ${tagName(names, change.tagId)} taken off` };
+    case 'ticked':
+      return { joinedBy: 'had its', words: `checklist item "${change.item}" ticked` };
+    case 'unticked':
+      return { joinedBy: 'had its', words: `checklist item "${change.item}" unticked` };
   }
+}
+
+function tagName({ tags }: HistoryNames, tagId: Id): string {
+  const tag = tags?.find((other) => other.id === tagId);
+  return tag ? `"${tag.name}"` : 'a tag that was removed';
 }
 
 function statusName({ project }: HistoryNames, statusId: Id): string {

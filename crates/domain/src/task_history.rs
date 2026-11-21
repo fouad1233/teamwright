@@ -4,9 +4,9 @@
 //! a task has had, in its log of operations, and the history is read off
 //! those versions by comparing each one with the one before it.
 
-use crate::ids::{StatusId, TaskId};
+use crate::ids::{StatusId, TagId, TaskId};
 use crate::task::{Assignee, Priority, Schedule, Task};
-use crate::text::TaskTitle;
+use crate::text::{ChecklistText, TaskTitle};
 use crate::time::Timestamp;
 
 /// One change in the life of a task.
@@ -79,6 +79,26 @@ pub enum TaskChangeKind {
         /// The task it waited for.
         blocker: TaskId,
     },
+    /// A tag was put on it. The tag may have been removed since.
+    Tagged {
+        /// The tag.
+        tag: TagId,
+    },
+    /// A tag was taken off it, by hand or because the tag was removed.
+    Untagged {
+        /// The tag.
+        tag: TagId,
+    },
+    /// An item of its checklist was ticked: it is done.
+    Ticked {
+        /// The text of the item when it was ticked.
+        item: ChecklistText,
+    },
+    /// An item of its checklist that was done is not done any more.
+    Unticked {
+        /// The text of the item when it was unticked.
+        item: ChecklistText,
+    },
 }
 
 /// Tells what changed between two versions of a task, in the order the
@@ -141,6 +161,34 @@ pub fn changes_between(before: &Task, after: &Task) -> Vec<TaskChange> {
             .difference(after.blocked_by())
             .map(|&blocker| TaskChangeKind::NoLongerWaitsFor { blocker }),
     );
+    kinds.extend(
+        after
+            .tags()
+            .difference(before.tags())
+            .map(|&tag| TaskChangeKind::Tagged { tag }),
+    );
+    kinds.extend(
+        before
+            .tags()
+            .difference(after.tags())
+            .map(|&tag| TaskChangeKind::Untagged { tag }),
+    );
+    // Adding, renaming, moving and removing an item are not part of the
+    // history; ticking it is, because that is work done.
+    for item in after.checklist().items() {
+        let Some(earlier) = before.checklist().item(item.id()) else {
+            continue;
+        };
+        match (earlier.is_done(), item.is_done()) {
+            (false, true) => kinds.push(TaskChangeKind::Ticked {
+                item: item.text().clone(),
+            }),
+            (true, false) => kinds.push(TaskChangeKind::Unticked {
+                item: item.text().clone(),
+            }),
+            _ => {}
+        }
+    }
 
     let at = after.updated_at();
     kinds
@@ -338,6 +386,60 @@ mod tests {
             [TaskChange {
                 at: moment(11),
                 kind: TaskChangeKind::NoLongerWaitsFor { blocker }
+            }]
+        );
+    }
+
+    #[test]
+    fn a_tag_put_on_and_taken_off_is_told() {
+        let before = task_in(&Workflow::standard());
+        let kept = TagId::generate();
+        let added = TagId::generate();
+        let mut before_with_one = before.clone();
+        before_with_one.put_tag(kept, moment(10));
+        let mut after = before_with_one.clone();
+        after.take_tag_off(kept, moment(11));
+        after.put_tag(added, moment(11));
+
+        assert_eq!(
+            kinds(&changes_between(&before_with_one, &after)),
+            [
+                &TaskChangeKind::Tagged { tag: added },
+                &TaskChangeKind::Untagged { tag: kept }
+            ]
+        );
+    }
+
+    #[test]
+    fn ticking_an_item_is_told_and_adding_or_moving_one_is_not() {
+        let text = |words: &str| ChecklistText::parse(words).unwrap();
+        let mut before = task_in(&Workflow::standard());
+        let item = before
+            .add_checklist_item(text("Order the stencil"), moment(10))
+            .unwrap();
+        let mut added = before.clone();
+        added
+            .add_checklist_item(text("Bake the board"), moment(11))
+            .unwrap();
+        let mut ticked = added.clone();
+        ticked.tick_checklist_item(item, true, moment(12)).unwrap();
+        ticked.move_checklist_item(item, 1, moment(12)).unwrap();
+        let mut unticked = ticked.clone();
+        unticked
+            .tick_checklist_item(item, false, moment(13))
+            .unwrap();
+
+        assert_eq!(changes_between(&before, &added), []);
+        assert_eq!(
+            kinds(&changes_between(&added, &ticked)),
+            [&TaskChangeKind::Ticked {
+                item: text("Order the stencil")
+            }]
+        );
+        assert_eq!(
+            kinds(&changes_between(&ticked, &unticked)),
+            [&TaskChangeKind::Unticked {
+                item: text("Order the stencil")
             }]
         );
     }

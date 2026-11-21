@@ -1,6 +1,7 @@
-//! Stores tasks together with their dependencies.
+//! Stores tasks together with their dependencies, their tags and their
+//! checklists.
 
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::Arc;
 
 use rusqlite::{Connection, OptionalExtension, Row, Transaction, named_params};
@@ -8,14 +9,33 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use teamwright_application::{StorageError, TaskRepository};
 use teamwright_domain::{
-    Area, Assignee, ComputerId, DomainError, ProjectId, Rank, Schedule, StoryPoints, Task, TaskId,
-    TaskSnapshot, TaskTitle,
+    Area, Assignee, ChecklistItem, ChecklistText, ComputerId, DomainError, ProjectId, Rank,
+    Schedule, StoryPoints, TagId, Task, TaskId, TaskSnapshot, TaskTitle,
 };
 
 use crate::codec;
 use crate::database::Database;
 use crate::error::DatabaseError;
+use crate::merge::MergedState;
 use crate::operations::{self, Entity, OperationRecorder};
+
+/// The start of the key of a tag in the logged state of a task:
+/// `tag:<identifier of the tag>`, true while the task carries the tag and
+/// false once it was taken off (decision 0030).
+pub(crate) const TAG_KEY: &str = "tag:";
+/// The start of the key of an item of the checklist in the logged state of
+/// a task: `item:<identifier of the item>`, the item as an object, or null
+/// once it was removed.
+pub(crate) const ITEM_KEY: &str = "item:";
+
+/// An item of a checklist as the operation log keeps it, under its key in
+/// the state of its task.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct ItemRecord {
+    text: String,
+    done: bool,
+    rank: f64,
+}
 
 /// The columns of the `tasks` table that every query reads.
 const TASK_COLUMNS: &str = "id, project_id, area_id, number, title, description, status_id, priority, \
@@ -94,6 +114,11 @@ struct TaskRecord {
     updated_at: String,
     completed_at: Option<String>,
     blocked_by: Vec<String>,
+    /// The tags and the items of the checklist, one key each: see
+    /// [`TAG_KEY`] and [`ITEM_KEY`]. Read from a state, this also holds the
+    /// keys a newer version wrote, which are passed over.
+    #[serde(flatten)]
+    parts: BTreeMap<String, Value>,
 }
 
 impl TaskRecord {
@@ -129,11 +154,12 @@ impl TaskRecord {
             updated_at: codec::moment_to_text(task.updated_at()),
             completed_at: task.completed_at().map(codec::moment_to_text),
             blocked_by: task.blocked_by().iter().map(ToString::to_string).collect(),
+            parts: parts_of(task),
         }
     }
 
-    /// Reads the columns of a `tasks` row. The dependencies live in another
-    /// table and are added by the caller.
+    /// Reads the columns of a `tasks` row. The dependencies, the tags and
+    /// the checklist live in other tables and are added by the caller.
     fn from_row(row: &Row<'_>) -> rusqlite::Result<Self> {
         Ok(Self {
             id: row.get("id")?,
@@ -157,6 +183,7 @@ impl TaskRecord {
             updated_at: row.get("updated_at")?,
             completed_at: row.get("completed_at")?,
             blocked_by: Vec::new(),
+            parts: BTreeMap::new(),
         })
     }
 
@@ -183,6 +210,7 @@ impl TaskRecord {
             .map(|blocker_id| codec::parse(blocker_id))
             .collect::<Result<BTreeSet<TaskId>, _>>()?;
 
+        let (tags, checklist) = self.tags_and_checklist()?;
         let project_id: ProjectId = codec::parse(&self.project_id)?;
         let area_id = match self.area_id.as_deref() {
             Some(area_id) => codec::parse(area_id)?,
@@ -209,6 +237,8 @@ impl TaskRecord {
                 .map_err(broken)?,
             schedule,
             rank: Rank::from_value(self.rank),
+            tags,
+            checklist,
             created_at: codec::moment_from_text(&self.created_at)?,
             updated_at: codec::moment_from_text(&self.updated_at)?,
             completed_at: self
@@ -217,6 +247,36 @@ impl TaskRecord {
                 .map(codec::moment_from_text)
                 .transpose()?,
         }))
+    }
+
+    /// Reads the tags the task carries and the items of its checklist from
+    /// their keys. A tag taken off and an item removed are passed over, and
+    /// so is a key a newer version wrote.
+    fn tags_and_checklist(&self) -> Result<(BTreeSet<TagId>, Vec<ChecklistItem>), DatabaseError> {
+        let mut tags = BTreeSet::new();
+        let mut checklist = Vec::new();
+        for (key, value) in &self.parts {
+            if let Some(tag_id) = key.strip_prefix(TAG_KEY) {
+                if *value == Value::Bool(true) {
+                    tags.insert(codec::parse(tag_id)?);
+                }
+            } else if let Some(item_id) = key.strip_prefix(ITEM_KEY)
+                && !value.is_null()
+            {
+                let item: ItemRecord = serde_json::from_value(value.clone()).map_err(|reason| {
+                    DatabaseError::damaged("an item of a checklist", &value.to_string(), reason)
+                })?;
+                let text = ChecklistText::parse(&item.text)
+                    .map_err(|reason| codec::damaged_record("task", &self.id, &reason))?;
+                checklist.push(ChecklistItem::restore(
+                    codec::parse(item_id)?,
+                    text,
+                    item.done,
+                    Rank::from_value(item.rank),
+                ));
+            }
+        }
+        Ok((tags, checklist))
     }
 
     /// Reads who is responsible for the task from its two columns.
@@ -350,15 +410,55 @@ pub(crate) fn store_task(
     store(transaction, operations, &TaskRecord::of(task))
 }
 
-/// Writes the stored form of one task with its dependencies and logs the
-/// change.
+/// Writes the stored form of one task with its dependencies, its tags and
+/// its checklist, and logs the change.
+///
+/// A tag the task no longer carries, and an item it no longer has, are
+/// logged as such (false, null): a key left out of a logged state keeps its
+/// value, so that each tag and each item merges on its own.
 fn store(
     transaction: &Transaction<'_>,
     operations: &mut OperationRecorder<'_>,
     record: &TaskRecord,
 ) -> Result<(), DatabaseError> {
     write_rows(transaction, record)?;
-    operations.record_upsert(Entity::Task, &record.id, record)
+    let mut logged = record.clone();
+    if let Some(state) =
+        MergedState::read(transaction, Entity::Task, &record.id)?.and_then(|merged| merged.state)
+    {
+        for (key, value) in state {
+            if logged.parts.contains_key(&key) {
+                continue;
+            }
+            if key.starts_with(TAG_KEY) && value == Value::Bool(true) {
+                logged.parts.insert(key, Value::Bool(false));
+            } else if key.starts_with(ITEM_KEY) && !value.is_null() {
+                logged.parts.insert(key, Value::Null);
+            }
+        }
+    }
+    operations.record_upsert(Entity::Task, &record.id, &logged)
+}
+
+/// The keys of the tags a task carries and of the items of its checklist,
+/// as the log keeps them.
+fn parts_of(task: &Task) -> BTreeMap<String, Value> {
+    let tags = task
+        .tags()
+        .iter()
+        .map(|tag| (format!("{TAG_KEY}{tag}"), Value::Bool(true)));
+    let items = task.checklist().items().iter().map(|item| {
+        (
+            format!("{ITEM_KEY}{}", item.id()),
+            item_value(item.text().as_str(), item.is_done(), item.rank().value()),
+        )
+    });
+    tags.chain(items).collect()
+}
+
+/// An item of a checklist as the log keeps it.
+fn item_value(text: &str, done: bool, rank: f64) -> Value {
+    serde_json::json!({ "text": text, "done": done, "rank": rank })
 }
 
 /// Writes the rows of a task from a state the log keeps, without logging
@@ -399,6 +499,9 @@ pub(crate) fn find_task(connection: &Connection, id: &str) -> Result<Option<Task
         return Ok(None);
     };
     record.blocked_by = blockers_of(connection, &record.id)?;
+    record.parts = parts_in(connection, "task.id = :id", id)?
+        .remove(&record.id)
+        .unwrap_or_default();
     record.into_task().map(Some)
 }
 
@@ -409,6 +512,7 @@ pub(crate) fn tasks_of_project(
     project_id: &str,
 ) -> Result<Vec<Task>, DatabaseError> {
     let mut blockers_by_task = blockers_in_project(connection, project_id)?;
+    let mut parts_by_task = parts_in(connection, "task.project_id = :id", project_id)?;
     let query = format!("SELECT {TASK_COLUMNS} FROM tasks WHERE project_id = :project_id");
     let mut statement = connection.prepare(&query)?;
     let records = statement
@@ -421,6 +525,7 @@ pub(crate) fn tasks_of_project(
         .into_iter()
         .map(|mut record| {
             record.blocked_by = blockers_by_task.remove(&record.id).unwrap_or_default();
+            record.parts = parts_by_task.remove(&record.id).unwrap_or_default();
             record.into_task()
         })
         .collect()
@@ -464,7 +569,111 @@ fn write_rows(transaction: &Transaction<'_>, record: &TaskRecord) -> Result<(), 
             named_params! { ":task_id": record.id, ":blocker_id": blocker_id },
         )?;
     }
+    write_tags_and_checklist(transaction, record)
+}
+
+/// Writes the rows of the tags a task carries and of the items of its
+/// checklist. Rows are added and updated in place, and the rows of a tag
+/// taken off or of an item removed are deleted.
+fn write_tags_and_checklist(
+    transaction: &Transaction<'_>,
+    record: &TaskRecord,
+) -> Result<(), DatabaseError> {
+    let (tags, checklist) = record.tags_and_checklist()?;
+    let tags: Vec<String> = tags.iter().map(ToString::to_string).collect();
+    let item_ids: Vec<String> = checklist.iter().map(|item| item.id().to_string()).collect();
+    let as_json_list = |ids: &[String]| Value::from(ids.to_vec()).to_string();
+
+    transaction.execute(
+        "DELETE FROM task_tags WHERE task_id = :task_id
+           AND tag_id NOT IN (SELECT value FROM json_each(:kept))",
+        named_params! { ":task_id": record.id, ":kept": as_json_list(&tags) },
+    )?;
+    for tag_id in &tags {
+        transaction.execute(
+            "INSERT INTO task_tags (task_id, tag_id) VALUES (:task_id, :tag_id)
+             ON CONFLICT (task_id, tag_id) DO NOTHING",
+            named_params! { ":task_id": record.id, ":tag_id": tag_id },
+        )?;
+    }
+
+    transaction.execute(
+        "DELETE FROM checklist_items WHERE task_id = :task_id
+           AND id NOT IN (SELECT value FROM json_each(:kept))",
+        named_params! { ":task_id": record.id, ":kept": as_json_list(&item_ids) },
+    )?;
+    for item in &checklist {
+        transaction.execute(
+            "INSERT INTO checklist_items (id, task_id, text, done, rank)
+             VALUES (:id, :task_id, :text, :done, :rank)
+             ON CONFLICT (id) DO UPDATE SET
+                 task_id = excluded.task_id,
+                 text = excluded.text,
+                 done = excluded.done,
+                 rank = excluded.rank",
+            named_params! {
+                ":id": item.id().to_string(),
+                ":task_id": record.id,
+                ":text": item.text().as_str(),
+                ":done": i64::from(item.is_done()),
+                ":rank": item.rank().value(),
+            },
+        )?;
+    }
     Ok(())
+}
+
+/// Reads, for every task a condition on `task` picks, the keys of the tags
+/// it carries and of the items of its checklist, as the log keeps them.
+/// The condition names one parameter, `:id`.
+fn parts_in(
+    connection: &Connection,
+    condition: &str,
+    id: &str,
+) -> Result<HashMap<String, BTreeMap<String, Value>>, DatabaseError> {
+    let mut parts: HashMap<String, BTreeMap<String, Value>> = HashMap::new();
+
+    let query = format!(
+        "SELECT carried.task_id, carried.tag_id FROM task_tags AS carried
+         JOIN tasks AS task ON task.id = carried.task_id
+         WHERE {condition}"
+    );
+    let mut statement = connection.prepare(&query)?;
+    let rows = statement.query_map(named_params! { ":id": id }, |row| {
+        Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+    })?;
+    for row in rows {
+        let (task_id, tag_id) = row?;
+        parts
+            .entry(task_id)
+            .or_default()
+            .insert(format!("{TAG_KEY}{tag_id}"), Value::Bool(true));
+    }
+
+    let query = format!(
+        "SELECT item.task_id, item.id, item.text, item.done, item.rank
+         FROM checklist_items AS item
+         JOIN tasks AS task ON task.id = item.task_id
+         WHERE {condition}"
+    );
+    let mut statement = connection.prepare(&query)?;
+    let rows = statement.query_map(named_params! { ":id": id }, |row| {
+        Ok((
+            row.get::<_, String>(0)?,
+            row.get::<_, String>(1)?,
+            row.get::<_, String>(2)?,
+            row.get::<_, i64>(3)? != 0,
+            row.get::<_, f64>(4)?,
+        ))
+    })?;
+    for row in rows {
+        let (task_id, item_id, text, done, rank) = row?;
+        parts.entry(task_id).or_default().insert(
+            format!("{ITEM_KEY}{item_id}"),
+            item_value(&text, done, rank),
+        );
+    }
+    Ok(parts)
 }
 
 /// Reads the identifiers of the tasks one task waits for.

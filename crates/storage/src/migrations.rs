@@ -29,6 +29,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("schema/0017_integrations.sql"),
     include_str!("schema/0020_member_instructions.sql"),
     include_str!("schema/0018_teamwork.sql"),
+    include_str!("schema/0019_tags_and_checklists.sql"),
 ];
 
 /// Applies the migrations a database has not seen yet. Each one runs in its
@@ -121,7 +122,10 @@ mod tests {
             "projects",
             "sprints",
             "statuses",
+            "checklist_items",
+            "tags",
             "task_dependencies",
+            "task_tags",
             "tasks",
             "turn_decision_options",
             "turn_decisions",

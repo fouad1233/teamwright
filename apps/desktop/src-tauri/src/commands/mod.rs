@@ -6,6 +6,7 @@
 
 pub mod appearance;
 pub mod areas;
+pub mod checklists;
 pub mod files;
 pub mod github;
 pub mod google_drive;
@@ -15,6 +16,7 @@ pub mod places;
 pub mod projects;
 pub mod sprints;
 pub mod sync;
+pub mod tags;
 pub mod tasks;
 pub mod team;
 pub mod teamwork;

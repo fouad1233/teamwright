@@ -54,6 +54,24 @@ export function changesBetween(before: Task, after: Task): TaskChange[] {
       changes.push({ at, kind: 'no_longer_waits_for', taskId: blockerId });
     }
   }
+  for (const tagId of after.tagIds) {
+    if (!before.tagIds.includes(tagId)) {
+      changes.push({ at, kind: 'tagged', tagId });
+    }
+  }
+  for (const tagId of before.tagIds) {
+    if (!after.tagIds.includes(tagId)) {
+      changes.push({ at, kind: 'untagged', tagId });
+    }
+  }
+  // Adding, renaming, moving and removing an item are not part of the
+  // history; ticking it is, because that is work done.
+  for (const item of after.checklist) {
+    const earlier = before.checklist.find((candidate) => candidate.id === item.id);
+    if (earlier && earlier.done !== item.done) {
+      changes.push({ at, kind: item.done ? 'ticked' : 'unticked', item: item.text });
+    }
+  }
   return changes;
 }
 

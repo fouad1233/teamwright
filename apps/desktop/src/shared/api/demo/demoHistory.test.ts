@@ -279,6 +279,8 @@ describe('changesBetween and historyOf', () => {
     assignee: null,
     parentId: null,
     blockedBy: ['a'],
+    tagIds: [],
+    checklist: [],
     estimateMinutes: null,
     sprintId: null,
     points: null,

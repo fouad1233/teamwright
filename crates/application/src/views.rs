@@ -12,7 +12,7 @@ use std::sync::Arc;
 use teamwright_domain::{ProjectId, View, ViewAssignee, ViewFilter, ViewId, ViewKind, ViewName};
 
 use crate::error::ApplicationError;
-use crate::ports::{MemberRepository, ProjectRepository, ViewRepository};
+use crate::ports::{MemberRepository, ProjectRepository, TagRepository, ViewRepository};
 
 /// What is needed to add a view to a project.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -33,21 +33,25 @@ pub struct ViewService {
     projects: Arc<dyn ProjectRepository>,
     members: Arc<dyn MemberRepository>,
     views: Arc<dyn ViewRepository>,
+    tags: Arc<dyn TagRepository>,
 }
 
 impl ViewService {
     /// Creates the service. The members are needed because a filter may
-    /// only name a member of the team of the project.
+    /// only name a member of the team of the project, and the tags because
+    /// it may only name a tag of the project.
     #[must_use]
     pub fn new(
         projects: Arc<dyn ProjectRepository>,
         members: Arc<dyn MemberRepository>,
         views: Arc<dyn ViewRepository>,
+        tags: Arc<dyn TagRepository>,
     ) -> Self {
         Self {
             projects,
             members,
             views,
+            tags,
         }
     }
 
@@ -114,13 +118,14 @@ impl ViewService {
 
     /// Replaces the filter of a view. Only the kinds that show some of the
     /// tasks can be filtered ([`ViewKind::can_be_filtered`]), and only by a
-    /// member of the team of the project.
+    /// member of the team of the project and a tag of the project.
     ///
     /// # Errors
     ///
     /// Returns an error if there is no such view, if its kind cannot be
     /// filtered, if the filter names a member who is not on the team
-    /// (`member_not_on_team`), or if storage fails.
+    /// (`member_not_on_team`), a tag that does not exist (`not_found`) or a
+    /// tag of another project (`different_projects`), or if storage fails.
     pub fn set_filter(&self, id: ViewId, filter: ViewFilter) -> Result<View, ApplicationError> {
         let mut view = self.require_view(id)?;
         // The kind is checked before the member: a backlog is refused as a
@@ -133,6 +138,18 @@ impl ViewService {
                 .is_some_and(|member| member.project_id() == view.project_id());
             if !on_team {
                 return Err(ApplicationError::MemberNotOnTeam);
+            }
+        }
+        if let Some(tag_id) = filter.tag {
+            let tag = self
+                .tags
+                .find(tag_id)?
+                .ok_or_else(|| ApplicationError::NotFound {
+                    kind: "tag",
+                    id: tag_id.to_string(),
+                })?;
+            if tag.project_id() != view.project_id() {
+                return Err(ApplicationError::TagOfAnotherProject);
             }
         }
         self.views.save_all(std::slice::from_ref(&view))?;

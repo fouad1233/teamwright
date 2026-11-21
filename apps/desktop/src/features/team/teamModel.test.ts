@@ -70,6 +70,8 @@ function task(number: number, assignee: Assignee | null): Task {
     assignee,
     parentId: null,
     blockedBy: [],
+    tagIds: [],
+    checklist: [],
     estimateMinutes: null,
     sprintId: null,
     points: null,

@@ -5,7 +5,7 @@
 //! sprint, put someone on the team, choose the folders of a project, let an
 //! AI specialist work on a task. Each use case is a method of a service
 //! ([`ProjectService`], [`TaskService`], [`SprintService`], [`ViewService`],
-//! [`AreaService`], [`TeamService`], [`PlacesService`], [`WorkService`],
+//! [`AreaService`], [`TagService`], [`ChecklistService`], [`TeamService`], [`PlacesService`], [`WorkService`],
 //! [`WorkbookService`])
 //! that loads what it
 //! needs, lets the
@@ -19,6 +19,7 @@
 pub mod agent_runtime;
 pub mod appearance;
 pub mod areas;
+pub mod checklists;
 pub mod clock;
 pub mod error;
 pub mod files;
@@ -32,6 +33,7 @@ pub mod project_events;
 pub mod projects;
 pub mod sprints;
 pub mod sync;
+pub mod tags;
 pub mod tasks;
 pub mod team;
 pub mod teamwork;
@@ -50,6 +52,7 @@ pub use agent_runtime::{
 };
 pub use appearance::{AppearanceService, Theme, ThemeStore};
 pub use areas::AreaService;
+pub use checklists::ChecklistService;
 pub use clock::SystemClock;
 pub use error::ApplicationError;
 pub use files::{FolderListing, ProjectFilesService};
@@ -80,8 +83,8 @@ pub use places::{ChosenPlaces, PlacesService, ProjectPlaces, REFERENCES_FOLDER};
 pub use ports::{
     ApprovedPlan, AreaRepository, Clock, ConversationRepository, DiskEntry, FileSystem,
     FolderReader, MemberRepository, PlacesRepository, PlanningRepository, ProjectFolders,
-    ProjectRepository, SprintRepository, StorageError, TaskRepository, TeamworkRepository,
-    ViewRepository, WorkListener,
+    ProjectRepository, SprintRepository, StorageError, TagRepository, TaskRepository,
+    TeamworkRepository, ViewRepository, WorkListener,
 };
 pub use project_events::{
     Agent, Happening, ProjectEvent, StatusOfEvent, TaskOfEvent, WaitsFor,
@@ -96,6 +99,7 @@ pub use sync::{
     SYNC_FORMAT, SyncFolder, SyncLedger, SyncNotice, SyncPhase, SyncPorts, SyncService,
     SyncSettings, SyncState, TakeInReport,
 };
+pub use tags::TagService;
 pub use tasks::{HistoryEntry, MOST_PROJECT_CHANGES, NewTask, ProjectChange, TaskService};
 pub use team::{NewMember, TeamService};
 pub use teamwork::{

@@ -106,6 +106,9 @@ const TASK_FIELDS: &[Field] = &[
     // value would win against a later write here whose clock disagrees,
     // and the rows would then differ from the merged state.
     later("updated_at", &["updated_at"]),
+    // The tags a task carries and the items of its checklist have no field
+    // here: each is a key of its own, `tag:<id>` and `item:<id>`, and a key
+    // no field names merges on its own (decision 0030).
 ];
 
 const MEMBER_FIELDS: &[Field] = &[
@@ -146,6 +149,8 @@ const AREA_FIELDS: &[Field] = &[later("name", &["name"]), later("position", &["p
 // the later delivery.
 const TEAM_MESSAGE_FIELDS: &[Field] = &[later("delivery", &["delivered_turn_id", "delivered_at"])];
 
+const TAG_FIELDS: &[Field] = &[later("name", &["name"]), later("color", &["color"])];
+
 const CONVERSATION_FIELDS: &[Field] = &[
     later("member", &["member_id"]),
     later("task", &["task_id"]),
@@ -167,6 +172,7 @@ pub(crate) const fn merging_of(entity: Entity) -> Merging {
         Entity::Sprint => Merging::ByField(SPRINT_FIELDS),
         Entity::View => Merging::ByField(VIEW_FIELDS),
         Entity::Area => Merging::ByField(AREA_FIELDS),
+        Entity::Tag => Merging::ByField(TAG_FIELDS),
         Entity::Conversation => Merging::ByField(CONVERSATION_FIELDS),
         Entity::TeamMessage => Merging::ByField(TEAM_MESSAGE_FIELDS),
         Entity::Turn
@@ -477,6 +483,20 @@ mod tests {
         );
         assert!(fields.iter().any(|(name, keys, _)| name == "status"
             && keys == &["status_id".to_owned(), "completed_at".to_owned()]));
+    }
+
+    #[test]
+    fn every_tag_and_every_item_of_a_task_merges_on_its_own() {
+        let fields = fields_of(Entity::Task, &["title", "tag:a", "tag:b", "item:c"]);
+
+        for key in ["tag:a", "tag:b", "item:c"] {
+            assert!(
+                fields.iter().any(|(name, keys, rule)| name == key
+                    && keys == &[key.to_owned()]
+                    && *rule == Rule::Later),
+                "{key}"
+            );
+        }
     }
 
     #[test]

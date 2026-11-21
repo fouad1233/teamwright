@@ -9,8 +9,8 @@ use std::path::{Path, PathBuf};
 
 use teamwright_domain::{
     Area, AreaId, CalendarDate, ComputerId, Conversation, ConversationId, Handoff, Member,
-    MemberId, Project, ProjectId, Sprint, SprintId, Task, TaskId, TeamMessage, Timestamp, Turn,
-    View, ViewId,
+    MemberId, Project, ProjectId, Sprint, SprintId, Tag, TagId, Task, TaskId, TeamMessage,
+    Timestamp, Turn, View, ViewId,
 };
 
 use crate::places::ChosenPlaces;
@@ -266,6 +266,40 @@ pub trait AreaRepository: Send + Sync {
     ///
     /// Returns an error if the area could not be removed.
     fn delete(&self, id: AreaId) -> Result<(), StorageError>;
+}
+
+/// Stores the tags of the projects.
+pub trait TagRepository: Send + Sync {
+    /// Stores tags, replacing stored tags with the same identifiers. Either
+    /// all of them are stored or none is.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the tags could not be written.
+    fn save_all(&self, tags: &[Tag]) -> Result<(), StorageError>;
+
+    /// Finds a tag by its identifier.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if stored data could not be read.
+    fn find(&self, id: TagId) -> Result<Option<Tag>, StorageError>;
+
+    /// Lists the tags of a project in no particular order.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if stored data could not be read.
+    fn list_for_project(&self, project_id: ProjectId) -> Result<Vec<Tag>, StorageError>;
+
+    /// Removes a tag. The identifier of a tag that is not stored is
+    /// ignored. The tasks that carried it, and the views that showed only
+    /// the tasks with it, are expected to have been changed first.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the tag could not be removed.
+    fn delete(&self, id: TagId) -> Result<(), StorageError>;
 }
 
 /// Stores the members of the teams.

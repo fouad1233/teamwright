@@ -9,7 +9,7 @@
 use uuid::Uuid;
 
 use crate::error::DomainError;
-use crate::ids::{MemberId, ProjectId, ViewId};
+use crate::ids::{MemberId, ProjectId, TagId, ViewId};
 use crate::macros::text_enum;
 use crate::text::ViewName;
 
@@ -202,6 +202,8 @@ pub struct ViewFilter {
     pub assignee: ViewAssignee,
     /// Whether tasks in a status of the category done are left out.
     pub hides_finished: bool,
+    /// The tag the tasks carry, if only the tasks with one tag are shown.
+    pub tag: Option<TagId>,
 }
 
 impl ViewFilter {
@@ -209,6 +211,7 @@ impl ViewFilter {
     pub const EVERY_TASK: Self = Self {
         assignee: ViewAssignee::Anyone,
         hides_finished: false,
+        tag: None,
     };
 }
 
@@ -438,6 +441,18 @@ impl View {
         Ok(())
     }
 
+    /// Shows the tasks with any tag again if the view showed only those with
+    /// a tag that was removed. The rest of the filter stays as it was. Says
+    /// whether anything changed.
+    pub fn forget_tag(&mut self, tag_id: TagId) -> bool {
+        if self.filter.tag == Some(tag_id) {
+            self.filter.tag = None;
+            true
+        } else {
+            false
+        }
+    }
+
     /// Puts the view at another place among the views of its project.
     pub fn move_to(&mut self, position: u32) {
         self.position = position;
@@ -655,6 +670,7 @@ mod tests {
         let result = doc.set_filter(ViewFilter {
             assignee: ViewAssignee::Nobody,
             hides_finished: false,
+            tag: None,
         });
 
         assert_eq!(result.unwrap_err().code(), "rule_broken");
@@ -765,6 +781,7 @@ mod tests {
         let filter = ViewFilter {
             assignee: ViewAssignee::Manager,
             hides_finished: true,
+            tag: Some(TagId::generate()),
         };
 
         for view in &mut views {
@@ -788,6 +805,7 @@ mod tests {
             .set_filter(ViewFilter {
                 assignee: ViewAssignee::Member(member),
                 hides_finished: true,
+                tag: None,
             })
             .unwrap();
 
@@ -799,6 +817,30 @@ mod tests {
             ViewFilter {
                 assignee: ViewAssignee::Anyone,
                 hides_finished: true,
+                tag: None,
+            }
+        );
+    }
+
+    #[test]
+    fn a_view_forgets_a_tag_that_was_removed_and_keeps_the_rest_of_its_filter() {
+        let mut board = View::starting(ProjectId::generate()).remove(0);
+        let tag = TagId::generate();
+        let filter = ViewFilter {
+            assignee: ViewAssignee::Manager,
+            hides_finished: true,
+            tag: Some(tag),
+        };
+        board.set_filter(filter).unwrap();
+
+        assert!(!board.forget_tag(TagId::generate()));
+        assert!(board.forget_tag(tag));
+
+        assert_eq!(
+            board.filter(),
+            ViewFilter {
+                tag: None,
+                ..filter
             }
         );
     }

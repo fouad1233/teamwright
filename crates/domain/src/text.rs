@@ -170,6 +170,52 @@ impl AreaName {
     }
 }
 
+define_text!(
+    /// The name of a tag of a project, such as "Blocked by supplier" or
+    /// "EMC". It is short because it is shown on the cards of the board.
+    TagName,
+    field = "tag name",
+    max_length = 30
+);
+
+impl TagName {
+    /// Whether two names are the same, whatever the capitals. Two tags of a
+    /// project never have the same name in this sense.
+    #[must_use]
+    pub fn is_same_as(&self, other: &str) -> bool {
+        self.0.to_lowercase() == other.to_lowercase()
+    }
+
+    /// This name with the first number from 2 on for which `is_free` holds,
+    /// such as "EMC 2". The name is shortened if the number would not fit
+    /// otherwise.
+    #[must_use]
+    pub fn numbered(base: &str, is_free: &impl Fn(&str) -> bool) -> Self {
+        let mut number: u32 = 2;
+        loop {
+            let suffix = format!(" {number}");
+            let room = Self::MAX_LENGTH.saturating_sub(suffix.chars().count());
+            let stem: String = base.chars().take(room).collect();
+            let candidate = format!("{}{suffix}", stem.trim_end());
+            if is_free(&candidate) {
+                // A trimmed stem and a number are never empty, never
+                // multi-line and never too long.
+                return Self::parse(&candidate).unwrap_or_else(|_| Self::from_trusted("Tag"));
+            }
+            number = number.saturating_add(1);
+        }
+    }
+}
+
+define_text!(
+    /// The text of an item of the checklist of a task, such as "Order the
+    /// stencil". It has the limit of a task title: an item that grows is
+    /// often made a task of its own.
+    ChecklistText,
+    field = "checklist item",
+    max_length = 200
+);
+
 /// The name of a model, as the program that runs the specialists
 /// understands it: a short name for the latest model of a family, such as
 /// `sonnet`, or the full name of a model.

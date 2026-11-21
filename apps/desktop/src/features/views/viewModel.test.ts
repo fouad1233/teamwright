@@ -34,6 +34,8 @@ function task(id: string, more: Partial<Task> = {}): Task {
     assignee: null,
     parentId: null,
     blockedBy: [],
+    tagIds: [],
+    checklist: [],
     estimateMinutes: null,
     sprintId: null,
     points: null,

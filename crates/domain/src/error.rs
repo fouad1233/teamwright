@@ -341,6 +341,17 @@ pub enum DomainError {
         max: usize,
     },
 
+    /// An item was to be added to a checklist that is full.
+    #[error("a checklist has at most {max} items")]
+    ChecklistFull {
+        /// The most items a checklist may have.
+        max: usize,
+    },
+
+    /// An item was named that the checklist of the task does not have.
+    #[error("the checklist of the task has no such item")]
+    NoSuchChecklistItem,
+
     /// A path inside a folder of a project would lead outside it, by how
     /// it is written or through a link.
     #[error("the path {path} does not stay inside the folder")]
@@ -382,6 +393,7 @@ impl DomainError {
             Self::SprintCompleted { .. } => "sprint_completed",
             Self::ActiveSprintDeleted { .. } | Self::SprintAlreadyStarted { .. } => "sprint_active",
             Self::SprintNotStarted { .. } => "sprint_not_active",
+            Self::NoSuchChecklistItem => "not_found",
             _ => "rule_broken",
         }
     }

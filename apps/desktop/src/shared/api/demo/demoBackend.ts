@@ -58,6 +58,8 @@ import type {
   StatusProperties,
   SyncNotice,
   SyncState,
+  Tag,
+  TaggedTask,
   Task,
   TaskChange,
   TaskOnGitHub,
@@ -109,6 +111,16 @@ import {
   type CountedTask,
 } from './sprints';
 import { LAPTOP, PretendedSync, THIS_COMPUTER, type SyncTrouble } from './sync';
+import {
+  byName,
+  refuseFullChecklist,
+  refuseTagNameInUse,
+  refuseTooManyTags,
+  requireItem,
+  tagColorInTurn,
+  tidyChecklistText,
+  tidyTagName,
+} from './tags';
 import { historyOf, pretendedPastOf, projectHistoryOf } from './taskHistory';
 import { contextAfter, usageOfConversations } from './usage';
 import {
@@ -202,6 +214,8 @@ export interface DemoWorkspace {
    * between teammates. Left out, there is nothing.
    */
   teamTalk?: TeamTalk;
+  /** The tags of the projects. Left out, there are none. */
+  tags?: Tag[];
 }
 
 const browserEnvironment: DemoEnvironment = {
@@ -294,6 +308,8 @@ export class DemoBackend implements Backend {
   private readonly views = new Map<Id, View[]>();
   /** The areas of each project, in the order the manager gave them. */
   private readonly areas = new Map<Id, Area[]>();
+  /** The tags of each project, in the order they were made. */
+  private readonly tags = new Map<Id, Tag[]>();
   private sampleFoldersHandedOut = 0;
   /**
    * The theme of this computer. The browser is the computer of the demo, so
@@ -384,6 +400,9 @@ export class DemoBackend implements Backend {
     }
     for (const area of workspace?.areas ?? []) {
       this.areasOf(area.projectId).push(structuredClone(area));
+    }
+    for (const tag of workspace?.tags ?? []) {
+      this.tagsOf(tag.projectId).push(structuredClone(tag));
     }
     // A project that was kept before it had areas gets the area "General",
     // and a task that is in none of the areas of its project goes into the
@@ -489,6 +508,7 @@ export class DemoBackend implements Backend {
       this.views.delete(project.id);
       this.areas.delete(project.id);
       this.teamwork.forgetProject(project.id);
+      this.tags.delete(project.id);
       for (const conversation of this.conversationsOf(project.id)) {
         this.forget(conversation);
       }
@@ -813,6 +833,8 @@ export class DemoBackend implements Backend {
         assignee: newTask.assignee ?? null,
         parentId: newTask.parentId ?? null,
         blockedBy: [],
+        tagIds: [],
+        checklist: [],
         estimateMinutes: newTask.estimateMinutes ?? null,
         // A subtask goes where the task it is a part of goes.
         sprintId: parent?.sprintId ?? null,
@@ -1420,6 +1442,8 @@ export class DemoBackend implements Backend {
                 : null,
           parentId: null,
           blockedBy: [],
+          tagIds: [],
+          checklist: [],
           estimateMinutes: proposed.estimateMinutes,
           sprintId: null,
           points: null,
@@ -1927,6 +1951,8 @@ export class DemoBackend implements Backend {
         assignee: { kind: 'manager' },
         parentId: null,
         blockedBy: [],
+        tagIds: [],
+        checklist: [],
         estimateMinutes: null,
         sprintId: null,
         points: null,
@@ -2571,6 +2597,12 @@ export class DemoBackend implements Backend {
           );
         }
       }
+      if (filter.tagId) {
+        const tag = this.requireTag(filter.tagId);
+        if (tag.projectId !== view.projectId) {
+          throw new BackendError('different_projects', 'a tag can only be used in its own project');
+        }
+      }
       view.filter = tidyFilter(filter);
       return view;
     });
@@ -2631,6 +2663,164 @@ export class DemoBackend implements Backend {
   /** The six views a project starts with, with new identifiers. */
   private startingViewsOf(projectId: Id): View[] {
     return startingViews(projectId, () => this.environment.newId());
+  }
+
+  listTags(projectId: Id): Promise<Tag[]> {
+    return this.answer(() => byName(this.tagsOf(this.requireProject(projectId).id)));
+  }
+
+  addTag(projectId: Id, name: string, color?: Color): Promise<Tag> {
+    return this.answer(() => this.makeTag(this.requireProject(projectId).id, name, color));
+  }
+
+  renameTag(tagId: Id, name: string): Promise<Tag> {
+    return this.answer(() => {
+      const tag = this.requireTag(tagId);
+      const tidy = tidyTagName(name);
+      refuseTagNameInUse(
+        this.tagsOf(tag.projectId).filter((other) => other.id !== tag.id),
+        tidy,
+      );
+      tag.name = tidy;
+      return tag;
+    });
+  }
+
+  recolorTag(tagId: Id, color: Color): Promise<Tag> {
+    return this.answer(() => {
+      const tag = this.requireTag(tagId);
+      tag.color = color;
+      return tag;
+    });
+  }
+
+  removeTag(tagId: Id): Promise<void> {
+    return this.answer(() => {
+      const tag = this.requireTag(tagId);
+      for (const task of this.tasksOfProject(tag.projectId)) {
+        if (task.tagIds.includes(tag.id)) {
+          this.change(task.id, (changed) => {
+            changed.tagIds = changed.tagIds.filter((id) => id !== tag.id);
+          });
+        }
+      }
+      for (const view of this.viewsOf(tag.projectId)) {
+        if (view.filter.tagId === tag.id) {
+          view.filter = tidyFilter({ ...view.filter, tagId: null });
+        }
+      }
+      const tags = this.tagsOf(tag.projectId);
+      tags.splice(tags.indexOf(tag), 1);
+    });
+  }
+
+  putTagOnTask(taskId: Id, tagId: Id): Promise<Task> {
+    return this.answer(() => this.putTagOn(taskId, tagId));
+  }
+
+  putNamedTagOnTask(taskId: Id, name: string): Promise<TaggedTask> {
+    return this.answer(() => {
+      const task = this.requireTask(taskId);
+      const wanted = tidyTagName(name).toLowerCase();
+      const tag =
+        this.tagsOf(task.projectId).find((candidate) => candidate.name.toLowerCase() === wanted) ??
+        this.makeTag(task.projectId, name);
+      return { task: this.putTagOn(taskId, tag.id), tag };
+    });
+  }
+
+  takeTagOffTask(taskId: Id, tagId: Id): Promise<Task> {
+    return this.answer(() => {
+      const task = this.requireTask(taskId);
+      if (!task.tagIds.includes(tagId)) {
+        return task;
+      }
+      return this.change(taskId, (changed) => {
+        changed.tagIds = changed.tagIds.filter((id) => id !== tagId);
+      });
+    });
+  }
+
+  addChecklistItem(taskId: Id, text: string): Promise<Task> {
+    return this.answer(() => {
+      const tidy = tidyChecklistText(text);
+      refuseFullChecklist(this.requireTask(taskId).checklist);
+      return this.change(taskId, (task) => {
+        task.checklist = [
+          ...task.checklist,
+          { id: this.environment.newId(), text: tidy, done: false },
+        ];
+      });
+    });
+  }
+
+  renameChecklistItem(taskId: Id, itemId: Id, text: string): Promise<Task> {
+    return this.answer(() => {
+      const tidy = tidyChecklistText(text);
+      const item = requireItem(this.requireTask(taskId).checklist, itemId);
+      if (item.text === tidy) {
+        return this.requireTask(taskId);
+      }
+      return this.change(taskId, (task) => {
+        task.checklist = task.checklist.map((other) =>
+          other.id === itemId ? { ...other, text: tidy } : other,
+        );
+      });
+    });
+  }
+
+  tickChecklistItem(taskId: Id, itemId: Id, done: boolean): Promise<Task> {
+    return this.answer(() => {
+      const item = requireItem(this.requireTask(taskId).checklist, itemId);
+      if (item.done === done) {
+        return this.requireTask(taskId);
+      }
+      return this.change(taskId, (task) => {
+        task.checklist = task.checklist.map((other) =>
+          other.id === itemId ? { ...other, done } : other,
+        );
+      });
+    });
+  }
+
+  moveChecklistItem(taskId: Id, itemId: Id, index: number): Promise<Task> {
+    return this.answer(() => {
+      const task = this.requireTask(taskId);
+      const item = requireItem(task.checklist, itemId);
+      const others = task.checklist.filter((other) => other.id !== itemId);
+      const place = Math.min(Math.max(Math.trunc(index) || 0, 0), others.length);
+      if (task.checklist.indexOf(item) === place) {
+        return task;
+      }
+      others.splice(place, 0, item);
+      return this.change(taskId, (changed) => {
+        changed.checklist = others;
+      });
+    });
+  }
+
+  removeChecklistItem(taskId: Id, itemId: Id): Promise<Task> {
+    return this.answer(() => {
+      requireItem(this.requireTask(taskId).checklist, itemId);
+      return this.change(taskId, (task) => {
+        task.checklist = task.checklist.filter((item) => item.id !== itemId);
+      });
+    });
+  }
+
+  /** Puts a tag of its project on a task; a tag it carries already changes nothing. */
+  private putTagOn(taskId: Id, tagId: Id): Task {
+    const task = this.requireTask(taskId);
+    const tag = this.requireTag(tagId);
+    if (tag.projectId !== task.projectId) {
+      throw new BackendError('different_projects', 'a tag can only be used in its own project');
+    }
+    if (task.tagIds.includes(tag.id)) {
+      return task;
+    }
+    return this.change(taskId, (changed) => {
+      changed.tagIds = [...changed.tagIds, tag.id];
+    });
   }
 
   listAreas(projectId: Id): Promise<Area[]> {
@@ -2735,6 +2925,41 @@ export class DemoBackend implements Backend {
    * The areas of a project, in the order the manager gave them. It is the
    * list the backend keeps, so a change to it is a change of the areas.
    */
+  private tagsOf(projectId: Id): Tag[] {
+    let tags = this.tags.get(projectId);
+    if (!tags) {
+      tags = [];
+      this.tags.set(projectId, tags);
+    }
+    return tags;
+  }
+
+  private requireTag(tagId: Id): Tag {
+    for (const tags of this.tags.values()) {
+      const tag = tags.find((candidate) => candidate.id === tagId);
+      if (tag) {
+        return tag;
+      }
+    }
+    throw new BackendError('not_found', `there is no tag with the identifier ${tagId}`);
+  }
+
+  /** Adds a tag to a project by the rules of `addTag`. */
+  private makeTag(projectId: Id, name: string, color?: Color): Tag {
+    const tags = this.tagsOf(projectId);
+    const tidy = tidyTagName(name);
+    refuseTagNameInUse(tags, tidy);
+    refuseTooManyTags(tags.length);
+    const tag: Tag = {
+      id: this.environment.newId(),
+      projectId,
+      name: tidy,
+      color: color ?? tagColorInTurn(tags.length),
+    };
+    tags.push(tag);
+    return tag;
+  }
+
   private areasOf(projectId: Id): Area[] {
     let areas = this.areas.get(projectId);
     if (!areas) {

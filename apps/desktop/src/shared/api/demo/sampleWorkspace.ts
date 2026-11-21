@@ -4,6 +4,7 @@ import type {
   Area,
   Assignee,
   CalendarDate,
+  ChecklistItem,
   Id,
   Member,
   MemberProfile,
@@ -13,6 +14,7 @@ import type {
   SprintState,
   SprintSummary,
   Status,
+  Tag,
   Task,
   TeamTalk,
 } from '../types';
@@ -142,6 +144,43 @@ const AREAS = {
 } as const satisfies Record<string, Pick<Area, 'id' | 'name'>>;
 
 type AreaName = keyof typeof AREAS;
+
+/**
+ * The tags of the sample project: the words a small hardware team puts on
+ * its work, one of them long, so that a long name can be seen on a card.
+ */
+const TAGS = {
+  emc: { id: 'demo-tag-emc', name: 'EMC', color: 'red' },
+  power: { id: 'demo-tag-power', name: 'Power', color: 'amber' },
+  parts: { id: 'demo-tag-parts', name: 'Waiting for parts', color: 'purple' },
+  cost: { id: 'demo-tag-cost', name: 'Cost', color: 'green' },
+  lab: { id: 'demo-tag-lab', name: 'Needs a second look in the lab', color: 'teal' },
+} as const satisfies Record<string, Pick<Tag, 'id' | 'name' | 'color'>>;
+
+type TagName = keyof typeof TAGS;
+
+/** The tags of the sample tasks, by the number of the task. */
+const SAMPLE_TAGS: Record<number, TagName[]> = {
+  3: ['parts', 'cost'],
+  4: ['power', 'emc', 'lab', 'cost'],
+  6: ['emc', 'power'],
+};
+
+/** The checklists of the sample tasks, by the number of the task: each item and whether it is done. */
+const SAMPLE_CHECKLISTS: Record<number, [string, boolean][]> = {
+  3: [
+    ['Compare three temperature sensors', true],
+    ['Ask two suppliers for samples', true],
+    ['Check the display draws under 20 mA', false],
+  ],
+  4: [
+    ['Power stage', true],
+    ['Microcontroller and its crystal', true],
+    ['Sensors on I2C', true],
+    ['Display on SPI', false],
+    ['Check it against the pin map', false],
+  ],
+};
 
 /** One task of the sample project, written the way a person would list it. */
 interface SampleTask {
@@ -478,6 +517,14 @@ export function sampleWorkspace(today: Date = new Date()): DemoWorkspace {
       startOn: dateInDays(today, sample.startsInDays),
       dueOn: dateInDays(today, sample.dueInDays),
       rank: rankWithinStatus(sample),
+      tagIds: (SAMPLE_TAGS[sample.number] ?? []).map((tag) => TAGS[tag].id),
+      checklist: (SAMPLE_CHECKLISTS[sample.number] ?? []).map(
+        ([text, done], index): ChecklistItem => ({
+          id: `demo-item-${sample.number.toString()}-${(index + 1).toString()}`,
+          text,
+          done,
+        }),
+      ),
       createdAt,
       updatedAt: createdAt,
       completedAt: isDone ? shiftedByDays(today, sample.dueInDays ?? 0).toISOString() : null,
@@ -508,6 +555,9 @@ export function sampleWorkspace(today: Date = new Date()): DemoWorkspace {
   // The sample project is cut into areas, so that they can be seen.
   const areas = Object.values(AREAS).map((area): Area => ({ ...area, projectId: project.id }));
 
+  // Some of its tasks carry tags and checklists, so that they can be seen.
+  const tags = Object.values(TAGS).map((tag): Tag => ({ ...tag, projectId: project.id }));
+
   return {
     projects: [project],
     tasks,
@@ -515,6 +565,7 @@ export function sampleWorkspace(today: Date = new Date()): DemoWorkspace {
     sprints,
     views,
     areas,
+    tags,
     teamTalk: sampleTeamTalk(today),
   };
 }

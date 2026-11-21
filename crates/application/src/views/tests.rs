@@ -76,7 +76,12 @@ fn workspace() -> Workspace {
         views_store.clone(),
         clock,
     );
-    let views = ViewService::new(projects_store, members_store, views_store);
+    let views = ViewService::new(
+        projects_store,
+        members_store,
+        views_store,
+        Arc::new(crate::in_memory::InMemoryTagRepository::default()),
+    );
     let project = projects
         .create(NewProject {
             name: "Air quality node".to_owned(),
@@ -167,6 +172,7 @@ fn filter(assignee: ViewAssignee, hides_finished: bool) -> ViewFilter {
     ViewFilter {
         assignee,
         hides_finished,
+        tag: None,
     }
 }
 

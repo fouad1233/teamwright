@@ -16,6 +16,7 @@
 mod macros;
 
 pub mod area;
+pub mod checklist;
 pub mod color;
 pub mod conversation;
 pub mod dependencies;
@@ -28,6 +29,7 @@ pub mod project;
 pub mod project_files;
 pub mod ready_made;
 pub mod sprint;
+pub mod tag;
 pub mod task;
 pub mod task_history;
 pub mod teamwork;
@@ -37,6 +39,7 @@ pub mod view;
 pub mod workflow;
 
 pub use area::{Area, AreaSnapshot};
+pub use checklist::{Checklist, ChecklistItem};
 pub use color::Color;
 pub use conversation::{
     ContextUse, Conversation, ConversationSnapshot, DecisionAnswer, DecisionOption,
@@ -46,8 +49,8 @@ pub use conversation::{
 pub use dependencies::DependencyGraph;
 pub use error::DomainError;
 pub use ids::{
-    AreaId, ComputerId, ConversationId, HandoffId, MemberId, ProjectId, SprintId, StatusId, TaskId,
-    TeamMessageId, TurnId, ViewId,
+    AreaId, ChecklistItemId, ComputerId, ConversationId, HandoffId, MemberId, ProjectId, SprintId,
+    StatusId, TagId, TaskId, TeamMessageId, TurnId, ViewId,
 };
 pub use integration::{EventKind, EventKinds, RepositoryName, WebAddress};
 pub use member::{Effort, Member, MemberInstructions, MemberKind, MemberProfile, MemberSnapshot};
@@ -62,6 +65,7 @@ pub use sprint::{
     CountedTask, Sprint, SprintDates, SprintSnapshot, SprintState, SprintSummary, SprintUnit,
     StoryPoints,
 };
+pub use tag::{Tag, TagSnapshot};
 pub use task::{Assignee, Priority, Rank, Schedule, Task, TaskDraft, TaskSnapshot};
 pub use task_history::{TaskChange, TaskChangeKind, changes_between, history_of};
 pub use teamwork::{
@@ -69,8 +73,8 @@ pub use teamwork::{
     TeamMessageSnapshot,
 };
 pub use text::{
-    AreaName, ComputerName, MemberName, ModelName, ProjectName, SprintName, StatusName, TaskTitle,
-    ViewName,
+    AreaName, ChecklistText, ComputerName, MemberName, ModelName, ProjectName, SprintName,
+    StatusName, TagName, TaskTitle, ViewName,
 };
 pub use time::{CalendarDate, Timestamp};
 pub use view::{View, ViewAssignee, ViewFilter, ViewKind, ViewSnapshot};

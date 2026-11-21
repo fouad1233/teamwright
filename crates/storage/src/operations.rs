@@ -79,11 +79,14 @@ pub(crate) enum Entity {
     Handoff,
     /// A message from one specialist to another, with its delivery.
     TeamMessage,
+    /// A tag of a project. Which tasks carry it is a part of the state of
+    /// each task.
+    Tag,
 }
 
 impl Entity {
     /// Every kind of thing whose changes are logged.
-    pub(crate) const ALL: [Self; 15] = [
+    pub(crate) const ALL: [Self; 16] = [
         Self::Project,
         Self::Task,
         Self::Member,
@@ -99,6 +102,7 @@ impl Entity {
         Self::Area,
         Self::Handoff,
         Self::TeamMessage,
+        Self::Tag,
     ];
 
     /// The entity of a name in the log, if this version knows it.
@@ -124,6 +128,7 @@ impl Entity {
             Self::Area => "area",
             Self::Handoff => "handoff",
             Self::TeamMessage => "team_message",
+            Self::Tag => "tag",
         }
     }
 }

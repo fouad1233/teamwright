@@ -3,11 +3,12 @@
 use std::cmp::Ordering;
 use std::collections::BTreeSet;
 
+use crate::checklist::{Checklist, ChecklistItem};
 use crate::error::DomainError;
-use crate::ids::{AreaId, MemberId, ProjectId, SprintId, StatusId, TaskId};
+use crate::ids::{AreaId, ChecklistItemId, MemberId, ProjectId, SprintId, StatusId, TagId, TaskId};
 use crate::macros::text_enum;
 use crate::sprint::StoryPoints;
-use crate::text::TaskTitle;
+use crate::text::{ChecklistText, TaskTitle};
 use crate::time::{CalendarDate, Timestamp};
 use crate::workflow::{Status, StatusCategory};
 
@@ -253,6 +254,10 @@ pub struct TaskSnapshot {
     pub schedule: Schedule,
     /// The position among the tasks of the same status.
     pub rank: Rank,
+    /// The tags of its project it carries.
+    pub tags: BTreeSet<TagId>,
+    /// The items of its checklist, in any order.
+    pub checklist: Vec<ChecklistItem>,
     /// When the task was opened.
     pub created_at: Timestamp,
     /// When the task was last changed.
@@ -280,6 +285,8 @@ pub struct Task {
     points: Option<StoryPoints>,
     schedule: Schedule,
     rank: Rank,
+    tags: BTreeSet<TagId>,
+    checklist: Checklist,
     created_at: Timestamp,
     updated_at: Timestamp,
     completed_at: Option<Timestamp>,
@@ -323,6 +330,8 @@ impl Task {
             points: None,
             schedule: draft.schedule,
             rank,
+            tags: BTreeSet::new(),
+            checklist: Checklist::default(),
             created_at: now,
             updated_at: now,
             completed_at: completion_time(status, None, now),
@@ -349,6 +358,8 @@ impl Task {
             points: snapshot.points,
             schedule: snapshot.schedule,
             rank: snapshot.rank,
+            tags: snapshot.tags,
+            checklist: Checklist::of(snapshot.checklist),
             created_at: snapshot.created_at,
             updated_at: snapshot.updated_at,
             completed_at: snapshot.completed_at,
@@ -450,6 +461,18 @@ impl Task {
     #[must_use]
     pub const fn rank(&self) -> Rank {
         self.rank
+    }
+
+    /// The tags of its project the task carries.
+    #[must_use]
+    pub const fn tags(&self) -> &BTreeSet<TagId> {
+        &self.tags
+    }
+
+    /// The checklist of the task, which may be empty.
+    #[must_use]
+    pub const fn checklist(&self) -> &Checklist {
+        &self.checklist
     }
 
     /// When the task was opened.
@@ -598,6 +621,114 @@ impl Task {
         self.touch(now);
     }
 
+    /// Puts a tag on the task. That the tag belongs to the project of the
+    /// task depends on another stored thing and is checked by the use case.
+    /// Says whether anything changed: a tag the task carries already is not
+    /// put on again.
+    pub fn put_tag(&mut self, tag_id: TagId, now: Timestamp) -> bool {
+        let changed = self.tags.insert(tag_id);
+        if changed {
+            self.touch(now);
+        }
+        changed
+    }
+
+    /// Takes a tag off the task. Says whether anything changed.
+    pub fn take_tag_off(&mut self, tag_id: TagId, now: Timestamp) -> bool {
+        let changed = self.tags.remove(&tag_id);
+        if changed {
+            self.touch(now);
+        }
+        changed
+    }
+
+    /// Adds an item to the end of the checklist, not done.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DomainError::ChecklistFull`] if the checklist has
+    /// [`Checklist::MOST_ITEMS`] items already.
+    pub fn add_checklist_item(
+        &mut self,
+        text: ChecklistText,
+        now: Timestamp,
+    ) -> Result<ChecklistItemId, DomainError> {
+        let id = self.checklist.add(text)?;
+        self.touch(now);
+        Ok(id)
+    }
+
+    /// Gives an item of the checklist another text.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DomainError::NoSuchChecklistItem`] if the checklist has no
+    /// such item.
+    pub fn rename_checklist_item(
+        &mut self,
+        id: ChecklistItemId,
+        text: ChecklistText,
+        now: Timestamp,
+    ) -> Result<(), DomainError> {
+        if self.checklist.rename(id, text)? {
+            self.touch(now);
+        }
+        Ok(())
+    }
+
+    /// Marks an item of the checklist done, or not done.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DomainError::NoSuchChecklistItem`] if the checklist has no
+    /// such item.
+    pub fn tick_checklist_item(
+        &mut self,
+        id: ChecklistItemId,
+        done: bool,
+        now: Timestamp,
+    ) -> Result<(), DomainError> {
+        if self.checklist.tick(id, done)? {
+            self.touch(now);
+        }
+        Ok(())
+    }
+
+    /// Moves an item of the checklist to a place among the others. Place 0
+    /// is the first; a place past the end is the last.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DomainError::NoSuchChecklistItem`] if the checklist has no
+    /// such item.
+    pub fn move_checklist_item(
+        &mut self,
+        id: ChecklistItemId,
+        place: usize,
+        now: Timestamp,
+    ) -> Result<(), DomainError> {
+        if self.checklist.move_to(id, place)? {
+            self.touch(now);
+        }
+        Ok(())
+    }
+
+    /// Removes an item from the checklist.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DomainError::NoSuchChecklistItem`] if the checklist has no
+    /// such item.
+    pub fn remove_checklist_item(
+        &mut self,
+        id: ChecklistItemId,
+        now: Timestamp,
+    ) -> Result<(), DomainError> {
+        self.checklist.remove(id)?;
+        self.touch(now);
+        Ok(())
+    }
+
     /// Records that the task changed.
     const fn touch(&mut self, now: Timestamp) {
         self.updated_at = now;
@@ -650,6 +781,58 @@ mod tests {
             draft("Choose the microcontroller"),
             moment(9),
         )
+    }
+
+    #[test]
+    fn a_tag_is_put_on_a_task_once_and_taken_off() {
+        let mut task = task_in(&Workflow::standard());
+        let tag = TagId::generate();
+
+        assert!(task.put_tag(tag, moment(10)));
+        assert!(!task.put_tag(tag, moment(11)));
+        assert_eq!(task.updated_at(), moment(10));
+        assert!(task.tags().contains(&tag));
+        assert!(task.take_tag_off(tag, moment(12)));
+        assert!(!task.take_tag_off(tag, moment(13)));
+
+        assert!(task.tags().is_empty());
+        assert_eq!(task.updated_at(), moment(12));
+    }
+
+    #[test]
+    fn the_checklist_of_a_task_is_changed_through_the_task() {
+        let mut task = task_in(&Workflow::standard());
+        assert!(task.checklist().is_empty());
+        let text = |words: &str| ChecklistText::parse(words).unwrap();
+
+        let first = task
+            .add_checklist_item(text("Order the stencil"), moment(10))
+            .unwrap();
+        let second = task
+            .add_checklist_item(text("Bake the board"), moment(11))
+            .unwrap();
+        task.tick_checklist_item(first, true, moment(12)).unwrap();
+        task.move_checklist_item(second, 0, moment(13)).unwrap();
+        task.rename_checklist_item(second, text("Bake it"), moment(14))
+            .unwrap();
+
+        let texts: Vec<&str> = task
+            .checklist()
+            .items()
+            .iter()
+            .map(|item| item.text().as_str())
+            .collect();
+        assert_eq!(texts, ["Bake it", "Order the stencil"]);
+        assert_eq!(task.checklist().progress(), (1, 2));
+        assert_eq!(task.updated_at(), moment(14));
+
+        task.remove_checklist_item(first, moment(15)).unwrap();
+        assert_eq!(task.checklist().progress(), (0, 1));
+        assert_eq!(
+            task.remove_checklist_item(first, moment(16)),
+            Err(DomainError::NoSuchChecklistItem)
+        );
+        assert_eq!(task.updated_at(), moment(15));
     }
 
     #[test]

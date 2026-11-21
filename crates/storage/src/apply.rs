@@ -20,6 +20,7 @@ use crate::operations::{Entity, OperationRecorder};
 use crate::planning;
 use crate::projects;
 use crate::sprints;
+use crate::tags;
 use crate::tasks;
 use crate::teamwork;
 use crate::views;
@@ -46,6 +47,7 @@ pub(crate) fn write_state(
         Entity::Area => areas::write_state(transaction, state),
         Entity::Handoff => teamwork::write_handoff_state(transaction, state),
         Entity::TeamMessage => teamwork::write_message_state(transaction, state),
+        Entity::Tag => tags::write_state(transaction, state),
         Entity::Conversation => conversations::write_conversation_state(transaction, state),
         Entity::Turn => conversations::write_turn_state(transaction, state),
         Entity::TurnStep => conversations::write_step_state(transaction, state),
@@ -96,6 +98,9 @@ pub(crate) fn remove(
         }
         Entity::TeamMessage => {
             teamwork::remove_message(transaction, entity_id)?;
+        }
+        Entity::Tag => {
+            tags::remove_tag(transaction, entity_id)?;
         }
         Entity::Conversation => {
             conversations::remove_conversation(transaction, operations, entity_id)?;

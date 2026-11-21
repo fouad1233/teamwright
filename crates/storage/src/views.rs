@@ -18,17 +18,17 @@ use crate::operations::{Entity, OperationRecorder};
 /// The columns of the `views` table that every query reads.
 const VIEW_COLUMNS: &str =
     "id, project_id, kind, name, assignee_kind, assignee_member_id, hides_finished, position,
-     content";
+     content, tag_id";
 
 // The row is updated in place, never replaced.
 const UPSERT_VIEW: &str = "
     INSERT INTO views (
         id, project_id, kind, name, assignee_kind, assignee_member_id, hides_finished, position,
-        content
+        content, tag_id
     )
     VALUES (
         :id, :project_id, :kind, :name, :assignee_kind, :assignee_member_id, :hides_finished,
-        :position, :content
+        :position, :content, :tag_id
     )
     ON CONFLICT (id) DO UPDATE SET
         project_id = excluded.project_id,
@@ -38,7 +38,8 @@ const UPSERT_VIEW: &str = "
         assignee_member_id = excluded.assignee_member_id,
         hides_finished = excluded.hides_finished,
         position = excluded.position,
-        content = excluded.content";
+        content = excluded.content,
+        tag_id = excluded.tag_id";
 
 /// A view as the database and the operation log keep it: plain text,
 /// numbers and a flag.
@@ -56,6 +57,11 @@ struct ViewRecord {
     /// content has no such key, and is read as a view without any.
     #[serde(default)]
     content: Option<String>,
+    /// The tag the tasks it shows carry, if it shows only the tasks with
+    /// one. A state logged before there were tags has no such key, and is
+    /// read as a view that shows the tasks with any tag.
+    #[serde(default)]
+    tag_id: Option<String>,
 }
 
 impl ViewRecord {
@@ -78,6 +84,7 @@ impl ViewRecord {
             hides_finished: filter.hides_finished,
             position: view.position(),
             content: view.content().map(str::to_owned),
+            tag_id: filter.tag.map(|tag| tag.to_string()),
         }
     }
 
@@ -93,6 +100,7 @@ impl ViewRecord {
             hides_finished: row.get::<_, i64>("hides_finished")? != 0,
             position: row.get("position")?,
             content: row.get("content")?,
+            tag_id: row.get("tag_id")?,
         })
     }
 
@@ -120,6 +128,7 @@ impl ViewRecord {
             filter: ViewFilter {
                 assignee,
                 hides_finished: self.hides_finished,
+                tag: self.tag_id.as_deref().map(codec::parse).transpose()?,
             },
             position: self.position,
             content: self.content.clone(),
@@ -218,6 +227,20 @@ pub(crate) fn views_showing_member(
     records.into_iter().map(ViewRecord::into_view).collect()
 }
 
+/// Reads the views of every project that show only the tasks with a tag,
+/// inside a transaction.
+pub(crate) fn views_showing_tag(
+    connection: &Connection,
+    tag_id: &str,
+) -> Result<Vec<View>, DatabaseError> {
+    let query = format!("SELECT {VIEW_COLUMNS} FROM views WHERE tag_id = :tag_id");
+    let mut statement = connection.prepare(&query)?;
+    let records = statement
+        .query_map(named_params! { ":tag_id": tag_id }, ViewRecord::from_row)?
+        .collect::<Result<Vec<_>, _>>()?;
+    records.into_iter().map(ViewRecord::into_view).collect()
+}
+
 /// Writes one view and logs the change.
 pub(crate) fn store_view(
     transaction: &Transaction<'_>,
@@ -283,6 +306,7 @@ fn write_rows(transaction: &Transaction<'_>, record: &ViewRecord) -> Result<(), 
             ":hides_finished": i64::from(record.hides_finished),
             ":position": record.position,
             ":content": record.content,
+            ":tag_id": record.tag_id,
         },
     )?;
     Ok(())
@@ -313,6 +337,20 @@ mod tests {
         state.remove("content");
 
         assert_eq!(view_from_state(&state).unwrap(), view);
+    }
+
+    #[test]
+    fn a_state_logged_before_there_were_tags_is_a_view_of_the_tasks_with_any_tag() {
+        let view = View::add(
+            ProjectId::generate(),
+            ViewKind::Board,
+            ViewKind::Board.default_name(),
+            0,
+        );
+        let mut state = state_of(&view);
+        state.remove("tag_id");
+
+        assert_eq!(view_from_state(&state).unwrap().filter().tag, None);
     }
 
     #[test]
