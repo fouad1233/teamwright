@@ -1,7 +1,8 @@
-import { Check, Printer } from 'lucide-react';
+import { Check, FileDown, Printer } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 
+import { useIsDemo } from '@/shared/api/BackendProvider';
 import type { Id, Project, Sprint, SprintReport, Task, View } from '@/shared/api/types';
 import { classNames } from '@/shared/lib/classNames';
 import { today as todayWhereTheUserIs } from '@/shared/lib/format';
@@ -13,10 +14,22 @@ import { useSprintReport, useSprints } from '../sprints/sprintQueries';
 import { useTeamMembers } from '../team/TeamContext';
 import type { KindProps } from '../views/viewKinds';
 import { useConversationsOfProject, useUsageOfProject } from '../work/WorkContext';
-import { PARTS, PART_LABELS, shows, togglePart, withIntroduction } from './reportModel';
+import switchStyles from '../sprints/SprintBoard.module.css';
+import {
+  PARTS,
+  PART_LABELS,
+  SHEET_LABELS,
+  shows,
+  togglePart,
+  withIntroduction,
+  withSheet,
+  type Sheet,
+} from './reportModel';
+import { useProjectReport, useSaveReport } from './reportQueries';
 import { ReportSheet, type ReportSources } from './ReportSheet';
 import styles from './ReportView.module.css';
 import { useReportSettings } from './useReportSettings';
+import { WholeProjectSheet } from './WholeProjectSheet';
 
 /**
  * The report view: one page about the project as it stands when the view
@@ -97,17 +110,35 @@ function ReportPage({ view, project, tasks, sprints, report }: ReportPageProps) 
     today,
   };
 
+  const isWhole = settings.sheet === 'whole';
+  const whole = useProjectReport(project.id, isWhole).data;
+  const saveReport = useSaveReport();
+  // A browser has no files to keep the report in.
+  const isDemo = useIsDemo();
+  const nowSheet = (onIntroduce?: (introduction: string) => void) => (
+    <ReportSheet sources={sources} settings={settings} onIntroduce={onIntroduce} />
+  );
+  const wholeSheet = whole ? (
+    <WholeProjectSheet report={whole} />
+  ) : (
+    <p className={styles.sideNote}>Gathering the report of the project.</p>
+  );
+
   return (
     <div className={styles.view}>
       <div className={styles.ground}>
-        <ReportSheet
-          sources={sources}
-          settings={settings}
-          onIntroduce={(introduction) => {
-            change((before) => withIntroduction(before, introduction));
-          }}
-        />
+        {isWhole
+          ? wholeSheet
+          : nowSheet((introduction) => {
+              change((before) => withIntroduction(before, introduction));
+            })}
         <aside className={styles.side} aria-label="The report">
+          <SheetChoice
+            sheet={settings.sheet}
+            onChoose={(sheet) => {
+              change((before) => withSheet(before, sheet));
+            }}
+          />
           <Button
             variant="primary"
             icon={<Printer aria-hidden />}
@@ -117,44 +148,90 @@ function ReportPage({ view, project, tasks, sprints, report }: ReportPageProps) 
           >
             Print or save as PDF
           </Button>
+          {isWhole && (
+            <Button
+              icon={<FileDown aria-hidden />}
+              disabled={isDemo}
+              onClick={() => {
+                void saveReport(project);
+              }}
+            >
+              Save as Markdown
+            </Button>
+          )}
           <p className={styles.sideNote}>
-            The page is made from the project as it stands now. Nothing is sent anywhere.
+            {isWhole
+              ? isDemo
+                ? 'The whole project, from everything it has stored. The browser demo has no files to keep it in.'
+                : 'The whole project, from everything it has stored. Markdown is kept in the work folder, next to the work.'
+              : 'The page is made from the project as it stands now. Nothing is sent anywhere.'}
           </p>
-          <div className={styles.parts} role="group" aria-labelledby="report-parts">
-            <h2 id="report-parts" className="label">
-              Parts
-            </h2>
-            {PARTS.map((part) => {
-              const isOn = shows(settings, part);
-              return (
-                <button
-                  key={part}
-                  type="button"
-                  role="checkbox"
-                  aria-checked={isOn}
-                  className={classNames(styles.partChoice, isOn && styles.partOn)}
-                  onClick={() => {
-                    change((before) => togglePart(before, part));
-                  }}
-                >
-                  <span className={styles.box} aria-hidden>
-                    {isOn && <Check />}
-                  </span>
-                  {PART_LABELS[part]}
-                </button>
-              );
-            })}
-          </div>
+          {!isWhole && (
+            <div className={styles.parts} role="group" aria-labelledby="report-parts">
+              <h2 id="report-parts" className="label">
+                Parts
+              </h2>
+              {PARTS.map((part) => {
+                const isOn = shows(settings, part);
+                return (
+                  <button
+                    key={part}
+                    type="button"
+                    role="checkbox"
+                    aria-checked={isOn}
+                    className={classNames(styles.partChoice, isOn && styles.partOn)}
+                    onClick={() => {
+                      change((before) => togglePart(before, part));
+                    }}
+                  >
+                    <span className={styles.box} aria-hidden>
+                      {isOn && <Check />}
+                    </span>
+                    {PART_LABELS[part]}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </aside>
       </div>
       {/* The copy that is printed: the sheet alone, straight in the body of
           the document, so that nothing of the program is printed with it. */}
       {createPortal(
-        <div className={styles.printCopy}>
-          <ReportSheet sources={sources} settings={settings} />
-        </div>,
+        <div className={styles.printCopy}>{isWhole ? wholeSheet : nowSheet()}</div>,
         document.body,
       )}
+    </div>
+  );
+}
+
+const SHEETS: readonly Sheet[] = ['now', 'whole'];
+
+/** The choice of the sheet: the page of now, or the report of the whole project. */
+function SheetChoice({ sheet, onChoose }: { sheet: Sheet; onChoose: (sheet: Sheet) => void }) {
+  return (
+    <div
+      className={classNames(switchStyles.switch, styles.sheetChoice)}
+      role="radiogroup"
+      aria-label="Which report"
+    >
+      {SHEETS.map((each) => {
+        const isChosen = each === sheet;
+        return (
+          <button
+            key={each}
+            type="button"
+            role="radio"
+            aria-checked={isChosen}
+            className={classNames(switchStyles.choice, isChosen && switchStyles.chosen)}
+            onClick={() => {
+              onChoose(each);
+            }}
+          >
+            {SHEET_LABELS[each]}
+          </button>
+        );
+      })}
     </div>
   );
 }

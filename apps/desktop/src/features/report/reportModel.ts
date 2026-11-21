@@ -50,18 +50,36 @@ export const PART_LABELS: Record<Part, string> = {
 /** The longest introduction the view keeps, in characters. */
 export const INTRODUCTION_MAX_LENGTH = 2000;
 
-/** What a report view keeps: the manager's introduction, and which parts are left out. */
+/**
+ * The two sheets a report view can show: the page of how the project
+ * stands now, made from the dashboard's figures, and the report of the
+ * whole project from its start (decision 0042), gathered by the backend.
+ */
+export type Sheet = 'now' | 'whole';
+
+/** What each sheet is called in the control beside it. */
+export const SHEET_LABELS: Record<Sheet, string> = {
+  now: 'Now',
+  whole: 'Whole project',
+};
+
+/**
+ * What a report view keeps: the manager's introduction, which parts are
+ * left out, and which sheet it shows.
+ */
 export interface ReportSettings {
   introduction: string;
   /** The parts left out, in the order of `PARTS`. A part the view does not name shows. */
   hidden: Part[];
+  /** The sheet the view shows. Content written before there were two reads as `now`. */
+  sheet: Sheet;
 }
 
 /**
  * A new report shows every part but the usage: what the specialists spent
  * is the manager's own business more often than the reader's.
  */
-export const NEW_REPORT: ReportSettings = { introduction: '', hidden: ['usage'] };
+export const NEW_REPORT: ReportSettings = { introduction: '', hidden: ['usage'], sheet: 'now' };
 
 function isPart(value: unknown): value is Part {
   return typeof value === 'string' && (PARTS as readonly string[]).includes(value);
@@ -85,18 +103,27 @@ export function parseReport(content: string | null): ReportSettings {
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
     return NEW_REPORT;
   }
-  const { introduction, hidden } = raw as { introduction?: unknown; hidden?: unknown };
+  const { introduction, hidden, sheet } = raw as {
+    introduction?: unknown;
+    hidden?: unknown;
+    sheet?: unknown;
+  };
   const named = Array.isArray(hidden) ? hidden.filter(isPart) : NEW_REPORT.hidden;
   return {
     introduction:
       typeof introduction === 'string' ? introduction.slice(0, INTRODUCTION_MAX_LENGTH) : '',
     hidden: PARTS.filter((part) => named.includes(part)),
+    sheet: sheet === 'whole' ? 'whole' : 'now',
   };
 }
 
 /** Writes what a view keeps, as `parseReport` reads it. */
 export function serializeReport(settings: ReportSettings): string {
-  return JSON.stringify({ introduction: settings.introduction, hidden: settings.hidden });
+  return JSON.stringify({
+    introduction: settings.introduction,
+    hidden: settings.hidden,
+    sheet: settings.sheet,
+  });
 }
 
 /** Whether a part is on the sheet. */
@@ -115,6 +142,11 @@ export function togglePart(settings: ReportSettings, part: Part): ReportSettings
 /** The report with a new introduction, cut to the longest that is kept. */
 export function withIntroduction(settings: ReportSettings, introduction: string): ReportSettings {
   return { ...settings, introduction: introduction.slice(0, INTRODUCTION_MAX_LENGTH) };
+}
+
+/** The report showing another sheet. */
+export function withSheet(settings: ReportSettings, sheet: Sheet): ReportSettings {
+  return settings.sheet === sheet ? settings : { ...settings, sheet };
 }
 
 /** The date under the name: "Monday 16 November 2026". */

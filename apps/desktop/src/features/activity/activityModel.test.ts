@@ -6,6 +6,7 @@ import { calendarDateOf } from '@/shared/lib/format';
 import {
   changesToShow,
   dayHeading,
+  entryInWords,
   isReadFarEnough,
   isShownBy,
   logDays,
@@ -13,6 +14,7 @@ import {
   longestKey,
   nothingInWords,
   oldestMomentOf,
+  whenInWords,
   type LoggedTask,
   type Narrowing,
 } from './activityModel';
@@ -388,5 +390,56 @@ describe('nothingInWords', () => {
 
     expect(new Set(sentences).size).toBe(narrowings.length);
     expect(sentences.every((sentence) => sentence.endsWith('.'))).toBe(true);
+  });
+});
+
+describe('entryInWords', () => {
+  const names = { project, tasks: [], members: [] };
+
+  it('says one change as a sentence that begins with the title of the task', () => {
+    const [entry] = logEntries([change(board, at(12, 14, 2), moved('todo', 'doing'))]);
+    if (!entry) {
+      throw new Error('there is an entry');
+    }
+
+    expect(entryInWords(entry, names)).toBe('Route the board moved from To do to In progress.');
+  });
+
+  it('says the changes made in one go in one sentence, in the order they happened', () => {
+    const [entry] = logEntries([
+      change(schematic, at(12, 9, 5, 55), { kind: 'estimated', from: null, to: 180 }),
+      change(schematic, at(12, 9, 5, 27), {
+        kind: 'assigned',
+        from: null,
+        to: { kind: 'manager' },
+      }),
+      change(schematic, at(12, 9, 5, 4)),
+    ]);
+    if (!entry) {
+      throw new Error('there is an entry');
+    }
+
+    expect(entryInWords(entry, names)).toBe(
+      'Draw the schematic was opened, was given to you and had its estimate set to 3h.',
+    );
+  });
+});
+
+describe('whenInWords', () => {
+  const today = calendarDateOf(new Date(2026, 10, 12));
+
+  it('calls the last two days by a word and the others by their date, with the time', () => {
+    const [latest, earlier, oldest] = logEntries([
+      change(board, at(12, 14, 2)),
+      change(schematic, at(11, 9, 10)),
+      change(enclosure, at(5, 16, 45)),
+    ]);
+    if (!latest || !earlier || !oldest) {
+      throw new Error('there are three entries');
+    }
+
+    expect(whenInWords(latest, today)).toBe('Today, 14:02');
+    expect(whenInWords(earlier, today)).toBe('Yesterday, 09:10');
+    expect(whenInWords(oldest, today)).toBe('Thursday 5 November, 16:45');
   });
 });

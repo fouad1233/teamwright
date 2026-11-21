@@ -17,6 +17,7 @@ import {
   tasksInWork,
   togglePart,
   withIntroduction,
+  withSheet,
 } from './reportModel';
 
 // Named the way a manager might name them: the rules follow the categories.
@@ -79,7 +80,11 @@ describe('parseReport', () => {
   });
 
   it('reads back what it wrote', () => {
-    const settings = { introduction: 'For the board.\nSecond line.', hidden: ['sprint' as const] };
+    const settings = {
+      introduction: 'For the board.\nSecond line.',
+      hidden: ['sprint' as const],
+      sheet: 'whole' as const,
+    };
     expect(parseReport(serializeReport(settings))).toEqual(settings);
   });
 
@@ -93,6 +98,7 @@ describe('parseReport', () => {
     expect(parseReport(JSON.stringify({ introduction: 'Hello', hidden: [] }))).toEqual({
       introduction: 'Hello',
       hidden: [],
+      sheet: 'now',
     });
   });
 
@@ -170,5 +176,19 @@ describe('the lists', () => {
     expect(attentionInWords(0, 0)).toBe('Nothing is late. Nothing waits for the manager.');
     expect(attentionInWords(2, 1)).toBe('1 thing waits for the manager.');
     expect(attentionInWords(0, 3)).toBe('Nothing is late. 3 things wait for the manager.');
+  });
+});
+
+describe('the sheet a report shows', () => {
+  it('shows the page of now when its content was written before there were two sheets', () => {
+    expect(parseReport(JSON.stringify({ introduction: 'Hello', hidden: [] })).sheet).toBe('now');
+    expect(parseReport(JSON.stringify({ sheet: 'everything' })).sheet).toBe('now');
+    expect(parseReport(JSON.stringify({ sheet: 'whole' })).sheet).toBe('whole');
+  });
+
+  it('changes the sheet and nothing else', () => {
+    const whole = withSheet(NEW_REPORT, 'whole');
+    expect(whole).toEqual({ ...NEW_REPORT, sheet: 'whole' });
+    expect(withSheet(whole, 'whole')).toBe(whole);
   });
 });

@@ -4,7 +4,9 @@ import type {
   Color,
   Conversation,
   Member,
+  Id,
   Project,
+  ProjectChange,
   ProjectUsage,
   Sprint,
   SprintReport,
@@ -16,6 +18,7 @@ import type {
 import { calendarDateOfDay, dayNumberOf, mondayOf } from '@/shared/lib/days';
 import { calendarDateOf } from '@/shared/lib/format';
 
+import { changesToShow, logEntries, type LogEntry } from '../activity/activityModel';
 import { advisorConversation } from '../advisor/advisorModel';
 import { countWaitingForManager } from '../office/officeModel';
 import { daysLeft } from '../sprints/sprintModel';
@@ -495,4 +498,33 @@ export function toneOf(project: Project, task: Task): Color {
 
 function count(number: number, one: string, many: string): string {
   return `${number.toString()} ${number === 1 ? one : many}`;
+}
+
+/** How many entries of the log the latest activity shows. */
+export const LATEST_ACTIVITY_LENGTH = 6;
+
+/**
+ * The latest activity of a project: the newest entries of its log, made
+ * by the rule of the Activity view (`logEntries`), so that the dashboard
+ * and the log never tell the same thing two ways. While one area is open,
+ * `taskIds` are its tasks and only they are told.
+ */
+export function latestActivity(
+  changes: readonly ProjectChange[],
+  project: Project,
+  taskIds: ReadonlySet<Id> | null,
+): LogEntry[] {
+  return logEntries(changesToShow(changes, 'everything', project, taskIds)).slice(
+    0,
+    LATEST_ACTIVITY_LENGTH,
+  );
+}
+
+/**
+ * Whether the project is complete: it has tasks, and every one is
+ * finished. It is the rule of the report of the whole project (decision
+ * 0042), said with the dashboard's counts.
+ */
+export function isComplete(counts: Pick<DashboardCounts, 'total' | 'finished'>): boolean {
+  return counts.total > 0 && counts.finished === counts.total;
 }

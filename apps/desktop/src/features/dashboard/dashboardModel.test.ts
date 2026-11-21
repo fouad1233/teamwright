@@ -6,6 +6,7 @@ import type {
   DecisionRequest,
   Member,
   Project,
+  ProjectChange,
   Sprint,
   SprintReport,
   Task,
@@ -16,10 +17,13 @@ import {
   atWorkInWords,
   countsOf,
   daysLate,
+  isComplete,
   isFinished,
   isInWork,
   isLate,
   largestHolding,
+  latestActivity,
+  LATEST_ACTIVITY_LENGTH,
   lateCountInWords,
   lateInWords,
   overLimitInWords,
@@ -560,5 +564,47 @@ describe('overLimitInWords', () => {
         { statusId: 'doing', count: 4, limit: 3, fill: 'over' },
       ]),
     ).toBe('Ready, In progress and Review are over their limits.');
+  });
+});
+
+describe('latestActivity', () => {
+  const sample: Project = {
+    id: 'p',
+    key: 'SSN',
+    name: 'Sensor',
+    description: '',
+    statuses: [
+      { id: 'todo', name: 'To do', category: 'todo', color: 'gray' },
+      { id: 'done', name: 'Done', category: 'done', color: 'green' },
+    ],
+    createdAt: '2026-11-01T09:00:00.000Z',
+    archivedAt: null,
+  };
+  const opened = (task: string, minute: number): ProjectChange => ({
+    kind: 'created',
+    at: new Date(2026, 10, 12, 9, minute).toISOString(),
+    task: { id: task, number: minute, title: task, gone: false },
+  });
+
+  it('is the newest entries of the log, at most six', () => {
+    const changes = Array.from({ length: 9 }, (_, place) =>
+      opened(`t${place.toString()}`, 9 - place),
+    );
+    const entries = latestActivity(changes, sample, null);
+    expect(entries).toHaveLength(LATEST_ACTIVITY_LENGTH);
+    expect(entries[0]?.task.id).toBe('t0');
+  });
+
+  it('tells only the tasks of the open area', () => {
+    const entries = latestActivity([opened('a', 2), opened('b', 1)], sample, new Set(['b']));
+    expect(entries.map((entry) => entry.task.id)).toEqual(['b']);
+  });
+});
+
+describe('isComplete', () => {
+  it('needs tasks, and every one of them finished', () => {
+    expect(isComplete({ total: 0, finished: 0 })).toBe(false);
+    expect(isComplete({ total: 3, finished: 2 })).toBe(false);
+    expect(isComplete({ total: 3, finished: 3 })).toBe(true);
   });
 });

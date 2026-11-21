@@ -1,0 +1,59 @@
+/* A line of the latest activity: when, the key of the task, one sentence. */
+.list {
+  container: activity / inline-size;
+  display: flex;
+  flex-direction: column;
+}
+
+.line {
+  display: grid;
+  grid-template-columns: 168px auto minmax(0, 1fr);
+  align-items: baseline;
+  gap: var(--space-3);
+  min-height: 34px;
+  padding: var(--space-2);
+  border-bottom: 1px solid var(--rule);
+}
+
+.when,
+.key {
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+button.key {
+  transition: color var(--duration-quick) ease;
+}
+
+button.key:hover {
+  color: var(--ink);
+  text-decoration: underline;
+}
+
+.what {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.aside {
+  color: var(--ink-faint);
+  font-size: var(--text-small);
+}
+
+.quiet {
+  padding: 0 var(--space-2);
+  color: var(--ink-faint);
+}
+
+@container activity (width < 520px) {
+  .line {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .when {
+    grid-column: 1 / -1;
+  }
+}

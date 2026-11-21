@@ -47,3 +47,13 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* The way to the report, once every task is finished. */
+.finished {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: 0 var(--space-2);
+  color: var(--ink-soft);
+}

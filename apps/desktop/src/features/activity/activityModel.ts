@@ -2,6 +2,8 @@ import type { CalendarDate, Id, Moment, Project, ProjectChange } from '@/shared/
 import { addDays } from '@/shared/lib/days';
 import { calendarDateOf, formatDay, taskReference } from '@/shared/lib/format';
 
+import { changeAfterTaskName, type HistoryNames } from '../tasks/taskHistoryModel';
+
 /**
  * Pure functions that turn the history of a project into the log the
  * Activity view shows: which changes it is narrowed to, the entries they
@@ -172,6 +174,29 @@ export function logDays(entries: readonly LogEntry[]): LogDay[] {
     }
   }
   return days;
+}
+
+/**
+ * An entry of the log as one sentence, for a place that has no room for
+ * its parts on lines of their own, such as the latest activity on the
+ * dashboard: the title of the task and what happened to it, in the words
+ * of the history of a task. "Draw the schematic was opened, was given to
+ * you and had its estimate set to 3h."
+ */
+export function entryInWords(entry: Pick<LogEntry, 'task' | 'changes'>, names: HistoryNames) {
+  const parts = entry.changes.map((change) => changeAfterTaskName(change, names));
+  const last = parts.pop();
+  const said = parts.length === 0 ? (last ?? '') : `${parts.join(', ')} and ${last ?? ''}`;
+  return `${entry.task.title} ${said}.`;
+}
+
+/**
+ * When an entry happened, said plainly for a short list: "Today, 14:02",
+ * "Yesterday, 09:10", "Thursday 12 November, 16:45". The day is called as
+ * the log heads it (`dayHeading`).
+ */
+export function whenInWords(entry: Pick<LogEntry, 'at' | 'time'>, today: CalendarDate): string {
+  return `${dayHeading(dayOf(entry.at), today).name}, ${entry.time}`;
 }
 
 /** What a day is called at the head of its entries. */

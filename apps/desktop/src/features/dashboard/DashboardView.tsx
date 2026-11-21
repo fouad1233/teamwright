@@ -1,9 +1,12 @@
+import { FileText } from 'lucide-react';
 import { useMemo, useState, type ReactNode } from 'react';
 
 import { useNavigation } from '@/app/navigation';
 import type { Id, Project, Sprint, SprintReport, Task } from '@/shared/api/types';
 import { today as todayWhereTheUserIs } from '@/shared/lib/format';
+import { Button } from '@/shared/ui/Button';
 
+import { useOpenWholeReport } from '../report/reportQueries';
 import { reportVersionOf } from '../sprints/sprintModel';
 import { useSprintReport, useSprints } from '../sprints/sprintQueries';
 import { useStatusLoads } from '../projects/projectQueries';
@@ -14,6 +17,7 @@ import { DashboardSection } from './DashboardSection';
 import styles from './DashboardView.module.css';
 import {
   countsOf,
+  isComplete,
   sprintsToShow,
   standingInWords,
   tasksAtRisk,
@@ -27,11 +31,14 @@ import { SprintPart } from './SprintPart';
 import { Standing } from './Standing';
 import { TaskLines } from './TaskLines';
 import { UsagePart } from './UsagePart';
+import { LatestActivity } from './LatestActivity';
 import { HolderBars, StatusBar } from './WorkCharts';
 
 interface DashboardViewProps {
   project: Project;
   tasks: Task[];
+  /** Every task of the project, to name the tasks the latest activity names. */
+  everyTask: Task[];
 }
 
 /**
@@ -42,11 +49,17 @@ interface DashboardViewProps {
  * in `dashboardModel.ts` from what the interface already knows; nothing
  * on it costs a token.
  */
-export function DashboardView({ project, tasks }: DashboardViewProps) {
+export function DashboardView({ project, tasks, everyTask }: DashboardViewProps) {
   const sprints = useSprints(project.id);
   const active = sprintsToShow(sprints.data ?? []).active;
   const page = (report: SprintReport | null) => (
-    <DashboardPage project={project} tasks={tasks} sprints={sprints.data ?? null} report={report} />
+    <DashboardPage
+      project={project}
+      tasks={tasks}
+      everyTask={everyTask}
+      sprints={sprints.data ?? null}
+      report={report}
+    />
   );
   return active ? (
     <ActiveSprintReport sprintId={active.id} version={reportVersionOf(tasks, active.id)}>
@@ -78,7 +91,7 @@ interface DashboardPageProps extends DashboardViewProps {
 }
 
 /** The page itself, once it is known whether a sprint runs. */
-function DashboardPage({ project, tasks, sprints, report }: DashboardPageProps) {
+function DashboardPage({ project, tasks, everyTask, sprints, report }: DashboardPageProps) {
   const navigation = useNavigation();
   const members = useTeamMembers();
   const conversations = useConversationsOfProject();
@@ -108,6 +121,7 @@ function DashboardPage({ project, tasks, sprints, report }: DashboardPageProps) 
   const atRisk = tasksAtRisk(project, tasks, today);
   const week = thisWeek(project, tasks, today);
   const usage = useUsageOfProject();
+  const openWholeReport = useOpenWholeReport(project.id);
   const hasTasks = tasks.length > 0;
   const usesSprints = (sprints?.length ?? 0) > 0;
 
@@ -129,6 +143,25 @@ function DashboardPage({ project, tasks, sprints, report }: DashboardPageProps) 
             project={project}
           />
         </div>
+
+        {isComplete(counts) && (
+          <DashboardSection title="The project is finished">
+            <div className={styles.finished}>
+              <p>
+                Every task is finished. The report of the project tells what was built, by whom,
+                against the plan, and what was handed over.
+              </p>
+              <Button
+                icon={<FileText aria-hidden />}
+                onClick={() => {
+                  void openWholeReport();
+                }}
+              >
+                Open the report
+              </Button>
+            </div>
+          </DashboardSection>
+        )}
 
         {/* A row of noughts says nothing the sentence above does not. */}
         {(hasTasks || counts.waiting > 0) && (
@@ -181,6 +214,14 @@ function DashboardPage({ project, tasks, sprints, report }: DashboardPageProps) 
             the project with the Advisor.
           </p>
         )}
+
+        <LatestActivity
+          project={project}
+          tasks={tasks}
+          everyTask={everyTask}
+          today={today}
+          onOpenTask={navigation.openTask}
+        />
 
         {usesSprints && (
           <SprintPart

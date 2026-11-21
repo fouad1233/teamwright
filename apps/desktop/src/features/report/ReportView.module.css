@@ -371,6 +371,91 @@
   stroke-width: 2.25;
 }
 
+/* The sheet of the whole project: sentences, entries and contracts. */
+.prose {
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.sentences {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-left: var(--space-4);
+  margin: 0;
+  line-height: 1.6;
+  list-style: disc;
+}
+
+.under {
+  display: block;
+  color: var(--ink-faint);
+  font-size: var(--text-label);
+}
+
+.wideFactColumn {
+  width: 208px;
+}
+
+.entry {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--rule);
+  break-inside: avoid;
+}
+
+.entry:first-of-type {
+  padding-top: 0;
+  border-top: none;
+}
+
+.entryTitle {
+  font-size: var(--text-strong);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.chosen {
+  font-weight: 600;
+}
+
+.contract {
+  padding: var(--space-2) var(--space-3);
+  margin: var(--space-1) 0 0;
+  border-left: 2px solid var(--rule-strong);
+  font-family: var(--font-mono);
+  font-size: var(--text-small);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.files {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  color: var(--ink-soft);
+  font-family: var(--font-mono);
+  font-size: var(--text-small);
+  overflow-wrap: anywhere;
+}
+
+.table td {
+  overflow-wrap: anywhere;
+}
+
+/* The two sheets, chosen beside the page. */
+.sheetChoice {
+  display: flex;
+}
+
+.sheetChoice > * {
+  flex: 1;
+}
+
 /* The copy that is printed is not seen on the screen. */
 .printCopy {
   display: none;
