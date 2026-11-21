@@ -123,8 +123,12 @@ Points to notice:
   session. What the session said reaches Teamwright in the stream of events
   that the agent runtime reads anyway
   ([decision 0012](../decisions/0012-a-specialist-asks-through-a-tool.md)).
-  Today the bus has one tool, `ask_manager`. Handoffs and messages are
-  planned to travel the same way.
+  A specialist has three tools: `ask_manager`, `publish_handoff` and
+  `send_message`; the Advisor has two more, `interview` and `propose_plan`.
+  A handoff and a message travel like a question, and neither ends the
+  turn. The latest handoff of a task goes into the brief of every task that
+  builds on it, and a message is delivered with the next turn of its
+  receiver ([decision 0029](../decisions/0029-handoffs-and-messages-between-specialists.md)).
 - **Nobody polls.** A team member runs only while it has a turn to work on.
 - **Usage is measured, not guessed.** Each finished turn reports its tokens
   per model, which are stored with the turn.

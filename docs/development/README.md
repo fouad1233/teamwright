@@ -98,6 +98,12 @@ default for the same reason:
 cargo test -p teamwright-runtime --test real_program -- --ignored --nocapture --test-threads 1
 ```
 
+One of them, `a_real_session_hands_its_result_over_through_the_team_bus`,
+proves that a session told to publish a handoff calls the tool of the team
+bus and the decoder finds the call. It needs the built program, which serves
+the bus: run `cargo build -p teamwright-desktop` first, or name another
+program in `TEAMWRIGHT_BUS_PROGRAM`.
+
 One of them proves what a session can reach: its own folder, a folder it was
 given to read and not to change, and nothing else. Run it after a change to
 what a specialist may do. The specialist of the test above knows its folders
