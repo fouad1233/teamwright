@@ -50,6 +50,8 @@ import type {
   NewTask,
   NewView,
   NotificationChoice,
+  PlanLimit,
+  PlanWindow,
   NotificationKind,
   Priority,
   Project,
@@ -86,6 +88,7 @@ import type {
   MemoryEntry,
   NewMemoryFact,
   ThemeName,
+  TokenCounts,
   UpdateStatus,
   Turn,
   View,
@@ -397,6 +400,12 @@ export class DemoBackend implements Backend {
   private readonly conversationListeners = new Set<(conversation: Conversation) => void>();
   private readonly syncListeners = new Set<(state: SyncState) => void>();
   private readonly dataListeners = new Set<(change: DataChanged) => void>();
+  private readonly planLimitListeners = new Set<(planLimit: PlanLimit) => void>();
+  /**
+   * What the demo pretends Claude Code reported about the plan. Until a
+   * turn reports, nothing is known, as in the program.
+   */
+  private planLimitKnown: PlanLimit = { reached: null, windows: [], reportedAt: null };
   /** Syncing through a folder, pretended, with a second computer called "Laptop". */
   private readonly sync: PretendedSync;
   /** The coordinators of the projects, their budgets and their records (decision 0037). */
@@ -2712,6 +2721,7 @@ export class DemoBackend implements Backend {
       decision: null,
       interview: null,
       proposal: null,
+      planLimitReached: false,
     };
     conversation.turns.push(turn);
     // Messages that wait for the specialist come with this turn.
@@ -2726,6 +2736,14 @@ export class DemoBackend implements Backend {
 
     this.playing.add(turn.id);
     const later = this.environment.later ?? ((work, pause) => void setTimeout(work, pause));
+    // While the limit of the plan is reached, Claude Code ends every new
+    // turn at once, and so does the pretended one.
+    if (this.isPlanLimitReached()) {
+      later(() => {
+        this.endTurnAtPlanLimit(conversation.id, turn.id);
+      }, PLAN_LIMIT_PAUSE);
+      return;
+    }
     let pause = 0;
     for (const { after, act } of script.acts) {
       pause += after;
@@ -2857,6 +2875,7 @@ export class DemoBackend implements Backend {
     }
     const [conversation, turn] = found;
     this.playing.delete(turnId);
+    this.reportPlanUsage(script.tokens);
     turn.state = 'finished';
     turn.endedAt = this.nowAsText();
     turn.answer = script.answer;
@@ -2882,6 +2901,126 @@ export class DemoBackend implements Backend {
     this.tellListeners(conversation);
     // The specialist is free again: the coordinator looks at what can start.
     this.nudge(conversation.projectId);
+  }
+
+  /**
+   * Pretends that the limit of the Claude plan is reached now, as it was on
+   * the night of 21 November 2026: every turn that runs ends at the limit,
+   * and every turn started before the reset ends at once. It lifts by
+   * itself after `resetsAfter` milliseconds, or, if that is null (the reset
+   * is not known), when `liftPlanLimit` is called. Scenarios reach both
+   * through `window.teamwrightDemo`.
+   */
+  pretendPlanLimitReached(resetsAfter: number | null = 60_000): void {
+    const now = this.environment.now();
+    const resetsAt = resetsAfter === null ? null : new Date(now.getTime() + resetsAfter);
+    this.planLimitKnown = {
+      ...this.planLimitKnown,
+      reached: {
+        at: now.toISOString(),
+        window: 'five_hour',
+        resetsAt: resetsAt === null ? null : resetsAt.toISOString(),
+      },
+      windows: pretendedWindows(now, 1, resetsAt),
+      reportedAt: now.toISOString(),
+    };
+    for (const conversation of this.conversations.values()) {
+      for (const turn of conversation.turns) {
+        if (this.playing.has(turn.id)) {
+          this.endTurnAtPlanLimit(conversation.id, turn.id);
+        }
+      }
+    }
+    this.tellPlanLimit();
+    if (resetsAfter !== null) {
+      const later = this.environment.later ?? ((work, pause) => void setTimeout(work, pause));
+      const reached = this.planLimitKnown.reached;
+      later(() => {
+        // A limit reached again since has a reset of its own.
+        if (this.planLimitKnown.reached === reached) {
+          this.liftPlanLimit();
+        }
+      }, resetsAfter);
+    }
+  }
+
+  /** Pretends that the limit of the plan has reset. */
+  liftPlanLimit(): void {
+    if (this.planLimitKnown.reached === null) {
+      return;
+    }
+    this.planLimitKnown = { ...this.planLimitKnown, reached: null };
+    this.tellPlanLimit();
+  }
+
+  planLimit(): Promise<PlanLimit> {
+    return this.answer(() => this.planLimitNow());
+  }
+
+  onPlanLimitChanged(listener: (planLimit: PlanLimit) => void): () => void {
+    this.planLimitListeners.add(listener);
+    return () => {
+      this.planLimitListeners.delete(listener);
+    };
+  }
+
+  /** What is known about the plan now: a reached limit whose reset passed is no longer reached. */
+  private planLimitNow(): PlanLimit {
+    const known = structuredClone(this.planLimitKnown);
+    if (!this.isPlanLimitReached()) {
+      known.reached = null;
+    }
+    return known;
+  }
+
+  private isPlanLimitReached(): boolean {
+    const reached = this.planLimitKnown.reached;
+    return (
+      reached !== null &&
+      (reached.resetsAt === null ||
+        this.environment.now().getTime() < new Date(reached.resetsAt).getTime())
+    );
+  }
+
+  private tellPlanLimit(): void {
+    const known = this.planLimitNow();
+    for (const listener of this.planLimitListeners) {
+      listener(structuredClone(known));
+    }
+  }
+
+  /**
+   * After a turn that went through, the pretended program reports the
+   * windows again: a little more of each is used. A turn that went through
+   * also shows that the plan allows work, which lifts a limit whose reset
+   * was not known.
+   */
+  private reportPlanUsage(tokens: TokenCounts): void {
+    const now = this.environment.now();
+    const used = this.planLimitKnown.windows.find((window) => window.kind === 'five_hour')?.used;
+    const spent = (tokens.input + tokens.output) / 2_000_000;
+    this.planLimitKnown = {
+      reached: this.isPlanLimitReached() ? this.planLimitKnown.reached : null,
+      windows: pretendedWindows(now, Math.min(0.99, (used ?? 0.38) + spent), null),
+      reportedAt: now.toISOString(),
+    };
+    this.tellPlanLimit();
+  }
+
+  /** Ends a turn that is being played because the limit of the plan is reached. */
+  private endTurnAtPlanLimit(conversationId: Id, turnId: Id): void {
+    const found = this.turnBeingPlayed(conversationId, turnId);
+    if (!found) {
+      return;
+    }
+    const [conversation, turn] = found;
+    this.playing.delete(turnId);
+    turn.state = 'failed';
+    turn.endedAt = this.nowAsText();
+    turn.failure = 'The limit of the Claude plan was reached.';
+    turn.planLimitReached = true;
+    // The task stays in work: the specialist did not fail it.
+    this.tellListeners(conversation);
   }
 
   private tellListeners(conversation: Conversation): void {
@@ -4465,4 +4604,26 @@ function requireStartNotAfterDue(startOn: CalendarDate | null, dueOn: CalendarDa
       `the start date ${startOn} is after the due date ${dueOn}`,
     );
   }
+}
+
+/** How long a turn started while the limit of the plan is reached runs before it ends, in milliseconds. */
+const PLAN_LIMIT_PAUSE = 600;
+
+/**
+ * The windows the pretended Claude Code reports: the five hours, used as
+ * given, and the week, used a little. The five hours reset at `resetsAt`,
+ * or three hours from now.
+ */
+function pretendedWindows(now: Date, fiveHoursUsed: number, resetsAt: Date | null): PlanWindow[] {
+  const hours = (count: number) => new Date(now.getTime() + count * 3_600_000).toISOString();
+  return [
+    {
+      kind: 'five_hour',
+      used: fiveHoursUsed,
+      resetsAt: resetsAt === null ? hours(3) : resetsAt.toISOString(),
+      status:
+        fiveHoursUsed >= 1 ? 'rejected' : fiveHoursUsed >= 0.9 ? 'allowed_warning' : 'allowed',
+    },
+    { kind: 'seven_day', used: 0.21, resetsAt: hours(4 * 24 + 6), status: 'allowed' },
+  ];
 }

@@ -14,10 +14,11 @@ use teamwright_application::{
     CoordinatorPorts, CoordinatorService, DeliveryPorts, DeliveryService, DigestRepository,
     DigestService, DiskEntry, DriveSurroundings, FieldService, FileSystem, FolderReader,
     GitHubPorts, GitHubService, GoogleDriveService, GroupingService, IntegrationSettings,
-    NotificationService, OperatingSystem, PlacesService, ProjectEvent, ProjectFilesService,
-    ProjectFolders, ProjectService, RoundReport, SprintService, StorageError, SyncPorts,
-    SyncService, SystemClock, TagService, TaskService, TeamService, UpdateService, ViewService,
-    WorkListener, WorkPorts, WorkService, WorkbookPorts, WorkbookService,
+    NotificationService, OperatingSystem, PlacesService, PlanLimitService, PlanReport,
+    ProjectEvent, ProjectFilesService, ProjectFolders, ProjectService, RoundReport, SprintService,
+    StorageError, SyncPorts, SyncService, SystemClock, TagService, TaskService, TeamService,
+    UpdateService, ViewService, WorkListener, WorkPorts, WorkService, WorkbookPorts,
+    WorkbookService,
 };
 use teamwright_domain::{ComputerId, Conversation, Project, Turn};
 use teamwright_integrations::{GhCommandLine, GhLocator, GitHubReleases, HttpsSender};
@@ -26,15 +27,16 @@ use teamwright_storage::{
     Database, FolderOfComputers, SqliteAreaRepository, SqliteConversationRepository,
     SqliteCoordinatorRepository, SqliteDigestRepository, SqliteFieldRepository,
     SqliteIntegrationStore, SqliteMemberRepository, SqliteNotificationChoice,
-    SqlitePlacesRepository, SqlitePlanningRepository, SqliteProjectRepository,
-    SqliteSprintRepository, SqliteSyncLedger, SqliteTagRepository, SqliteTaskRepository,
-    SqliteThemeStore, SqliteUpdateChoice, SqliteViewRepository,
+    SqlitePlacesRepository, SqlitePlanLimitStore, SqlitePlanningRepository,
+    SqliteProjectRepository, SqliteSprintRepository, SqliteSyncLedger, SqliteTagRepository,
+    SqliteTaskRepository, SqliteThemeStore, SqliteUpdateChoice, SqliteViewRepository,
 };
 
 use crate::coordinating::{CoordinatorNudge, start_coordinating};
 use crate::dto::{ConversationDto, DataChangedDto, SyncStateDto};
 use crate::error::CommandError;
 use crate::events;
+use crate::plan_limit;
 use crate::skill_shelf::LocalSkillShelf;
 
 /// The name of the database file inside the application's data directory.
@@ -174,6 +176,8 @@ pub struct AppState {
     pub appearance: AppearanceService,
     /// Noticing that a newer version of the program is out.
     pub updates: UpdateService,
+    /// What this computer knows about the limits of its Claude plan.
+    pub plan_limit: PlanLimitService,
     /// The settings of the integrations of each project on this computer.
     pub integrations: IntegrationSettings,
     /// GitHub, through the manager's own `gh`.
@@ -251,6 +255,10 @@ impl AppState {
             Arc::new(GitHubReleases::of_teamwright()),
             clock.clone(),
         );
+        let plan_limit = PlanLimitService::new(
+            Arc::new(SqlitePlanLimitStore::new(database.clone())),
+            clock.clone(),
+        );
         let integration_store = Arc::new(SqliteIntegrationStore::new(database));
         let integrations =
             IntegrationSettings::new(project_repository.clone(), integration_store.clone());
@@ -308,6 +316,7 @@ impl AppState {
                 notifications: notifications.clone(),
                 deliveries: deliveries.clone(),
                 coordinator_nudge: coordinator_nudge.clone(),
+                plan_limit: plan_limit.clone(),
             }),
             clock: clock.clone(),
             this_computer,
@@ -459,6 +468,7 @@ impl AppState {
             notifications,
             appearance,
             updates,
+            plan_limit,
             integrations,
             exported_workbooks: Mutex::new(Vec::new()),
             this_computer,
@@ -827,6 +837,7 @@ struct EventToInterface {
     notifications: NotificationService,
     deliveries: DeliveryService,
     coordinator_nudge: CoordinatorNudge,
+    plan_limit: PlanLimitService,
 }
 
 impl WorkListener for EventToInterface {
@@ -847,5 +858,9 @@ impl WorkListener for EventToInterface {
 
     fn happened(&self, event: &ProjectEvent) {
         events::tell(&self.app, &self.notifications, &self.deliveries, event);
+    }
+
+    fn plan_reported(&self, report: &PlanReport) {
+        plan_limit::take(&self.app, &self.plan_limit, &self.notifications, report);
     }
 }

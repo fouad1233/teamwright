@@ -14,6 +14,7 @@ mod coordinating;
 mod dto;
 mod error;
 mod events;
+mod plan_limit;
 mod skill_shelf;
 mod state;
 
@@ -39,6 +40,9 @@ fn main() -> ExitCode {
         .plugin(tauri_plugin_notification::init())
         .setup(|app| {
             let state = AppState::open(app.handle())?;
+            // A limit reached before the program was closed may reset
+            // while it runs.
+            plan_limit::wake_at_the_reset(app.handle(), &state.plan_limit, &state.notifications);
             app.manage(state);
             events::listen_for_presses(app.handle());
             state::start_syncing_in_the_background(app.handle().clone());
@@ -200,6 +204,7 @@ fn main() -> ExitCode {
             commands::appearance::theme,
             commands::appearance::choose_theme,
             commands::notifications::notification_choice,
+            commands::plan_limit::plan_limit,
             commands::notifications::allow_notifications,
             commands::notifications::decline_notifications,
             commands::notifications::set_notification_kind,

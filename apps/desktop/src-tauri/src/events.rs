@@ -135,7 +135,7 @@ fn pressed<R: Runtime>(app: &AppHandle<R>, performed: &ActionPerformed) {
 
 /// Whether the window of the program is in front. A window that cannot be
 /// asked counts as not in front, so that nothing is missed.
-fn window_is_in_front<R: Runtime>(app: &AppHandle<R>) -> bool {
+pub fn window_is_in_front<R: Runtime>(app: &AppHandle<R>) -> bool {
     app.get_webview_window(MAIN_WINDOW)
         .and_then(|window| window.is_focused().ok())
         .unwrap_or(false)

@@ -18,6 +18,7 @@ pub mod kits;
 pub mod memory;
 pub mod notifications;
 pub mod places;
+pub mod plan_limit;
 pub mod project_report;
 pub mod projects;
 pub mod sprints;

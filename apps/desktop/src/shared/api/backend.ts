@@ -42,6 +42,7 @@ import type {
   NotificationChoice,
   NotificationKind,
   NotificationPressed,
+  PlanLimit,
   Priority,
   Project,
   ProjectChange,
@@ -582,6 +583,18 @@ export interface Backend {
 
   /** Says whether the program that runs the AI specialists is installed and signed in. */
   agentProgram(): Promise<AgentProgram>;
+  /**
+   * What this computer knows about the limits of its Claude plan: whether
+   * the limit is reached and when it resets, and the windows as Claude Code
+   * last reported them.
+   */
+  planLimit(): Promise<PlanLimit>;
+  /**
+   * Calls the listener with all that is known about the plan whenever it
+   * changes: a turn reported the windows, a limit was reached, or it reset.
+   * Returns the function that stops the calls.
+   */
+  onPlanLimitChanged(listener: (planLimit: PlanLimit) => void): () => void;
   /**
    * Lists the conversations of a project with their turns, the oldest
    * first, also those that run on another computer. A conversation can only

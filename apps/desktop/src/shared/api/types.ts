@@ -922,6 +922,53 @@ export interface Turn {
   interview: Interview | null;
   /** What the Advisor proposed in this turn, if anything. */
   proposal: Proposal | null;
+  /**
+   * Whether the turn ended because the limit of the Claude plan was
+   * reached. Its state is `failed`, but by no fault of the specialist: the
+   * plan refused the work until its limit resets.
+   */
+  planLimitReached: boolean;
+}
+
+/**
+ * A window of the Claude plan: `five_hour`, `seven_day`, or another name
+ * Claude Code gives, such as `seven_day_opus`.
+ */
+export type PlanWindowKind = 'five_hour' | 'seven_day' | (string & {});
+
+/** A limit of the Claude plan that is reached. */
+export interface ReachedLimit {
+  /** When a turn ended because of it. */
+  at: Moment;
+  /** Which limit it is, or null if Claude Code did not say. */
+  window: PlanWindowKind | null;
+  /** When it resets, or null when that is not known. */
+  resetsAt: Moment | null;
+}
+
+/** One window of the plan, as Claude Code last reported it. */
+export interface PlanWindow {
+  kind: PlanWindowKind;
+  /** How much of it is used, from 0 to 1 (sometimes above), or null if not known. */
+  used: number | null;
+  /** When it starts again from nothing, or null if not known. */
+  resetsAt: Moment | null;
+  /** Whether the plan allows work in it, in Claude Code's words, such as `allowed`. */
+  status: string | null;
+}
+
+/**
+ * What this computer knows about the limits of its Claude plan. It is a
+ * fact about the Claude account of this computer, never synced. Nothing is
+ * guessed: a window Claude Code did not report is not listed.
+ */
+export interface PlanLimit {
+  /** The limit, while it is reached; null otherwise. */
+  reached: ReachedLimit | null;
+  /** The windows as Claude Code last reported them. */
+  windows: PlanWindow[];
+  /** When Claude Code last reported them, or null if it never did. */
+  reportedAt: Moment | null;
 }
 
 /**

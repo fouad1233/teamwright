@@ -15,10 +15,10 @@ use teamwright_application::{
     ApprovedTask, ConversationWithTurns, Deliveries, Delivery, DriveFinding, DriveFolder,
     GitHubItem, GitHubOverview, GitHubSignIn, GoogleDrive, ItemKind, ItemState, KnownComputer,
     NamedTask, NewMember, NewProject, NewSprint, NewTask, NewView, NotificationChoice,
-    NotificationKind, NotificationPermission, ProjectChange, ProjectIntegrations, ProjectPlaces,
-    ProjectUsage, SprintChanges, SprintForecast, SprintReport, SprintStart, StatusProperties,
-    SyncNotice, SyncState, TaskActual, TaskOnGitHub, UpdateStatus, WorkflowTemplate,
-    sign_in_problem,
+    NotificationKind, NotificationPermission, PlanLimitState, PlanWindowKind, ProjectChange,
+    ProjectIntegrations, ProjectPlaces, ProjectUsage, SprintChanges, SprintForecast, SprintReport,
+    SprintStart, StatusProperties, SyncNotice, SyncState, TaskActual, TaskOnGitHub, UpdateStatus,
+    WorkflowTemplate, sign_in_problem,
 };
 use teamwright_application::{DueOutcome, ProjectReport, ReportTask, UsageLine, WorkShare};
 use teamwright_domain::{
@@ -1535,6 +1535,9 @@ pub struct TurnDto {
     decision: Option<DecisionRequestDto>,
     interview: Option<InterviewDto>,
     proposal: Option<ProposalDto>,
+    /// Whether the turn ended because the limit of the Claude plan was
+    /// reached: failed, but by no fault of the specialist.
+    plan_limit_reached: bool,
 }
 
 impl From<&Turn> for TurnDto {
@@ -1555,6 +1558,7 @@ impl From<&Turn> for TurnDto {
             decision: turn.decision().map(DecisionRequestDto::from),
             interview: turn.interview().map(InterviewDto::from),
             proposal: turn.proposal().map(ProposalDto::from),
+            plan_limit_reached: turn.reached_plan_limit(),
         }
     }
 }
@@ -2686,6 +2690,71 @@ impl From<&[teamwright_domain::ProjectId]> for DataChangedDto {
     fn from(projects: &[teamwright_domain::ProjectId]) -> Self {
         Self {
             project_ids: projects.iter().map(ToString::to_string).collect(),
+        }
+    }
+}
+
+/// What this computer knows about the limits of its Claude plan, as the
+/// interface sees it. `reached` is null while the limit is not known to be
+/// reached. A window is listed only if Claude Code reported it; `used`,
+/// from 0 to 1 and sometimes above, is null when it is not known.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlanLimitDto {
+    reached: Option<ReachedLimitDto>,
+    windows: Vec<PlanWindowDto>,
+    reported_at: Option<String>,
+}
+
+/// A limit of the plan that is reached.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReachedLimitDto {
+    at: String,
+    /// `five_hour`, `seven_day`, another name of the program, or null.
+    window: Option<String>,
+    /// Null when it is not known.
+    resets_at: Option<String>,
+}
+
+/// A window of the plan, as Claude Code reported it.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlanWindowDto {
+    /// `five_hour`, `seven_day` or another name of the program.
+    kind: String,
+    used: Option<f64>,
+    resets_at: Option<String>,
+    status: Option<String>,
+}
+
+fn window_kind_name(kind: &PlanWindowKind) -> String {
+    match kind {
+        PlanWindowKind::FiveHours => "five_hour".to_owned(),
+        PlanWindowKind::Week => "seven_day".to_owned(),
+        PlanWindowKind::Other(name) => name.clone(),
+    }
+}
+
+impl From<&PlanLimitState> for PlanLimitDto {
+    fn from(state: &PlanLimitState) -> Self {
+        Self {
+            reached: state.reached.as_ref().map(|limit| ReachedLimitDto {
+                at: moment_to_text(limit.at),
+                window: limit.window.as_ref().map(window_kind_name),
+                resets_at: limit.resets_at.map(moment_to_text),
+            }),
+            windows: state
+                .windows
+                .iter()
+                .map(|window| PlanWindowDto {
+                    kind: window_kind_name(&window.kind),
+                    used: window.used,
+                    resets_at: window.resets_at.map(moment_to_text),
+                    status: window.status.clone(),
+                })
+                .collect(),
+            reported_at: state.reported_at.map(moment_to_text),
         }
     }
 }
@@ -4327,5 +4396,38 @@ mod tests {
         assert_eq!(json["plan"]["withDueDate"], 0);
         assert_eq!(json["usage"]["byWho"], serde_json::json!([]));
         assert_eq!(json["brief"], serde_json::Value::Null);
+    }
+
+    #[test]
+    fn the_plan_limit_names_its_windows_and_leaves_what_is_unknown_null() {
+        use chrono::TimeZone;
+        use teamwright_application::{PlanWindow, ReachedLimit};
+
+        let moment = chrono::Utc
+            .with_ymd_and_hms(2026, 11, 21, 19, 40, 0)
+            .unwrap();
+        let state = PlanLimitState {
+            reached: Some(ReachedLimit {
+                at: moment,
+                window: Some(PlanWindowKind::FiveHours),
+                resets_at: None,
+            }),
+            windows: vec![PlanWindow {
+                kind: PlanWindowKind::Week,
+                used: Some(0.25),
+                resets_at: Some(moment),
+                status: Some("allowed".to_owned()),
+            }],
+            reported_at: None,
+        };
+
+        let sent = serde_json::to_value(PlanLimitDto::from(&state)).unwrap();
+
+        assert_eq!(sent["reached"]["window"], "five_hour");
+        assert_eq!(sent["reached"]["resetsAt"], serde_json::Value::Null);
+        assert_eq!(sent["reached"]["at"], "2026-11-21T19:40:00.000Z");
+        assert_eq!(sent["windows"][0]["kind"], "seven_day");
+        assert_eq!(sent["windows"][0]["used"], 0.25);
+        assert_eq!(sent["reportedAt"], serde_json::Value::Null);
     }
 }

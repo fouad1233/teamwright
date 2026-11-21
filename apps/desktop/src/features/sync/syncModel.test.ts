@@ -240,6 +240,7 @@ describe('lastNewsOf', () => {
     decision: null,
     interview: null,
     proposal: null,
+    planLimitReached: false,
     context: null,
   };
 

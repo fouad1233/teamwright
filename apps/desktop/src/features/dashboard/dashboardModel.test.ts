@@ -120,6 +120,7 @@ function turn(overrides: Partial<Turn> & Pick<Turn, 'id'>): Turn {
     decision: null,
     interview: null,
     proposal: null,
+    planLimitReached: false,
     context: null,
     ...overrides,
   };

@@ -47,6 +47,7 @@ import type {
   NotificationChoice,
   NotificationKind,
   NotificationPressed,
+  PlanLimit,
   Priority,
   Project,
   ProjectChange,
@@ -575,6 +576,15 @@ export class TauriBackend implements Backend {
     return call('agent_program');
   }
 
+  planLimit(): Promise<PlanLimit> {
+    return call('plan_limit');
+  }
+
+  onPlanLimitChanged(listener: (planLimit: PlanLimit) => void): () => void {
+    // The shell sends all that is known after every change.
+    return listenTo(PLAN_LIMIT_CHANGED, listener);
+  }
+
   listConversations(projectId: Id): Promise<Conversation[]> {
     return call('list_conversations', { projectId });
   }
@@ -908,6 +918,9 @@ const SYNC_CHANGED = 'sync-changed';
 
 /** The name of the event the shell sends when a round changed projects. */
 const DATA_CHANGED = 'data-changed';
+
+/** The name of the event the shell sends when what is known about the plan changed. */
+const PLAN_LIMIT_CHANGED = 'plan-limit-changed';
 
 /**
  * Calls a listener with the payload of every event of a name the shell
