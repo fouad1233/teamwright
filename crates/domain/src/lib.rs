@@ -52,8 +52,8 @@ pub use ids::{
 pub use integration::{EventKind, EventKinds, RepositoryName, WebAddress};
 pub use member::{Effort, Member, MemberInstructions, MemberKind, MemberProfile, MemberSnapshot};
 pub use planning::{
-    Interview, InterviewAnswer, InterviewQuestion, InterviewSnapshot, Proposal, ProposalSnapshot,
-    ProposedMember, ProposedOwner, ProposedTask,
+    Interview, InterviewAnswer, InterviewQuestion, InterviewSnapshot, Proposal, ProposalChange,
+    ProposalSnapshot, ProposedMember, ProposedOwner, ProposedTask,
 };
 pub use project::{Project, ProjectKey, ProjectSnapshot};
 pub use project_files::{EntryKind, FolderEntry, PathInFolder};

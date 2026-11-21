@@ -13,7 +13,9 @@ use crate::error::DomainError;
 use crate::ids::{ComputerId, ConversationId, MemberId, ProjectId, TaskId, TurnId};
 use crate::macros::text_enum;
 use crate::member::{Effort, MemberProfile};
-use crate::planning::{Interview, InterviewAnswer, Proposal, ProposedMember, ProposedTask};
+use crate::planning::{
+    Interview, InterviewAnswer, Proposal, ProposalChange, ProposedMember, ProposedTask,
+};
 use crate::text::ModelName;
 use crate::time::Timestamp;
 
@@ -893,6 +895,23 @@ impl Turn {
             .as_mut()
             .ok_or(DomainError::NothingProposed)?
             .approve(members, tasks, now)
+    }
+
+    /// Makes one change of the manager's to the proposal of the turn before
+    /// it is approved.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the turn is still running, if it proposed
+    /// nothing, or if the change is refused (see [`Proposal::change`]).
+    pub fn change_proposal(&mut self, change: ProposalChange) -> Result<(), DomainError> {
+        if self.is_running() {
+            return Err(DomainError::TurnStillRunning);
+        }
+        self.proposal
+            .as_mut()
+            .ok_or(DomainError::NothingProposed)?
+            .change(change)
     }
 
     /// Records the manager's answer to the question of the turn: one of its
@@ -1852,6 +1871,38 @@ mod tests {
             .unwrap();
         assert_eq!(
             nothing_proposed.approve_proposal(members(), Vec::new(), moment(4)),
+            Err(DomainError::NothingProposed)
+        );
+    }
+
+    #[test]
+    fn a_proposal_is_changed_after_its_turn_has_ended() {
+        let mut turn = running_turn();
+        turn.propose(proposal()).unwrap();
+        let change = || ProposalChange::SetProfile {
+            member: 0,
+            model: None,
+            effort: Some(Effort::Low),
+        };
+        assert_eq!(
+            turn.change_proposal(change()),
+            Err(DomainError::TurnStillRunning)
+        );
+        turn.finish("I propose one specialist.", tokens(), moment(4))
+            .unwrap();
+
+        turn.change_proposal(change()).unwrap();
+
+        assert_eq!(
+            turn.proposal().unwrap().members()[0].effort,
+            Some(Effort::Low)
+        );
+        let mut nothing_proposed = running_turn();
+        nothing_proposed
+            .finish("Report.", tokens(), moment(3))
+            .unwrap();
+        assert_eq!(
+            nothing_proposed.change_proposal(change()),
             Err(DomainError::NothingProposed)
         );
     }

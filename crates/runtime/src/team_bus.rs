@@ -38,7 +38,8 @@ use teamwright_application::{
     PlannedOwner, PlannedTask, PublishedHandoff, QuestionOption, SentMessage, TeamTool,
 };
 use teamwright_domain::{
-    HandoffContent, MemberName, MessageKind, ModelName, PathInFolder, TaskTitle, TeamMessage,
+    DependencyGraph, HandoffContent, MemberName, MessageKind, ModelName, PathInFolder, TaskTitle,
+    TeamMessage,
 };
 
 /// The name of the tool server, as Claude Code is told it.
@@ -724,27 +725,16 @@ fn minutes_of(hours: f64) -> Option<u32> {
         .then_some(minutes as u32)
 }
 
-/// Whether some tasks wait for each other in a circle. Every place a task
-/// waits for is one of the tasks.
+/// Whether some tasks wait for each other in a circle, by the rule of the
+/// tasks of a project.
 fn wait_in_circle(tasks: &[PlannedTask]) -> bool {
-    // 0: not seen, 1: on the way, 2: clear. Meeting a task that is on the
-    // way closes a circle.
-    fn closes_circle(place: usize, tasks: &[PlannedTask], marks: &mut [u8]) -> bool {
-        match marks.get(place) {
-            Some(1) => return true,
-            Some(0) => {}
-            _ => return false,
-        }
-        marks[place] = 1;
-        let found = tasks[place]
-            .waits_for
+    DependencyGraph::from_waits(
+        tasks
             .iter()
-            .any(|&earlier| closes_circle(earlier, tasks, marks));
-        marks[place] = 2;
-        found
-    }
-    let mut marks = vec![0_u8; tasks.len()];
-    (0..tasks.len()).any(|place| closes_circle(place, tasks, &mut marks))
+            .enumerate()
+            .map(|(place, task)| (place, task.waits_for.iter().copied())),
+    )
+    .has_cycle()
 }
 
 /// Reads a place in a list of `count`, counted from 1 by the model, as a

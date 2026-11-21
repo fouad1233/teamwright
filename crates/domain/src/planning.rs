@@ -6,6 +6,10 @@
 //! Nothing of a proposal exists before the manager approves it, and the
 //! manager may approve less than was proposed.
 //!
+//! Before approving, the manager may change the proposal one
+//! [`ProposalChange`] at a time: the title, the size and what a task waits
+//! for, and the rest of what a task or a member says.
+//!
 //! The rules here are those about one proposal. Whether the owner of a task
 //! is somebody the project has needs the team, and is checked where the
 //! team is known.
@@ -13,6 +17,7 @@
 use std::collections::HashSet;
 
 use crate::conversation::DecisionOption;
+use crate::dependencies::DependencyGraph;
 use crate::error::DomainError;
 use crate::member::Effort;
 use crate::task::Priority;
@@ -260,6 +265,90 @@ pub struct ProposedTask {
     pub waits_for: Vec<usize>,
 }
 
+/// One change the manager makes to a proposal before approving it. Tasks
+/// and members are named by their places from 0.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ProposalChange {
+    /// Gives a task another title.
+    Retitle {
+        /// The task.
+        task: usize,
+        /// The new title.
+        title: TaskTitle,
+    },
+    /// Gives a task another description. Whitespace around it is removed.
+    Describe {
+        /// The task.
+        task: usize,
+        /// The new description, which may be empty.
+        description: String,
+    },
+    /// Gives a task another size, or none.
+    Estimate {
+        /// The task.
+        task: usize,
+        /// The minutes a skilled person would need, or nothing.
+        estimate_minutes: Option<u32>,
+    },
+    /// Gives a task another priority.
+    Prioritize {
+        /// The task.
+        task: usize,
+        /// The new priority.
+        priority: Priority,
+    },
+    /// Gives a task to somebody else, or to nobody.
+    GiveTo {
+        /// The task.
+        task: usize,
+        /// The new owner, or nobody.
+        owner: Option<ProposedOwner>,
+    },
+    /// Lets a task wait for another task of the proposal. Waiting for a
+    /// task it waits for already changes nothing.
+    AddWait {
+        /// The task that is to wait.
+        task: usize,
+        /// The task it is to wait for.
+        waits_for: usize,
+    },
+    /// Lets a task stop waiting for another task of the proposal. A task
+    /// it does not wait for changes nothing.
+    RemoveWait {
+        /// The task that waits.
+        task: usize,
+        /// The task it is to stop waiting for.
+        waits_for: usize,
+    },
+    /// Adds a task of the manager's own at the end of the plan: given to
+    /// nobody, of normal priority, without a size, waiting for nothing.
+    AddTask {
+        /// What is to be done.
+        title: TaskTitle,
+    },
+    /// Takes a task out. No task waits for it any more, and the places of
+    /// the tasks after it move up by one.
+    RemoveTask {
+        /// The task.
+        task: usize,
+    },
+    /// Takes a member out. The tasks given to that member stay, and are
+    /// given to nobody: the work is still to be done.
+    RemoveMember {
+        /// The member.
+        member: usize,
+    },
+    /// Chooses the model and the effort of a member.
+    SetProfile {
+        /// The member.
+        member: usize,
+        /// The model, or the default of the program.
+        model: Option<ModelName>,
+        /// The effort, or the default of the program.
+        effort: Option<Effort>,
+    },
+}
+
 /// The plain data of a proposal, used to recreate one that was stored.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProposalSnapshot {
@@ -372,6 +461,89 @@ impl Proposal {
         tidy_plan(members, tasks)
     }
 
+    /// Makes one change of the manager's to the proposal. A change that
+    /// breaks a rule leaves the proposal as it was.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the proposal has been approved already, if the
+    /// change names a task or a member the proposal does not have, if a
+    /// task is to wait for itself or for a task that waits for it, or if
+    /// nothing would be left: no members and no tasks.
+    pub fn change(&mut self, change: ProposalChange) -> Result<(), DomainError> {
+        if !self.is_open() {
+            return Err(DomainError::AlreadyApproved);
+        }
+        let mut members = self.members.clone();
+        let mut tasks = self.tasks.clone();
+        match change {
+            ProposalChange::Retitle { task, title } => task_at(&mut tasks, task)?.title = title,
+            ProposalChange::Describe { task, description } => {
+                task_at(&mut tasks, task)?.description = description;
+            }
+            ProposalChange::Estimate {
+                task,
+                estimate_minutes,
+            } => task_at(&mut tasks, task)?.estimate_minutes = estimate_minutes,
+            ProposalChange::Prioritize { task, priority } => {
+                task_at(&mut tasks, task)?.priority = priority;
+            }
+            ProposalChange::GiveTo { task, owner } => task_at(&mut tasks, task)?.owner = owner,
+            ProposalChange::AddWait { task, waits_for } => add_wait(&mut tasks, task, waits_for)?,
+            ProposalChange::RemoveWait { task, waits_for } => {
+                task_at(&mut tasks, waits_for)?;
+                task_at(&mut tasks, task)?
+                    .waits_for
+                    .retain(|&earlier| earlier != waits_for);
+            }
+            ProposalChange::AddTask { title } => tasks.push(ProposedTask {
+                title,
+                description: String::new(),
+                owner: None,
+                estimate_minutes: None,
+                priority: Priority::Normal,
+                waits_for: Vec::new(),
+            }),
+            ProposalChange::RemoveTask { task } => {
+                task_at(&mut tasks, task)?;
+                tasks.remove(task);
+                for other in &mut tasks {
+                    other.waits_for = other
+                        .waits_for
+                        .iter()
+                        .filter(|&&earlier| earlier != task)
+                        .map(|&earlier| if earlier > task { earlier - 1 } else { earlier })
+                        .collect();
+                }
+            }
+            ProposalChange::RemoveMember { member } => {
+                let gone = member_at(&mut members, member)?.name.clone();
+                members.remove(member);
+                let key = gone.as_str().to_lowercase();
+                for task in &mut tasks {
+                    if let Some(ProposedOwner::Member(name)) = &task.owner
+                        && name.as_str().to_lowercase() == key
+                    {
+                        task.owner = None;
+                    }
+                }
+            }
+            ProposalChange::SetProfile {
+                member,
+                model,
+                effort,
+            } => {
+                let member = member_at(&mut members, member)?;
+                member.model = model;
+                member.effort = effort;
+            }
+        }
+        let (members, tasks) = tidy_plan(members, tasks)?;
+        self.members = members;
+        self.tasks = tasks;
+        Ok(())
+    }
+
     /// Records what the manager approved. The proposal keeps it in place
     /// of what was proposed.
     pub(crate) fn approve(
@@ -436,7 +608,7 @@ fn tidy_plan(
             })
         })
         .collect::<Result<Vec<_>, _>>()?;
-    if wait_in_circle(&tasks) {
+    if graph_of(&tasks).has_cycle() {
         return Err(DomainError::TasksWaitInCircle);
     }
     if members.is_empty() && tasks.is_empty() {
@@ -445,35 +617,51 @@ fn tidy_plan(
     Ok((members, tasks))
 }
 
-/// Whether some tasks wait for each other in a circle, so that none of them
-/// could ever start. Every place a task waits for is one of the tasks.
-fn wait_in_circle(tasks: &[ProposedTask]) -> bool {
-    #[derive(Clone, Copy, PartialEq, Eq)]
-    enum Mark {
-        NotSeen,
-        OnTheWay,
-        Clear,
-    }
+/// The task at a place of a plan, counted from 0.
+fn task_at(tasks: &mut [ProposedTask], place: usize) -> Result<&mut ProposedTask, DomainError> {
+    tasks.get_mut(place).ok_or(DomainError::NoSuchProposedTask {
+        number: place.saturating_add(1),
+    })
+}
 
-    // A task is looked at once. While the tasks it waits for are followed,
-    // it is on the way; meeting a task that is on the way closes a circle.
-    fn closes_circle(place: usize, tasks: &[ProposedTask], marks: &mut [Mark]) -> bool {
-        match marks.get(place).copied() {
-            Some(Mark::Clear) | None => return false,
-            Some(Mark::OnTheWay) => return true,
-            Some(Mark::NotSeen) => {}
-        }
-        marks[place] = Mark::OnTheWay;
-        let found = tasks[place]
-            .waits_for
+/// The member at a place of a plan, counted from 0.
+fn member_at(
+    members: &mut [ProposedMember],
+    place: usize,
+) -> Result<&mut ProposedMember, DomainError> {
+    members
+        .get_mut(place)
+        .ok_or(DomainError::NoSuchProposedMember {
+            number: place.saturating_add(1),
+        })
+}
+
+/// Lets one task of a plan wait for another, if that closes no circle.
+fn add_wait(tasks: &mut [ProposedTask], task: usize, waits_for: usize) -> Result<(), DomainError> {
+    let other = task_at(tasks, waits_for)?.title.to_string();
+    let title = task_at(tasks, task)?.title.to_string();
+    if task == waits_for {
+        return Err(DomainError::WaitsForNoOtherTask { title });
+    }
+    if graph_of(tasks).would_create_cycle(task, waits_for) {
+        return Err(DomainError::WaitWouldCloseCircle { title, other });
+    }
+    let waiting = task_at(tasks, task)?;
+    if !waiting.waits_for.contains(&waits_for) {
+        waiting.waits_for.push(waits_for);
+    }
+    Ok(())
+}
+
+/// What the tasks of a plan wait for, by their places, with the rule of
+/// the tasks of a project.
+fn graph_of(tasks: &[ProposedTask]) -> DependencyGraph<usize> {
+    DependencyGraph::from_waits(
+        tasks
             .iter()
-            .any(|&earlier| closes_circle(earlier, tasks, marks));
-        marks[place] = Mark::Clear;
-        found
-    }
-
-    let mut marks = vec![Mark::NotSeen; tasks.len()];
-    (0..tasks.len()).any(|place| closes_circle(place, tasks, &mut marks))
+            .enumerate()
+            .map(|(place, task)| (place, task.waits_for.iter().copied())),
+    )
 }
 
 #[cfg(test)]
@@ -764,6 +952,265 @@ mod tests {
         let refused = proposal.approve(Vec::new(), Vec::new(), moment(5));
 
         assert_eq!(refused, Err(DomainError::EmptyProposal));
+        assert_eq!(proposal, before);
+    }
+
+    /// A proposal of two members and four tasks: 1 waits for 0, 2 for 1,
+    /// and 3 for nothing. Task 0 is the hardware engineer's.
+    fn plan() -> Proposal {
+        Proposal::new(
+            "A device.",
+            vec![member("Hardware engineer"), member("Firmware engineer")],
+            vec![
+                ProposedTask {
+                    owner: Some(ProposedOwner::Member(
+                        MemberName::parse("hardware ENGINEER").unwrap(),
+                    )),
+                    ..task("Draw the schematic", Vec::new())
+                },
+                task("Route the board", vec![0]),
+                task("Write the firmware", vec![1]),
+                task("Write the manual", Vec::new()),
+            ],
+        )
+        .unwrap()
+    }
+
+    fn title(text: &str) -> TaskTitle {
+        TaskTitle::parse(text).unwrap()
+    }
+
+    fn changed(change: ProposalChange) -> Result<Proposal, DomainError> {
+        let mut proposal = plan();
+        let before = proposal.clone();
+        let result = proposal.change(change);
+        if result.is_err() {
+            assert_eq!(
+                proposal, before,
+                "a refused change leaves the proposal as it was"
+            );
+        }
+        result.map(|()| proposal)
+    }
+
+    #[test]
+    fn the_title_the_size_and_the_rest_of_a_task_can_be_changed() {
+        let mut proposal = plan();
+
+        proposal
+            .change(ProposalChange::Retitle {
+                task: 1,
+                title: title("Route the board in four layers"),
+            })
+            .unwrap();
+        proposal
+            .change(ProposalChange::Estimate {
+                task: 1,
+                estimate_minutes: Some(240),
+            })
+            .unwrap();
+        proposal
+            .change(ProposalChange::Describe {
+                task: 1,
+                description: "  Gerber files.  ".to_owned(),
+            })
+            .unwrap();
+        proposal
+            .change(ProposalChange::Prioritize {
+                task: 1,
+                priority: Priority::High,
+            })
+            .unwrap();
+        proposal
+            .change(ProposalChange::GiveTo {
+                task: 1,
+                owner: Some(ProposedOwner::Manager),
+            })
+            .unwrap();
+
+        let task = &proposal.tasks()[1];
+        assert_eq!(task.title.as_str(), "Route the board in four layers");
+        assert_eq!(task.estimate_minutes, Some(240));
+        assert_eq!(task.description, "Gerber files.");
+        assert_eq!(task.priority, Priority::High);
+        assert_eq!(task.owner, Some(ProposedOwner::Manager));
+        assert_eq!(task.waits_for, [0]);
+        assert!(proposal.is_open());
+    }
+
+    #[test]
+    fn a_task_can_wait_for_another_task_of_the_proposal_and_stop_waiting() {
+        let mut proposal = plan();
+
+        proposal
+            .change(ProposalChange::AddWait {
+                task: 3,
+                waits_for: 2,
+            })
+            .unwrap();
+        proposal
+            .change(ProposalChange::AddWait {
+                task: 3,
+                waits_for: 2,
+            })
+            .unwrap();
+        assert_eq!(proposal.tasks()[3].waits_for, [2]);
+
+        proposal
+            .change(ProposalChange::RemoveWait {
+                task: 2,
+                waits_for: 1,
+            })
+            .unwrap();
+        proposal
+            .change(ProposalChange::RemoveWait {
+                task: 2,
+                waits_for: 1,
+            })
+            .unwrap();
+        assert!(proposal.tasks()[2].waits_for.is_empty());
+    }
+
+    #[test]
+    fn a_task_waits_neither_for_itself_nor_in_a_circle_nor_for_a_task_that_is_not_there() {
+        assert_eq!(
+            changed(ProposalChange::AddWait {
+                task: 1,
+                waits_for: 1
+            })
+            .unwrap_err()
+            .to_string(),
+            "\"Route the board\" waits for a task that is not another task of the proposal"
+        );
+        assert_eq!(
+            changed(ProposalChange::AddWait {
+                task: 0,
+                waits_for: 2
+            })
+            .unwrap_err()
+            .to_string(),
+            "\"Draw the schematic\" cannot wait for \"Write the firmware\", which waits for it \
+             already"
+        );
+        assert_eq!(
+            changed(ProposalChange::AddWait {
+                task: 0,
+                waits_for: 4
+            })
+            .unwrap_err()
+            .to_string(),
+            "the proposal has no task 5"
+        );
+        assert_eq!(
+            changed(ProposalChange::RemoveWait {
+                task: 9,
+                waits_for: 0
+            }),
+            Err(DomainError::NoSuchProposedTask { number: 10 })
+        );
+        assert_eq!(
+            changed(ProposalChange::RemoveTask { task: usize::MAX }),
+            Err(DomainError::NoSuchProposedTask { number: usize::MAX })
+        );
+    }
+
+    #[test]
+    fn taking_a_task_out_takes_out_what_waited_for_it_and_counts_the_places_anew() {
+        let proposal = changed(ProposalChange::RemoveTask { task: 1 }).unwrap();
+
+        let titles: Vec<_> = proposal
+            .tasks()
+            .iter()
+            .map(|task| task.title.as_str())
+            .collect();
+        assert_eq!(
+            titles,
+            [
+                "Draw the schematic",
+                "Write the firmware",
+                "Write the manual"
+            ]
+        );
+        assert!(proposal.tasks()[1].waits_for.is_empty());
+
+        let later = changed(ProposalChange::RemoveTask { task: 0 }).unwrap();
+        assert!(later.tasks()[0].waits_for.is_empty());
+        assert_eq!(later.tasks()[1].waits_for, [0]);
+    }
+
+    #[test]
+    fn a_task_of_the_managers_own_comes_at_the_end_and_waits_for_nothing() {
+        let proposal = changed(ProposalChange::AddTask {
+            title: title("Order the parts"),
+        })
+        .unwrap();
+
+        assert_eq!(proposal.tasks().len(), 5);
+        assert_eq!(proposal.tasks()[4], task("Order the parts", Vec::new()));
+    }
+
+    #[test]
+    fn taking_a_member_out_leaves_its_tasks_to_nobody() {
+        let proposal = changed(ProposalChange::RemoveMember { member: 0 }).unwrap();
+
+        assert_eq!(proposal.members(), [member("Firmware engineer")]);
+        assert_eq!(proposal.tasks()[0].owner, None);
+        assert_eq!(
+            changed(ProposalChange::RemoveMember { member: 2 })
+                .unwrap_err()
+                .to_string(),
+            "the proposal has no member 3"
+        );
+    }
+
+    #[test]
+    fn the_model_and_the_effort_of_a_member_can_be_chosen() {
+        let proposal = changed(ProposalChange::SetProfile {
+            member: 1,
+            model: Some(ModelName::parse("haiku").unwrap()),
+            effort: Some(Effort::Low),
+        })
+        .unwrap();
+
+        assert_eq!(
+            proposal.members()[1].model,
+            Some(ModelName::parse("haiku").unwrap())
+        );
+        assert_eq!(proposal.members()[1].effort, Some(Effort::Low));
+    }
+
+    #[test]
+    fn a_change_never_leaves_a_proposal_empty() {
+        let mut proposal = Proposal::new(
+            "A device.",
+            Vec::new(),
+            vec![task("Draw the schematic", Vec::new())],
+        )
+        .unwrap();
+
+        assert_eq!(
+            proposal.change(ProposalChange::RemoveTask { task: 0 }),
+            Err(DomainError::EmptyProposal)
+        );
+        assert_eq!(proposal.tasks().len(), 1);
+    }
+
+    #[test]
+    fn an_approved_proposal_is_not_changed() {
+        let mut proposal = plan();
+        proposal
+            .approve(
+                proposal.members().to_vec(),
+                proposal.tasks().to_vec(),
+                moment(5),
+            )
+            .unwrap();
+        let before = proposal.clone();
+
+        assert_eq!(
+            proposal.change(ProposalChange::RemoveTask { task: 0 }),
+            Err(DomainError::AlreadyApproved)
+        );
         assert_eq!(proposal, before);
     }
 }

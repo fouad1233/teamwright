@@ -1,6 +1,11 @@
 //! Dependencies between tasks: which task waits for which.
+//!
+//! The rule is the same for the tasks of a project and for the tasks of a
+//! proposal of the Advisor, which are known by their places in the
+//! proposal. So the graph works on any kind of key.
 
 use std::collections::{BTreeSet, HashMap, HashSet};
+use std::hash::Hash;
 
 use crate::ids::TaskId;
 use crate::task::Task;
@@ -10,13 +15,24 @@ use crate::task::Task;
 /// A single task can refuse to wait for itself, but only a view of all the
 /// tasks can tell that "A waits for B" and "B waits for A" form a loop that
 /// would leave both waiting forever. This type is that view.
-#[derive(Debug, Clone, Default)]
-pub struct DependencyGraph {
+///
+/// A task is known by its key: its identifier for the tasks of a project,
+/// its place for the tasks of a proposal.
+#[derive(Debug, Clone)]
+pub struct DependencyGraph<Key = TaskId> {
     /// For each task, the tasks it waits for.
-    blockers: HashMap<TaskId, BTreeSet<TaskId>>,
+    blockers: HashMap<Key, BTreeSet<Key>>,
 }
 
-impl DependencyGraph {
+impl<Key> Default for DependencyGraph<Key> {
+    fn default() -> Self {
+        Self {
+            blockers: HashMap::new(),
+        }
+    }
+}
+
+impl DependencyGraph<TaskId> {
     /// Builds the graph of a set of tasks, usually all tasks of one project.
     pub fn from_tasks<'a>(tasks: impl IntoIterator<Item = &'a Task>) -> Self {
         let blockers = tasks
@@ -26,20 +42,47 @@ impl DependencyGraph {
             .collect();
         Self { blockers }
     }
+}
+
+impl<Key: Copy + Eq + Hash + Ord> DependencyGraph<Key> {
+    /// Builds the graph from each task with the tasks it waits for.
+    pub fn from_waits<Waits: IntoIterator<Item = Key>>(
+        waits: impl IntoIterator<Item = (Key, Waits)>,
+    ) -> Self {
+        let blockers = waits
+            .into_iter()
+            .map(|(task, blockers)| (task, blockers.into_iter().collect::<BTreeSet<_>>()))
+            .filter(|(_, blockers)| !blockers.is_empty())
+            .collect();
+        Self { blockers }
+    }
 
     /// Tells whether making `task` wait for `blocker` would close a loop.
     ///
     /// That is the case when the blocker is the task itself, or when the
     /// blocker already waits for the task, directly or through other tasks.
     #[must_use]
-    pub fn would_create_cycle(&self, task: TaskId, blocker: TaskId) -> bool {
+    pub fn would_create_cycle(&self, task: Key, blocker: Key) -> bool {
         task == blocker || self.waits_for(blocker, task)
+    }
+
+    /// Tells whether some tasks already wait for each other in a loop, so
+    /// that none of them could ever start.
+    #[must_use]
+    pub fn has_cycle(&self) -> bool {
+        // Every loop holds a task that waits directly for a task which
+        // waits for it in turn.
+        self.blockers.iter().any(|(&task, blockers)| {
+            blockers
+                .iter()
+                .any(|&blocker| self.would_create_cycle(task, blocker))
+        })
     }
 
     /// Tells whether `waiting` waits for `target`, directly or through other
     /// tasks.
     #[must_use]
-    pub fn waits_for(&self, waiting: TaskId, target: TaskId) -> bool {
+    pub fn waits_for(&self, waiting: Key, target: Key) -> bool {
         let mut to_visit = vec![waiting];
         let mut visited = HashSet::new();
 
@@ -176,5 +219,27 @@ mod tests {
         let graph = DependencyGraph::from_tasks([&first, &second, &outsider]);
 
         assert!(!graph.waits_for(first.id(), outsider.id()));
+    }
+
+    #[test]
+    fn works_on_places_as_well_as_on_identifiers() {
+        // The tasks of a proposal: 1 waits for 0, 2 waits for 1.
+        let graph = DependencyGraph::from_waits([(0, vec![]), (1, vec![0]), (2, vec![1])]);
+
+        assert!(graph.waits_for(2, 0));
+        assert!(graph.would_create_cycle(0, 2));
+        assert!(!graph.would_create_cycle(2, 0));
+        assert!(!graph.has_cycle());
+    }
+
+    #[test]
+    fn finds_a_loop_that_is_there_already() {
+        let chain = DependencyGraph::from_waits([(0, vec![3]), (1, vec![]), (2, vec![1])]);
+        let looped = DependencyGraph::from_waits([(0, vec![2]), (1, vec![0]), (2, vec![1])]);
+        let on_itself = DependencyGraph::from_waits([(0, vec![0])]);
+
+        assert!(!chain.has_cycle());
+        assert!(looped.has_cycle());
+        assert!(on_itself.has_cycle());
     }
 }

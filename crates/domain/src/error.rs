@@ -173,6 +173,30 @@ pub enum DomainError {
     #[error("the proposal has no members and no tasks")]
     EmptyProposal,
 
+    /// A change named a task that a proposal does not have.
+    #[error("the proposal has no task {number}")]
+    NoSuchProposedTask {
+        /// The place that was named, counted from 1.
+        number: usize,
+    },
+
+    /// A change named a member that a proposal does not have.
+    #[error("the proposal has no member {number}")]
+    NoSuchProposedMember {
+        /// The place that was named, counted from 1.
+        number: usize,
+    },
+
+    /// A task of a proposal was to wait for a task that waits for it,
+    /// directly or through other tasks.
+    #[error("\"{title}\" cannot wait for \"{other}\", which waits for it already")]
+    WaitWouldCloseCircle {
+        /// The title of the task that was to wait.
+        title: String,
+        /// The title of the task it was to wait for.
+        other: String,
+    },
+
     /// A proposal was to be approved in a turn that proposed nothing.
     #[error("the turn proposed nothing")]
     NothingProposed,
