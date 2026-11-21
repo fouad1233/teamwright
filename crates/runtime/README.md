@@ -79,6 +79,23 @@ in print mode. `--bare` is never used, because it ignores the subscription
 sign-in. `--max-turns`, which older documentation mentions, is not in the
 help of that version and is not used.
 
+## Skills and connectors
+
+[Decision 0039](../../docs/decisions/0039-skills-and-connectors-chosen-by-the-manager.md).
+A confined turn always gets `--setting-sources=` and `--settings` with
+`disableAllHooks`, `disableSkillShellExecution` and
+`disableClaudeAiConnectors` (`kit::SESSION_SETTINGS`). Each skill of
+`TurnRequest::kit` is a `--plugin-dir`, readable through `--add-dir` and
+denied for writing, allowed as `Skill(<name>:<name>)`. Each connector is an
+entry of the one `--mcp-config`, beside the team bus: a program with `env`
+`{NAME: "${NAME}"}`, or `{"type": "http", url, headers}`; Claude Code fills
+`${NAME}` from its own environment. Its tools are allowed one by one as
+`mcp__<name>__<tool>`. The exact command line is tested in `arguments.rs`.
+The ignored test
+`a_real_session_gets_its_chosen_skill_and_connector_and_nothing_of_the_users_own`
+in `tests/real_program.rs` has never run (needs the built program:
+`cargo build -p teamwright-desktop`).
+
 ## The team bus
 
 `team_bus::serve` is a tool server (MCP, one JSON-RPC 2.0 message per line

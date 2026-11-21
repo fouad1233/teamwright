@@ -415,6 +415,19 @@ and a conversation that runs on Laptop. Its refusals are those of the shell.
 a folder that cannot be reached, a copied identity, or another computer;
 in the browser the demo is `window.teamwrightDemo`.
 
+### Skills and connectors
+
+`skill_shelf.rs` implements `SkillShelf`: copies of skills in `skills/<id>/`
+of the data folder, in the form of a plugin, links refused. The commands in
+`commands/kits.rs` (`project_library`, `add_skill`, `remove_skill`,
+`add_connector`, `remove_connector`, `set_member_kit`) answer with the whole
+library. In the interface, the Team place has "Skills and connectors"
+(`features/team/LibraryDialog.tsx`), the dialog of a specialist gives
+skills and each tool of a connector (`KitField.tsx`), and a specialist's
+row says what it has. The demo keeps a sample library in
+`shared/api/demo/kits.ts`; the simulated specialist ignores it.
+([decision 0039](../../docs/decisions/0039-skills-and-connectors-chosen-by-the-manager.md))
+
 ## The interface: `src`
 
 ```

@@ -499,6 +499,20 @@ holds one lock while a use case starts or stops a turn and while an event is
 recorded, so each sees the stored turns whole. The `WorkListener` is called
 under that lock: it must return quickly and must not call the service.
 
+## Skills and connectors
+
+[Decision 0039](../../docs/decisions/0039-skills-and-connectors-chosen-by-the-manager.md).
+`KitService` keeps the library of a project (skills and connectors) and the
+kit of each specialist (`set_kit`: skills of its own project, connectors
+tool by tool, only tools the connector lists, never for a person). Its two
+ports live in `kits.rs`: `KitRepository` (logged storage) and `SkillShelf`
+(this computer: reads a chosen folder, keeps a copy of a skill, says
+whether an environment variable is set; it never reads a value).
+`turn_kit_of` gives a turn of a specialist only what this computer has: a
+kept copy that still passes `SkillFile::check`, a connector whose variables
+are all set. The result is `TurnRequest::kit` (`TurnKit`); the Advisor gets
+none. `InMemoryKitRepository` and `PretendShelf` stand in for tests.
+
 ## The agent runtime
 
 A team member's session runs on the user's own Claude Code

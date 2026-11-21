@@ -259,6 +259,19 @@ out when it has none; a state logged before limits reads as statuses
 without one. A limit out of range, or on a status of the category done, is
 damaged data.
 
+## Skills, connectors and kits
+
+Version 27 ([decision 0039](../../docs/decisions/0039-skills-and-connectors-chosen-by-the-manager.md)):
+`skills`, `connectors` (how it starts and its tools as JSON) and
+`member_kits` (keyed by the member), each logged with its whole state as
+`skill`, `connector` and `member_kit`, merged whole, synced; their parent is
+the project. No secret is stored: a connector names its environment
+variables. A kit may name what another computer removed; it is read only
+together with the library, which drops such names. Removing a skill or a
+connector stores the changed kits in the same transaction; deleting a
+project deletes and logs kits, connectors and skills. The copies of skill
+folders are not in the database: they lie on each computer.
+
 ## Field stamps and merged states
 
 Computers that keep in step merge what they changed field by field
