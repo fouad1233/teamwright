@@ -564,6 +564,17 @@ the schedule, and a bar from its start to its due date.
   start or only its due date. The new dates are shown while you drag, and
   Escape puts the bar back.
 - Press a bar or the name of a task to open it.
+- The switch *Actual* in the corner shows what really happened under the
+  plan, and the view keeps it on. A thin line under a bar runs from the
+  day work began (the task first went into a status that is under way,
+  in review or done) to the day it was finished, or to today with a fading
+  end while work goes on. The days past the due date are hatched. After
+  the bars, a few words say how it went: *began 1 day late*, *finished 2
+  days late*, *3 days past due*, *not begun, 2 days late*, *opened again*
+  for a task that was finished and opened again (its line runs from its
+  first start to its last finish), and *no planned dates* for a task that
+  was worked on without a plan. Rest the pointer on a line for its dates.
+  The program reads all this from the record of every change it keeps.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="../screenshots/gantt-dark.png">

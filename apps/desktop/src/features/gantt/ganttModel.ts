@@ -1,5 +1,12 @@
-import type { CalendarDate, Id, Task } from '@/shared/api/types';
-import { addDays, firstDayOfMonth, mondayOf, partsOfDay, type DayNumber } from '@/shared/lib/days';
+import type { CalendarDate, Id, Task, TaskActual } from '@/shared/api/types';
+import {
+  addDays,
+  dayNumberOf,
+  firstDayOfMonth,
+  mondayOf,
+  partsOfDay,
+  type DayNumber,
+} from '@/shared/lib/days';
 
 import { indexSubtasks, isSubtask, outlineRows, type OutlineRow } from '../tasks/taskModel';
 import { spanOf, type Span } from '../tasks/taskSpan';
@@ -391,4 +398,110 @@ export function draggedDates(task: Dates, grip: Grip, days: number): Dates {
   }
   const moved = addDays(dueOn, days);
   return { startOn, dueOn: startOn !== null && moved < startOn ? startOn : moved };
+}
+
+/** What the Gantt view keeps of its own: whether it shows what really happened. */
+export interface GanttContent {
+  showsActual: boolean;
+}
+
+/** Reads what a Gantt view keeps. Anything it cannot read is the default: the plan only. */
+export function parseGanttContent(content: string | null): GanttContent {
+  try {
+    const parsed: unknown = content === null ? null : JSON.parse(content);
+    return {
+      showsActual:
+        typeof parsed === 'object' &&
+        parsed !== null &&
+        'showsActual' in parsed &&
+        parsed.showsActual === true,
+    };
+  } catch {
+    return { showsActual: false };
+  }
+}
+
+/** Writes what a Gantt view keeps, or nothing for the default. */
+export function serializeGanttContent(content: GanttContent): string | null {
+  return content.showsActual ? JSON.stringify(content) : null;
+}
+
+/** The days on which work on a task really went on: from its start to its finish, or to today. */
+export function actualSpanOf(actual: TaskActual, today: DayNumber): Span | undefined {
+  if (actual.startedOn === null) {
+    return undefined;
+  }
+  const firstDay = dayNumberOf(actual.startedOn);
+  const lastDay = actual.finishedOn === null ? today : dayNumberOf(actual.finishedOn);
+  return { firstDay, lastDay: Math.max(firstDay, lastDay), kind: 'planned' };
+}
+
+/** The line of what really happened, under the bar of the plan. */
+export interface ActualBar {
+  left: number;
+  width: number;
+  /** Whether work still goes on: the line runs to today and has an open end. */
+  isRunning: boolean;
+  /**
+   * Where the part that lies past the due day begins, in pixels from the
+   * left of the line, or nothing if none does. It is drawn hatched.
+   */
+  overdueFrom: number | null;
+}
+
+/**
+ * Where the line of what really happened lies on the chart, or nothing for
+ * a task on which work has not begun. It runs from the beginning of the day
+ * work began to the end of the day it was finished, or of today.
+ */
+export function actualBarOf(
+  actual: TaskActual,
+  dueOn: CalendarDate | null,
+  range: ChartRange,
+  today: DayNumber,
+  dayWidth: number = DAY_WIDTH,
+): ActualBar | null {
+  const span = actualSpanOf(actual, today);
+  if (!span) {
+    return null;
+  }
+  const box = boxOf(span, range, dayWidth);
+  const left = box.left + BAR_INSET;
+  const width = box.width - 2 * BAR_INSET;
+  const due = dueOn === null ? null : dayNumberOf(dueOn);
+  const overdueFrom =
+    due !== null && span.lastDay > due
+      ? Math.max((due + 1 - range.firstDay) * dayWidth - left, 0)
+      : null;
+  return { left, width, isRunning: actual.finishedOn === null, overdueFrom };
+}
+
+/**
+ * How what really happened compares with the plan, in a few words for the
+ * end of the row: "began 1 day late", "finished 2 days late", "3 days past
+ * due", "opened again". Each is said in words, so that none rests on colour.
+ */
+export function actualInWords(actual: TaskActual, hasPlan: boolean): string[] {
+  const days = (count: number) => `${count.toString()} ${count === 1 ? 'day' : 'days'}`;
+  const words: string[] = [];
+  if (actual.startedLateDays !== null) {
+    words.push(
+      actual.notStarted
+        ? `not begun, ${days(actual.startedLateDays)} late`
+        : `began ${days(actual.startedLateDays)} late`,
+    );
+  }
+  if (actual.finishedLateDays !== null) {
+    words.push(`finished ${days(actual.finishedLateDays)} late`);
+  }
+  if (actual.runningLateDays !== null) {
+    words.push(`${days(actual.runningLateDays)} past due`);
+  }
+  if (actual.reopened) {
+    words.push('opened again');
+  }
+  if (!hasPlan && actual.startedOn !== null) {
+    words.push('no planned dates');
+  }
+  return words;
 }

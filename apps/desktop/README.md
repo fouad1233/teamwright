@@ -582,7 +582,9 @@ Rules of the interface:
   and `shared/lib`, next to their tests. The Gantt chart, the calendar and
   the burndown chart only draw what `ganttModel.ts`, `calendarModel.ts` and
   `burndownModel.ts` work out. The pace of the team is the backend's
-  (`sprintForecast`); `forecastModel.ts` only puts it into words.
+  (`sprintForecast`); `forecastModel.ts` only puts it into words. The
+  actual dates of the Gantt chart and how late they were are the backend's
+  too (`listTaskActuals`); `ganttModel.ts` only places them.
 - **The dashboard is worked out, not written**
   ([decision 0020](../../docs/decisions/0020-a-dashboard-worked-out-not-written.md)).
   Its sentences, numbers and bars come from `dashboardModel.ts`, from the

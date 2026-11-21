@@ -9,12 +9,23 @@ import {
   type PointerEvent,
 } from 'react';
 
+import { useQuery } from '@tanstack/react-query';
+
 import { useNavigation } from '@/app/navigation';
-import type { Id, Project, Status, Task } from '@/shared/api/types';
+import { useBackend } from '@/shared/api/BackendProvider';
+import type { Id, Project, Status, Task, TaskActual, View } from '@/shared/api/types';
 import { classNames } from '@/shared/lib/classNames';
 import { dayNumberOf, isWeekend, partsOfDay, type DayNumber } from '@/shared/lib/days';
-import { formatMonth, formatPeriod, isOverdue, taskReference, today } from '@/shared/lib/format';
+import {
+  formatDate,
+  formatMonth,
+  formatPeriod,
+  isOverdue,
+  taskReference,
+  today,
+} from '@/shared/lib/format';
 import { Button } from '@/shared/ui/Button';
+import { Switch } from '@/shared/ui/Switch';
 
 import { SubtaskFold } from '../tasks/SubtaskFold';
 import { StatusMark } from '../tasks/TaskBadges';
@@ -23,17 +34,23 @@ import { statusOf } from '../tasks/taskModel';
 import { spanOf, type Span } from '../tasks/taskSpan';
 import { useTaskCommands } from '../tasks/taskQueries';
 import { AssigneeAvatar } from '../team/Assignee';
+import { useSetViewContent } from '../views/viewQueries';
 import styles from './GanttView.module.css';
 import {
   BAR_HEIGHT,
   DAY_WIDTH,
   ROW_HEIGHT,
+  actualBarOf,
+  actualInWords,
+  actualSpanOf,
   barOf,
   chartRange,
   chartRows,
   draggedDates,
   linksOf,
   monthsOf,
+  parseGanttContent,
+  serializeGanttContent,
   type ChartRange,
   type ChartRow,
   type Dates,
@@ -63,6 +80,8 @@ interface Preview {
 interface GanttViewProps {
   project: Project;
   tasks: Task[];
+  /** The view the chart is drawn in, which keeps whether it shows what really happened. */
+  view?: View;
 }
 
 /**
@@ -71,8 +90,24 @@ interface GanttViewProps {
  * another. A bar can be dragged to move the task, and pulled at an end to
  * make it longer or shorter.
  */
-export function GanttView({ project, tasks }: GanttViewProps) {
+export function GanttView({ project, tasks, view }: GanttViewProps) {
   const navigation = useNavigation();
+  const backend = useBackend();
+  const setViewContent = useSetViewContent();
+  const { showsActual } = parseGanttContent(view?.content ?? null);
+  // What really happened is read from the log only while it is shown, and
+  // again whenever a task changes.
+  const actuals = useQuery({
+    queryKey: ['task-actuals', project.id, actualsVersionOf(tasks)] as const,
+    queryFn: () => backend.listTaskActuals(project.id),
+    enabled: showsActual,
+  });
+  const actualOf = useMemo(() => {
+    const byTask = new Map(
+      (showsActual ? (actuals.data ?? []) : []).map((one) => [one.taskId, one]),
+    );
+    return (taskId: Id) => byTask.get(taskId);
+  }, [actuals.data, showsActual]);
   const commands = useTaskCommands(project.id);
   const folds = useSubtaskFolds(project.id);
   const arrowId = useId();
@@ -84,10 +119,16 @@ export function GanttView({ project, tasks }: GanttViewProps) {
   const range = useMemo(
     () =>
       chartRange(
-        tasks.flatMap((task) => spanOf(task) ?? []),
+        [
+          ...tasks.flatMap((task) => spanOf(task) ?? []),
+          ...tasks.flatMap((task) => {
+            const actual = actualOf(task.id);
+            return (actual && actualSpanOf(actual, todayDay)) ?? [];
+          }),
+        ],
         todayDay,
       ),
-    [tasks, todayDay],
+    [tasks, todayDay, actualOf],
   );
   const storedRows = useMemo(() => chartRows(tasks, folds.isOpen), [tasks, folds]);
   const dragged = preview?.tasks === tasks ? preview : null;
@@ -154,9 +195,21 @@ export function GanttView({ project, tasks }: GanttViewProps) {
         <div className={styles.head}>
           <div className={styles.corner}>
             <span className="label">Task</span>
-            <Button variant="ghost" className={styles.todayButton} onClick={showToday}>
-              Today
-            </Button>
+            <span className={styles.cornerTools}>
+              {view && (
+                <Switch
+                  className={styles.actualSwitch}
+                  on={showsActual}
+                  label="Actual"
+                  onChange={(on) => {
+                    void setViewContent(view, serializeGanttContent({ showsActual: on }));
+                  }}
+                />
+              )}
+              <Button variant="ghost" className={styles.todayButton} onClick={showToday}>
+                Today
+              </Button>
+            </span>
           </div>
 
           <div className={styles.scale} style={{ width: chartWidth }}>
@@ -214,6 +267,7 @@ export function GanttView({ project, tasks }: GanttViewProps) {
               dates={dragged?.taskId === row.task.id ? dragged.dates : row.task}
               range={range}
               todayDay={todayDay}
+              actual={actualOf(row.task.id)}
               isOpenInPanel={navigation.taskId === row.task.id}
               onOpen={() => {
                 navigation.openTask(row.task.id);
@@ -276,6 +330,8 @@ interface RowProps {
   dates: Dates;
   range: ChartRange;
   todayDay: DayNumber;
+  /** What really happened to the task, while the chart shows it. */
+  actual: TaskActual | undefined;
   /** Whether the panel at the side shows this task. */
   isOpenInPanel: boolean;
   onOpen: () => void;
@@ -291,6 +347,7 @@ function Row({
   dates,
   range,
   todayDay,
+  actual,
   isOpenInPanel,
   onOpen,
   onToggle,
@@ -352,9 +409,72 @@ function Row({
             onReschedule={onReschedule}
           />
         )}
+        {actual && <ActualLine actual={actual} task={task} range={range} todayDay={todayDay} />}
       </div>
     </div>
   );
+}
+
+interface ActualLineProps {
+  actual: TaskActual;
+  task: Task;
+  range: ChartRange;
+  todayDay: DayNumber;
+}
+
+/**
+ * What really happened, as a thin line under the bar of the plan: from the
+ * day work began to the day it was finished, or to today with an open end
+ * while it goes on. The part past the due day is hatched, and how late it
+ * was is said in words after the line, so that nothing rests on colour.
+ */
+function ActualLine({ actual, task, range, todayDay }: ActualLineProps) {
+  const line = actualBarOf(actual, task.dueOn, range, todayDay);
+  const hasPlan = task.startOn !== null || task.dueOn !== null;
+  const words = actualInWords(actual, hasPlan);
+  const planned = spanOf(task);
+  const plannedEnd = planned ? barOf(planned, range).left + barOf(planned, range).width : 0;
+  const wordsLeft = Math.max(line ? line.left + line.width : 0, plannedEnd) + 8;
+  const said = [
+    actual.startedOn === null ? 'Not begun' : `Began ${formatDate(actual.startedOn)}`,
+    actual.finishedOn === null
+      ? actual.startedOn === null
+        ? null
+        : 'not finished'
+      : `finished ${formatDate(actual.finishedOn)}`,
+    ...words,
+  ]
+    .filter((part) => part !== null)
+    .join(', ');
+
+  return (
+    <>
+      {line && (
+        <span
+          className={classNames(styles.actual, line.isRunning && styles.running)}
+          style={{ left: line.left, width: line.width }}
+          title={said}
+          role="img"
+          aria-label={said}
+        >
+          {line.overdueFrom !== null && (
+            <span className={styles.overdue} style={{ left: line.overdueFrom }} />
+          )}
+        </span>
+      )}
+      {words.length > 0 && (
+        <span className={styles.actualWords} style={{ left: wordsLeft }} aria-hidden>
+          {words.join(' · ')}
+        </span>
+      )}
+    </>
+  );
+}
+
+/** A text that changes whenever a task of the project changes, to read the actual dates again. */
+function actualsVersionOf(tasks: readonly Task[]): string {
+  const latest = tasks.reduce((last, task) => (task.updatedAt > last ? task.updatedAt : last), '');
+  return `${tasks.length.toString()}:${latest}`;
 }
 
 /** A bar while it is held: where it is held, and how far it has come. */
