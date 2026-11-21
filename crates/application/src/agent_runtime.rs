@@ -359,6 +359,12 @@ pub struct PermissionProfile {
     /// are refused also when a command makes them, and not only when a file
     /// tool does. A turn that may run commands has it (decision 0038).
     pub reads_blocked_outside_working_folders: bool,
+    /// Whether every command the session runs runs in the agent program's
+    /// sandbox, which keeps it out of the folders it may not write, off the
+    /// network but for the domains allowed, and which fails closed: the
+    /// session does not start if the sandbox cannot. A turn that may run
+    /// commands has it (decision 0038).
+    pub commands_in_sandbox: bool,
 }
 
 impl PermissionProfile {
@@ -403,6 +409,7 @@ impl PermissionProfile {
             confined_to_working_folder: true,
             only_given_tool_servers: true,
             reads_blocked_outside_working_folders: false,
+            commands_in_sandbox: false,
         }
     }
 
@@ -426,6 +433,7 @@ impl PermissionProfile {
             confined_to_working_folder: true,
             only_given_tool_servers: true,
             reads_blocked_outside_working_folders: false,
+            commands_in_sandbox: false,
         }
     }
 
@@ -437,8 +445,9 @@ impl PermissionProfile {
     /// A rule that runs a command needs the shell, which the profile denies
     /// by name and which the confined mode removes unless it is named: the
     /// shell is named among the built-in tools and no longer denied as a
-    /// whole. The programs that change files are denied by name, and reads
-    /// outside the folders are blocked for commands too. Every command
+    /// whole. The programs that change files are denied by name, reads
+    /// outside the folders are blocked for commands too, and every command
+    /// runs in the sandbox. Every command
     /// that no rule allows would need approval, which is denied at once.
     /// A rule that fetches from a domain names the tool that fetches.
     #[must_use]
@@ -466,6 +475,7 @@ impl PermissionProfile {
                     .map(|program| format!("{SHELL}({program} *)")),
             );
             profile.reads_blocked_outside_working_folders = true;
+            profile.commands_in_sandbox = true;
         }
         profile
             .allowed_tools
@@ -1148,6 +1158,8 @@ mod tests {
         assert!(granted.disallowed_tools.contains(&"Bash(rm *)".to_owned()));
         assert!(granted.disallowed_tools.contains(&"Bash(mv *)".to_owned()));
         assert!(granted.reads_blocked_outside_working_folders);
+        assert!(granted.commands_in_sandbox);
+        assert!(!specialist.commands_in_sandbox);
         // What decision 0011 closed stays closed.
         assert_eq!(granted.mode, specialist.mode);
         assert!(granted.deny_instead_of_asking);
@@ -1175,6 +1187,7 @@ mod tests {
         );
         assert!(granted.disallowed_tools.contains(&"Bash".to_owned()));
         assert!(!granted.reads_blocked_outside_working_folders);
+        assert!(!granted.commands_in_sandbox);
         assert_eq!(
             granted.allowed_tools.last().map(String::as_str),
             Some("WebFetch(domain:docs.rs)")

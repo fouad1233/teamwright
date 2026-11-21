@@ -15,12 +15,49 @@ use teamwright_application::{
 use crate::kit::{ConnectorStarts, SESSION_SETTINGS, connector_entry, skill_rule};
 use crate::team_bus::{SERVER_NAME, TeamBus, name_in_session};
 
-/// The settings that refuse reads outside the working folders, also for
-/// commands. The key is documented for Claude Code 2.1.257 and later. A
-/// key the program does not know could make it ignore the whole settings,
-/// so nothing else is put here.
-pub const READS_BLOCKED_SETTINGS: &str =
-    r#"{"permissions":{"blockReadsOutsideWorkingDirectories":true}}"#;
+/// The settings of a turn that may run commands (decision 0038): reads
+/// outside the working folders are refused also for commands, and every
+/// command runs in the sandbox of Claude Code, which fails closed.
+///
+/// Each key was read in the documentation at <https://code.claude.com/docs>
+/// (`settings-reference`, `sandboxing`) and found in the installed program,
+/// Claude Code 2.1.289, on 21 November 2026. None of it has been seen
+/// working in a run: the program was not signed in.
+///
+/// - `permissions.blockReadsOutsideWorkingDirectories` (2.1.257): with the
+///   sandbox on, it also denies sandboxed commands the home folder and the
+///   other roots of user files (`/home`, `/Users`, `/mnt`, ...), and opens
+///   again only the working folders. Teamwright's data and the sync folder
+///   are outside them.
+/// - `sandbox.enabled`: commands run in the sandbox (bubblewrap on Linux and
+///   WSL2, Seatbelt on macOS).
+/// - `sandbox.failIfUnavailable`: if the sandbox cannot start, the program
+///   does not start, instead of running commands without it.
+/// - `sandbox.autoAllowBashIfSandboxed`: false. It defaults to true before
+///   2.1.324, which would run every sandboxed command without a rule; false
+///   keeps the allowed rules the only commands that run.
+/// - `sandbox.allowUnsandboxedCommands`: false, so a command refused by the
+///   sandbox is never tried again outside it.
+/// - `sandbox.network.strictAllowlist`: a host that is not allowed is denied
+///   at once instead of asked for. The allowed hosts are the web domains
+///   the manager allowed, which the program adds itself; with none, a
+///   command reaches no network.
+/// - `sandbox.filesystem.denyWrite`: the folders the session may only read.
+///   Without it, a command could write in every folder given with
+///   `--add-dir`.
+fn command_settings(read_only_folders: &[String]) -> serde_json::Value {
+    serde_json::json!({
+        "permissions": { "blockReadsOutsideWorkingDirectories": true },
+        "sandbox": {
+            "enabled": true,
+            "failIfUnavailable": true,
+            "autoAllowBashIfSandboxed": false,
+            "allowUnsandboxedCommands": false,
+            "network": { "strictAllowlist": true },
+            "filesystem": { "denyWrite": read_only_folders },
+        },
+    })
+}
 
 /// The first version that can open a session in the Claude desktop app.
 pub const FIRST_VERSION_WITH_DESKTOP: ProgramVersion = ProgramVersion::new(2, 1, 285);
@@ -136,9 +173,21 @@ pub fn turn_arguments_with(
     }
     // One argument of settings, JSON, which restricted mode still reads:
     // those of every confined session (decision 0039) and, for a turn that
-    // may run commands, the block on reads outside the folders (decision
-    // 0038). One argument, so that neither replaces the other.
-    if let Some(settings) = settings_of(permissions) {
+    // may run commands, the block on reads outside the folders and the
+    // sandbox (decision 0038). One argument, so that neither replaces the
+    // other.
+    let read_only_folders: Vec<String> = readable_folders
+        .iter()
+        .chain(request.kit.skills.iter().map(|skill| &skill.folder))
+        .map(|folder| {
+            folder
+                .to_string_lossy()
+                .replace('\\', "/")
+                .trim_end_matches('/')
+                .to_owned()
+        })
+        .collect();
+    if let Some(settings) = settings_of(permissions, &read_only_folders) {
         push_pair(&mut arguments, "--settings", &settings);
     }
     if permissions.only_given_tool_servers {
@@ -212,20 +261,31 @@ pub fn turn_arguments_with(
 }
 
 /// The settings a session is started with, as one JSON object, or nothing.
-fn settings_of(permissions: &PermissionProfile) -> Option<String> {
-    match (
-        permissions.confined_to_working_folder,
-        permissions.reads_blocked_outside_working_folders,
-    ) {
-        (false, false) => None,
-        (true, false) => Some(SESSION_SETTINGS.to_owned()),
-        (false, true) => Some(READS_BLOCKED_SETTINGS.to_owned()),
-        // Both objects are constants of one level whose last character
-        // closes them, so the second's keys join the first's.
-        (true, true) => Some(format!(
+/// `read_only_folders` are the folders the session may read and not
+/// write, in the form a sandbox path takes.
+fn settings_of(permissions: &PermissionProfile, read_only_folders: &[String]) -> Option<String> {
+    let mut extra = serde_json::Map::new();
+    if permissions.commands_in_sandbox {
+        if let serde_json::Value::Object(keys) = command_settings(read_only_folders) {
+            extra = keys;
+        }
+    } else if permissions.reads_blocked_outside_working_folders {
+        extra.insert(
+            "permissions".to_owned(),
+            serde_json::json!({ "blockReadsOutsideWorkingDirectories": true }),
+        );
+    }
+    let extra = (!extra.is_empty()).then(|| serde_json::Value::Object(extra).to_string());
+    match (permissions.confined_to_working_folder, extra) {
+        (false, None) => None,
+        (true, None) => Some(SESSION_SETTINGS.to_owned()),
+        (false, Some(extra)) => Some(extra),
+        // Both are objects of JSON whose last character closes them, and
+        // their keys differ, so the second's keys join the first's.
+        (true, Some(extra)) => Some(format!(
             "{},{}",
             SESSION_SETTINGS.trim_end_matches('}'),
-            READS_BLOCKED_SETTINGS.trim_start_matches('{')
+            extra.trim_start_matches('{')
         )),
     }
 }
@@ -536,7 +596,7 @@ mod tests {
                 "--restricted",
                 "--setting-sources=",
                 "--settings",
-                r#"{"disableAllHooks":true,"disableSkillShellExecution":true,"disableClaudeAiConnectors":true,"permissions":{"blockReadsOutsideWorkingDirectories":true}}"#,
+                r#"{"disableAllHooks":true,"disableSkillShellExecution":true,"disableClaudeAiConnectors":true,"permissions":{"blockReadsOutsideWorkingDirectories":true},"sandbox":{"allowUnsandboxedCommands":false,"autoAllowBashIfSandboxed":false,"enabled":true,"failIfUnavailable":true,"filesystem":{"denyWrite":[]},"network":{"strictAllowlist":true}}}"#,
                 "--strict-mcp-config",
                 "--tools",
                 "Read",
@@ -578,21 +638,78 @@ mod tests {
     fn the_settings_of_a_session_are_one_json_object_with_every_key() {
         let mut profile = PermissionProfile::specialist();
         profile.reads_blocked_outside_working_folders = true;
+        profile.commands_in_sandbox = true;
+        let folders = ["/home/sample/datasheets".to_owned()];
         let settings: serde_json::Value =
-            serde_json::from_str(&settings_of(&profile).unwrap()).unwrap();
-        assert_eq!(settings["disableAllHooks"], true);
-        assert_eq!(settings["disableClaudeAiConnectors"], true);
+            serde_json::from_str(&settings_of(&profile, &folders).unwrap()).unwrap();
+        assert_eq!(
+            settings,
+            serde_json::json!({
+                "disableAllHooks": true,
+                "disableSkillShellExecution": true,
+                "disableClaudeAiConnectors": true,
+                "permissions": { "blockReadsOutsideWorkingDirectories": true },
+                "sandbox": {
+                    "enabled": true,
+                    "failIfUnavailable": true,
+                    "autoAllowBashIfSandboxed": false,
+                    "allowUnsandboxedCommands": false,
+                    "network": { "strictAllowlist": true },
+                    "filesystem": { "denyWrite": ["/home/sample/datasheets"] }
+                }
+            })
+        );
+        profile.confined_to_working_folder = false;
+        let alone: serde_json::Value =
+            serde_json::from_str(&settings_of(&profile, &folders).unwrap()).unwrap();
+        assert_eq!(alone["sandbox"]["failIfUnavailable"], true);
+        assert_eq!(alone.get("disableAllHooks"), None);
+        profile.commands_in_sandbox = false;
+        assert_eq!(
+            settings_of(&profile, &folders).as_deref(),
+            Some(r#"{"permissions":{"blockReadsOutsideWorkingDirectories":true}}"#)
+        );
+        profile.reads_blocked_outside_working_folders = false;
+        assert_eq!(settings_of(&profile, &folders), None);
+    }
+
+    #[test]
+    fn a_turn_that_may_run_a_command_runs_it_in_a_sandbox_that_fails_closed() {
+        let mut allowed = granted(&[(PermissionKind::Command, "npm test")]);
+        allowed.kit.skills = kit().skills;
+        let arguments = text(
+            &turn_arguments(&allowed, &[PathBuf::from("/home/sample/datasheets/")], None).unwrap(),
+        );
+        let settings: Vec<&String> = arguments
+            .windows(2)
+            .filter(|pair| pair[0] == "--settings")
+            .map(|pair| &pair[1])
+            .collect();
+        let [settings] = settings.as_slice() else {
+            panic!("one --settings, never two: {arguments:?}");
+        };
+        let settings: serde_json::Value = serde_json::from_str(settings).unwrap();
+        let sandbox = &settings["sandbox"];
+        assert_eq!(sandbox["enabled"], true);
+        assert_eq!(sandbox["failIfUnavailable"], true);
+        // Its default would approve every sandboxed command.
+        assert_eq!(sandbox["autoAllowBashIfSandboxed"], false);
+        assert_eq!(sandbox["allowUnsandboxedCommands"], false);
+        assert_eq!(sandbox["network"]["strictAllowlist"], true);
+        assert_eq!(sandbox.get("excludedCommands"), None);
+        let skill_folder = allowed.kit.skills[0]
+            .folder
+            .to_string_lossy()
+            .trim_end_matches('/')
+            .to_owned();
+        assert_eq!(
+            sandbox["filesystem"]["denyWrite"],
+            serde_json::json!(["/home/sample/datasheets", skill_folder])
+        );
         assert_eq!(
             settings["permissions"]["blockReadsOutsideWorkingDirectories"],
             true
         );
-        profile.confined_to_working_folder = false;
-        assert_eq!(
-            settings_of(&profile).as_deref(),
-            Some(READS_BLOCKED_SETTINGS)
-        );
-        profile.reads_blocked_outside_working_folders = false;
-        assert_eq!(settings_of(&profile), None);
     }
 
     #[test]
@@ -775,6 +892,7 @@ mod tests {
             confined_to_working_folder: false,
             only_given_tool_servers: false,
             reads_blocked_outside_working_folders: false,
+            commands_in_sandbox: false,
         };
         let arguments = text(&turn_arguments(&open, &[], None).unwrap());
         assert_eq!(
