@@ -76,7 +76,7 @@ export function SprintPart({
             </p>
             {active.goal !== '' && <p className={styles.goal}>{active.goal}</p>}
           </div>
-          {report && <BurndownChart report={report} today={today} />}
+          {report && <BurndownChart project={project} report={report} today={today} />}
         </div>
       ) : (
         <p className={styles.quiet}>No sprint is running.</p>

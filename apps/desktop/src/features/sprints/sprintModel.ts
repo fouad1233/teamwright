@@ -3,6 +3,7 @@ import type {
   Id,
   Project,
   Sprint,
+  SprintReport,
   SprintSummary,
   SprintUnit,
   Task,
@@ -216,6 +217,34 @@ export function movedOnNote(summary: SprintSummary): string | null {
     return null;
   }
   return `It finished ${formatSummary(summary)}. The rest moved on when the sprint was completed.`;
+}
+
+/** A task that moved on when its sprint was completed, as the record of the sprint lists it. */
+export interface MovedOnLine {
+  taskId: Id;
+  number: number;
+  title: string;
+  /** Its work in the unit of the sprint, in words: "5 points". */
+  work: string;
+  /** Where it went, in words: "Sprint 4", "the backlog". */
+  to: string;
+}
+
+/**
+ * The tasks a completed sprint did not finish, and where each went when it
+ * was completed, by their number. A sprint deleted since is said to be one.
+ */
+export function movedOnLinesOf(report: SprintReport, sprints: readonly Sprint[]): MovedOnLine[] {
+  return report.movedOn.map(({ task, toSprintId }) => ({
+    taskId: task.taskId,
+    number: task.number,
+    title: task.title,
+    work: task.hasNoPoints ? 'no points' : formatWork(task.work, report.unit),
+    to:
+      toSprintId === null
+        ? 'the backlog'
+        : (sprints.find((sprint) => sprint.id === toSprintId)?.name ?? 'a sprint deleted since'),
+  }));
 }
 
 /** One line of the facts of a completed sprint: what it is and its value. */

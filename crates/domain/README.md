@@ -21,6 +21,7 @@ done with them. It does no input or output.
 | `view` | `View`, `ViewKind`, `ViewFilter`, `ViewAssignee`: one way of looking at the tasks of a project, with a name, a filter and a place among the views of the project |
 | `project_files` | `PathInFolder`: a path inside a folder of a project that cannot leave it by how it is written (no `..`, no root, no drive, no colon); `FolderEntry`, `EntryKind`, `listing_of`: what a folder holds as the files view shows it (noise left out by `is_noise`, folders first, at most `MOST_ENTRIES`); `runs_as_program`: the endings Teamwright does not open |
 | `area` | `Area`: a part of a project with a job of its own, such as its firmware, with a name and a place among the areas of the project |
+| `sprint_course` | `course_of`: what a sprint held at the end of each of its days, which tasks joined or left it and on which day, and which moved on when it was completed, read off the versions of the tasks (`TaskPast`) |
 | `tag` | `Tag`: a word of a project with a color, put on its tasks ([decision 0030](../../docs/decisions/0030-tags-and-checklists.md)) |
 | `checklist` | `Checklist` and `ChecklistItem`: the items of the checklist of a task, each a text that is done or not, in the order of their ranks |
 | `task_history` | `TaskChange`, `history_of`: what changed from one version of a task to the next |

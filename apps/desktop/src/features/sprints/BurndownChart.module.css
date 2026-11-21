@@ -36,6 +36,20 @@
   stroke-linejoin: miter;
 }
 
+/* All the work the sprint held: dotted and quiet, drawn only when it
+   changed while the sprint ran. */
+.scope {
+  fill: none;
+  stroke: var(--ink-soft);
+  stroke-dasharray: 1 2;
+  stroke-width: 1;
+}
+
+/* A day on which tasks joined or left: its shape says which way. */
+.mark {
+  fill: var(--ink-soft);
+}
+
 /* Today is the one point of attention of the chart, so it gets the brass. */
 .today {
   stroke: var(--brass);
@@ -57,4 +71,31 @@
   color: var(--ink-soft);
   font-family: var(--font-mono);
   font-size: 11px;
+}
+
+.changes {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: var(--ink-soft);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.change {
+  display: flex;
+  gap: var(--space-1);
+  white-space: nowrap;
+}
+
+.changeMark {
+  flex: none;
+  font-size: 8px;
+  line-height: 15px;
+}
+
+.changeDay {
+  flex: none;
+  color: var(--ink-faint);
 }

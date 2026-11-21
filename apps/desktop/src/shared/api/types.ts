@@ -355,20 +355,58 @@ export interface SprintDay {
    * has not come yet, or that came after the sprint was completed.
    */
   remaining: number | null;
+  /** All the work the sprint held at the end of the day, finished or not. Nothing for a day that has not come. */
+  scope: number | null;
+}
+
+/** A task as it stood in a sprint, in the report of the sprint. */
+export interface ScopeTask {
+  taskId: Id;
+  number: number;
+  /** Its title at the time. */
+  title: string;
+  /** Its work in the unit of the sprint. */
+  work: number;
+  /** Whether it has no points while the sprint counts points: it weighs nothing. */
+  hasNoPoints: boolean;
+}
+
+/** What changed in what a sprint held, on one of its days. */
+export interface ScopeChange {
+  date: CalendarDate;
+  /** The tasks that came into the sprint that day, by their number. */
+  joined: ScopeTask[];
+  /** The tasks that went out of it: planned elsewhere, back to the backlog, made a subtask, or deleted. */
+  left: ScopeTask[];
+  /** How much the work of the tasks that stayed changed, because their points changed. */
+  reestimated: number;
+}
+
+/** A task that was not finished when its sprint was completed, and where it went. */
+export interface MovedOn {
+  task: ScopeTask;
+  /** The sprint it went to, or nothing for the backlog. */
+  toSprintId: Id | null;
 }
 
 /**
- * The course of a sprint, for its burndown chart. It counts the tasks that
- * are in the sprint now, from the moments at which they were finished.
- * Tasks that joined or left the sprint while it ran are not followed.
+ * The course of a sprint, for its burndown chart. It is read off every
+ * version the tasks of the project have had, so it follows the tasks that
+ * joined or left the sprint while it ran.
  */
 export interface SprintReport {
   sprintId: Id;
   unit: SprintUnit;
-  /** The work of all the tasks of the sprint. */
+  /** The work the sprint holds now, or held just before it was completed. */
   total: number;
+  /** The work the sprint held when it was started; for a planned sprint, what it holds now. */
+  committed: number;
   /** Every day from the start date to the end date, in order. Empty without both dates. */
   days: SprintDay[];
+  /** The days on which tasks joined or left the sprint, or changed their points, in order. */
+  changes: ScopeChange[];
+  /** The tasks that moved on when the sprint was completed, by their number. */
+  movedOn: MovedOn[];
 }
 
 /**

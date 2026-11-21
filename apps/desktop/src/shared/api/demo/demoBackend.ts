@@ -227,6 +227,12 @@ export interface DemoWorkspace {
    * out, every memory is empty.
    */
   memory?: Record<Id, MemoryEntry[]>;
+  /**
+   * The past of some tasks: every version each has had, the oldest first,
+   * the last one being the task as it is. A task that has none here gets a
+   * believable past made up for it.
+   */
+  versions?: Record<Id, Task[]>;
 }
 
 const browserEnvironment: DemoEnvironment = {
@@ -282,6 +288,8 @@ export class DemoBackend implements Backend {
    * has its log of operations for this; the demo keeps the versions.
    */
   private readonly versions = new Map<Id, Task[]>();
+  /** When each deleted task was deleted, as the log of the real application knows it. */
+  private readonly deletedAt = new Map<Id, string>();
   private readonly nextTaskNumbers = new Map<Id, number>();
   private readonly sprints = new Map<Id, Sprint>();
   /**
@@ -355,11 +363,14 @@ export class DemoBackend implements Backend {
       const firstStatusId = this.projects
         .get(task.projectId)
         ?.statuses.find((status) => status.category === 'todo')?.id;
+      const told = workspace?.versions?.[task.id];
       this.versions.set(
         task.id,
-        firstStatusId === undefined
-          ? [structuredClone(task)]
-          : pretendedPastOf(task, firstStatusId, environment.now()),
+        told
+          ? structuredClone(told)
+          : firstStatusId === undefined
+            ? [structuredClone(task)]
+            : pretendedPastOf(task, firstStatusId, environment.now()),
       );
       const next = Math.max(this.nextTaskNumbers.get(task.projectId) ?? 1, task.number + 1);
       this.nextTaskNumbers.set(task.projectId, next);
@@ -1059,6 +1070,7 @@ export class DemoBackend implements Backend {
       for (const other of this.tasksOfProject(task.projectId)) {
         if (removed.has(other.id)) {
           this.tasks.delete(other.id);
+          this.deletedAt.set(other.id, now);
         } else if (other.blockedBy.some((id) => removed.has(id))) {
           other.blockedBy = other.blockedBy.filter((id) => !removed.has(id));
           other.updatedAt = now;
@@ -2699,10 +2711,24 @@ export class DemoBackend implements Backend {
   sprintReport(sprintId: Id): Promise<SprintReport> {
     return this.answer(() => {
       const sprint = this.requireSprint(sprintId);
-      const mainTasks = this.tasksOfSprint(sprint.id).filter((task) => task.parentId === null);
+      const project = this.requireProject(sprint.projectId);
+      // The versions are noted after each answer, so the latest change to
+      // a task may not be among them yet: the task as it is now is added.
+      const pasts = [...this.versions.entries()]
+        .filter(([, versions]) => versions.at(-1)?.projectId === project.id)
+        .map(([taskId, versions]) => {
+          const current = this.tasks.get(taskId);
+          const last = versions.at(-1);
+          const known =
+            current && JSON.stringify(current) !== JSON.stringify(last)
+              ? [...versions, current]
+              : versions;
+          return { versions: known, deletedAt: this.deletedAt.get(taskId) ?? null };
+        });
       return reportOf(
         sprint,
-        mainTasks.map((task) => this.countedTask(task)),
+        (statusId) => project.statuses.find((status) => status.id === statusId)?.category,
+        pasts,
         dayOfMoment(this.nowAsText()),
       );
     });

@@ -1,10 +1,11 @@
 import type { Id, Project, Sprint, Task } from '@/shared/api/types';
+import { taskReference } from '@/shared/lib/format';
 
 import { RecordRow } from './BacklogRow';
 import { BurndownChart } from './BurndownChart';
 import styles from './SprintRecord.module.css';
-import { movedOnNote, recordFactsOf, reportVersionOf, rowsOf } from './sprintModel';
-import { useSprintReport } from './sprintQueries';
+import { movedOnLinesOf, movedOnNote, recordFactsOf, reportVersionOf, rowsOf } from './sprintModel';
+import { useSprintReport, useSprints } from './sprintQueries';
 
 interface SprintRecordProps {
   id: string;
@@ -16,15 +17,17 @@ interface SprintRecordProps {
 
 /**
  * What stays of a completed sprint, read from top to bottom: its goal and
- * facts, its burndown as it ended, and the tasks that are in it. Those are
- * the tasks it finished: the others moved on when it was completed, and
- * which ones they were is not recorded, so the note under the list only
- * says that some did.
+ * facts, its burndown as it ended, the tasks that are in it, which are the
+ * ones it finished, and the tasks that moved on when it was completed, with
+ * where each went. Those are read from the log by the backend; while its
+ * report has not come, a note only says that some moved on.
  */
 export function SprintRecord({ id, project, sprint, tasks, onOpenTask }: SprintRecordProps) {
   const report = useSprintReport(sprint.id, reportVersionOf(tasks, sprint.id));
+  const sprints = useSprints(project.id);
   const rows = rowsOf(project, tasks, sprint.id);
-  const note = sprint.summary ? movedOnNote(sprint.summary) : null;
+  const movedOn = report.data ? movedOnLinesOf(report.data, sprints.data ?? []) : [];
+  const note = sprint.summary && movedOn.length === 0 ? movedOnNote(sprint.summary) : null;
 
   return (
     <div id={id} className={styles.record} role="region" aria-label={`${sprint.name}, completed`}>
@@ -40,7 +43,7 @@ export function SprintRecord({ id, project, sprint, tasks, onOpenTask }: SprintR
             ))}
           </dl>
         </div>
-        {report.data && <BurndownChart report={report.data} today={null} />}
+        {report.data && <BurndownChart project={project} report={report.data} today={null} />}
       </div>
 
       <ul className={styles.rows}>
@@ -49,6 +52,30 @@ export function SprintRecord({ id, project, sprint, tasks, onOpenTask }: SprintR
         ))}
         {rows.length === 0 && <li className={styles.empty}>No task is left in this sprint.</li>}
       </ul>
+      {movedOn.length > 0 && (
+        <div className={styles.movedOn}>
+          <h3 className="label">Moved on when it was completed</h3>
+          <ul className={styles.movedRows}>
+            {movedOn.map((line) => (
+              <li key={line.taskId} className={styles.movedRow}>
+                <button
+                  type="button"
+                  className={styles.movedTask}
+                  onClick={() => {
+                    onOpenTask(line.taskId);
+                  }}
+                >
+                  <span className={styles.reference}>{taskReference(project, line)}</span>
+                  <span className={styles.title}>{line.title}</span>
+                </button>
+                <span className={styles.movedFacts}>
+                  {line.work} · to {line.to}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       {note && <p className={styles.note}>{note}</p>}
     </div>
   );

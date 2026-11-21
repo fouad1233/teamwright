@@ -22,9 +22,9 @@ use teamwright_domain::{
     Area, Assignee, CalendarDate, Color, ComputerId, ContextUse, Conversation, DecisionOption,
     DecisionRequest, DomainError, Effort, EventKind, EventKinds, Fill, Interview, InterviewAnswer,
     Member, MemberKind, Priority, Project, ProjectTemplate, Proposal, ProposedOwner, Schedule,
-    Sprint, SprintSummary, Status, StatusCategory, StatusLoad, Step, StepContent, StoryPoints, Tag,
-    Task, TaskChange, TaskChangeKind, Timestamp, TokenCounts, Turn, View, ViewAssignee, ViewFilter,
-    ViewKind, WorkInProgressLimit, context_of,
+    ScopeTask, Sprint, SprintSummary, Status, StatusCategory, StatusLoad, Step, StepContent,
+    StoryPoints, Tag, Task, TaskChange, TaskChangeKind, Timestamp, TokenCounts, Turn, View,
+    ViewAssignee, ViewFilter, ViewKind, WorkInProgressLimit, context_of,
 };
 
 use crate::error::CommandError;
@@ -342,7 +342,10 @@ pub struct SprintReportDto {
     sprint_id: String,
     unit: &'static str,
     total: u32,
+    committed: u32,
     days: Vec<SprintDayDto>,
+    changes: Vec<ScopeChangeDto>,
+    moved_on: Vec<MovedOnDto>,
 }
 
 /// One day of a sprint in its report.
@@ -351,20 +354,84 @@ pub struct SprintReportDto {
 pub struct SprintDayDto {
     date: String,
     remaining: Option<u32>,
+    scope: Option<u32>,
+}
+
+/// A task as it stood in a sprint, in its report.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ScopeTaskDto {
+    task_id: String,
+    number: u32,
+    title: String,
+    work: u32,
+    has_no_points: bool,
+}
+
+impl From<&ScopeTask> for ScopeTaskDto {
+    fn from(task: &ScopeTask) -> Self {
+        Self {
+            task_id: task.task_id.to_string(),
+            number: task.number,
+            title: task.title.to_string(),
+            work: task.work,
+            has_no_points: task.has_no_points,
+        }
+    }
+}
+
+/// What changed in what a sprint held on one of its days.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ScopeChangeDto {
+    date: String,
+    joined: Vec<ScopeTaskDto>,
+    left: Vec<ScopeTaskDto>,
+    reestimated: i64,
+}
+
+/// A task that moved on when its sprint was completed, and where to: a
+/// sprint, or the backlog with no sprint.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MovedOnDto {
+    task: ScopeTaskDto,
+    to_sprint_id: Option<String>,
 }
 
 impl From<&SprintReport> for SprintReportDto {
     fn from(report: &SprintReport) -> Self {
+        let tasks = |tasks: &[ScopeTask]| tasks.iter().map(ScopeTaskDto::from).collect();
         Self {
             sprint_id: report.sprint_id.to_string(),
             unit: report.unit.as_str(),
             total: report.total,
+            committed: report.committed,
             days: report
                 .days
                 .iter()
                 .map(|day| SprintDayDto {
                     date: date_to_text(day.date),
                     remaining: day.remaining,
+                    scope: day.scope,
+                })
+                .collect(),
+            changes: report
+                .changes
+                .iter()
+                .map(|change| ScopeChangeDto {
+                    date: date_to_text(change.date),
+                    joined: tasks(&change.joined),
+                    left: tasks(&change.left),
+                    reestimated: change.reestimated,
+                })
+                .collect(),
+            moved_on: report
+                .moved_on
+                .iter()
+                .map(|moved| MovedOnDto {
+                    task: ScopeTaskDto::from(&moved.task),
+                    to_sprint_id: moved.to.map(|sprint| sprint.to_string()),
                 })
                 .collect(),
         }

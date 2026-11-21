@@ -184,6 +184,7 @@ export function BacklogView({ project, tasks }: BacklogViewProps) {
               rows={activeRows}
               chart={
                 <ActiveBurndown
+                  project={project}
                   sprintId={active.id}
                   version={reportVersionOf(tasks, active.id)}
                   today={today}
@@ -313,6 +314,7 @@ export function BacklogView({ project, tasks }: BacklogViewProps) {
 }
 
 interface ActiveBurndownProps {
+  project: Project;
   sprintId: Id;
   /** Changes whenever the tasks of the sprint change, so the report is asked for again. */
   version: string;
@@ -320,7 +322,9 @@ interface ActiveBurndownProps {
 }
 
 /** The burndown of the active sprint, once its report has come. */
-function ActiveBurndown({ sprintId, version, today }: ActiveBurndownProps) {
+function ActiveBurndown({ project, sprintId, version, today }: ActiveBurndownProps) {
   const report = useSprintReport(sprintId, version);
-  return report.data ? <BurndownChart report={report.data} today={today} /> : null;
+  return report.data ? (
+    <BurndownChart project={project} report={report.data} today={today} />
+  ) : null;
 }

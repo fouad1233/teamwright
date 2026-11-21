@@ -67,7 +67,9 @@ involved.
   a manager sees needs no table of its own. The tasks a project has had,
   deleted ones included, are the tasks whose logged states name it
   (`TaskRepository::ids_ever_in_project`), which the history of a project
-  reads.
+  reads. When a task was deleted is the clock part of the stamp of its
+  deletion (`TaskRepository::deleted_at`). The report of a sprint reads all
+  three to follow the tasks that joined or left it day by day.
 - **Each database file has the identity of its computer** (a `ComputerId` of
   the domain), created when the file is first opened and stored in `meta`
   under `device_id`. `Database::device_id` returns it.

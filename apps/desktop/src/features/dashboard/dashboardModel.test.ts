@@ -173,10 +173,14 @@ function report(remaining: (number | null)[], total = 16): SprintReport {
     sprintId: 'two',
     unit: 'points',
     total,
+    committed: total,
     days: remaining.map((left, index) => ({
       date: `2026-11-${(7 + index).toString().padStart(2, '0')}`,
       remaining: left,
+      scope: left === null ? null : total,
     })),
+    changes: [],
+    movedOn: [],
   };
 }
 

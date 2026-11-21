@@ -98,16 +98,41 @@ interface SampleSprint {
 }
 
 /**
- * The sprints of the sample project: one that is over, one that runs with
- * some of its work done, and one that is planned to come next.
+ * The sprints of the sample project: three that are over, so that the pace
+ * of the team can be told; one that runs with some of its work done and
+ * whose tasks changed while it ran; and one that is planned to come next.
  */
 const SPRINTS = {
+  brief: {
+    id: 'demo-sprint-brief',
+    name: 'Sprint 1',
+    goal: 'Know what the device is for',
+    state: 'completed',
+    createdInDays: -25,
+    startsInDays: -24,
+    endsInDays: -18,
+    completedInDays: -18,
+    // The block diagram was not finished and went on into the next sprint.
+    summary: { unit: 'points', committed: 13, completed: 11 },
+  },
+  survey: {
+    id: 'demo-sprint-survey',
+    name: 'Sprint 2',
+    goal: 'Compare the parts that could do it',
+    state: 'completed',
+    createdInDays: -18,
+    startsInDays: -17,
+    endsInDays: -11,
+    completedInDays: -11,
+    // The guide for setting up the device went back to the backlog.
+    summary: { unit: 'points', committed: 12, completed: 9 },
+  },
   first: {
     id: 'demo-sprint-1',
-    name: 'Sprint 1',
+    name: 'Sprint 3',
     goal: 'Agree on the device and choose its heart',
     state: 'completed',
-    createdInDays: -10,
+    createdInDays: -11,
     startsInDays: -10,
     endsInDays: -5,
     completedInDays: -5,
@@ -116,7 +141,7 @@ const SPRINTS = {
   },
   current: {
     id: 'demo-sprint-2',
-    name: 'Sprint 2',
+    name: 'Sprint 4',
     goal: 'A schematic that can be routed',
     state: 'active',
     createdInDays: -6,
@@ -125,7 +150,7 @@ const SPRINTS = {
   },
   next: {
     id: 'demo-sprint-3',
-    name: 'Sprint 3',
+    name: 'Sprint 5',
     goal: 'Firmware that talks to the sensors',
     state: 'planned',
     createdInDays: -1,
@@ -205,6 +230,25 @@ interface SampleTask {
   /** Days from today. Negative numbers lie in the past. */
   startsInDays?: number;
   dueInDays?: number;
+  /**
+   * What really happened, in days from today, for the past of the task:
+   * when work on it began, and when it was finished. Left out, work began
+   * on its start day (or the day before it was due), and a finished task
+   * was finished on its due day.
+   */
+  startedInDays?: number;
+  finishedInDays?: number;
+  /** A finished task that was opened again: when it was first finished, and when it was opened. */
+  reopened?: { finishedInDays: number; reopenedInDays: number };
+  /**
+   * Where the task was planned, in order, each from a day; `null` is the
+   * backlog. The task was in the backlog when it was opened, and the last
+   * place is where it is now. Left out, it was planned into its sprint on
+   * the day the sprint was planned.
+   */
+  sprintPath?: { sprint: SprintName | null; inDays: number }[];
+  /** The points it had before, and the day they changed to what they are. */
+  pointsBefore?: { points: number | null; changedInDays: number };
 }
 
 /**
@@ -226,6 +270,7 @@ const SAMPLE_TASKS: SampleTask[] = [
     estimateHours: 2,
     startsInDays: -9,
     dueInDays: -8,
+    startedInDays: -9,
   },
   {
     number: 2,
@@ -240,6 +285,9 @@ const SAMPLE_TASKS: SampleTask[] = [
     estimateHours: 3,
     startsInDays: -8,
     dueInDays: -6,
+    // Begun a day late, and finished a day after it was due.
+    startedInDays: -7,
+    finishedInDays: -5,
   },
   {
     number: 3,
@@ -253,6 +301,12 @@ const SAMPLE_TASKS: SampleTask[] = [
     estimateHours: 4,
     startsInDays: -6,
     dueInDays: -2,
+    // Not finished in Sprint 3: it went on into Sprint 4 as Sprint 3 was
+    // completed, and it is still in test after its due day.
+    sprintPath: [
+      { sprint: 'first', inDays: -11 },
+      { sprint: 'current', inDays: -5 },
+    ],
   },
   {
     number: 4,
@@ -269,6 +323,10 @@ const SAMPLE_TASKS: SampleTask[] = [
     estimateHours: 8,
     startsInDays: -2,
     dueInDays: 2,
+    // Found to be bigger than it looked once the sprint had begun, and
+    // begun a day after its start day.
+    pointsBefore: { points: 5, changedInDays: -3 },
+    startedInDays: -1,
   },
   {
     number: 5,
@@ -334,6 +392,11 @@ const SAMPLE_TASKS: SampleTask[] = [
     priority: 'low',
     estimateHours: 5,
     dueInDays: 9,
+    // Planned into Sprint 4, then taken back out while it ran.
+    sprintPath: [
+      { sprint: 'current', inDays: -5 },
+      { sprint: null, inDays: -2 },
+    ],
   },
   {
     number: 10,
@@ -359,6 +422,8 @@ const SAMPLE_TASKS: SampleTask[] = [
     waitsFor: [4],
     estimateHours: 1,
     dueInDays: 3,
+    // Urgent: planned into the running sprint the day before yesterday.
+    sprintPath: [{ sprint: 'current', inDays: -1 }],
   },
   {
     number: 12,
@@ -431,6 +496,8 @@ const SAMPLE_TASKS: SampleTask[] = [
     estimateHours: 2,
     startsInDays: -2,
     dueInDays: -1,
+    // Joined the running sprint and was finished the next day.
+    sprintPath: [{ sprint: 'current', inDays: -2 }],
   },
   {
     number: 19,
@@ -443,6 +510,8 @@ const SAMPLE_TASKS: SampleTask[] = [
     estimateHours: 2,
     startsInDays: -4,
     dueInDays: -3,
+    // Finished a day after it was due.
+    finishedInDays: -2,
   },
   {
     number: 20,
@@ -453,6 +522,11 @@ const SAMPLE_TASKS: SampleTask[] = [
     priority: 'low',
     owner: 'manager',
     estimateHours: 3,
+    // In Sprint 2, not finished, and back to the backlog when it was completed.
+    sprintPath: [
+      { sprint: 'survey', inDays: -18 },
+      { sprint: null, inDays: -11 },
+    ],
   },
   {
     number: 21,
@@ -461,17 +535,105 @@ const SAMPLE_TASKS: SampleTask[] = [
     status: 'todo',
     estimateHours: 2,
   },
+  // The work of the first two sprints, all finished.
+  {
+    number: 22,
+    title: 'Collect what people want to measure',
+    area: 'electronics',
+    status: 'done',
+    sprint: 'brief',
+    points: 5,
+    owner: 'manager',
+    estimateHours: 3,
+    startsInDays: -24,
+    dueInDays: -22,
+  },
+  {
+    number: 23,
+    title: 'Survey the sensors on the market',
+    area: 'electronics',
+    status: 'done',
+    sprint: 'brief',
+    points: 3,
+    owner: 'hardware',
+    estimateHours: 4,
+    startsInDays: -22,
+    dueInDays: -20,
+  },
+  {
+    number: 24,
+    title: 'Sketch the enclosure by hand',
+    area: 'enclosure',
+    status: 'done',
+    sprint: 'brief',
+    points: 3,
+    owner: 'mechanical',
+    estimateHours: 3,
+    startsInDays: -21,
+    dueInDays: -19,
+  },
+  {
+    number: 25,
+    title: 'Draw the block diagram',
+    area: 'electronics',
+    status: 'done',
+    sprint: 'survey',
+    points: 2,
+    owner: 'hardware',
+    estimateHours: 2,
+    startsInDays: -20,
+    dueInDays: -18,
+    // Not finished in Sprint 1, so it went on into Sprint 2, where it was
+    // finished three days after it was due.
+    sprintPath: [
+      { sprint: 'brief', inDays: -25 },
+      { sprint: 'survey', inDays: -18 },
+    ],
+    finishedInDays: -15,
+  },
+  {
+    number: 26,
+    title: 'Compare three microcontroller boards',
+    area: 'electronics',
+    status: 'done',
+    sprint: 'survey',
+    points: 4,
+    owner: 'hardware',
+    estimateHours: 5,
+    startsInDays: -17,
+    dueInDays: -14,
+  },
+  {
+    number: 27,
+    title: 'Write the test plan',
+    area: 'firmware',
+    status: 'done',
+    sprint: 'survey',
+    points: 3,
+    owner: 'firmware',
+    estimateHours: 3,
+    startsInDays: -16,
+    dueInDays: -12,
+    // Finished, opened again when a case was found missing, and finished
+    // a second time.
+    reopened: { finishedInDays: -13, reopenedInDays: -12.5 },
+    finishedInDays: -11.5,
+  },
 ];
 
 const SAMPLE_PROJECT_ID: Id = 'demo-project-sensor';
+/** The project was opened before its first sprint was planned. */
+const PROJECT_OPENED_IN_DAYS = -26;
 const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
+const DAY = MILLISECONDS_PER_DAY;
+const HOUR = 60 * 60 * 1000;
 
 /**
  * Builds the workspace the demo starts with. Dates are counted from `today`,
  * so the sample project always looks like it is under way.
  */
 export function sampleWorkspace(today: Date = new Date()): DemoWorkspace {
-  const createdAt = shiftedByDays(today, -10).toISOString();
+  const createdAt = shiftedByDays(today, PROJECT_OPENED_IN_DAYS).toISOString();
   const project: Project = {
     id: SAMPLE_PROJECT_ID,
     key: 'SSN',
@@ -528,9 +690,18 @@ export function sampleWorkspace(today: Date = new Date()): DemoWorkspace {
       ),
       createdAt,
       updatedAt: createdAt,
-      completedAt: isDone ? shiftedByDays(today, sample.dueInDays ?? 0).toISOString() : null,
+      completedAt: isDone
+        ? shiftedByDays(today, sample.finishedInDays ?? sample.dueInDays ?? 0).toISOString()
+        : null,
     };
   });
+  const versions = Object.fromEntries(
+    tasks.map((task, index) => [task.id, pastOf(SAMPLE_TASKS[index], task, today)]),
+  );
+  for (const task of tasks) {
+    const last = versions[task.id]?.at(-1);
+    task.updatedAt = last?.updatedAt ?? task.updatedAt;
+  }
 
   const sprints = Object.values(SPRINTS).map((sample: SampleSprint): Sprint => {
     const momentInDays = (days: number | undefined) =>
@@ -569,6 +740,7 @@ export function sampleWorkspace(today: Date = new Date()): DemoWorkspace {
     tags,
     teamTalk: sampleTeamTalk(today),
     memory: { [project.id]: sampleMemory(today) },
+    versions,
   };
 }
 
@@ -771,6 +943,130 @@ function sampleTeamTalk(today: Date): TeamTalk {
       },
     ],
   };
+}
+
+/** One thing that happened to a sample task: when, and what it changed. */
+interface SampleEvent {
+  at: number;
+  change: (task: Task) => void;
+}
+
+/**
+ * The past of a sample task, the oldest version first and the task as it is
+ * last: it was opened in the backlog in the first status, given to its
+ * owner, planned into its sprints, given its points, begun, maybe finished
+ * and opened again, and brought to where it is now. Nothing happens after
+ * `today`.
+ */
+function pastOf(sample: SampleTask | undefined, task: Task, today: Date): Task[] {
+  if (!sample) {
+    return [task];
+  }
+  const opened = Date.parse(task.createdAt);
+  const at = (days: number) => shiftedByDays(today, days).getTime();
+  const pointsBefore = sample.pointsBefore;
+  const first: Task = {
+    ...structuredClone(task),
+    statusId: STATUSES.todo.id,
+    assignee: null,
+    sprintId: null,
+    points: pointsBefore ? pointsBefore.points : task.points,
+    completedAt: null,
+    updatedAt: task.createdAt,
+  };
+
+  const events: SampleEvent[] = [];
+  if (task.assignee !== null) {
+    const assignee = task.assignee;
+    events.push({ at: opened + 2 * HOUR, change: (version) => (version.assignee = assignee) });
+  }
+  for (const step of sprintPathOf(sample)) {
+    const sprintId = step.sprint === null ? null : SPRINTS[step.sprint].id;
+    events.push({ at: at(step.inDays), change: (version) => (version.sprintId = sprintId) });
+  }
+  if (pointsBefore) {
+    events.push({
+      at: at(pointsBefore.changedInDays),
+      change: (version) => (version.points = task.points),
+    });
+  }
+  const finalStatus = STATUSES[sample.status];
+  if (finalStatus.category !== 'todo') {
+    const startedAt = at(
+      sample.startedInDays ??
+        sample.startsInDays ??
+        (sample.finishedInDays ?? sample.dueInDays ?? 0) - 1,
+    );
+    events.push({ at: startedAt, change: (version) => (version.statusId = STATUSES.progress.id) });
+    if (sample.reopened) {
+      const finishedAt = at(sample.reopened.finishedInDays);
+      events.push({
+        at: finishedAt,
+        change: (version) => {
+          version.statusId = STATUSES.done.id;
+          version.completedAt = new Date(finishedAt).toISOString();
+        },
+      });
+      events.push({
+        at: at(sample.reopened.reopenedInDays),
+        change: (version) => {
+          version.statusId = STATUSES.progress.id;
+          version.completedAt = null;
+        },
+      });
+    }
+    if (finalStatus.id !== STATUSES.progress.id) {
+      // A task that is finished now was finished when it says; one waiting
+      // in another status went there a day after it was begun.
+      const reachedAt =
+        task.completedAt === null
+          ? Math.min(startedAt + DAY, today.getTime() - HOUR)
+          : Date.parse(task.completedAt);
+      events.push({
+        at: reachedAt,
+        change: (version) => {
+          version.statusId = finalStatus.id;
+          version.completedAt = task.completedAt;
+        },
+      });
+    }
+  }
+
+  const versions: Task[] = [first];
+  let last = first;
+  for (const event of events
+    .filter((candidate) => candidate.at <= today.getTime())
+    .sort((one, other) => one.at - other.at)) {
+    const next = structuredClone(last);
+    event.change(next);
+    next.updatedAt = new Date(Math.max(event.at, opened)).toISOString();
+    versions.push(next);
+    last = next;
+  }
+  // The last version is the task as it is now, whenever it last changed.
+  const now: Task = { ...structuredClone(task), updatedAt: last.updatedAt };
+  if (JSON.stringify(now) !== JSON.stringify(last)) {
+    versions.push(now);
+  }
+  return versions;
+}
+
+/** Where a sample task was planned, in order: its own path, or that of the task it is a part of. */
+function sprintPathOf(
+  sample: SampleTask,
+): readonly { sprint: SprintName | null; inDays: number }[] {
+  const root = rootOf(sample);
+  if (root.sprintPath) {
+    return root.sprintPath;
+  }
+  return root.sprint === undefined
+    ? []
+    : [{ sprint: root.sprint, inDays: SPRINTS[root.sprint].createdInDays }];
+}
+
+/** The task a sample task is a part of, or the task itself. */
+function rootOf(sample: SampleTask): SampleTask {
+  return SAMPLE_TASKS.find((other) => other.number === sample.partOf) ?? sample;
 }
 
 /** The area of a sample task: its own, or that of the task it is a part of. */

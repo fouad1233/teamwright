@@ -11,7 +11,7 @@ const DAY = 24 * 60 * 60 * 1000;
 describe('the sprints of the sample workspace', () => {
   const workspace = sampleWorkspace(new Date('2026-11-11T09:00:00.000Z'));
 
-  it('has a completed sprint, an active one with some work done, and a planned one', async () => {
+  it('has completed sprints, an active one with some work done, and a planned one', async () => {
     const backend = new DemoBackend(workspace, testEnvironment());
     const [project] = workspace.projects;
 
@@ -19,10 +19,46 @@ describe('the sprints of the sample workspace', () => {
     const [active] = sprints;
     const report = await backend.sprintReport(active?.id ?? '');
 
-    expect(sprints.map((sprint) => sprint.state)).toEqual(['active', 'planned', 'completed']);
+    expect(sprints.map((sprint) => sprint.state)).toEqual([
+      'active',
+      'planned',
+      'completed',
+      'completed',
+      'completed',
+    ]);
     expect(report.days.some((day) => day.remaining !== null && day.remaining < report.total)).toBe(
       true,
     );
+  });
+
+  it('has a running sprint whose tasks changed while it ran', async () => {
+    const backend = new DemoBackend(workspace, testEnvironment());
+    const [project] = workspace.projects;
+    const [active] = await backend.listSprints(project?.id ?? '');
+
+    const report = await backend.sprintReport(active?.id ?? '');
+
+    const joined = report.changes.flatMap((change) => change.joined.map((task) => task.number));
+    const left = report.changes.flatMap((change) => change.left.map((task) => task.number));
+    expect(joined).toEqual([18, 11]);
+    expect(left).toEqual([9]);
+    expect(report.changes.some((change) => change.reestimated > 0)).toBe(true);
+  });
+
+  it('keeps for each completed sprint a summary that agrees with its report', async () => {
+    const backend = new DemoBackend(workspace, testEnvironment());
+    const [project] = workspace.projects;
+    const completed = (await backend.listSprints(project?.id ?? '')).filter(
+      (sprint) => sprint.state === 'completed',
+    );
+
+    for (const sprint of completed) {
+      const report = await backend.sprintReport(sprint.id);
+      const lastDay = [...report.days].reverse().find((day) => day.remaining !== null);
+      expect(report.total).toBe(sprint.summary?.committed);
+      expect(report.total - (lastDay?.remaining ?? 0)).toBe(sprint.summary?.completed);
+      expect(report.movedOn).toHaveLength(1);
+    }
   });
 
   it('puts every subtask into the sprint of its task, and leaves a backlog', () => {
@@ -659,13 +695,16 @@ describe('sprints and the backlog in the DemoBackend', () => {
         sprintId: sprint.id,
         unit: 'points',
         total: 10,
+        committed: 10,
         days: [
-          { date: '2026-11-10', remaining: 10 },
-          { date: '2026-11-11', remaining: 7 },
-          { date: '2026-11-12', remaining: 2 },
-          { date: '2026-11-13', remaining: null },
-          { date: '2026-11-14', remaining: null },
+          { date: '2026-11-10', remaining: 10, scope: 10 },
+          { date: '2026-11-11', remaining: 7, scope: 10 },
+          { date: '2026-11-12', remaining: 2, scope: 10 },
+          { date: '2026-11-13', remaining: null, scope: null },
+          { date: '2026-11-14', remaining: null, scope: null },
         ],
+        changes: [],
+        movedOn: [],
       });
     });
 
@@ -695,7 +734,15 @@ describe('sprints and the backlog in the DemoBackend', () => {
 
       const report = await backend.sprintReport(sprint.id);
 
-      expect(report).toEqual({ sprintId: sprint.id, unit: 'tasks', total: 1, days: [] });
+      expect(report).toEqual({
+        sprintId: sprint.id,
+        unit: 'tasks',
+        total: 1,
+        committed: 1,
+        days: [],
+        changes: [],
+        movedOn: [],
+      });
     });
 
     it('stops on the day the sprint was completed', async () => {
@@ -706,10 +753,73 @@ describe('sprints and the backlog in the DemoBackend', () => {
 
       const report = await backend.sprintReport(sprint.id);
 
-      expect(report.days.slice(0, 3)).toEqual([
-        { date: '2026-11-10', remaining: 1 },
-        { date: '2026-11-11', remaining: 0 },
-        { date: '2026-11-12', remaining: null },
+      expect(report.days.slice(0, 3).map((day) => day.remaining)).toEqual([1, 0, null]);
+    });
+  });
+
+  describe('the report follows the scope of a sprint', () => {
+    const remaining = (report: { days: { remaining: number | null }[] }) =>
+      report.days.map((day) => day.remaining);
+
+    it('raises the line on the day a task is planned in while the sprint runs', async () => {
+      const { sprint } = await activeSprint();
+      environment.pass(DAY);
+      const late = await task('Order the parts');
+      await backend.planTask(late.id, sprint.id);
+
+      const report = await backend.sprintReport(sprint.id);
+
+      expect(report.committed).toBe(1);
+      expect(report.total).toBe(2);
+      expect(remaining(report).slice(0, 4)).toEqual([1, 1, 2, null]);
+      expect(report.changes).toHaveLength(1);
+      expect(report.changes[0]?.date).toBe('2026-11-12');
+      expect(report.changes[0]?.joined[0]?.taskId).toBe(late.id);
+    });
+
+    it('lowers the line on the day a task is taken back to the backlog', async () => {
+      const { sprint, task: planned } = await activeSprint();
+      const other = await task('Route the board');
+      await backend.planTask(other.id, sprint.id);
+      environment.pass(DAY);
+      await backend.planTask(planned.id, null);
+
+      const report = await backend.sprintReport(sprint.id);
+
+      expect(remaining(report).slice(0, 3)).toEqual([2, 2, 1]);
+      expect(report.changes[0]?.date).toBe('2026-11-12');
+      expect(report.changes[0]?.left[0]?.taskId).toBe(planned.id);
+    });
+
+    it('lets a task deleted while the sprint runs leave on the day it was deleted', async () => {
+      const { sprint, task: planned } = await activeSprint();
+      const other = await task('Route the board');
+      await backend.planTask(other.id, sprint.id);
+      environment.pass(DAY);
+      await backend.deleteTask(planned.id);
+
+      const report = await backend.sprintReport(sprint.id);
+
+      expect(remaining(report).slice(0, 3)).toEqual([2, 2, 1]);
+      expect(report.changes[0]?.left[0]?.taskId).toBe(planned.id);
+    });
+
+    it('tells which tasks moved on when the sprint was completed, and where', async () => {
+      const { sprint, task: planned } = await activeSprint();
+      const finished = await task('Choose the microcontroller');
+      await backend.planTask(finished.id, sprint.id);
+      await finish(finished.id);
+      const next = await backend.createSprint({ projectId: project.id });
+      environment.pass(DAY);
+      await backend.completeSprint(sprint.id, { moveUnfinishedTo: next.id });
+
+      const report = await backend.sprintReport(sprint.id);
+
+      expect(report.total).toBe(2);
+      expect(remaining(report).slice(0, 3)).toEqual([2, 1, 1]);
+      expect(report.changes).toEqual([]);
+      expect(report.movedOn.map((moved) => [moved.task.taskId, moved.toSprintId])).toEqual([
+        [planned.id, next.id],
       ]);
     });
   });

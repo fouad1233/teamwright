@@ -634,13 +634,18 @@ not listed: they go where their task goes.
   that runs cannot be deleted, and a completed one cannot be changed.
 
 **The burndown chart** stands next to the sprint that runs. The thin line
-falls from all the work of the sprint on its first day to none on its
-last: the pace its dates ask for. The ink line is what really remained at
-the end of each day, in points if any of its tasks has points and in
-tasks otherwise. The brass line is today. The chart counts the tasks that
-are in the sprint now, as if they had been there from the first day: a
-task added in the middle raises the line from the start, and a task taken
-out leaves no trace. It does not yet follow such changes day by day.
+falls from the work the sprint was started with on its first day to none
+on its last: the pace its dates ask for. The ink line is what really
+remained at the end of each day, in points if any of its tasks has points
+and in tasks otherwise. The brass line is today. The chart follows the
+tasks that join or leave the sprint while it runs: on the day a task is
+planned in, the ink line steps up, and on the day one is taken out or
+deleted, it steps down. Such a day gets a small triangle that points up or
+down, a dotted line shows all the work the sprint held, and under the
+chart the day is said in words, such as *19 Nov 1 task joined, 3 points;
+1 task left, 2 points*. Rest the pointer on a line to see which tasks they
+were. New points on a task already in the sprint are said too
+(*re-estimated, +3 points*).
 
 **Completed sprints** keep what they took on and what they finished:
 *13 of 15 points*. The bar beside it shows the same on one scale for all
@@ -649,10 +654,10 @@ of them, so you can see the pace from sprint to sprint.
 Press the line of a completed sprint to open it where it stands, and press
 it again to fold it. Opened, it shows its goal, its dates, when it was
 started and completed, what it took on and what it finished, its burndown
-as it ended, and its tasks. The tasks in it are the ones it finished:
-the unfinished ones moved on when it was completed, and the program does
-not keep which they were, so it only says that some did. Press a task to
-open it. The rows cannot be dragged or moved, and their points cannot be
+as it ended, and its tasks. The tasks in it are the ones it finished.
+Under them, *Moved on when it was completed* lists the unfinished ones,
+each with its points and where it went: another sprint or the backlog.
+Press a task to open it. The rows cannot be dragged or moved, and their points cannot be
 changed: the sprint is over.
 
 **The board** shows the tasks of the sprint that runs. The switch at the

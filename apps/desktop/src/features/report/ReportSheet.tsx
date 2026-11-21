@@ -247,7 +247,7 @@ function Progress({ counts }: { counts: DashboardCounts }) {
 
 /** The running sprint: its name, dates and goal, and its burndown drawn small in ink. */
 function SprintOf({ sources }: { sources: ReportSources }) {
-  const { active, report, today } = sources;
+  const { project, active, report, today } = sources;
   if (!active) {
     return (
       <PartOf part="sprint">
@@ -271,7 +271,9 @@ function SprintOf({ sources }: { sources: ReportSources }) {
             </p>
           )}
         </div>
-        {report?.sprintId === active.id && <BurndownChart report={report} today={today} />}
+        {report?.sprintId === active.id && (
+          <BurndownChart project={project} report={report} today={today} />
+        )}
       </div>
     </PartOf>
   );

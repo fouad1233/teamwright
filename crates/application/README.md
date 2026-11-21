@@ -9,7 +9,7 @@ window or agent runtime.
 |---|---|
 | `projects` | `ProjectService`: start, find, list, rename, describe, archive, restore and delete projects, each new one from a template (`WorkflowTemplate`); add, change, move and remove the statuses of their workflows, set their work-in-progress limits, and count how full each status is (`status_loads`) |
 | `tasks` | `TaskService`: open, change, plan into a sprint, give points, move, connect and remove tasks, and tell the history of one, or of a whole project, from the versions storage has kept |
-| `sprints` | `SprintService`: list, plan, change, delete, start and complete the sprints of a project, and the report for the burndown chart of one (`SprintReport`) |
+| `sprints` | `SprintService`: list, plan, change, delete, start and complete the sprints of a project, and the report for the burndown chart of one (`SprintReport`), read off the versions of every task of the project, so that it follows the tasks that joined or left the sprint and tells which moved on at its completion |
 | `views` | `ViewService`: list, add, rename, filter, give content to, move and remove the views of a project |
 | `areas` | `AreaService`: list, add, rename, move and remove the areas of a project, and move a task with its subtasks into another area |
 | `tags` | `TagService`: list, add, rename, recolor and remove the tags of a project, and put a tag on a task (by itself, or by its name, making it if need be) or take it off |
