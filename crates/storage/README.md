@@ -194,7 +194,11 @@ Stored values are checked when they are read. A row that breaks a rule of the
 domain is reported as damaged data and never turned into an invalid object.
 The model and the effort of a specialist are the columns `model` and
 `effort` of `members` (version 4), NULL when they are left to the program; a
-person with either is damaged data.
+person with either is damaged data. Its instructions are the column
+`instructions` (migration 0020), empty when it has none, with lines
+separated by a line feed; they merge as a field of their own, and a state
+logged before they existed reads as having none. A person with
+instructions is damaged data.
 
 ## Field stamps and merged states
 

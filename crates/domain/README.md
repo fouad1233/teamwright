@@ -22,7 +22,8 @@ done with them. It does no input or output.
 | `task_history` | `TaskChange`, `history_of`: what changed from one version of a task to the next |
 | `dependencies` | `DependencyGraph`: which task waits for which |
 | `integration` | `EventKind` (with stable names such as `task.status_changed`): the kinds of events a Slack channel or a web address can hear; `WebAddress`: an https address whose `Debug` form and `shown()` hide all but the host, since it may be a secret; `RepositoryName`: `owner/name` of a GitHub repository, also read from a git remote (`of_remote`) |
-| `member` | `Member`, `MemberKind`: an AI agent or a person on the team of a project; `MemberProfile`, `Effort`: the model and the effort of a specialist |
+| `member` | `Member`, `MemberKind`: an AI agent or a person on the team of a project; `MemberProfile`, `Effort`: the model and the effort of a specialist; `MemberInstructions`: its instructions, in the manager's words |
+| `ready_made` | `ReadyMadeSpecialist`: the twelve roles that ship with Teamwright, each with a description, instructions, a model and an effort ([decision 0031](../../docs/decisions/0031-instructions-and-ready-made-specialists.md)) |
 | `conversation` | `Conversation`, `Turn`, `Step`, `TokenCounts`, `ContextUse` (how full the context of a session was after a turn; nearly full from 80 % of the window; `context_of` a conversation is that of its last turn that reported one): the work of an AI specialist or of the Advisor, one request at a time; `DecisionRequest`, `DecisionOption`, `DecisionAnswer`: a question a specialist asks the manager to decide |
 | `planning` | `Interview`, `InterviewQuestion`, `InterviewAnswer`: the questions the Advisor asks before it proposes; `Proposal`, `ProposedMember`, `ProposedTask`, `ProposedOwner`: the team and the plan it proposes |
 | `error` | `DomainError`: every rule that can be broken |
@@ -90,6 +91,13 @@ done with them. It does no input or output.
   there is one left. Gray, amber and red are never handed out.
 - Only an AI specialist has a model and an effort; a person's profile is
   always empty. The name of a model is one word of at most 80 characters.
+- Only an AI specialist has instructions. They keep their lines, lose the
+  space at both ends, and have at most 4,000 characters; empty means none.
+- Every ready-made specialist has a name, a model and instructions that
+  pass the rules of a member, a key and a name no other one has, and
+  instructions that say when to ask the manager and what it cannot do.
+  A name stands for a ready-made specialist when it is the same, whatever
+  the capitals and the space at both ends.
 - A turn of a conversation has a request that is not empty. It takes steps
   only while it runs, a tool use is finished only if the turn has it, and the
   turn ends exactly once: finished, failed or stopped.

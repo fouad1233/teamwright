@@ -204,6 +204,19 @@ The shell is where the work of an AI specialist meets the outside world
   as a number that is not a whole number from 0, such as `-1` or `1.5`, is
   read as a place that is not there, so that the use case refuses it with
   the rule it breaks.
+- **Instructions and ready-made specialists**
+  ([decision 0031](../../docs/decisions/0031-instructions-and-ready-made-specialists.md)).
+  A member on the wire carries its `instructions`. The commands
+  `set_member_instructions`, `list_ready_made_specialists` and
+  `add_ready_made_member` in `commands/team.rs` answer with a `MemberDto` or
+  a list of `ReadyMadeSpecialistDto`. `src/shared/api/readyMade.json` is the
+  interface's copy of the set and of the limit of length of instructions:
+  the demo offers the set from it and the Team place counts against the
+  limit. A test in `commands/team.rs` fails when the copy differs from the
+  domain; run the tests of this crate with `TEAMWRIGHT_WRITE_READY_MADE=1`
+  to write it anew. In the Team place, `ReadyMadeDialog` is the chooser and
+  `InstructionsField` the growing field with its count in the dialog that
+  changes a specialist.
 - **Slow commands.** Asking the program whether it is there, and starting a
   turn (also `advise` and `answer_interview`), take seconds. Those commands are declared `async`, so they run on a
   thread of their own and the window stays alive.

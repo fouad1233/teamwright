@@ -78,6 +78,20 @@ project, two members of one team cannot have the same name.
   an effort; an empty model means none. A person given either is refused
   (`no_specialist`). A turn runs on the specialist's model and effort, or on
   the program's defaults when it has none.
+- `TeamService::set_instructions` gives an AI specialist instructions of its
+  own; text that is only whitespace takes them away, a person given any is
+  refused (`no_specialist`), and more than 4,000 characters is refused
+  (`rule_broken`). `instructions_for` appends them to every turn of the
+  specialist, after Teamwright's own instructions, framed so that they add
+  to the rules and never replace them, and followed by a line that repeats
+  the rules about the folder and about asking the manager
+  ([decision 0031](../../docs/decisions/0031-instructions-and-ready-made-specialists.md)).
+- `TeamService::add_ready_made` puts a ready-made specialist on the team in
+  one step, with its name, description, instructions, model and effort; a
+  name the team has is numbered ("Researcher 2"), and an unknown key is
+  `not_found`. When a proposal of the Advisor is approved, a member whose
+  name is exactly that of a ready-made specialist starts with its
+  instructions, and the Advisor is told the names.
 - A task can be given to the manager or to a member of the team of its own
   project, and to nobody else.
 - Work in progress is protected. A member with a running turn cannot leave

@@ -252,6 +252,14 @@ version of Claude Code. A specialist that runs through Teamwright cannot
 stand in for this test: it is told which folders are its own, and declines
 to leave them without trying.
 
+Another (`the_own_instructions_of_a_specialist_reach_a_real_session`) gives
+a session the instructions the application builds for a specialist whose
+own instructions say to end every reply with the word PERSIMMON, and asks
+it a short question that does not name the word. It passes if the last line
+of the answer is that word: the instructions a manager writes reach the
+session through the appended system prompt
+([decision 0031](../../docs/decisions/0031-instructions-and-ready-made-specialists.md)).
+
 ### Recordings
 
 Each file in `tests/recordings/` is the standard output of one real turn of
