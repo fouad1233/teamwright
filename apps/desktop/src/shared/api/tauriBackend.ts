@@ -41,6 +41,7 @@ import type {
   ProjectIntegrations,
   ProjectPlaces,
   ProjectUsage,
+  ProposalChange,
   ReadyMadeSpecialist,
   Sprint,
   SprintChanges,
@@ -408,6 +409,10 @@ export class TauriBackend implements Backend {
 
   approveProposal(conversationId: Id, proposal: ApprovedProposal): Promise<Conversation> {
     return call('approve_proposal', { conversationId, proposal });
+  }
+
+  changeProposal(conversationId: Id, change: ProposalChange): Promise<Conversation> {
+    return call('change_proposal', { conversationId, change });
   }
 
   listConversationsWaiting(): Promise<Conversation[]> {

@@ -121,6 +121,7 @@ fn main() -> ExitCode {
             commands::work::advise,
             commands::work::answer_interview,
             commands::work::approve_proposal,
+            commands::work::change_proposal,
             commands::work::list_conversations_waiting,
             commands::work::stop_work,
             commands::work::open_in_claude,

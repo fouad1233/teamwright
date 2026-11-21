@@ -144,6 +144,21 @@ pub fn approve_proposal(
     Ok(ConversationDto::of(&conversation, state.this_computer))
 }
 
+/// Makes one change to the open proposal of a conversation with the
+/// Advisor before it is approved. The change is stored at once.
+#[tauri::command(async)]
+pub fn change_proposal(
+    state: State<'_, AppState>,
+    conversation_id: String,
+    change: crate::dto::ProposalEditInput,
+) -> Result<ConversationDto, CommandError> {
+    let conversation = state.work.change_proposal(
+        parse_id(&conversation_id)?,
+        teamwright_application::ProposalEdit::try_from(change)?,
+    )?;
+    Ok(ConversationDto::of(&conversation, state.this_computer))
+}
+
 /// Lists the conversations that wait for the manager, in every project that
 /// is not archived, the longest wait first: a specialist waits for a
 /// decision, or the Advisor for answers or for a word about its proposal.

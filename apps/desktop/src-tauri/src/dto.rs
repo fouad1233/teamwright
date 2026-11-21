@@ -1104,6 +1104,109 @@ fn place_from_number(number: f64) -> usize {
     }
 }
 
+/// One change the manager makes to an open proposal, as the interface
+/// sends it: `{"kind": "retitle", "task": 3, "title": "…"}` and so on.
+/// Tasks and members are named by their places from 0.
+#[derive(Debug, Deserialize)]
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum ProposalEditInput {
+    /// Gives a task another title.
+    Retitle { task: f64, title: String },
+    /// Gives a task another description.
+    Describe { task: f64, description: String },
+    /// Gives a task another size in minutes, or none.
+    Estimate {
+        task: f64,
+        estimate_minutes: Option<u32>,
+    },
+    /// Gives a task another priority.
+    Prioritize { task: f64, priority: String },
+    /// Gives a task to somebody else, or to nobody.
+    GiveTo {
+        task: f64,
+        owner: Option<ProposedOwnerDto>,
+    },
+    /// Lets a task wait for another task of the proposal.
+    AddWait { task: f64, waits_for: f64 },
+    /// Lets a task stop waiting for another task of the proposal.
+    RemoveWait { task: f64, waits_for: f64 },
+    /// Adds a task of the manager's own at the end of the plan.
+    AddTask { title: String },
+    /// Takes a task out of the proposal.
+    RemoveTask { task: f64 },
+    /// Takes a member out of the proposal.
+    RemoveMember { member: f64 },
+    /// Chooses the model and the effort of a member; null for the default.
+    SetProfile {
+        member: f64,
+        model: Option<String>,
+        effort: Option<String>,
+    },
+}
+
+impl TryFrom<ProposalEditInput> for teamwright_application::ProposalEdit {
+    type Error = CommandError;
+
+    fn try_from(input: ProposalEditInput) -> Result<Self, Self::Error> {
+        use teamwright_application::ProposalEdit as Edit;
+        let place = place_from_number;
+        Ok(match input {
+            ProposalEditInput::Retitle { task, title } => Edit::Retitle {
+                task: place(task),
+                title,
+            },
+            ProposalEditInput::Describe { task, description } => Edit::Describe {
+                task: place(task),
+                description,
+            },
+            ProposalEditInput::Estimate {
+                task,
+                estimate_minutes,
+            } => Edit::Estimate {
+                task: place(task),
+                estimate_minutes,
+            },
+            ProposalEditInput::Prioritize { task, priority } => Edit::Prioritize {
+                task: place(task),
+                priority: parse_priority(&priority)?,
+            },
+            ProposalEditInput::GiveTo { task, owner } => Edit::GiveTo {
+                task: place(task),
+                owner: owner.map(|owner| match owner {
+                    ProposedOwnerDto::Manager => ApprovedOwner::Manager,
+                    ProposedOwnerDto::Member { name } => ApprovedOwner::Member(name),
+                }),
+            },
+            ProposalEditInput::AddWait { task, waits_for } => Edit::AddWait {
+                task: place(task),
+                waits_for: place(waits_for),
+            },
+            ProposalEditInput::RemoveWait { task, waits_for } => Edit::RemoveWait {
+                task: place(task),
+                waits_for: place(waits_for),
+            },
+            ProposalEditInput::AddTask { title } => Edit::AddTask { title },
+            ProposalEditInput::RemoveTask { task } => Edit::RemoveTask { task: place(task) },
+            ProposalEditInput::RemoveMember { member } => Edit::RemoveMember {
+                member: place(member),
+            },
+            ProposalEditInput::SetProfile {
+                member,
+                model,
+                effort,
+            } => Edit::SetProfile {
+                member: place(member),
+                model,
+                effort: effort.as_deref().map(parse_effort).transpose()?,
+            },
+        })
+    }
+}
+
 impl From<&DecisionOption> for DecisionOptionDto {
     fn from(option: &DecisionOption) -> Self {
         Self {
@@ -2328,5 +2431,67 @@ mod tests {
 
         assert_eq!(moment.timestamp_millis() % 1000, 250);
         assert!(parse_moment("yesterday").is_err());
+    }
+
+    #[test]
+    fn a_change_of_a_proposal_is_read_as_the_interface_writes_it() {
+        use teamwright_application::ProposalEdit;
+
+        let read = |json: serde_json::Value| {
+            ProposalEdit::try_from(serde_json::from_value::<ProposalEditInput>(json).unwrap())
+        };
+
+        assert_eq!(
+            read(serde_json::json!({ "kind": "retitle", "task": 2, "title": "Route it" })).unwrap(),
+            ProposalEdit::Retitle {
+                task: 2,
+                title: "Route it".to_owned()
+            }
+        );
+        assert_eq!(
+            read(serde_json::json!({ "kind": "estimate", "task": 0, "estimateMinutes": null }))
+                .unwrap(),
+            ProposalEdit::Estimate {
+                task: 0,
+                estimate_minutes: None
+            }
+        );
+        assert_eq!(
+            read(serde_json::json!({ "kind": "addWait", "task": 3, "waitsFor": 1 })).unwrap(),
+            ProposalEdit::AddWait {
+                task: 3,
+                waits_for: 1
+            }
+        );
+        assert_eq!(
+            read(serde_json::json!({
+                "kind": "giveTo", "task": 1, "owner": { "kind": "member", "name": "Ada" }
+            }))
+            .unwrap(),
+            ProposalEdit::GiveTo {
+                task: 1,
+                owner: Some(ApprovedOwner::Member("Ada".to_owned()))
+            }
+        );
+        assert_eq!(
+            read(serde_json::json!({
+                "kind": "setProfile", "member": 0, "model": null, "effort": "low"
+            }))
+            .unwrap(),
+            ProposalEdit::SetProfile {
+                member: 0,
+                model: None,
+                effort: Some(Effort::Low)
+            }
+        );
+        // A place that is not a place is read as one no proposal has.
+        assert_eq!(
+            read(serde_json::json!({ "kind": "removeTask", "task": -1 })).unwrap(),
+            ProposalEdit::RemoveTask { task: usize::MAX }
+        );
+        assert!(
+            read(serde_json::json!({ "kind": "prioritize", "task": 0, "priority": "huge" }))
+                .is_err()
+        );
     }
 }

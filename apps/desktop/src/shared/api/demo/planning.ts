@@ -1,9 +1,12 @@
+import { BackendError } from '../backend';
 import type {
+  ApprovedProposal,
   Conversation,
   Interview,
   InterviewAnswer,
   InterviewQuestion,
   Proposal,
+  ProposalChange,
   ProposedTask,
 } from '../types';
 
@@ -79,4 +82,130 @@ export function waitInCircle(tasks: readonly ProposedTask[]): boolean {
     return found;
   };
   return tasks.some((_, place) => closesCircle(place));
+}
+
+/** Whether one task of a plan waits for another, directly or through other tasks. */
+function waitsOn(tasks: readonly ProposedTask[], waiting: number, target: number): boolean {
+  const seen = new Set<number>();
+  const toVisit = [waiting];
+  for (let current = toVisit.pop(); current !== undefined; current = toVisit.pop()) {
+    if (seen.has(current)) {
+      continue;
+    }
+    seen.add(current);
+    for (const earlier of tasks[current]?.waitsFor ?? []) {
+      if (earlier === target) {
+        return true;
+      }
+      toVisit.push(earlier);
+    }
+  }
+  return false;
+}
+
+/**
+ * The members and the tasks of a proposal after one change of the
+ * manager's, as the domain of the real application makes it. Titles,
+ * names and owners are checked afterwards, with the rest of the plan.
+ */
+export function proposalAfter(
+  proposal: Pick<Proposal, 'members' | 'tasks'>,
+  change: ProposalChange,
+): ApprovedProposal {
+  const members = structuredClone(proposal.members);
+  const tasks = structuredClone(proposal.tasks);
+  const taskAt = (place: number): ProposedTask => {
+    const task = Number.isInteger(place) ? tasks[place] : undefined;
+    if (!task) {
+      throw new BackendError('rule_broken', `the proposal has no task ${(place + 1).toString()}`);
+    }
+    return task;
+  };
+  const memberAt = (place: number) => {
+    const member = Number.isInteger(place) ? members[place] : undefined;
+    if (!member) {
+      throw new BackendError('rule_broken', `the proposal has no member ${(place + 1).toString()}`);
+    }
+    return member;
+  };
+  switch (change.kind) {
+    case 'retitle':
+      taskAt(change.task).title = change.title;
+      break;
+    case 'describe':
+      taskAt(change.task).description = change.description;
+      break;
+    case 'estimate':
+      taskAt(change.task).estimateMinutes = change.estimateMinutes;
+      break;
+    case 'prioritize':
+      taskAt(change.task).priority = change.priority;
+      break;
+    case 'giveTo':
+      taskAt(change.task).owner = change.owner;
+      break;
+    case 'addWait': {
+      const other = taskAt(change.waitsFor);
+      const task = taskAt(change.task);
+      if (change.task === change.waitsFor) {
+        throw new BackendError(
+          'rule_broken',
+          `"${task.title}" waits for a task that is not another task of the proposal`,
+        );
+      }
+      if (waitsOn(tasks, change.waitsFor, change.task)) {
+        throw new BackendError(
+          'rule_broken',
+          `"${task.title}" cannot wait for "${other.title}", which waits for it already`,
+        );
+      }
+      if (!task.waitsFor.includes(change.waitsFor)) {
+        task.waitsFor.push(change.waitsFor);
+      }
+      break;
+    }
+    case 'removeWait': {
+      taskAt(change.waitsFor);
+      const task = taskAt(change.task);
+      task.waitsFor = task.waitsFor.filter((earlier) => earlier !== change.waitsFor);
+      break;
+    }
+    case 'addTask':
+      tasks.push({
+        title: change.title,
+        description: '',
+        owner: null,
+        estimateMinutes: null,
+        priority: 'normal',
+        waitsFor: [],
+      });
+      break;
+    case 'removeTask': {
+      taskAt(change.task);
+      tasks.splice(change.task, 1);
+      for (const task of tasks) {
+        task.waitsFor = task.waitsFor
+          .filter((earlier) => earlier !== change.task)
+          .map((earlier) => (earlier > change.task ? earlier - 1 : earlier));
+      }
+      break;
+    }
+    case 'removeMember': {
+      const gone = memberAt(change.member).name.toLowerCase();
+      members.splice(change.member, 1);
+      for (const task of tasks) {
+        if (task.owner?.kind === 'member' && task.owner.name.toLowerCase() === gone) {
+          task.owner = null;
+        }
+      }
+      break;
+    }
+    case 'setProfile': {
+      const member = memberAt(change.member);
+      member.model = change.model;
+      member.effort = change.effort;
+      break;
+    }
+  }
+  return { members, tasks };
 }

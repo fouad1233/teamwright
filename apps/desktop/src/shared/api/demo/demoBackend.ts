@@ -44,6 +44,7 @@ import type {
   ProjectIntegrations,
   ProjectPlaces,
   ProjectUsage,
+  ProposalChange,
   ProposedMember,
   ProposedTask,
   ReadyMadeSpecialist,
@@ -89,7 +90,13 @@ import {
   requireReadyMade,
   tidyInstructions,
 } from './readyMade';
-import { answersInWords, openInterviewOf, openProposalOf, waitInCircle } from './planning';
+import {
+  answersInWords,
+  openInterviewOf,
+  openProposalOf,
+  proposalAfter,
+  waitInCircle,
+} from './planning';
 import { scriptForAnswers, scriptForBrief, scriptForChange } from './simulatedAdvisor';
 import {
   asListed,
@@ -1438,6 +1445,43 @@ export class DemoBackend implements Backend {
       proposal.members = members;
       proposal.tasks = tasks;
       proposal.approvedAt = now;
+      this.noteVersions();
+      this.tellListeners(conversation);
+      return conversation;
+    });
+  }
+
+  changeProposal(conversationId: Id, change: ProposalChange): Promise<Conversation> {
+    return this.answer(() => {
+      const conversation = this.requireConversationHere(conversationId);
+      const proposal = openProposalOf(conversation);
+      if (!proposal) {
+        throw new BackendError('no_proposal_open', 'no proposal is open in this conversation');
+      }
+      const team = this.teamOf(conversation.projectId);
+      if (change.kind === 'removeMember') {
+        const name = proposal.members[change.member]?.name;
+        if (
+          name !== undefined &&
+          team.some((member) => member.name.toLowerCase() === name.toLowerCase())
+        ) {
+          throw new BackendError(
+            'rule_broken',
+            `${name} is on the team already: approving does not add them again`,
+          );
+        }
+      }
+      const changed = proposalAfter(proposal, change);
+      const members = tidyProposedMembers(changed.members);
+      const tasks = tidyProposedTasks(changed.tasks, [
+        ...team.map((member) => member.name),
+        ...members.map((member) => member.name),
+      ]);
+      if (members.length === 0 && tasks.length === 0) {
+        throw new BackendError('rule_broken', 'the proposal has no members and no tasks');
+      }
+      proposal.members = members;
+      proposal.tasks = tasks;
       this.noteVersions();
       this.tellListeners(conversation);
       return conversation;

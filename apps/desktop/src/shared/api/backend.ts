@@ -36,6 +36,7 @@ import type {
   ProjectIntegrations,
   ProjectPlaces,
   ProjectUsage,
+  ProposalChange,
   ReadyMadeSpecialist,
   Sprint,
   SprintChanges,
@@ -439,6 +440,14 @@ export interface Backend {
    * the first status of the workflow, and no work starts by itself.
    */
   approveProposal(conversationId: Id, proposal: ApprovedProposal): Promise<Conversation>;
+  /**
+   * Makes one change to the proposal the Advisor made in the latest turn
+   * of a conversation, before it is approved. The change is stored at
+   * once, so it is kept over a restart and reaches the other computers. A
+   * change that breaks a rule is refused (`rule_broken`) with the reason
+   * in words, and changes nothing.
+   */
+  changeProposal(conversationId: Id, change: ProposalChange): Promise<Conversation>;
   /**
    * Lists the conversations that wait for the manager, in every project
    * that is not put away: a specialist waits for a decision, or the Advisor

@@ -7,6 +7,7 @@ import type {
   InterviewAnswer,
   Project,
   Proposal,
+  ProposalChange,
   Turn,
 } from '../types';
 import { DemoBackend } from './demoBackend';
@@ -614,6 +615,175 @@ describe('planning with the Advisor in the DemoBackend', () => {
       const again = await backend.reply(conversation.id, 'Add a battery.');
 
       expect(latestTurn(again).state).toBe('running');
+    });
+  });
+
+  describe('changing a proposal before approving it', () => {
+    function titlesOf(proposal: Proposal): string[] {
+      return proposal.tasks.map((task) => task.title);
+    }
+
+    it('changes the title, the size and what a task waits for, and keeps the changes', async () => {
+      const conversation = await proposed();
+
+      await backend.changeProposal(conversation.id, {
+        kind: 'retitle',
+        task: 4,
+        title: '  Route the board in four layers  ',
+      });
+      await backend.changeProposal(conversation.id, {
+        kind: 'estimate',
+        task: 4,
+        estimateMinutes: 900,
+      });
+      await backend.changeProposal(conversation.id, { kind: 'addWait', task: 4, waitsFor: 0 });
+      const changed = await backend.changeProposal(conversation.id, {
+        kind: 'removeWait',
+        task: 4,
+        waitsFor: 3,
+      });
+
+      const stored = await now(conversation.id);
+      expect(proposalOf(stored)).toEqual(proposalOf(changed));
+      expect(proposalOf(stored).tasks[4]).toMatchObject({
+        title: 'Route the board in four layers',
+        estimateMinutes: 900,
+        waitsFor: [0],
+      });
+      expect(proposalOf(stored).approvedAt).toBeNull();
+      expect(await backend.listTasks(project.id)).toHaveLength(0);
+    });
+
+    it('changes the rest of a task and of a member, and adds and takes out tasks', async () => {
+      const conversation = await proposed();
+      const changes = [
+        { kind: 'describe', task: 0, description: 'A list of five lines.' },
+        { kind: 'prioritize', task: 0, priority: 'urgent' },
+        { kind: 'giveTo', task: 0, owner: { kind: 'member', name: 'firmware ENGINEER' } },
+        { kind: 'setProfile', member: 0, model: 'haiku', effort: null },
+        { kind: 'addTask', title: 'Write the manual' },
+        // "Design the enclosure", which nothing but the last task waits for.
+        { kind: 'removeTask', task: 9 },
+        { kind: 'removeMember', member: 2 },
+      ] as const;
+      for (const change of changes) {
+        await backend.changeProposal(conversation.id, structuredClone(change));
+      }
+
+      const proposal = proposalOf(await now(conversation.id));
+      expect(proposal.tasks[0]).toMatchObject({
+        description: 'A list of five lines.',
+        priority: 'urgent',
+        owner: { kind: 'member', name: 'firmware ENGINEER' },
+      });
+      expect(proposal.members[0]).toMatchObject({ model: 'haiku', effort: null });
+      expect(proposal.members).toHaveLength(2);
+      const titles = titlesOf(proposal);
+      expect(titles).toHaveLength(12);
+      expect(titles).not.toContain('Design the enclosure');
+      expect(titles[11]).toBe('Write the manual');
+      // The last task waited for 7, 8, 9 and 10; 9 is gone and 10 moved up.
+      expect(proposal.tasks[10]?.waitsFor).toEqual([7, 8, 9]);
+    });
+
+    it('approves a changed proposal in one step as it then reads', async () => {
+      const conversation = await proposed();
+      await backend.changeProposal(conversation.id, {
+        kind: 'retitle',
+        task: 3,
+        title: 'Draw the schematic in KiCad',
+      });
+      await backend.changeProposal(conversation.id, {
+        kind: 'estimate',
+        task: 3,
+        estimateMinutes: null,
+      });
+      await backend.changeProposal(conversation.id, { kind: 'addWait', task: 9, waitsFor: 0 });
+      await backend.changeProposal(conversation.id, { kind: 'removeTask', task: 11 });
+      const changed = await now(conversation.id);
+
+      const approved = await backend.approveProposal(
+        conversation.id,
+        unchanged(proposalOf(changed)),
+      );
+
+      const tasks = (await backend.listTasks(project.id)).sort(
+        (first, second) => first.number - second.number,
+      );
+      expect(tasks.map((task) => task.title)).toEqual(titlesOf(proposalOf(changed)));
+      expect(tasks[3]).toMatchObject({
+        title: 'Draw the schematic in KiCad',
+        estimateMinutes: null,
+      });
+      expect([...(tasks[9]?.blockedBy ?? [])].sort()).toEqual([tasks[0]?.id, tasks[5]?.id].sort());
+      expect(titlesOf(proposalOf(approved))).toEqual(titlesOf(proposalOf(changed)));
+    });
+
+    it('refuses a change that breaks a rule and leaves the proposal as it was', async () => {
+      const conversation = await proposed();
+      const before = proposalOf(conversation);
+      const refused = async (change: ProposalChange) => {
+        const error = await refusal(backend.changeProposal(conversation.id, change));
+        return [error.code, error.message];
+      };
+
+      expect(await refused({ kind: 'retitle', task: 0, title: '   ' })).toEqual([
+        'rule_broken',
+        'the task title must not be empty',
+      ]);
+      expect(await refused({ kind: 'addWait', task: 2, waitsFor: 4 })).toEqual([
+        'rule_broken',
+        '"Define the pin map" cannot wait for "Route the board", which waits for it already',
+      ]);
+      expect(await refused({ kind: 'addWait', task: 2, waitsFor: 2 })).toEqual([
+        'rule_broken',
+        '"Define the pin map" waits for a task that is not another task of the proposal',
+      ]);
+      expect(await refused({ kind: 'removeTask', task: 12 })).toEqual([
+        'rule_broken',
+        'the proposal has no task 13',
+      ]);
+      expect(
+        await refused({ kind: 'giveTo', task: 0, owner: { kind: 'member', name: 'Electrician' } }),
+      ).toEqual([
+        'rule_broken',
+        '"Agree on what the device must do" is given to "Electrician", who is neither on the team nor in the proposal',
+      ]);
+      expect(
+        (await refused({ kind: 'setProfile', member: 0, model: 'two words', effort: null }))[0],
+      ).toBe('rule_broken');
+      expect(proposalOf(await now(conversation.id))).toEqual(before);
+    });
+
+    it('refuses to take out a member the team has already', async () => {
+      const conversation = await proposed();
+      // The member joins after the Advisor proposed one of its name.
+      await backend.addMember({ projectId: project.id, name: 'Firmware engineer', kind: 'agent' });
+
+      const error = await refusal(
+        backend.changeProposal(conversation.id, { kind: 'removeMember', member: 1 }),
+      );
+
+      expect([error.code, error.message]).toEqual([
+        'rule_broken',
+        'Firmware engineer is on the team already: approving does not add them again',
+      ]);
+    });
+
+    it('refuses a change where no proposal is open', async () => {
+      const asked = await interviewed();
+      const change: ProposalChange = { kind: 'removeTask', task: 0 };
+      expect((await refusal(backend.changeProposal(asked.id, change))).code).toBe(
+        'no_proposal_open',
+      );
+
+      const conversation = await proposed();
+      await backend.approveProposal(conversation.id, unchanged(proposalOf(conversation)));
+      const error = await refusal(backend.changeProposal(conversation.id, change));
+      expect([error.code, error.message]).toEqual([
+        'no_proposal_open',
+        'no proposal is open in this conversation',
+      ]);
     });
   });
 

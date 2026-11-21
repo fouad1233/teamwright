@@ -588,6 +588,25 @@ export interface ApprovedProposal {
   tasks: ProposedTask[];
 }
 
+/**
+ * One change the manager makes to an open proposal before approving it.
+ * Tasks and members are named by their places from 0. Taking a task out
+ * takes out what waited for it, and the places after it move up by one.
+ * Taking a member out leaves its tasks to nobody.
+ */
+export type ProposalChange =
+  | { kind: 'retitle'; task: number; title: string }
+  | { kind: 'describe'; task: number; description: string }
+  | { kind: 'estimate'; task: number; estimateMinutes: number | null }
+  | { kind: 'prioritize'; task: number; priority: Priority }
+  | { kind: 'giveTo'; task: number; owner: ProposedOwner | null }
+  | { kind: 'addWait'; task: number; waitsFor: number }
+  | { kind: 'removeWait'; task: number; waitsFor: number }
+  | { kind: 'addTask'; title: string }
+  | { kind: 'removeTask'; task: number }
+  | { kind: 'removeMember'; member: number }
+  | { kind: 'setProfile'; member: number; model: string | null; effort: Effort | null };
+
 /** One request to a specialist or to the Advisor, and what came of it. */
 export interface Turn {
   id: Id;
