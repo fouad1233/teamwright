@@ -90,6 +90,20 @@ folder (Explorer, Finder; on Linux the folder is opened), but only a path
 `AppState`, so the interface cannot make it open any other place. In the
 demo the save window suggests a path and writing is `not_available`.
 
+**The report of a whole project**
+([decision 0042](../../docs/decisions/0042-the-report-of-a-whole-project.md))
+is three commands in `commands/project_report.rs`. `project_report`
+answers with the report `ProjectReportService` gathers (`ProjectReport`
+in `types.ts`, every sentence and figure the application's).
+`suggested_report_path` is the work folder of the project joined with the
+name `report_file_name` gives (`Smart sensor node report 2026-11-21.md`),
+so that the save window opens there and the report stays with the work.
+`save_project_report` writes `report_in_markdown` to the path the manager
+chose, in one go, and answers with the path; a file that could not be
+written is refused with `file_not_written` and the reason. In the demo
+the report is gathered by `demo/projectReport.ts`, which follows the same
+rules sentence for sentence, and saving is `not_available`.
+
 ### The work of the specialists
 
 The shell is where the work of an AI specialist meets the outside world

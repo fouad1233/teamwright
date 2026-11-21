@@ -39,6 +39,7 @@ import type {
   ProjectChange,
   ProjectIntegrations,
   ProjectPlaces,
+  ProjectReport,
   ProjectTemplate,
   ProjectUsage,
   ProposalChange,
@@ -171,6 +172,25 @@ export interface Backend {
    * Only a file the program wrote since it started can be shown.
    */
   showExportedWorkbook(path: string): Promise<void>;
+
+  /**
+   * The report of a whole project as it stands now (decision 0042),
+   * worked out by rules from what is stored.
+   */
+  projectReport(projectId: Id): Promise<ProjectReport>;
+  /**
+   * Lets the manager choose where to keep the report of a project as
+   * Markdown. The save window opens in the work folder of the project,
+   * with a name made of the project's name and the day. Resolves to the
+   * path, or to nothing if the manager changed their mind.
+   */
+  chooseReportFile(projectId: Id): Promise<string | null>;
+  /**
+   * Writes the report of a project as Markdown to a file. Resolves to the
+   * path of the file. A file that cannot be written is refused with the
+   * reason in words.
+   */
+  saveProjectReport(projectId: Id, path: string): Promise<string>;
 
   /**
    * Adds a status to the workflow of a project. It goes behind the last

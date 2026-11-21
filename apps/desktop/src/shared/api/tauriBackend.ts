@@ -44,6 +44,7 @@ import type {
   ProjectChange,
   ProjectIntegrations,
   ProjectPlaces,
+  ProjectReport,
   ProjectTemplate,
   ProjectUsage,
   ProposalChange,
@@ -413,6 +414,25 @@ export class TauriBackend implements Backend {
 
   showExportedWorkbook(path: string): Promise<void> {
     return call('show_exported_workbook', { path });
+  }
+
+  projectReport(projectId: Id): Promise<ProjectReport> {
+    return call('project_report', { projectId });
+  }
+
+  async chooseReportFile(projectId: Id): Promise<string | null> {
+    // The save window opens in the work folder of the project, so that the
+    // report stays with the work, unless the manager chooses elsewhere.
+    const suggested = await call<string>('suggested_report_path', { projectId });
+    return save({
+      title: 'Save the report as Markdown',
+      defaultPath: suggested,
+      filters: [{ name: 'Markdown', extensions: ['md'] }],
+    });
+  }
+
+  saveProjectReport(projectId: Id, path: string): Promise<string> {
+    return call('save_project_report', { projectId, path });
   }
 
   listMembers(projectId: Id): Promise<Member[]> {

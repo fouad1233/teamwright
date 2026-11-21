@@ -46,6 +46,7 @@ import type {
   ProjectChange,
   ProjectIntegrations,
   ProjectPlaces,
+  ProjectReport,
   ProjectTemplate,
   ProjectUsage,
   ProposalChange,
@@ -95,6 +96,7 @@ import { PretendedGitHub } from './gitHub';
 import { PretendedIntegrations } from './integrations';
 import { freeName, isInside, isSameFolder, nameOf } from './places';
 import { pretendedListing } from './projectFiles';
+import { projectReportOf } from './projectReport';
 import {
   READY_MADE_SPECIALISTS,
   freeMemberName,
@@ -722,6 +724,40 @@ export class DemoBackend implements Backend {
       throw new BackendError(
         'not_available',
         `the demo has no file manager to show ${nameOf(path)} in`,
+      );
+    });
+  }
+
+  projectReport(projectId: Id): Promise<ProjectReport> {
+    return this.answer(() => {
+      const project = this.requireProject(projectId);
+      return projectReportOf({
+        project,
+        tasks: this.tasksOfProject(project.id),
+        sprints: this.sprintsOf(project.id),
+        members: this.teamOf(project.id),
+        areas: this.areasOf(project.id),
+        conversations: this.conversationsOf(project.id),
+        handoffs: this.teamwork.handoffsOf(project.id),
+        today: dayOfMoment(this.environment.now().toISOString()),
+      });
+    });
+  }
+
+  chooseReportFile(projectId: Id): Promise<string | null> {
+    return this.answer(() => {
+      const project = this.requireProject(projectId);
+      const today = dayOfMoment(this.environment.now().toISOString());
+      return `${this.placesOf(project).workFolder}\\${project.name} report ${today}.md`;
+    });
+  }
+
+  saveProjectReport(projectId: Id, path: string): Promise<string> {
+    return this.answer(() => {
+      this.requireProject(projectId);
+      throw new BackendError(
+        'not_available',
+        `the demo has no files, so ${nameOf(path)} could not be written`,
       );
     });
   }

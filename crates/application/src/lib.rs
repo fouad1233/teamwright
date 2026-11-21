@@ -104,7 +104,7 @@ pub use project_events::{
     event_of_completed_sprint, event_of_created_task, event_of_ended_turn, event_of_moved_task,
     event_of_started_sprint,
 };
-pub use project_report::markdown::report_in_markdown;
+pub use project_report::markdown::{report_file_name, report_in_markdown};
 pub use project_report::{
     DueOutcome, PlanAgainstActual, ProjectReport, ProjectReportPorts, ProjectReportService,
     ReportBrief, ReportDecision, ReportHandoff, ReportTask, ReportUsage, SprintOutcome, UsageLine,

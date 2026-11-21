@@ -139,6 +139,30 @@ pub fn report_in_markdown(report: &ProjectReport) -> String {
     text
 }
 
+/// The characters a file name may not hold on Windows, the strictest of the
+/// systems, and the ones that would make it a hidden file elsewhere.
+const NOT_IN_FILE_NAMES: &[char] = &['<', '>', ':', '"', '/', '\\', '|', '?', '*'];
+
+/// The name a saved report gets: the name of the project, the word
+/// "report" and the day it was made, so that a report saved later does not
+/// replace an earlier one: `Smart sensor node report 2026-11-21.md`.
+#[must_use]
+pub fn report_file_name(project_name: &str, made_on: CalendarDate) -> String {
+    let name: String = project_name
+        .chars()
+        .map(|character| {
+            if NOT_IN_FILE_NAMES.contains(&character) || character.is_control() {
+                ' '
+            } else {
+                character
+            }
+        })
+        .collect();
+    let name = one_line(name.trim_start_matches('.'));
+    let name = if name.is_empty() { "Project" } else { &name };
+    format!("{name} report {}.md", made_on.format("%Y-%m-%d"))
+}
+
 /// What a task's due date says in a table.
 #[must_use]
 pub fn due_in_words(due: DueOutcome, due_on: Option<CalendarDate>) -> String {
@@ -625,6 +649,22 @@ mod tests {
 
         assert!(text.contains("| Ada | 1,234,567 | 3 |\n| **Everyone** | **1,234,567** | **3** |\n\n| Model | Tokens | Turns |"));
         assert!(text.contains("| opus | 1,234,567 | 3 |"));
+    }
+
+    #[test]
+    fn the_file_is_named_after_the_project_and_the_day_without_forbidden_characters() {
+        assert_eq!(
+            report_file_name("Smart sensor node", day(21)),
+            "Smart sensor node report 2026-11-21.md"
+        );
+        assert_eq!(
+            report_file_name("A/B: test?  run", day(1)),
+            "A B test run report 2026-11-01.md"
+        );
+        assert_eq!(
+            report_file_name("..", day(1)),
+            "Project report 2026-11-01.md"
+        );
     }
 
     #[test]

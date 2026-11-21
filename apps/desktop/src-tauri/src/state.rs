@@ -150,6 +150,8 @@ pub struct AppState {
     pub google_drive: GoogleDriveService,
     /// The use case that gathers a project into an Excel workbook.
     pub workbook: WorkbookService,
+    /// The use case that gathers the report of a whole project.
+    pub project_report: teamwright_application::ProjectReportService,
     /// The choice of this computer about notifications, and what an event
     /// is worth with it.
     pub notifications: NotificationService,
@@ -273,7 +275,19 @@ impl AppState {
         let teamwork = teamwright_application::TeamworkService::new(
             project_repository.clone(),
             member_repository.clone(),
-            teamwork_repository,
+            teamwork_repository.clone(),
+        );
+        let project_report = teamwright_application::ProjectReportService::new(
+            teamwright_application::ProjectReportPorts {
+                projects: project_repository.clone(),
+                tasks: task_repository.clone(),
+                sprints: sprint_repository.clone(),
+                areas: area_repository.clone(),
+                members: member_repository.clone(),
+                conversations: conversation_repository.clone(),
+                teamwork: teamwork_repository,
+                clock: clock.clone(),
+            },
         );
         let memory = teamwright_application::MemoryService::new(
             project_repository.clone(),
@@ -363,6 +377,7 @@ impl AppState {
             sync,
             google_drive: GoogleDriveService::new(Arc::new(LocalDriveSurroundings)),
             workbook,
+            project_report,
             notifications,
             appearance,
             integrations,

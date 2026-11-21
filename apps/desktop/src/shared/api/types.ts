@@ -1523,3 +1523,152 @@ export interface Digest {
   endedAt: Moment | null;
   keptAt: Moment;
 }
+
+/**
+ * The report of a whole project (decision 0042): one document from its
+ * start to the day it is made, worked out by rules from what is stored.
+ * There is no state "completed": a project is complete when it has tasks
+ * and every one is in a status of the category done, and the report is
+ * called "Report of the project so far" until then. Every figure and
+ * sentence is the backend's; the interface only lays them out.
+ */
+export interface ProjectReport {
+  projectId: Id;
+  name: string;
+  key: string;
+  /** The manager's description of the project. May be empty. */
+  description: string;
+  madeOn: CalendarDate;
+  begunOn: CalendarDate;
+  isComplete: boolean;
+  /** "Report of the project", or "Report of the project so far". */
+  title: string;
+  /** A few sentences that say where the project ended, or stands. */
+  summary: string[];
+  /** What was to be built, in the Advisor's words, if the manager approved a plan of it. */
+  brief: ReportBrief | null;
+  /** The work of every area that has tasks. Empty when the project has only one area. */
+  byArea: WorkShare[];
+  /** The work of the members in the order they joined, then the manager's, then nobody's. */
+  byHolder: WorkShare[];
+  /** The finished tasks, the one finished first first. */
+  finished: ReportTask[];
+  plan: PlanAgainstActual;
+  /** The sprints, in the order they began. */
+  sprints: SprintOutcome[];
+  usage: ReportUsage;
+  /** The questions the manager answered, the one answered first first. */
+  decisions: ReportDecision[];
+  /** The latest handoff of every task that has one, in the order of the tasks. */
+  handoffs: ReportHandoff[];
+  /** The tasks not finished, by number. */
+  open: ReportTask[];
+  /** The questions that still wait for the manager's answer. */
+  waiting: number;
+}
+
+export interface ReportBrief {
+  summary: string;
+  approvedOn: CalendarDate;
+}
+
+/** What one area, or one holder of tasks, has finished and has open. */
+export interface WorkShare {
+  name: string;
+  finished: number;
+  open: number;
+}
+
+/** How a task stands against its due date. */
+export type DueOutcome =
+  | { kind: 'none' }
+  | { kind: 'met' }
+  | { kind: 'missed'; days: number }
+  | { kind: 'coming' }
+  | { kind: 'late'; days: number };
+
+/** A task as the report lists it. */
+export interface ReportTask {
+  taskId: Id;
+  reference: string;
+  title: string;
+  /** Its area, when the project has more than one. */
+  area: string | null;
+  /** Who holds it, in words: a member, "The manager" or "Nobody". */
+  holder: string;
+  status: string | null;
+  dueOn: CalendarDate | null;
+  finishedOn: CalendarDate | null;
+  estimateMinutes: number | null;
+  /** How long the turns of the specialists on it ran, in minutes. Nothing without a turn. */
+  workedMinutes: number | null;
+  due: DueOutcome;
+}
+
+/** The plan against what happened: only what the stored data can say. */
+export interface PlanAgainstActual {
+  finished: number;
+  estimated: number;
+  estimatedMinutes: number;
+  worked: number;
+  workedMinutes: number;
+  compared: number;
+  comparedEstimateMinutes: number;
+  comparedWorkedMinutes: number;
+  withDueDate: number;
+  met: number;
+  missed: number;
+  late: number;
+  /** What the figures say, with what is missing said plainly. */
+  sentences: string[];
+}
+
+/** How a sprint went. A completed one keeps what it was completed with. */
+export interface SprintOutcome {
+  name: string;
+  goal: string;
+  state: SprintState;
+  startOn: CalendarDate | null;
+  endOn: CalendarDate | null;
+  unit: SprintUnit;
+  committed: number;
+  completed: number;
+}
+
+/** What the team used, by who and by model. */
+export interface ReportUsage {
+  byWho: UsageLine[];
+  byModel: UsageLine[];
+  total: UsageLine;
+}
+
+export interface UsageLine {
+  name: string;
+  /** Every kind of token together. */
+  tokens: number;
+  turns: number;
+}
+
+/** A question the manager answered. */
+export interface ReportDecision {
+  askedBy: string;
+  /** The reference of the task it was about, if any. */
+  task: string | null;
+  question: string;
+  /** The label of the option chosen, if one was. */
+  chosen: string | null;
+  /** What the manager wrote. May be empty when an option was chosen. */
+  note: string;
+  answeredOn: CalendarDate;
+}
+
+/** What a specialist handed over for a task. */
+export interface ReportHandoff {
+  reference: string;
+  title: string;
+  author: string;
+  publishedOn: CalendarDate;
+  summary: string;
+  contract: string;
+  files: string[];
+}

@@ -18,6 +18,7 @@ use teamwright_application::{
     ProjectUsage, SprintChanges, SprintForecast, SprintReport, SprintStart, StatusProperties,
     SyncNotice, SyncState, TaskActual, TaskOnGitHub, WorkflowTemplate, sign_in_problem,
 };
+use teamwright_application::{DueOutcome, ProjectReport, ReportTask, UsageLine, WorkShare};
 use teamwright_domain::{
     Area, Assignee, CalendarDate, Color, ComputerId, ContextUse, Conversation, DecisionOption,
     DecisionRequest, DomainError, Effort, EventKind, EventKinds, Fill, Interview, InterviewAnswer,
@@ -2822,6 +2823,274 @@ pub struct NewMemoryFactInput {
     pub task_id: Option<String>,
 }
 
+/// The report of a whole project (decision 0042), as the interface draws
+/// it. Every figure and sentence is the application's; the interface only
+/// lays them out.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectReportDto {
+    project_id: String,
+    name: String,
+    key: String,
+    description: String,
+    made_on: String,
+    begun_on: String,
+    is_complete: bool,
+    title: String,
+    summary: Vec<String>,
+    brief: Option<ReportBriefDto>,
+    by_area: Vec<WorkShareDto>,
+    by_holder: Vec<WorkShareDto>,
+    finished: Vec<ReportTaskDto>,
+    plan: PlanAgainstActualDto,
+    sprints: Vec<SprintOutcomeDto>,
+    usage: ReportUsageDto,
+    decisions: Vec<ReportDecisionDto>,
+    handoffs: Vec<ReportHandoffDto>,
+    open: Vec<ReportTaskDto>,
+    waiting: u32,
+}
+
+/// What the project was to build, in the Advisor's words.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReportBriefDto {
+    summary: String,
+    approved_on: String,
+}
+
+/// What an area or a holder of tasks has finished and has open.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkShareDto {
+    name: String,
+    finished: u32,
+    open: u32,
+}
+
+/// A task as the report lists it.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReportTaskDto {
+    task_id: String,
+    reference: String,
+    title: String,
+    area: Option<String>,
+    holder: String,
+    status: Option<String>,
+    due_on: Option<String>,
+    finished_on: Option<String>,
+    estimate_minutes: Option<u32>,
+    worked_minutes: Option<u64>,
+    due: DueOutcomeDto,
+}
+
+/// How a task stands against its due date.
+#[derive(Debug, Serialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum DueOutcomeDto {
+    /// It has no due date.
+    None,
+    /// It was finished by its due date.
+    Met,
+    /// It was finished so many days after its due date.
+    Missed { days: u32 },
+    /// It is open, and its due date has not passed.
+    Coming,
+    /// It is open, so many days past its due date.
+    Late { days: u32 },
+}
+
+/// The plan against what happened.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlanAgainstActualDto {
+    finished: u32,
+    estimated: u32,
+    estimated_minutes: u64,
+    worked: u32,
+    worked_minutes: u64,
+    compared: u32,
+    compared_estimate_minutes: u64,
+    compared_worked_minutes: u64,
+    with_due_date: u32,
+    met: u32,
+    missed: u32,
+    late: u32,
+    sentences: Vec<String>,
+}
+
+/// How a sprint went.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SprintOutcomeDto {
+    name: String,
+    goal: String,
+    state: &'static str,
+    start_on: Option<String>,
+    end_on: Option<String>,
+    unit: &'static str,
+    committed: u32,
+    completed: u32,
+}
+
+/// What the team used.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReportUsageDto {
+    by_who: Vec<UsageLineDto>,
+    by_model: Vec<UsageLineDto>,
+    total: UsageLineDto,
+}
+
+/// One line of what was used.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UsageLineDto {
+    name: String,
+    tokens: u64,
+    turns: u32,
+}
+
+/// A question the manager answered.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReportDecisionDto {
+    asked_by: String,
+    task: Option<String>,
+    question: String,
+    chosen: Option<String>,
+    note: String,
+    answered_on: String,
+}
+
+/// What a specialist handed over for a task.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReportHandoffDto {
+    reference: String,
+    title: String,
+    author: String,
+    published_on: String,
+    summary: String,
+    contract: String,
+    files: Vec<String>,
+}
+
+impl From<ProjectReport> for ProjectReportDto {
+    fn from(report: ProjectReport) -> Self {
+        let task = |task: ReportTask| ReportTaskDto {
+            task_id: task.task_id.to_string(),
+            reference: task.reference,
+            title: task.title,
+            area: task.area,
+            holder: task.holder,
+            status: task.status,
+            due_on: task.due_on.map(date_to_text),
+            finished_on: task.finished_on.map(date_to_text),
+            estimate_minutes: task.estimate_minutes,
+            worked_minutes: task.worked_minutes,
+            due: match task.due {
+                DueOutcome::NoDueDate => DueOutcomeDto::None,
+                DueOutcome::Met => DueOutcomeDto::Met,
+                DueOutcome::Missed { days } => DueOutcomeDto::Missed { days },
+                DueOutcome::Coming => DueOutcomeDto::Coming,
+                DueOutcome::Late { days } => DueOutcomeDto::Late { days },
+            },
+        };
+        let share = |share: WorkShare| WorkShareDto {
+            name: share.name,
+            finished: share.finished,
+            open: share.open,
+        };
+        let usage = |line: UsageLine| UsageLineDto {
+            name: line.name,
+            tokens: line.tokens,
+            turns: line.turns,
+        };
+        let plan = report.plan;
+        Self {
+            project_id: report.project_id.to_string(),
+            name: report.name,
+            key: report.key,
+            description: report.description,
+            made_on: date_to_text(report.made_on),
+            begun_on: date_to_text(report.begun_on),
+            is_complete: report.is_complete,
+            title: report.title,
+            summary: report.summary,
+            brief: report.brief.map(|brief| ReportBriefDto {
+                summary: brief.summary,
+                approved_on: date_to_text(brief.approved_on),
+            }),
+            by_area: report.by_area.into_iter().map(share).collect(),
+            by_holder: report.by_holder.into_iter().map(share).collect(),
+            finished: report.finished.into_iter().map(task).collect(),
+            plan: PlanAgainstActualDto {
+                finished: plan.finished,
+                estimated: plan.estimated,
+                estimated_minutes: plan.estimated_minutes,
+                worked: plan.worked,
+                worked_minutes: plan.worked_minutes,
+                compared: plan.compared,
+                compared_estimate_minutes: plan.compared_estimate_minutes,
+                compared_worked_minutes: plan.compared_worked_minutes,
+                with_due_date: plan.with_due_date,
+                met: plan.met,
+                missed: plan.missed,
+                late: plan.late,
+                sentences: plan.sentences,
+            },
+            sprints: report
+                .sprints
+                .into_iter()
+                .map(|sprint| SprintOutcomeDto {
+                    name: sprint.name,
+                    goal: sprint.goal,
+                    state: sprint.state.as_str(),
+                    start_on: sprint.start_on.map(date_to_text),
+                    end_on: sprint.end_on.map(date_to_text),
+                    unit: sprint.unit.as_str(),
+                    committed: sprint.committed,
+                    completed: sprint.completed,
+                })
+                .collect(),
+            usage: ReportUsageDto {
+                by_who: report.usage.by_who.into_iter().map(usage).collect(),
+                by_model: report.usage.by_model.into_iter().map(usage).collect(),
+                total: usage(report.usage.total),
+            },
+            decisions: report
+                .decisions
+                .into_iter()
+                .map(|decision| ReportDecisionDto {
+                    asked_by: decision.asked_by,
+                    task: decision.task,
+                    question: decision.question,
+                    chosen: decision.chosen,
+                    note: decision.note,
+                    answered_on: date_to_text(decision.answered_on),
+                })
+                .collect(),
+            handoffs: report
+                .handoffs
+                .into_iter()
+                .map(|handoff| ReportHandoffDto {
+                    reference: handoff.reference,
+                    title: handoff.title,
+                    author: handoff.author,
+                    published_on: date_to_text(handoff.published_on),
+                    summary: handoff.summary,
+                    contract: handoff.contract,
+                    files: handoff.files,
+                })
+                .collect(),
+            open: report.open.into_iter().map(task).collect(),
+            waiting: report.waiting,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used)]
@@ -3010,5 +3279,63 @@ mod tests {
         assert_eq!(sent["taskId"], serde_json::Value::Null);
         assert_eq!(sent["replacedBy"], serde_json::Value::Null);
         assert_eq!(sent["recordedAt"], "2026-11-21T09:00:00.000Z");
+    }
+
+    #[test]
+    fn the_report_of_a_project_goes_out_in_camel_case_with_how_a_task_met_its_date() {
+        let day = |day_of_month| CalendarDate::from_ymd_opt(2026, 11, day_of_month).unwrap();
+        let task = ReportTask {
+            task_id: teamwright_domain::TaskId::generate(),
+            reference: "SH-1".to_owned(),
+            title: "Route the board".to_owned(),
+            area: None,
+            holder: "Ada".to_owned(),
+            status: Some("Done".to_owned()),
+            due_on: Some(day(10)),
+            finished_on: Some(day(12)),
+            estimate_minutes: Some(60),
+            worked_minutes: None,
+            due: DueOutcome::Missed { days: 2 },
+        };
+        let report = ProjectReport {
+            project_id: teamwright_domain::ProjectId::generate(),
+            name: "Smart home hub".to_owned(),
+            key: "SH".to_owned(),
+            description: String::new(),
+            made_on: day(21),
+            begun_on: day(2),
+            is_complete: true,
+            title: "Report of the project".to_owned(),
+            summary: vec!["All 1 of its tasks are finished.".to_owned()],
+            brief: None,
+            by_area: Vec::new(),
+            by_holder: Vec::new(),
+            finished: vec![task],
+            plan: teamwright_application::PlanAgainstActual::default(),
+            sprints: Vec::new(),
+            usage: teamwright_application::ReportUsage::default(),
+            decisions: Vec::new(),
+            handoffs: Vec::new(),
+            open: Vec::new(),
+            waiting: 0,
+        };
+
+        let json = serde_json::to_value(ProjectReportDto::from(report)).unwrap();
+
+        assert_eq!(json["madeOn"], "2026-11-21");
+        assert_eq!(json["isComplete"], true);
+        assert_eq!(json["finished"][0]["finishedOn"], "2026-11-12");
+        assert_eq!(json["finished"][0]["estimateMinutes"], 60);
+        assert_eq!(
+            json["finished"][0]["workedMinutes"],
+            serde_json::Value::Null
+        );
+        assert_eq!(
+            json["finished"][0]["due"],
+            serde_json::json!({ "kind": "missed", "days": 2 })
+        );
+        assert_eq!(json["plan"]["withDueDate"], 0);
+        assert_eq!(json["usage"]["byWho"], serde_json::json!([]));
+        assert_eq!(json["brief"], serde_json::Value::Null);
     }
 }
