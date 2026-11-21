@@ -7,6 +7,10 @@
 //! installed program, asks it whether the user is signed in, runs one turn
 //! of a session in headless mode and reports what happens as events, and
 //! opens a session in the Claude desktop app.
+//! [`EarlierConversationsOnDisk`] implements
+//! [`EarlierConversations`](teamwright_application::EarlierConversations):
+//! it reads the conversations the user held with Claude Code before, from
+//! where Claude Code keeps them, to make digests of them.
 //!
 //! Every turn is one process: `claude -p --output-format stream-json`, with
 //! the prompt on standard input and one JSON object per line on standard
@@ -24,6 +28,7 @@
 mod arguments;
 mod claude_code;
 mod decode;
+mod earlier;
 mod environment;
 mod locate;
 pub mod memory_file;
@@ -32,5 +37,6 @@ mod sign_in;
 pub mod team_bus;
 
 pub use claude_code::{ClaudeCode, full_form};
+pub use earlier::EarlierConversationsOnDisk;
 pub use environment::Environment;
 pub use locate::Locator;
