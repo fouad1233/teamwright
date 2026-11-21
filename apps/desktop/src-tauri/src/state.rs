@@ -160,6 +160,9 @@ pub struct AppState {
     pub teamwork: teamwright_application::TeamworkService,
     /// The memory of the projects: decisions, facts and contracts.
     pub memory: teamwright_application::MemoryService,
+    /// The permission requests of the specialists, and the taking back of
+    /// what was allowed (decision 0038).
+    pub permissions: teamwright_application::PermissionService,
     /// The use cases for keeping this computer in step with the manager's
     /// other computers.
     pub sync: SyncService,
@@ -355,6 +358,11 @@ impl AppState {
                 clock: clock.clone(),
             },
         );
+        let permissions = teamwright_application::PermissionService::new(
+            project_repository.clone(),
+            permission_repository,
+            clock.clone(),
+        );
         let memory = teamwright_application::MemoryService::new(
             project_repository.clone(),
             task_repository.clone(),
@@ -464,6 +472,7 @@ impl AppState {
             ),
             teamwork,
             memory,
+            permissions,
             work,
             sync,
             google_drive: GoogleDriveService::new(Arc::new(LocalDriveSurroundings)),

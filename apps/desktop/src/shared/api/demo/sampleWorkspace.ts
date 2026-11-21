@@ -11,6 +11,7 @@ import type {
   Member,
   MemberProfile,
   MemoryEntry,
+  PermissionRequest,
   Priority,
   Project,
   Sprint,
@@ -830,7 +831,44 @@ export function sampleWorkspace(today: Date = new Date()): DemoWorkspace {
     memory: { [project.id]: sampleMemory(today) },
     versions,
     earlierConversations: sampleEarlierConversations(today),
+    permissions: samplePermissions(today),
   };
+}
+
+/**
+ * What the manager has allowed in the sample project (decision 0038): the
+ * firmware engineer may build the firmware with `cargo build` while it
+ * works, as it asked when it set the firmware project up. The conversation
+ * it asked in is not part of the sample.
+ */
+function samplePermissions(today: Date): PermissionRequest[] {
+  const askedAt = shiftedByDays(today, -3).toISOString();
+  const answeredAt = new Date(Date.parse(askedAt) + 20 * 60 * 1000).toISOString();
+  return [
+    {
+      id: 'demo-permission-1',
+      projectId: SAMPLE_PROJECT_ID,
+      memberId: 'demo-member-firmware',
+      conversationId: 'demo-conversation-firmware-setup',
+      turnId: 'demo-turn-firmware-setup',
+      taskId: taskId(19),
+      kind: 'command_prefix',
+      what: 'cargo build',
+      reason:
+        'Building the firmware is the only way to know that the project is set up right; reading the files does not show it.',
+      askedAt,
+      answer: {
+        decision: 'allowed',
+        scope: 'always',
+        kind: 'command_prefix',
+        what: 'cargo build',
+        note: '',
+        answeredAt,
+        onThisComputer: true,
+        withdrawnAt: null,
+      },
+    },
+  ];
 }
 
 /**

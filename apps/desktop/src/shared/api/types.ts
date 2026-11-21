@@ -1059,6 +1059,74 @@ export interface MemoryEntry {
   replacedBy: Id | null;
 }
 
+/**
+ * What a permission is about (decision 0038): one exact command, the
+ * commands that start with a program and its subcommand, or one web domain.
+ */
+export type PermissionKind = 'command' | 'command_prefix' | 'web_domain';
+
+/**
+ * How long an allowed permission holds: for the turn the answer starts, for
+ * every turn of the specialist on the task, or for every turn of the
+ * specialist in the project until the manager takes it back.
+ */
+export type PermissionScope = 'once' | 'task' | 'always';
+
+/** The manager's answer to a permission request. */
+export interface PermissionAnswer {
+  decision: 'allowed' | 'refused';
+  /** How long it holds, when allowed. */
+  scope: PermissionScope | null;
+  /** What was allowed, which may be the manager's edit of what was asked. */
+  kind: PermissionKind | null;
+  what: string | null;
+  /** Words of the manager's. May be empty. */
+  note: string;
+  answeredAt: Moment;
+  /**
+   * Whether it was answered on this computer. An allowed permission holds
+   * only on the computer it was allowed on.
+   */
+  onThisComputer: boolean;
+  /** When an allowed permission was taken back, or null. */
+  withdrawnAt: Moment | null;
+}
+
+/**
+ * A specialist's request to do something it may not do on its own: run a
+ * command or fetch from a web domain, with why (decision 0038).
+ */
+export interface PermissionRequest {
+  id: Id;
+  projectId: Id;
+  /** The specialist who asked. It may have left the team since. */
+  memberId: Id;
+  conversationId: Id;
+  turnId: Id;
+  /** The task the conversation is about, or null. */
+  taskId: Id | null;
+  kind: PermissionKind;
+  /** The command, the prefix or the domain, exactly as it would be allowed. */
+  what: string;
+  /** Why, in the specialist's words. */
+  reason: string;
+  askedAt: Moment;
+  /** The answer, or null while the request waits for the manager. */
+  answer: PermissionAnswer | null;
+}
+
+/** The manager's answer to a permission request, as the interface sends it. */
+export type NewPermissionAnswer =
+  | {
+      decision: 'allow';
+      scope: PermissionScope;
+      /** The rule as the manager saw it, perhaps narrowed or edited. */
+      kind: PermissionKind;
+      what: string;
+      note: string;
+    }
+  | { decision: 'refuse'; note: string };
+
 /** A fact the manager adds to the memory of a project. */
 export interface NewMemoryFact {
   projectId: Id;

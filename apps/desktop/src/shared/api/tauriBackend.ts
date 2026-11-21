@@ -77,6 +77,8 @@ import type {
   TeamTalk,
   MemoryEntry,
   NewMemoryFact,
+  NewPermissionAnswer,
+  PermissionRequest,
   ThemeName,
   UpdateStatus,
   View,
@@ -615,6 +617,22 @@ export class TauriBackend implements Backend {
 
   removeMemoryEntry(entryId: Id): Promise<void> {
     return call('remove_memory_entry', { entryId });
+  }
+
+  permissionRequests(projectId: Id): Promise<PermissionRequest[]> {
+    return call('permission_requests', { projectId });
+  }
+
+  openPermissionRequests(): Promise<PermissionRequest[]> {
+    return call('open_permission_requests');
+  }
+
+  answerPermission(requestId: Id, answer: NewPermissionAnswer): Promise<Conversation> {
+    return call('answer_permission', { requestId, answer });
+  }
+
+  withdrawPermission(requestId: Id): Promise<PermissionRequest> {
+    return call('withdraw_permission', { requestId });
   }
 
   startWork(taskId: Id): Promise<Conversation> {

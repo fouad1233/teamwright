@@ -2,6 +2,7 @@ import type {
   DecisionRequest,
   InterviewQuestion,
   Member,
+  PermissionKind,
   Proposal,
   Task,
   TokenCounts,
@@ -55,6 +56,11 @@ export interface Script {
   contextAdded: number;
   /** What the specialist asks the manager to decide, if it ends the turn with a question. */
   asks?: Omit<DecisionRequest, 'answer'>;
+  /**
+   * What the specialist asks to be allowed, if it ends the turn with a
+   * request for a permission (decision 0038).
+   */
+  asksPermission?: { kind: PermissionKind; what: string; reason: string };
   /** The questions the Advisor asks, if it ends the turn with an interview. */
   interviews?: InterviewQuestion[];
   /** What the Advisor proposes, if it ends the turn with a proposal. */
@@ -144,10 +150,110 @@ export function scriptAfterDecision(decision: string): Script {
   };
 }
 
+/**
+ * Whether a simulated specialist asks for permission to run a command
+ * before it can finish a task. It does when the title says that something
+ * is to be checked, tested or measured, which needs a command: "Check the
+ * power budget" ends in a request, as the sample project shows.
+ */
+export function asksPermissionBeforeItWorks(task: Task): boolean {
+  return /^(check|test|measure|run)\b/i.test(task.title.trim());
+}
+
+/** The command a simulated specialist asks to run for a task. */
+export const DEMO_COMMAND = 'python3 tools/check.py';
+
+/** The script of a specialist that needs to run a command: it asks for permission. */
+export function scriptForPermission(task: Task): Script {
+  return {
+    acts: [
+      { after: 0, act: { kind: 'note', message: WHAT_THIS_IS } },
+      {
+        after: 700,
+        act: { kind: 'say', text: 'I am reading the task and what the project already has.' },
+      },
+      { after: 600, act: { kind: 'use', id: 'read', tool: 'Read', summary: 'tools/check.py' } },
+      { after: 500, act: { kind: 'finish', id: 'read' } },
+      {
+        after: 800,
+        act: {
+          kind: 'say',
+          text: `To check "${task.title}" I have to run the script of the project, and I may not run commands on my own.`,
+        },
+      },
+      {
+        after: 600,
+        act: {
+          kind: 'note',
+          message: `Asked the manager for permission to run the command \`${DEMO_COMMAND}\`. Why: The script works the numbers out from the parts list; reading it is not the same as running it.`,
+        },
+      },
+    ],
+    endsAfter: 600,
+    answer: 'I am waiting for your permission to run the check script.',
+    tokens: { input: 28, output: 380, cacheRead: 21_500, cacheWritten: 4900 },
+    contextAdded: 23_900,
+    asksPermission: {
+      kind: 'command',
+      what: DEMO_COMMAND,
+      reason:
+        'The script works the numbers out from the parts list; reading it is not the same as running it.',
+    },
+  };
+}
+
+/** The script of a specialist that goes on after the manager answered its request. */
+export function scriptAfterPermission(allowed: string | null): Script {
+  if (allowed === null) {
+    return {
+      acts: [
+        { after: 0, act: { kind: 'note', message: WHAT_THIS_IS } },
+        {
+          after: 700,
+          act: { kind: 'say', text: 'Understood. I am going on without running anything.' },
+        },
+      ],
+      endsAfter: 700,
+      answer: [
+        'Done as far as I could without the command.',
+        '',
+        '1. **What I did:** I read the script and the parts list, and wrote down what I could work out by hand.',
+        '2. **What is open:** the numbers are not checked by the script. Run it yourself, or allow it later.',
+      ].join('\n'),
+      tokens: { input: 20, output: 300, cacheRead: 22_400, cacheWritten: 600 },
+      contextAdded: 9600,
+    };
+  }
+  return {
+    acts: [
+      { after: 0, act: { kind: 'note', message: WHAT_THIS_IS } },
+      { after: 700, act: { kind: 'say', text: 'Thank you. I am running it now.' } },
+      { after: 600, act: { kind: 'use', id: 'run', tool: 'Bash', summary: allowed } },
+      { after: 1200, act: { kind: 'finish', id: 'run' } },
+      { after: 600, act: { kind: 'use', id: 'write', tool: 'Write', summary: 'check-result.md' } },
+      { after: 800, act: { kind: 'finish', id: 'write' } },
+    ],
+    endsAfter: 600,
+    answer: [
+      'Done: the check ran.',
+      '',
+      `1. **What I did:** I ran \`${allowed}\` and wrote what it printed into \`check-result.md\`.`,
+      '2. **Files:** `check-result.md` (new).',
+      '3. **What I decided on my own:** nothing.',
+      '4. **What is open:** please read the result, and accept it or send it back.',
+    ].join('\n'),
+    tokens: { input: 34, output: 590, cacheRead: 22_900, cacheWritten: 800 },
+    contextAdded: 11_200,
+  };
+}
+
 /** The script of a specialist that starts on a task. */
 export function scriptForTask(task: Task): Script {
   if (asksBeforeItWorks(task)) {
     return scriptForChoice(task);
+  }
+  if (asksPermissionBeforeItWorks(task)) {
+    return scriptForPermission(task);
   }
   const file = `${fileNameFor(task.title)}.md`;
   // Now and then, on every other task, the specialist learns something the

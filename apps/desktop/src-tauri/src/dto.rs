@@ -4431,3 +4431,178 @@ mod tests {
         assert_eq!(sent["reportedAt"], serde_json::Value::Null);
     }
 }
+
+/// A specialist's request for a permission, with the manager's answer
+/// (decision 0038).
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PermissionRequestDto {
+    id: String,
+    project_id: String,
+    /// The specialist who asked. It may have left the team since.
+    member_id: String,
+    conversation_id: String,
+    turn_id: String,
+    /// The task the conversation is about, or null.
+    task_id: Option<String>,
+    /// "command", "command_prefix" or "web_domain".
+    kind: &'static str,
+    /// The command, the prefix or the domain.
+    what: String,
+    reason: String,
+    asked_at: String,
+    /// The answer, or null while the request is open.
+    answer: Option<PermissionAnswerDto>,
+}
+
+/// The manager's answer to a permission request.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PermissionAnswerDto {
+    /// "allowed" or "refused".
+    decision: &'static str,
+    /// "once", "task" or "always" when allowed, else null.
+    scope: Option<&'static str>,
+    /// What was allowed, which may be the manager's edit of what was asked.
+    kind: Option<&'static str>,
+    what: Option<String>,
+    note: String,
+    answered_at: String,
+    /// Whether it was answered on this computer, the only one where an
+    /// allowed permission holds.
+    on_this_computer: bool,
+    /// When an allowed permission was taken back, or null.
+    withdrawn_at: Option<String>,
+}
+
+impl PermissionRequestDto {
+    /// The request as the interface sees it from `this_computer`.
+    pub fn of(
+        request: &teamwright_domain::PermissionRequest,
+        this_computer: teamwright_domain::ComputerId,
+    ) -> Self {
+        let said_in = request.said_in();
+        Self {
+            id: request.id().to_string(),
+            project_id: request.project_id().to_string(),
+            member_id: said_in.member_id.to_string(),
+            conversation_id: said_in.conversation_id.to_string(),
+            turn_id: said_in.turn_id.to_string(),
+            task_id: request.task_id().map(|id| id.to_string()),
+            kind: request.asked().kind().as_str(),
+            what: request.asked().text().to_owned(),
+            reason: request.reason().to_owned(),
+            asked_at: moment_to_text(request.asked_at()),
+            answer: request.answer().map(|answer| {
+                let allowed = match &answer.decision {
+                    teamwright_domain::PermissionDecision::Allowed { scope, rule } => {
+                        Some((*scope, rule))
+                    }
+                    teamwright_domain::PermissionDecision::Refused => None,
+                };
+                PermissionAnswerDto {
+                    decision: if allowed.is_some() {
+                        "allowed"
+                    } else {
+                        "refused"
+                    },
+                    scope: allowed.map(|(scope, _)| scope.as_str()),
+                    kind: allowed.map(|(_, rule)| rule.kind().as_str()),
+                    what: allowed.map(|(_, rule)| rule.text().to_owned()),
+                    note: answer.note.clone(),
+                    answered_at: moment_to_text(answer.at),
+                    on_this_computer: answer.computer == this_computer,
+                    withdrawn_at: answer.withdrawn_at.map(moment_to_text),
+                }
+            }),
+        }
+    }
+}
+
+/// What the interface sends to answer a permission request: allow, with
+/// how long and the rule as the manager saw and perhaps edited it; or
+/// refuse. Both may carry words of the manager's.
+#[derive(Debug, Deserialize)]
+#[serde(tag = "decision")]
+pub enum PermissionAnswerInput {
+    /// Allowed.
+    #[serde(rename = "allow")]
+    Allow {
+        /// "once", "task" or "always".
+        scope: String,
+        /// "command", "command_prefix" or "web_domain".
+        kind: String,
+        /// The command, the prefix or the domain.
+        what: String,
+        /// Words of the manager's. May be empty.
+        #[serde(default)]
+        note: String,
+    },
+    /// Refused.
+    #[serde(rename = "refuse")]
+    Refuse {
+        /// Why, in the manager's words. May be empty.
+        #[serde(default)]
+        note: String,
+    },
+}
+
+impl PermissionAnswerInput {
+    /// The answer as the application takes it. A scope or a kind the
+    /// interface does not offer is a request that cannot be understood.
+    pub fn into_reply(self) -> Result<teamwright_application::PermissionReply, CommandError> {
+        let invalid = |error: DomainError| CommandError::invalid_request(error.to_string());
+        Ok(match self {
+            Self::Allow {
+                scope,
+                kind,
+                what,
+                note,
+            } => teamwright_application::PermissionReply::Allow {
+                scope: scope.parse().map_err(invalid)?,
+                kind: kind.parse().map_err(invalid)?,
+                text: what,
+                note,
+            },
+            Self::Refuse { note } => teamwright_application::PermissionReply::Refuse { note },
+        })
+    }
+}
+
+#[cfg(test)]
+mod permission_tests {
+    #![allow(clippy::unwrap_used)]
+
+    use super::*;
+
+    #[test]
+    fn an_answer_to_a_permission_request_is_read_from_the_interface() {
+        let allow: PermissionAnswerInput = serde_json::from_value(serde_json::json!({
+            "decision": "allow", "scope": "task", "kind": "command_prefix", "what": "cargo test"
+        }))
+        .unwrap();
+        assert_eq!(
+            allow.into_reply().unwrap(),
+            teamwright_application::PermissionReply::Allow {
+                scope: teamwright_domain::PermissionScope::Task,
+                kind: teamwright_domain::PermissionKind::CommandPrefix,
+                text: "cargo test".to_owned(),
+                note: String::new(),
+            }
+        );
+        let refuse: PermissionAnswerInput =
+            serde_json::from_value(serde_json::json!({ "decision": "refuse", "note": "No." }))
+                .unwrap();
+        assert_eq!(
+            refuse.into_reply().unwrap(),
+            teamwright_application::PermissionReply::Refuse {
+                note: "No.".to_owned()
+            }
+        );
+        let anything: PermissionAnswerInput = serde_json::from_value(serde_json::json!({
+            "decision": "allow", "scope": "forever", "kind": "command", "what": "ls"
+        }))
+        .unwrap();
+        assert!(anything.into_reply().is_err());
+    }
+}

@@ -11,6 +11,7 @@ import { ActionMenu } from '@/shared/ui/Menu';
 
 import { CoordinatorPanel } from '../coordinator/CoordinatorPanel';
 import { Portrait } from '../office/characters/Portrait';
+import { StandingPermissions } from '../permissions/StandingPermissions';
 import { TaskTally } from '../projects/TaskTally';
 import { usageInWords } from '../office/officeModel';
 import { TeamMessages } from '../teamwork/TeamMessages';
@@ -304,6 +305,8 @@ export function TeamView({ project, tasks }: TeamViewProps) {
       {hasSpecialists && <CoordinatorPanel project={project} tasks={tasks} members={members} />}
 
       {hasSpecialists && <TeamMessages />}
+
+      {hasSpecialists && <StandingPermissions project={project} tasks={tasks} />}
 
       <MemberDialog
         open={form.isOpen}

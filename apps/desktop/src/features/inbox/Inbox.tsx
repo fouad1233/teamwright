@@ -1,5 +1,5 @@
 import { useNavigation } from '@/app/navigation';
-import type { Conversation, Project } from '@/shared/api/types';
+import type { Conversation, PermissionRequest, Project } from '@/shared/api/types';
 import { classNames } from '@/shared/lib/classNames';
 import { formatMoment, taskReference } from '@/shared/lib/format';
 import { Button } from '@/shared/ui/Button';
@@ -9,6 +9,8 @@ import { advisorWaitsFor } from '../advisor/advisorModel';
 import { BudgetQuestions } from '../coordinator/BudgetQuestions';
 import { useBudgetQuestions } from '../coordinator/coordinatorQueries';
 import { AskToNotify } from '../notifications/AskToNotify';
+import { PermissionCard } from '../permissions/PermissionCard';
+import { useOpenPermissionRequests, usePermissionCommands } from '../permissions/permissionQueries';
 import { useComputerOf } from '../sync/RunsElsewhere';
 import { useTasks } from '../tasks/taskQueries';
 import { MemberAvatar } from '../team/Assignee';
@@ -18,7 +20,7 @@ import { appearsAt, waitsForManager } from '../work/waitsForManager';
 import { askedAt, openDecision } from '../work/workModel';
 import { useConversationsWaiting, useWorkCommands } from '../work/workQueries';
 import styles from './Inbox.module.css';
-import { waitingInWords } from './inboxModel';
+import { inOrderOfAsking, waitingInWords } from './inboxModel';
 
 interface InboxProps {
   /** The projects that are not put away, to name the project of a question. */
@@ -27,25 +29,26 @@ interface InboxProps {
 
 /**
  * What waits for the manager, in every project: the questions that
- * specialists asked instead of guessing, and what the Advisor asks or
- * proposes, the one that has waited longest first. A question of a
- * specialist can be answered where it stands. What the Advisor wants leads
- * to the Advisor, where there is room for it.
+ * specialists asked instead of guessing, their requests for a permission,
+ * and what the Advisor asks or proposes, the one that has waited longest
+ * first. A question or a request of a specialist can be answered where it
+ * stands. What the Advisor wants leads to the Advisor, where there is room
+ * for it.
  */
 export function Inbox({ projects }: InboxProps) {
   const waiting = useConversationsWaiting();
+  const permissions = useOpenPermissionRequests();
   const conversations = waiting.data ?? [];
   // The questions of the coordinator about used-up budgets come first.
   const budgetQuestions = useBudgetQuestions().data ?? [];
+  const items = inOrderOfAsking(conversations, permissions.data ?? [], askedAt);
 
   return (
     <section className={styles.inbox} aria-label="Inbox">
       <header className={styles.header}>
         <h1 className={styles.title}>Inbox</h1>
         {waiting.data && (
-          <p className={styles.count}>
-            {waitingInWords(conversations.length + budgetQuestions.length)}
-          </p>
+          <p className={styles.count}>{waitingInWords(items.length + budgetQuestions.length)}</p>
         )}
       </header>
 
@@ -58,23 +61,35 @@ export function Inbox({ projects }: InboxProps) {
 
       {budgetQuestions.length > 0 && <BudgetQuestions questions={budgetQuestions} />}
 
-      {waiting.data && conversations.length === 0 && budgetQuestions.length === 0 && (
+      {waiting.data && items.length === 0 && budgetQuestions.length === 0 && (
         <div className={classNames(styles.empty, 'pattern-band')}>
           <p className="label">Nothing to decide</p>
           <p className={styles.emptyText}>
             A specialist that meets a choice that is yours to make does not guess. It stops and
             asks, and its question appears here: what it needs to know, why it matters, and the
-            options with what each leads to. The questions and the proposals of the Advisor wait
-            here too.
+            options with what each leads to. A specialist that needs to run a command or fetch from
+            the web asks here too, and you allow or refuse exactly that. The questions and the
+            proposals of the Advisor wait here as well.
           </p>
         </div>
       )}
 
-      {conversations.length > 0 && <AskToNotify />}
+      {items.length > 0 && <AskToNotify />}
 
-      {conversations.length > 0 && (
+      {items.length > 0 && (
         <ol className={styles.items}>
-          {conversations.map((conversation) => {
+          {items.map((item) => {
+            if (item.kind === 'permission') {
+              const project = projects.find((known) => known.id === item.request.projectId);
+              return (
+                project && (
+                  <li key={item.request.id}>
+                    <Permission project={project} request={item.request} />
+                  </li>
+                )
+              );
+            }
+            const conversation = item.conversation;
             const project = projects.find((known) => known.id === conversation.projectId);
             return (
               project && (
@@ -181,6 +196,50 @@ function Question({ project, conversation }: QuestionProps) {
         askedBy={member?.name ?? 'A specialist'}
         onDecide={(answer) => commands.decide(conversation.id, answer)}
         answeredOn={conversation.isHere ? undefined : computer}
+      />
+    </article>
+  );
+}
+
+interface PermissionProps {
+  project: Project;
+  request: PermissionRequest;
+}
+
+/** A request for a permission: where it comes from, who asks, and exactly what and why. */
+function Permission({ project, request }: PermissionProps) {
+  const navigation = useNavigation();
+  const tasks = useTasks(project.id);
+  const team = useTeam(project.id);
+  const commands = usePermissionCommands(project.id);
+  const task = tasks.data?.find((known) => known.id === request.taskId);
+  const member = team.data?.find((known) => known.id === request.memberId);
+
+  return (
+    <article className={styles.item}>
+      <header className={styles.about}>
+        {member && <MemberAvatar member={member} />}
+        <span className={styles.project}>{project.name}</span>
+        {task ? (
+          <button
+            type="button"
+            className={styles.task}
+            onClick={() => {
+              navigation.openTaskOf(project.id, task.id);
+            }}
+          >
+            <span className={styles.reference}>{taskReference(project, task)}</span>
+            <span className={styles.taskTitle}>{task.title}</span>
+          </button>
+        ) : (
+          <span className={styles.taskTitle}>A question of yours</span>
+        )}
+        <span className={classNames(styles.when)}>{formatMoment(request.askedAt)}</span>
+      </header>
+      <PermissionCard
+        request={request}
+        askedBy={member?.name ?? 'A specialist'}
+        onAnswer={(answer) => commands.answer(request.id, answer)}
       />
     </article>
   );

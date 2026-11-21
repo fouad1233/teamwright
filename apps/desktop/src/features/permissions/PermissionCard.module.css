@@ -1,0 +1,112 @@
+/* A request for a permission, in the frame of what waits for the manager
+   (WaitsForManager.module.css), laid out like a question
+   (DecisionCard.module.css). */
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+}
+
+/* Who asks, in the gold for words, as on a question. */
+.card .asks {
+  color: var(--brass-text);
+}
+
+/* Exactly what is wanted: the command or the domain, in the type of code,
+   so that every character can be read. */
+.wanted {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.kind {
+  color: var(--ink-faint);
+}
+
+.what {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius-control);
+  background: var(--ground-sunken);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: var(--text-body);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.reason {
+  color: var(--ink-soft);
+  line-height: 1.5;
+}
+
+/* The one plain sentence about what a command is. */
+.warning {
+  padding-left: var(--space-3);
+  border-left: 2px solid var(--brass);
+  color: var(--ink);
+  font-size: var(--text-small);
+  line-height: 1.5;
+}
+
+/* What is allowed, which the manager can narrow or edit before allowing. */
+.rule {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.ruleField {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.ruleInput {
+  font-family: var(--font-mono);
+}
+
+.narrow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* The way of allowing that is chosen is outlined in gold. */
+.narrow [aria-pressed='true'] {
+  border-color: var(--brass);
+  background: var(--brass-soft);
+}
+
+.note {
+  min-height: 52px;
+  padding: var(--space-2);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius-control);
+  background: var(--ground);
+  color: var(--ink);
+  line-height: 1.5;
+  resize: vertical;
+  transition: border-color 100ms ease;
+}
+
+.note::placeholder {
+  color: var(--ink-faint);
+}
+
+.note:hover {
+  border-color: var(--ink-faint);
+}
+
+.note:focus-visible {
+  border-color: var(--brass);
+  outline: 2px solid var(--brass-soft);
+  outline-offset: 0;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+}

@@ -87,6 +87,8 @@ import type {
   TeamTalk,
   MemoryEntry,
   NewMemoryFact,
+  NewPermissionAnswer,
+  PermissionRequest,
   ThemeName,
   TokenCounts,
   UpdateStatus,
@@ -110,6 +112,7 @@ import { groupTasks } from './groups';
 import { PretendedTeamTalk } from './teamwork';
 import { PretendedMemory, shorten } from './memory';
 import { PretendedEarlierConversations, type PretendedConversation } from './earlierConversations';
+import { PretendedPermissions, checkedRule, permissionAnswerInWords } from './permissions';
 import { PretendedGitHub } from './gitHub';
 import { PretendedIntegrations } from './integrations';
 import { freeName, isInside, isSameFolder, nameOf } from './places';
@@ -172,6 +175,7 @@ import { contextAfter, usageOfConversations } from './usage';
 import {
   SIMULATED_MODEL,
   scriptAfterDecision,
+  scriptAfterPermission,
   scriptForChoice,
   scriptForMessage,
   scriptForTask,
@@ -283,6 +287,8 @@ export interface DemoWorkspace {
    * on the computer. Left out, Claude Code was never used there.
    */
   earlierConversations?: PretendedConversation[];
+  /** The permission requests of the specialists. Left out, there are none. */
+  permissions?: PermissionRequest[];
 }
 
 const browserEnvironment: DemoEnvironment = {
@@ -359,6 +365,7 @@ export class DemoBackend implements Backend {
   /** The memory of the projects: decisions, facts and contracts. */
   private readonly memory: PretendedMemory;
   private readonly earlier: PretendedEarlierConversations;
+  private readonly permissions: PretendedPermissions;
   private readonly gitHub = new PretendedGitHub();
   /** The views of each project, in the order the manager gave them. */
   private readonly views = new Map<Id, View[]>();
@@ -479,6 +486,7 @@ export class DemoBackend implements Backend {
         return sender ? [{ projectId: sender.projectId, message }] : [];
       }),
     );
+    this.permissions = new PretendedPermissions(workspace?.permissions ?? []);
     this.memory = new PretendedMemory(
       Object.entries(workspace?.memory ?? {}).flatMap(([projectId, entries]) =>
         entries.map((entry) => ({ projectId, entry })),
@@ -1498,6 +1506,68 @@ export class DemoBackend implements Backend {
     return this.answer(() => {
       this.memory.remove(entryId);
     });
+  }
+
+  permissionRequests(projectId: Id): Promise<PermissionRequest[]> {
+    return this.answer(() => {
+      this.requireProject(projectId);
+      return this.permissions.of(projectId);
+    });
+  }
+
+  openPermissionRequests(): Promise<PermissionRequest[]> {
+    return this.answer(() => {
+      const shown = new Set(
+        this.allProjects()
+          .filter((project) => project.archivedAt === null)
+          .map((project) => project.id),
+      );
+      return this.permissions.openIn(shown);
+    });
+  }
+
+  answerPermission(requestId: Id, answer: NewPermissionAnswer): Promise<Conversation> {
+    return this.answer(() => {
+      const request = this.permissions.requireOpen(requestId);
+      const conversation = this.requireConversationHere(request.conversationId);
+      const member =
+        conversation.memberId === null ? undefined : this.members.get(conversation.memberId);
+      if (!member) {
+        throw new BackendError(
+          'no_specialist',
+          'the specialist of this conversation has left the team',
+        );
+      }
+      if (answer.decision === 'allow') {
+        checkedRule(answer.kind, answer.what);
+        if (answer.scope === 'task' && conversation.taskId === null) {
+          throw new BackendError(
+            'rule_broken',
+            'this permission cannot be given: the conversation is not about a task; allow it once or always',
+          );
+        }
+      }
+      this.refuseWhileBusy(member);
+      if (openDecisionOf(conversation)) {
+        throw new BackendError(
+          'decision_open',
+          `${member.name} waits for a decision: answer its question first`,
+        );
+      }
+      const words = permissionAnswerInWords(request, answer);
+      const answered = this.permissions.answer(requestId, answer, this.nowAsText());
+      this.beginTurn(
+        conversation,
+        words,
+        'decision',
+        scriptAfterPermission(answer.decision === 'allow' ? (answered.answer?.what ?? null) : null),
+      );
+      return conversation;
+    });
+  }
+
+  withdrawPermission(requestId: Id): Promise<PermissionRequest> {
+    return this.answer(() => this.permissions.withdraw(requestId, this.nowAsText()));
   }
 
   startWork(taskId: Id): Promise<Conversation> {
@@ -2889,12 +2959,32 @@ export class DemoBackend implements Backend {
     turn.proposal = script.proposes
       ? { ...structuredClone(script.proposes), approvedAt: null }
       : null;
+    if (script.asksPermission && conversation.memberId !== null) {
+      this.permissions.record({
+        id: this.environment.newId(),
+        projectId: conversation.projectId,
+        memberId: conversation.memberId,
+        conversationId: conversation.id,
+        turnId: turn.id,
+        taskId: conversation.taskId,
+        kind: script.asksPermission.kind,
+        what: script.asksPermission.what,
+        reason: script.asksPermission.reason,
+        askedAt: turn.endedAt,
+        answer: null,
+      });
+    }
 
     // Work that ends in a question is not ready to be checked: the task
     // stays in work until the manager has decided and the specialist has
     // gone on.
     const task = conversation.taskId === null ? undefined : this.tasks.get(conversation.taskId);
-    if (task && turn.decision === null && this.categoryOf(task) === 'active') {
+    if (
+      task &&
+      turn.decision === null &&
+      !script.asksPermission &&
+      this.categoryOf(task) === 'active'
+    ) {
       this.moveToFirst(task, 'review');
     }
     this.noteVersions();

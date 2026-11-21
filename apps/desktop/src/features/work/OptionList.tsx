@@ -25,6 +25,8 @@ interface OptionListProps {
    * question is not answered on. The answer in words is left out.
    */
   isReadOnly?: boolean;
+  /** Offers to answer in words of the manager's own as one more option. */
+  hasOwnWords?: boolean;
 }
 
 /**
@@ -40,6 +42,7 @@ export function OptionList({
   onPick,
   isAppearing = false,
   isReadOnly = false,
+  hasOwnWords = true,
 }: OptionListProps) {
   const name = useId();
 
@@ -84,7 +87,7 @@ export function OptionList({
           )}
         </label>
       ))}
-      {!isReadOnly && (
+      {!isReadOnly && hasOwnWords && (
         <label
           className={classNames(
             styles.option,

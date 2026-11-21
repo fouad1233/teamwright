@@ -72,6 +72,8 @@ import type {
   TeamTalk,
   MemoryEntry,
   NewMemoryFact,
+  NewPermissionAnswer,
+  PermissionRequest,
   ThemeName,
   UpdateStatus,
   View,
@@ -632,6 +634,33 @@ export interface Backend {
   changeMemoryEntry(entryId: Id, title: string, text: string): Promise<MemoryEntry>;
   /** Removes an entry from memory. */
   removeMemoryEntry(entryId: Id): Promise<void>;
+  /**
+   * Every permission request of a project, answered or not, the oldest
+   * first (decision 0038). The standing permissions of a specialist are
+   * among them: allowed for a task or always, and not taken back.
+   * Requests arrive while specialists work, so they are asked for again
+   * when a conversation changes.
+   */
+  permissionRequests(projectId: Id): Promise<PermissionRequest[]>;
+  /** The requests that wait for the manager, in every project not put away, the oldest first. */
+  openPermissionRequests(): Promise<PermissionRequest[]>;
+  /**
+   * Answers a permission request: allowed, with the rule as the manager
+   * saw it (perhaps edited), once, for the task or always; or refused. The
+   * specialist goes on in the same session, with the answer as its next
+   * request and the rule added to what that turn may do. A rule that can
+   * never be allowed, an answer to a request answered already, and a
+   * permission for the task in a conversation that is not about one are
+   * refused (`rule_broken`); a specialist that works on something else is
+   * refused too (`specialist_busy`).
+   */
+  answerPermission(requestId: Id, answer: NewPermissionAnswer): Promise<Conversation>;
+  /**
+   * Takes back a permission allowed for a task or for always. Later turns
+   * are not given it. Something that does not stand is refused
+   * (`rule_broken`).
+   */
+  withdrawPermission(requestId: Id): Promise<PermissionRequest>;
   /**
    * What the specialists and the Advisor of a project have spent, in tokens
    * of every kind, and how full the context of each is. Worked out from the

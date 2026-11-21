@@ -25,7 +25,7 @@ const PROGRAM_KEY = ['agent-program'] as const;
 const PROGRAM_IS_FRESH_FOR = 60_000;
 
 /** The name under which the conversations of a project are cached. */
-function conversationsKey(projectId: Id) {
+export function conversationsKey(projectId: Id) {
   return ['conversations', projectId] as const;
 }
 
