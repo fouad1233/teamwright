@@ -81,6 +81,7 @@ fn workspace() -> Workspace {
         members_store,
         views_store,
         Arc::new(crate::in_memory::InMemoryTagRepository::default()),
+        Arc::new(crate::in_memory::InMemoryFieldRepository::default()),
     );
     let project = projects
         .create(NewProject {
@@ -173,6 +174,7 @@ fn filter(assignee: ViewAssignee, hides_finished: bool) -> ViewFilter {
         assignee,
         hides_finished,
         tag: None,
+        field: None,
     }
 }
 

@@ -9,8 +9,9 @@ use std::path::{Path, PathBuf};
 
 use teamwright_domain::{
     Area, AreaId, CalendarDate, ComputerId, Conversation, ConversationId, Digest, DigestId,
-    EarlierConversation, Handoff, Member, MemberId, MemoryEntry, MemoryEntryId, Project, ProjectId,
-    Sprint, SprintId, Tag, TagId, Task, TaskId, TeamMessage, Timestamp, Turn, View, ViewId,
+    EarlierConversation, Field, FieldId, Handoff, Member, MemberId, MemoryEntry, MemoryEntryId,
+    Project, ProjectId, Sprint, SprintId, Tag, TagId, Task, TaskId, TeamMessage, Timestamp, Turn,
+    View, ViewId,
 };
 
 use crate::places::ChosenPlaces;
@@ -311,6 +312,40 @@ pub trait TagRepository: Send + Sync {
     ///
     /// Returns an error if the tag could not be removed.
     fn delete(&self, id: TagId) -> Result<(), StorageError>;
+}
+
+/// Stores the custom fields of the projects, with their choices.
+pub trait FieldRepository: Send + Sync {
+    /// Stores fields, replacing stored fields with the same identifiers.
+    /// Either all of them are stored or none is.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the fields could not be written.
+    fn save_all(&self, fields: &[Field]) -> Result<(), StorageError>;
+
+    /// Finds a field by its identifier.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if stored data could not be read.
+    fn find(&self, id: FieldId) -> Result<Option<Field>, StorageError>;
+
+    /// Lists the fields of a project in no particular order.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if stored data could not be read.
+    fn list_for_project(&self, project_id: ProjectId) -> Result<Vec<Field>, StorageError>;
+
+    /// Removes a field. The identifier of a field that is not stored is
+    /// ignored. The tasks that held a value of it, and the views filtered
+    /// by it, are expected to have been changed first.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the field could not be removed.
+    fn delete(&self, id: FieldId) -> Result<(), StorageError>;
 }
 
 /// Stores the members of the teams.

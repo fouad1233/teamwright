@@ -1,11 +1,14 @@
 //! Tasks.
 
 use std::cmp::Ordering;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::checklist::{Checklist, ChecklistItem};
 use crate::error::DomainError;
-use crate::ids::{AreaId, ChecklistItemId, MemberId, ProjectId, SprintId, StatusId, TagId, TaskId};
+use crate::field::FieldValue;
+use crate::ids::{
+    AreaId, ChecklistItemId, FieldId, MemberId, ProjectId, SprintId, StatusId, TagId, TaskId,
+};
 use crate::macros::text_enum;
 use crate::sprint::StoryPoints;
 use crate::text::{ChecklistText, TaskTitle};
@@ -258,6 +261,8 @@ pub struct TaskSnapshot {
     pub tags: BTreeSet<TagId>,
     /// The items of its checklist, in any order.
     pub checklist: Vec<ChecklistItem>,
+    /// The values it holds for the custom fields of its project.
+    pub field_values: BTreeMap<FieldId, FieldValue>,
     /// When the task was opened.
     pub created_at: Timestamp,
     /// When the task was last changed.
@@ -287,6 +292,7 @@ pub struct Task {
     rank: Rank,
     tags: BTreeSet<TagId>,
     checklist: Checklist,
+    field_values: BTreeMap<FieldId, FieldValue>,
     created_at: Timestamp,
     updated_at: Timestamp,
     completed_at: Option<Timestamp>,
@@ -332,6 +338,7 @@ impl Task {
             rank,
             tags: BTreeSet::new(),
             checklist: Checklist::default(),
+            field_values: BTreeMap::new(),
             created_at: now,
             updated_at: now,
             completed_at: completion_time(status, None, now),
@@ -360,6 +367,7 @@ impl Task {
             rank: snapshot.rank,
             tags: snapshot.tags,
             checklist: Checklist::of(snapshot.checklist),
+            field_values: snapshot.field_values,
             created_at: snapshot.created_at,
             updated_at: snapshot.updated_at,
             completed_at: snapshot.completed_at,
@@ -473,6 +481,13 @@ impl Task {
     #[must_use]
     pub const fn checklist(&self) -> &Checklist {
         &self.checklist
+    }
+
+    /// The values the task holds for the custom fields of its project, at
+    /// most one for each field.
+    #[must_use]
+    pub const fn field_values(&self) -> &BTreeMap<FieldId, FieldValue> {
+        &self.field_values
     }
 
     /// When the task was opened.
@@ -729,6 +744,34 @@ impl Task {
         Ok(())
     }
 
+    /// Gives the task a value for a custom field, in place of the one it
+    /// held. That the value suits the field, and that the field belongs to
+    /// the project of the task, depend on another stored thing and are
+    /// checked by the use case ([`crate::Field::check`]). Says whether
+    /// anything changed.
+    pub fn set_field_value(
+        &mut self,
+        field_id: FieldId,
+        value: FieldValue,
+        now: Timestamp,
+    ) -> bool {
+        if self.field_values.get(&field_id) == Some(&value) {
+            return false;
+        }
+        self.field_values.insert(field_id, value);
+        self.touch(now);
+        true
+    }
+
+    /// Clears the value of a custom field. Says whether anything changed.
+    pub fn clear_field_value(&mut self, field_id: FieldId, now: Timestamp) -> bool {
+        let changed = self.field_values.remove(&field_id).is_some();
+        if changed {
+            self.touch(now);
+        }
+        changed
+    }
+
     /// Records that the task changed.
     const fn touch(&mut self, now: Timestamp) {
         self.updated_at = now;
@@ -797,6 +840,23 @@ mod tests {
 
         assert!(task.tags().is_empty());
         assert_eq!(task.updated_at(), moment(12));
+    }
+
+    #[test]
+    fn a_task_holds_one_value_for_a_field_and_clears_it() {
+        let mut task = task_in(&Workflow::standard());
+        let field = FieldId::generate();
+
+        assert!(task.set_field_value(field, FieldValue::YesNo(true), moment(10)));
+        assert!(!task.set_field_value(field, FieldValue::YesNo(true), moment(11)));
+        assert!(task.set_field_value(field, FieldValue::YesNo(false), moment(12)));
+        assert_eq!(task.field_values().len(), 1);
+        assert_eq!(task.field_values()[&field], FieldValue::YesNo(false));
+        assert!(task.clear_field_value(field, moment(13)));
+        assert!(!task.clear_field_value(field, moment(14)));
+
+        assert!(task.field_values().is_empty());
+        assert_eq!(task.updated_at(), moment(13));
     }
 
     #[test]

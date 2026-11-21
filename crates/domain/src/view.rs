@@ -10,7 +10,7 @@ use uuid::Uuid;
 
 use crate::error::DomainError;
 use crate::grouping::Grouping;
-use crate::ids::{MemberId, ProjectId, TagId, ViewId};
+use crate::ids::{ChoiceId, FieldId, MemberId, ProjectId, TagId, ViewId};
 use crate::macros::text_enum;
 use crate::text::ViewName;
 
@@ -213,6 +213,8 @@ pub struct ViewFilter {
     pub hides_finished: bool,
     /// The tag the tasks carry, if only the tasks with one tag are shown.
     pub tag: Option<TagId>,
+    /// The value of a custom field the tasks hold, if only those are shown.
+    pub field: Option<FieldFilter>,
 }
 
 impl ViewFilter {
@@ -221,7 +223,40 @@ impl ViewFilter {
         assignee: ViewAssignee::Anyone,
         hides_finished: false,
         tag: None,
+        field: None,
     };
+}
+
+/// The value of a custom field the tasks a view shows hold. Only a choice
+/// field and a yes-or-no field can filter a view: their values are few and
+/// named, so a menu can offer each of them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum FieldFilter {
+    /// The tasks that hold one choice of a choice field.
+    Choice {
+        /// The field.
+        field: FieldId,
+        /// The choice.
+        choice: ChoiceId,
+    },
+    /// The tasks whose yes-or-no field says yes, or those whose field says
+    /// no or holds nothing: a box nobody ticked reads as no.
+    YesNo {
+        /// The field.
+        field: FieldId,
+        /// Yes or no.
+        yes: bool,
+    },
+}
+
+impl FieldFilter {
+    /// The field the filter looks at.
+    #[must_use]
+    pub const fn field(self) -> FieldId {
+        match self {
+            Self::Choice { field, .. } | Self::YesNo { field, .. } => field,
+        }
+    }
 }
 
 /// The plain data of a view, used to recreate one that was stored.
@@ -525,6 +560,32 @@ impl View {
         }
     }
 
+    /// Shows the tasks whatever they hold again if the view showed only
+    /// those holding a value of a field that was removed. The rest of the
+    /// filter stays as it was. Says whether anything changed.
+    pub fn forget_field(&mut self, field_id: FieldId) -> bool {
+        if self.filter.field.map(FieldFilter::field) == Some(field_id) {
+            self.filter.field = None;
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Shows the tasks whatever they hold again if the view showed only
+    /// those holding a choice that was removed. Says whether anything
+    /// changed.
+    pub fn forget_choice(&mut self, choice_id: ChoiceId) -> bool {
+        if let Some(FieldFilter::Choice { choice, .. }) = self.filter.field
+            && choice == choice_id
+        {
+            self.filter.field = None;
+            true
+        } else {
+            false
+        }
+    }
+
     /// Puts the view at another place among the views of its project.
     pub fn move_to(&mut self, position: u32) {
         self.position = position;
@@ -771,6 +832,7 @@ mod tests {
             assignee: ViewAssignee::Nobody,
             hides_finished: false,
             tag: None,
+            field: None,
         });
 
         assert_eq!(result.unwrap_err().code(), "rule_broken");
@@ -883,6 +945,7 @@ mod tests {
             assignee: ViewAssignee::Manager,
             hides_finished: true,
             tag: Some(TagId::generate()),
+            field: None,
         };
 
         for view in &mut views {
@@ -928,6 +991,7 @@ mod tests {
                 assignee: ViewAssignee::Member(member),
                 hides_finished: true,
                 tag: None,
+                field: None,
             })
             .unwrap();
 
@@ -940,6 +1004,7 @@ mod tests {
                 assignee: ViewAssignee::Anyone,
                 hides_finished: true,
                 tag: None,
+                field: None,
             }
         );
     }
@@ -952,6 +1017,7 @@ mod tests {
             assignee: ViewAssignee::Manager,
             hides_finished: true,
             tag: Some(tag),
+            field: None,
         };
         board.set_filter(filter).unwrap();
 
@@ -965,5 +1031,39 @@ mod tests {
                 ..filter
             }
         );
+    }
+
+    #[test]
+    fn a_view_forgets_a_field_or_a_choice_that_was_removed() {
+        let mut board = View::starting(ProjectId::generate()).remove(0);
+        let field = FieldId::generate();
+        let choice = ChoiceId::generate();
+        let filter = ViewFilter {
+            hides_finished: true,
+            field: Some(FieldFilter::Choice { field, choice }),
+            ..ViewFilter::EVERY_TASK
+        };
+        board.set_filter(filter).unwrap();
+
+        assert!(!board.forget_field(FieldId::generate()));
+        assert!(!board.forget_choice(ChoiceId::generate()));
+        assert!(board.forget_choice(choice));
+        assert_eq!(
+            board.filter(),
+            ViewFilter {
+                field: None,
+                ..filter
+            }
+        );
+
+        board
+            .set_filter(ViewFilter {
+                field: Some(FieldFilter::YesNo { field, yes: true }),
+                ..filter
+            })
+            .unwrap();
+        assert!(!board.forget_choice(choice));
+        assert!(board.forget_field(field));
+        assert_eq!(board.filter().field, None);
     }
 }

@@ -419,6 +419,32 @@ pub enum ApplicationError {
     #[error("a tag can only be used in its own project")]
     TagOfAnotherProject,
 
+    /// A custom field was to get a name that another field of its project
+    /// has, whatever the capitals.
+    #[error("the project already has a field called \"{name}\"")]
+    FieldNameTaken {
+        /// The name that was requested, tidied.
+        name: String,
+    },
+
+    /// A custom field was to be added to a project that has as many as it
+    /// may.
+    #[error("a project has at most {max} fields")]
+    TooManyFields {
+        /// The most fields a project may have.
+        max: usize,
+    },
+
+    /// A custom field of one project was to hold a value of a task of
+    /// another, or to filter a view of another.
+    #[error("a field can only be used in its own project")]
+    FieldOfAnotherProject,
+
+    /// A view was to be filtered by a field that is neither a choice nor
+    /// yes or no.
+    #[error("a view can be filtered only by a field of choices or of yes or no")]
+    FieldNotFilterable,
+
     /// A file to copy was named by a path that has no file name, such as
     /// the root of a drive.
     #[error("a file to copy has no name")]
@@ -501,6 +527,8 @@ impl ApplicationError {
             | Self::UnfinishedStayInSprint
             | Self::SubtaskInAnotherArea { .. }
             | Self::TooManyTags { .. }
+            | Self::TooManyFields { .. }
+            | Self::FieldNotFilterable
             | Self::ProjectWithoutAreas => "rule_broken",
             Self::FolderNotFound { .. } | Self::NotAGoogleDriveFolder { .. } => "folder_not_found",
             Self::NotFound { .. } | Self::NothingAtPath { .. } => "not_found",
@@ -511,7 +539,8 @@ impl ApplicationError {
             | Self::UnfinishedToAnotherProject
             | Self::AreaOfAnotherProject
             | Self::TasksToAreaOfAnotherProject
-            | Self::TagOfAnotherProject => "different_projects",
+            | Self::TagOfAnotherProject
+            | Self::FieldOfAnotherProject => "different_projects",
             Self::AnotherSprintActive { .. } => "another_sprint_active",
             Self::SprintEmpty { .. } => "sprint_empty",
             Self::SubtaskPlannedAlone { .. } => "subtask_planned_alone",
@@ -523,6 +552,7 @@ impl ApplicationError {
             Self::LastArea { .. } => "last_area",
             Self::AreaInUse { .. } => "area_in_use",
             Self::TagNameTaken { .. } => "tag_name_taken",
+            Self::FieldNameTaken { .. } => "field_name_taken",
             Self::SubtaskMovedAlone { .. } => "subtask_moved_alone",
             Self::DependencyCycle { .. } => "dependency_cycle",
             Self::MemberNameTaken { .. } => "member_name_taken",

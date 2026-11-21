@@ -24,6 +24,7 @@ pub mod coordination;
 pub mod dependencies;
 pub mod digest;
 pub mod error;
+pub mod field;
 pub mod grouping;
 pub mod ids;
 pub mod integration;
@@ -68,11 +69,12 @@ pub use digest::{
     Digest, DigestDraft, DigestSnapshot, DigestSource, DigestText, EarlierConversation,
 };
 pub use error::DomainError;
+pub use field::{Field, FieldChoice, FieldKind, FieldNumber, FieldSnapshot, FieldValue};
 pub use grouping::{GroupKey, Grouping, GroupingContext, TaskGroup, group_tasks};
 pub use ids::{
-    AreaId, ChecklistItemId, ComputerId, ConnectorId, ConversationId, CoordinatorEntryId, DigestId,
-    HandoffId, MemberId, MemoryEntryId, ProjectId, SkillId, SprintId, StatusId, TagId, TaskId,
-    TeamMessageId, TurnId, ViewId,
+    AreaId, ChecklistItemId, ChoiceId, ComputerId, ConnectorId, ConversationId, CoordinatorEntryId,
+    DigestId, FieldId, HandoffId, MemberId, MemoryEntryId, ProjectId, SkillId, SprintId, StatusId,
+    TagId, TaskId, TeamMessageId, TurnId, ViewId,
 };
 pub use integration::{EventKind, EventKinds, RepositoryName, WebAddress};
 pub use kit::{
@@ -109,13 +111,14 @@ pub use teamwork::{
 };
 pub use template::{ProjectTemplate, TemplateStatus};
 pub use text::{
-    AreaName, ChecklistText, ComputerName, DigestTitle, MemberName, ModelName, ProjectName,
-    SprintName, StatusName, TagName, TaskTitle, ViewName,
+    AreaName, ChecklistText, ChoiceName, ComputerName, DigestTitle, FieldName, FieldText,
+    FieldUnit, MemberName, ModelName, ProjectName, SprintName, StatusName, TagName, TaskTitle,
+    ViewName,
 };
 pub use time::{CalendarDate, Timestamp};
 pub use velocity::{
     FEWEST_SPRINTS_FOR_A_PACE, Load, MOST_SPRINTS_FOR_A_PACE, Pace, SprintsNeeded, Velocity,
 };
-pub use view::{View, ViewAssignee, ViewFilter, ViewKind, ViewSnapshot};
+pub use view::{FieldFilter, View, ViewAssignee, ViewFilter, ViewKind, ViewSnapshot};
 pub use work_in_progress::{Fill, StatusLoad, WorkInProgressLimit};
 pub use workflow::{Status, StatusCategory, Workflow};

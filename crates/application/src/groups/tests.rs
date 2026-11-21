@@ -106,6 +106,7 @@ fn workspace() -> Workspace {
             members_store.clone(),
             views_store.clone(),
             tags_store.clone(),
+            Arc::new(crate::in_memory::InMemoryFieldRepository::default()),
         ),
         groups: GroupingService::new(
             projects_store,

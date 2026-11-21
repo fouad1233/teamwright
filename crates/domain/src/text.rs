@@ -224,6 +224,90 @@ define_text!(
     max_length = 200
 );
 
+define_text!(
+    /// The name of a custom field of a project, such as "Supplier" or "Unit
+    /// cost". It heads a column of the table, so it is short.
+    FieldName,
+    field = "field name",
+    max_length = 40
+);
+
+impl FieldName {
+    /// Whether two names are the same, whatever the capitals. Two fields of
+    /// a project never have the same name in this sense.
+    #[must_use]
+    pub fn is_same_as(&self, other: &str) -> bool {
+        self.0.to_lowercase() == other.to_lowercase()
+    }
+
+    /// This name with the first number from 2 on for which `is_free` holds,
+    /// such as "Supplier 2".
+    #[must_use]
+    pub fn numbered(base: &str, is_free: &impl Fn(&str) -> bool) -> Self {
+        let candidate = numbered_text(base, Self::MAX_LENGTH, is_free);
+        Self::parse(&candidate).unwrap_or_else(|_| Self::from_trusted("Field"))
+    }
+}
+
+define_text!(
+    /// The name of one choice of a custom field, such as "Mouser". It is
+    /// shown like a tag, so it has the length of a tag name.
+    ChoiceName,
+    field = "choice name",
+    max_length = 30
+);
+
+impl ChoiceName {
+    /// Whether two names are the same, whatever the capitals. Two choices
+    /// of a field never have the same name in this sense.
+    #[must_use]
+    pub fn is_same_as(&self, other: &str) -> bool {
+        self.0.to_lowercase() == other.to_lowercase()
+    }
+
+    /// This name with the first number from 2 on for which `is_free` holds,
+    /// such as "Mouser 2".
+    #[must_use]
+    pub fn numbered(base: &str, is_free: &impl Fn(&str) -> bool) -> Self {
+        let candidate = numbered_text(base, Self::MAX_LENGTH, is_free);
+        Self::parse(&candidate).unwrap_or_else(|_| Self::from_trusted("Choice"))
+    }
+}
+
+define_text!(
+    /// The unit shown after the numbers of a custom field, such as "mm" or
+    /// "€".
+    FieldUnit,
+    field = "unit",
+    max_length = 8
+);
+
+define_text!(
+    /// The value of a custom field of the kind text: one line, such as a
+    /// part number or the name of a contact.
+    FieldText,
+    field = "text of a field",
+    max_length = 200
+);
+
+/// A text with the first number from 2 on for which `is_free` holds, such
+/// as "Supplier 2", shortened if the number would not fit in `max_length`
+/// characters otherwise. A trimmed stem and a number are never empty and
+/// never on more than one line.
+fn numbered_text(base: &str, max_length: usize, is_free: &impl Fn(&str) -> bool) -> String {
+    let mut number: u32 = 2;
+    loop {
+        let suffix = format!(" {number}");
+        let room = max_length.saturating_sub(suffix.chars().count());
+        let stem: String = base.chars().take(room).collect();
+        let candidate = format!("{}{suffix}", stem.trim_end());
+        if is_free(&candidate) {
+            return candidate;
+        }
+        number = number.saturating_add(1);
+    }
+}
+
 /// The name of a model, as the program that runs the specialists
 /// understands it: a short name for the latest model of a family, such as
 /// `sonnet`, or the full name of a model.

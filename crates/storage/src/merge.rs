@@ -108,7 +108,8 @@ const TASK_FIELDS: &[Field] = &[
     later("updated_at", &["updated_at"]),
     // The tags a task carries and the items of its checklist have no field
     // here: each is a key of its own, `tag:<id>` and `item:<id>`, and a key
-    // no field names merges on its own (decision 0030).
+    // no field names merges on its own (decision 0030). So does the value
+    // of each custom field, `field:<id>` (decision 0035).
 ];
 
 const MEMBER_FIELDS: &[Field] = &[
@@ -140,6 +141,9 @@ const VIEW_FIELDS: &[Field] = &[
     // later content wins. The domain does not read it, so nothing inside
     // it can be merged.
     later("content", &["content"]),
+    // The field and the value it is filtered by go together, so that a
+    // value is never read against another field.
+    later("field_filter", &["field_id", "field_value"]),
 ];
 
 const AREA_FIELDS: &[Field] = &[later("name", &["name"]), later("position", &["position"])];
@@ -168,6 +172,16 @@ const BUDGET_FIELDS: &[Field] = &[
     later("question", &["question"]),
 ];
 
+// The kind of a custom field never changes, and its choices have no field
+// here: each is a key of its own, `choice:<id>`, which merges on its own
+// (decision 0035).
+const FIELD_FIELDS: &[Field] = &[
+    later("name", &["name"]),
+    later("kind", &["kind"]),
+    later("unit", &["unit"]),
+    later("position", &["position"]),
+];
+
 const CONVERSATION_FIELDS: &[Field] = &[
     later("member", &["member_id"]),
     later("task", &["task_id"]),
@@ -190,6 +204,7 @@ pub(crate) const fn merging_of(entity: Entity) -> Merging {
         Entity::View => Merging::ByField(VIEW_FIELDS),
         Entity::Area => Merging::ByField(AREA_FIELDS),
         Entity::Tag => Merging::ByField(TAG_FIELDS),
+        Entity::Field => Merging::ByField(FIELD_FIELDS),
         Entity::Conversation => Merging::ByField(CONVERSATION_FIELDS),
         Entity::TeamMessage => Merging::ByField(TEAM_MESSAGE_FIELDS),
         Entity::MemoryEntry => Merging::ByField(MEMORY_ENTRY_FIELDS),
@@ -524,6 +539,34 @@ mod tests {
                 "{key}"
             );
         }
+    }
+
+    #[test]
+    fn every_value_of_a_task_and_every_choice_of_a_field_merges_on_its_own() {
+        let of_task = fields_of(Entity::Task, &["title", "field:a", "field:b"]);
+        let of_field = fields_of(Entity::Field, &["name", "kind", "choice:c", "choice:d"]);
+
+        for (fields, key) in [
+            (&of_task, "field:a"),
+            (&of_task, "field:b"),
+            (&of_field, "choice:c"),
+            (&of_field, "choice:d"),
+        ] {
+            assert!(
+                fields.iter().any(|(name, keys, rule)| name == key
+                    && keys == &[key.to_owned()]
+                    && *rule == Rule::Later),
+                "{key}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_field_of_a_filter_and_its_value_merge_together() {
+        let fields = fields_of(Entity::View, &["name", "field_id", "field_value"]);
+
+        assert!(fields.iter().any(|(name, keys, _)| name == "field_filter"
+            && keys == &["field_id".to_owned(), "field_value".to_owned()]));
     }
 
     #[test]

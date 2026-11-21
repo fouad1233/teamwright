@@ -18,8 +18,8 @@ use rusqlite::{ErrorCode, OptionalExtension, Transaction, named_params};
 use serde_json::{Map, Value};
 use teamwright_application::{ExchangedChange, ExchangedOperation, NoticeKind, TakeInReport};
 use teamwright_domain::{
-    Area, AreaName, Assignee, Project, Sprint, Status, StatusCategory, TagId, TagName, Task,
-    TaskId, View, ViewAssignee, ViewName,
+    Area, AreaName, Assignee, ChoiceName, FieldFilter, FieldId, FieldName, FieldValue, Project,
+    Sprint, Status, StatusCategory, TagId, TagName, Task, TaskId, View, ViewAssignee, ViewName,
 };
 
 use crate::apply;
@@ -27,6 +27,7 @@ use crate::areas;
 use crate::codec;
 use crate::conversations;
 use crate::error::DatabaseError;
+use crate::fields;
 use crate::merge::{MergedState, Rule, Stamps, all_fields, object_from_text, stamps_from_text};
 use crate::notices;
 use crate::operations::{Entity, OperationRecorder, Stamp, latest_changes_seen, wall_clock_millis};
@@ -48,7 +49,7 @@ pub(crate) const DAMAGED: &str = "damaged";
 pub(crate) const NEVER: &str = "never";
 
 /// The kinds of things whose dropped changes the manager is told about.
-const TOLD_WHEN_DROPPED: [Entity; 8] = [
+const TOLD_WHEN_DROPPED: [Entity; 9] = [
     Entity::Project,
     Entity::Task,
     Entity::Member,
@@ -56,6 +57,7 @@ const TOLD_WHEN_DROPPED: [Entity; 8] = [
     Entity::View,
     Entity::Area,
     Entity::Tag,
+    Entity::Field,
     Entity::Conversation,
 ];
 
@@ -372,6 +374,7 @@ fn parents_of(
         | Entity::View
         | Entity::Area
         | Entity::Tag
+        | Entity::Field
         | Entity::Conversation
         | Entity::TeamMessage
         | Entity::MemoryEntry
@@ -435,6 +438,10 @@ fn references_of(entity: Entity, state: &Map<String, Value>) -> Vec<(Entity, Str
                 let tag = key.strip_prefix(tasks::TAG_KEY)?;
                 (*value == Value::Bool(true)).then(|| (Entity::Tag, tag.to_owned()))
             }));
+            references.extend(state.iter().filter_map(|(key, value)| {
+                let field = key.strip_prefix(tasks::FIELD_KEY)?;
+                (!value.is_null()).then(|| (Entity::Field, field.to_owned()))
+            }));
         }
         Entity::Conversation => {
             if let Some(member) = text_of(state, "member_id") {
@@ -452,6 +459,9 @@ fn references_of(entity: Entity, state: &Map<String, Value>) -> Vec<(Entity, Str
             }
             if let Some(tag) = text_of(state, "tag_id") {
                 references.push((Entity::Tag, tag.to_owned()));
+            }
+            if let Some(field) = text_of(state, "field_id") {
+                references.push((Entity::Field, field.to_owned()));
             }
         }
         _ => {}
@@ -720,6 +730,17 @@ impl Round {
                     view.forget_tag(tag_id);
                     return views::store_view(transaction, operations, &view);
                 }
+                if let Some(by_field) = view.filter().field
+                    && presence(transaction, Entity::Field, &by_field.field().to_string())?
+                        == Presence::Deleted
+                {
+                    // A view filtered by a field removed on another computer
+                    // shows the tasks whatever they hold again, as it does
+                    // when the field is removed here. A choice removed is
+                    // repaired with the rules of the project.
+                    view.forget_field(by_field.field());
+                    return views::store_view(transaction, operations, &view);
+                }
                 views::write_state(transaction, state)
             }
             other => apply::write_state(transaction, other, state),
@@ -777,6 +798,13 @@ impl Round {
         for tag in tags {
             if presence(transaction, Entity::Tag, &tag.to_string())? == Presence::Deleted {
                 task.take_tag_off(tag, now);
+                repaired = true;
+            }
+        }
+        let fields: Vec<FieldId> = task.field_values().keys().copied().collect();
+        for field in fields {
+            if presence(transaction, Entity::Field, &field.to_string())? == Presence::Deleted {
+                task.clear_field_value(field, now);
                 repaired = true;
             }
         }
@@ -931,6 +959,7 @@ impl Round {
             Entity::View => format!("the view \"{name}\""),
             Entity::Area => format!("the area \"{name}\""),
             Entity::Tag => format!("the tag \"{name}\""),
+            Entity::Field => format!("the field \"{name}\""),
             _ => "a conversation".to_owned(),
         };
         let project_id = match entity {
@@ -1089,6 +1118,35 @@ impl Round {
                     }
                 }
             }
+            Entity::Field => {
+                // A field removed on another computer has its values cleared
+                // here first, so that the history of each task says so, as
+                // it does when the field is removed here.
+                let field_id: FieldId = codec::parse(id)?;
+                let project_id: Option<String> = transaction
+                    .query_row(
+                        "SELECT project_id FROM fields WHERE id = :id",
+                        named_params! { ":id": id },
+                        |row| row.get(0),
+                    )
+                    .optional()?;
+                if let Some(project_id) = project_id {
+                    for mut task in tasks::tasks_of_project(transaction, &project_id)? {
+                        if !going(Entity::Task, &task.id().to_string())
+                            && task.clear_field_value(field_id, now)
+                        {
+                            tasks::store_task(transaction, operations, &task)?;
+                        }
+                    }
+                    for mut view in views::views_of_project(transaction, &project_id)? {
+                        if !going(Entity::View, &view.id().to_string())
+                            && view.forget_field(field_id)
+                        {
+                            views::store_view(transaction, operations, &view)?;
+                        }
+                    }
+                }
+            }
             _ => {}
         }
         Ok(())
@@ -1165,6 +1223,7 @@ impl Round {
             | Entity::View
             | Entity::Area
             | Entity::Tag
+            | Entity::Field
             | Entity::Conversation
             | Entity::Digest
             | Entity::Coordinator
@@ -1324,7 +1383,96 @@ impl Round {
         self.repair_area_names(transaction, operations, project_id)?;
         self.give_general_if_no_area_is_left(transaction, operations, project_id)?;
         self.put_tasks_into_areas(transaction, operations, project_id)?;
-        self.repair_tag_names(transaction, operations, project_id)
+        self.repair_tag_names(transaction, operations, project_id)?;
+        self.repair_fields(transaction, operations, project_id)
+    }
+
+    /// Repairs the custom fields of a project after two computers changed
+    /// them at the same time (decision 0035), as tags are repaired:
+    ///
+    /// - Of two fields with one name, whatever the capitals, the older keeps
+    ///   it and the younger is numbered ("Supplier 2"). A field is as old as
+    ///   its first change in the log.
+    /// - Of two choices of a field with one name, the one that comes first
+    ///   keeps it and the other is numbered.
+    /// - A task that holds a value of a field that is gone, a choice its
+    ///   field no longer has, or a value of another kind is cleared, so that
+    ///   its history says so; a view filtered by such a value shows the
+    ///   tasks whatever they hold again.
+    fn repair_fields(
+        &mut self,
+        transaction: &Transaction<'_>,
+        operations: &mut OperationRecorder<'_>,
+        project_id: &str,
+    ) -> Result<(), DatabaseError> {
+        let mut aged = Vec::new();
+        for field in fields::fields_of_project(transaction, project_id)? {
+            let created = first_stamp(transaction, Entity::Field, &field.id().to_string())?;
+            aged.push((created, field));
+        }
+        aged.sort_by(|(one_created, one), (other_created, other)| {
+            one_created
+                .cmp(other_created)
+                .then_with(|| one.id().cmp(&other.id()))
+        });
+        let mut taken: BTreeSet<String> = aged
+            .iter()
+            .map(|(_, field)| field.name().as_str().to_lowercase())
+            .collect();
+        let mut names_kept = BTreeSet::new();
+        let mut kept = Vec::new();
+        for (_, mut field) in aged {
+            let mut changed = false;
+            if !names_kept.insert(field.name().as_str().to_lowercase()) {
+                let renamed = FieldName::numbered(field.name().as_str(), &|candidate: &str| {
+                    !taken.contains(&candidate.to_lowercase())
+                });
+                taken.insert(renamed.as_str().to_lowercase());
+                names_kept.insert(renamed.as_str().to_lowercase());
+                field.rename(renamed);
+                changed = true;
+            }
+            changed |= number_choices_with_one_name(&mut field)?;
+            if changed {
+                fields::store_field(transaction, operations, &field)?;
+            }
+            kept.push(field);
+        }
+
+        let now = Utc::now();
+        let suits = |field_id: FieldId, value: &FieldValue| {
+            kept.iter()
+                .find(|field| field.id() == field_id)
+                .is_some_and(|field| field.check(value).is_ok())
+        };
+        for mut task in tasks::tasks_of_project(transaction, project_id)? {
+            let unsuited: Vec<FieldId> = task
+                .field_values()
+                .iter()
+                .filter(|(field, value)| !suits(**field, value))
+                .map(|(field, _)| *field)
+                .collect();
+            if unsuited.is_empty() {
+                continue;
+            }
+            for field in unsuited {
+                task.clear_field_value(field, now);
+            }
+            tasks::store_task(transaction, operations, &task)?;
+        }
+        for mut view in views::views_of_project(transaction, project_id)? {
+            let Some(by_field) = view.filter().field else {
+                continue;
+            };
+            let still_filters = match by_field {
+                FieldFilter::Choice { field, choice } => suits(field, &FieldValue::Choice(choice)),
+                FieldFilter::YesNo { field, yes } => suits(field, &FieldValue::YesNo(yes)),
+            };
+            if !still_filters && view.forget_field(by_field.field()) {
+                views::store_view(transaction, operations, &view)?;
+            }
+        }
+        Ok(())
     }
 
     /// Repairs the names of the tags of a project after two computers made
@@ -1654,6 +1802,40 @@ impl Round {
             .optional()?;
         Ok(creator.as_deref() == Some(self.this_computer.as_str()))
     }
+}
+
+/// Numbers the choices of a field that two computers gave one name,
+/// whatever the capitals: the choice that comes first keeps the name, the
+/// others get the first free number from 2 on. Says whether any was
+/// renamed.
+fn number_choices_with_one_name(
+    field: &mut teamwright_domain::Field,
+) -> Result<bool, DatabaseError> {
+    let mut taken: BTreeSet<String> = field
+        .choices()
+        .iter()
+        .map(|choice| choice.name().as_str().to_lowercase())
+        .collect();
+    let mut names_kept = BTreeSet::new();
+    let mut renames = Vec::new();
+    for choice in field.choices() {
+        if names_kept.insert(choice.name().as_str().to_lowercase()) {
+            continue;
+        }
+        let renamed = ChoiceName::numbered(choice.name().as_str(), &|candidate: &str| {
+            !taken.contains(&candidate.to_lowercase())
+        });
+        taken.insert(renamed.as_str().to_lowercase());
+        names_kept.insert(renamed.as_str().to_lowercase());
+        renames.push((choice.id(), renamed));
+    }
+    let renamed_any = !renames.is_empty();
+    for (choice, name) in renames {
+        field
+            .rename_choice(choice, name)
+            .map_err(|reason| codec::damaged_record("field", &field.id().to_string(), &reason))?;
+    }
+    Ok(renamed_any)
 }
 
 /// The stamp of the first change of a thing in the log, or nothing if the

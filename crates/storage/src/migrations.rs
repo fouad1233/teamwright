@@ -36,6 +36,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("schema/0026_coordinator.sql"),
     include_str!("schema/0027_skills_and_connectors.sql"),
     include_str!("schema/0030_view_grouping.sql"),
+    include_str!("schema/0024_custom_fields.sql"),
 ];
 
 /// Applies the migrations a database has not seen yet. Each one runs in its
@@ -130,8 +131,11 @@ mod tests {
             "sprints",
             "statuses",
             "checklist_items",
+            "field_choices",
+            "fields",
             "tags",
             "task_dependencies",
+            "task_field_values",
             "task_tags",
             "tasks",
             "turn_decision_options",

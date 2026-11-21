@@ -11,10 +11,10 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use chrono::TimeDelta;
 use teamwright_domain::{
-    Area, AreaId, Conversation, ConversationId, Digest, DigestId, EarlierConversation, Handoff,
-    HandoffId, Member, MemberId, MemoryEntry, MemoryEntryId, Project, ProjectId, Release, Sprint,
-    SprintId, Tag, TagId, Task, TaskId, TeamMessage, TeamMessageId, Timestamp, Turn, TurnId, View,
-    ViewId,
+    Area, AreaId, Conversation, ConversationId, Digest, DigestId, EarlierConversation, Field,
+    FieldId, Handoff, HandoffId, Member, MemberId, MemoryEntry, MemoryEntryId, Project, ProjectId,
+    Release, Sprint, SprintId, Tag, TagId, Task, TaskId, TeamMessage, TeamMessageId, Timestamp,
+    Turn, TurnId, View, ViewId,
 };
 
 use crate::agent_runtime::{
@@ -26,9 +26,10 @@ use crate::notifications::{NotificationChoice, NotificationChoiceStore};
 use crate::places::ChosenPlaces;
 use crate::ports::{
     ApprovedPlan, AreaRepository, Clock, ConversationRepository, DigestRepository,
-    EarlierConversations, FileSystem, FoundConversation, MemberRepository, MemoryRepository,
-    PlacesRepository, PlanningRepository, ProjectFolders, ProjectRepository, SprintRepository,
-    StorageError, TagRepository, TaskRepository, TeamworkRepository, ViewRepository, WorkListener,
+    EarlierConversations, FieldRepository, FileSystem, FoundConversation, MemberRepository,
+    MemoryRepository, PlacesRepository, PlanningRepository, ProjectFolders, ProjectRepository,
+    SprintRepository, StorageError, TagRepository, TaskRepository, TeamworkRepository,
+    ViewRepository, WorkListener,
 };
 use crate::project_events::ProjectEvent;
 use crate::updates::{UpdateChoice, UpdateChoiceStore};
@@ -432,6 +433,39 @@ impl DigestRepository for InMemoryDigestRepository {
 
     fn delete(&self, id: DigestId) -> Result<(), StorageError> {
         lock(&self.digests).remove(&id);
+        Ok(())
+    }
+}
+
+/// Keeps the custom fields of the projects in memory.
+#[derive(Debug, Default)]
+pub struct InMemoryFieldRepository {
+    fields: Mutex<BTreeMap<FieldId, Field>>,
+}
+
+impl FieldRepository for InMemoryFieldRepository {
+    fn save_all(&self, fields: &[Field]) -> Result<(), StorageError> {
+        let mut stored = lock(&self.fields);
+        for field in fields {
+            stored.insert(field.id(), field.clone());
+        }
+        Ok(())
+    }
+
+    fn find(&self, id: FieldId) -> Result<Option<Field>, StorageError> {
+        Ok(lock(&self.fields).get(&id).cloned())
+    }
+
+    fn list_for_project(&self, project_id: ProjectId) -> Result<Vec<Field>, StorageError> {
+        Ok(lock(&self.fields)
+            .values()
+            .filter(|field| field.project_id() == project_id)
+            .cloned()
+            .collect())
+    }
+
+    fn delete(&self, id: FieldId) -> Result<(), StorageError> {
+        lock(&self.fields).remove(&id);
         Ok(())
     }
 }

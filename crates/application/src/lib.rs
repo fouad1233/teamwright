@@ -5,7 +5,8 @@
 //! sprint, put someone on the team, choose the folders of a project, let an
 //! AI specialist work on a task. Each use case is a method of a service
 //! ([`ProjectService`], [`TaskService`], [`SprintService`], [`ViewService`],
-//! [`AreaService`], [`TagService`], [`ChecklistService`], [`TeamService`], [`PlacesService`], [`WorkService`],
+//! [`AreaService`], [`TagService`], [`ChecklistService`], [`FieldService`], [`TeamService`],
+//! [`PlacesService`], [`WorkService`],
 //! [`WorkbookService`], [`ProjectReportService`])
 //! that loads what it
 //! needs, lets the
@@ -24,6 +25,7 @@ pub mod clock;
 pub mod coordinator;
 pub mod digests;
 pub mod error;
+pub mod fields;
 pub mod files;
 pub mod google_drive;
 pub mod groups;
@@ -73,6 +75,7 @@ pub use digests::{
     newest_kept_first,
 };
 pub use error::ApplicationError;
+pub use fields::FieldService;
 pub use files::{FolderListing, ProjectFilesService};
 pub use google_drive::{
     DriveFinding, DriveFolder, DriveSurroundings, FOLDER_IN_DRIVE, GoogleDrive, GoogleDriveService,
@@ -110,10 +113,10 @@ pub use notifications::{
 pub use places::{ChosenPlaces, PlacesService, ProjectPlaces, REFERENCES_FOLDER};
 pub use ports::{
     ApprovedPlan, AreaRepository, Clock, ConversationRepository, CoordinatorRepository,
-    DigestRepository, DiskEntry, EarlierConversations, FileSystem, FolderReader, FoundConversation,
-    MemberRepository, MemoryRepository, PlacesRepository, PlanningRepository, ProjectFolders,
-    ProjectRepository, SprintRepository, StorageError, TagRepository, TaskRepository,
-    TeamworkRepository, ViewRepository, WorkListener,
+    DigestRepository, DiskEntry, EarlierConversations, FieldRepository, FileSystem, FolderReader,
+    FoundConversation, MemberRepository, MemoryRepository, PlacesRepository, PlanningRepository,
+    ProjectFolders, ProjectRepository, SprintRepository, StorageError, TagRepository,
+    TaskRepository, TeamworkRepository, ViewRepository, WorkListener,
 };
 pub use project_events::{
     Agent, Happening, ProjectEvent, StatusOfEvent, TaskOfEvent, WaitsFor,

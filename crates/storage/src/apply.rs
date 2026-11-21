@@ -17,6 +17,7 @@ use crate::conversations;
 use crate::coordinator;
 use crate::digests;
 use crate::error::DatabaseError;
+use crate::fields;
 use crate::kits;
 use crate::members;
 use crate::memory;
@@ -60,6 +61,7 @@ pub(crate) fn write_state(
         Entity::Skill => kits::write_skill_state(transaction, state),
         Entity::Connector => kits::write_connector_state(transaction, state),
         Entity::MemberKit => kits::write_kit_state(transaction, state),
+        Entity::Field => fields::write_state(transaction, state),
         Entity::Conversation => conversations::write_conversation_state(transaction, state),
         Entity::Turn => conversations::write_turn_state(transaction, state),
         Entity::TurnStep => conversations::write_step_state(transaction, state),
@@ -126,6 +128,9 @@ pub(crate) fn remove(
         Entity::Skill => kits::remove_skill_row(transaction, entity_id)?,
         Entity::Connector => kits::remove_connector_row(transaction, entity_id)?,
         Entity::MemberKit => kits::remove_kit_row(transaction, entity_id)?,
+        Entity::Field => {
+            fields::remove_field(transaction, entity_id)?;
+        }
         Entity::Conversation => {
             conversations::remove_conversation(transaction, operations, entity_id)?;
         }

@@ -11,8 +11,8 @@ use chrono::{TimeZone, Utc};
 use teamwright_application::in_memory::ManualClock;
 use teamwright_application::{
     AreaRepository, AreaService, ChecklistService, ChosenPlaces, ConversationRepository,
-    ExchangedChange, ExchangedOperation, MemberRepository, NewMember, NewProject, NewSprint,
-    NewTask, NewView, NoticeKind, PlacesRepository, ProjectRepository, ProjectService,
+    ExchangedChange, ExchangedOperation, FieldService, MemberRepository, NewMember, NewProject,
+    NewSprint, NewTask, NewView, NoticeKind, PlacesRepository, ProjectRepository, ProjectService,
     SprintRepository, SprintService, SprintStart, TagService, TaskRepository, TaskService,
     TeamService, ViewRepository, ViewService, WorkflowTemplate,
 };
@@ -21,9 +21,9 @@ use teamwright_domain::{
     Timestamp, View, ViewAssignee, ViewFilter, ViewKind,
 };
 use teamwright_storage::{
-    Database, SqliteAreaRepository, SqliteConversationRepository, SqliteMemberRepository,
-    SqlitePlacesRepository, SqliteProjectRepository, SqliteSprintRepository, SqliteTagRepository,
-    SqliteTaskRepository, SqliteViewRepository,
+    Database, SqliteAreaRepository, SqliteConversationRepository, SqliteFieldRepository,
+    SqliteMemberRepository, SqlitePlacesRepository, SqliteProjectRepository,
+    SqliteSprintRepository, SqliteTagRepository, SqliteTaskRepository, SqliteViewRepository,
 };
 
 /// One computer: its database and the use cases on it.
@@ -36,6 +36,7 @@ struct Computer {
     views: ViewService,
     areas: AreaService,
     tags: TagService,
+    fields: FieldService,
     checklists: ChecklistService,
     places: SqlitePlacesRepository,
 }
@@ -56,6 +57,7 @@ impl Computer {
         let views = Arc::new(SqliteViewRepository::new(database.clone()));
         let area_store = Arc::new(SqliteAreaRepository::new(database.clone()));
         let tag_store = Arc::new(SqliteTagRepository::new(database.clone()));
+        let field_store = Arc::new(SqliteFieldRepository::new(database.clone()));
         let clock = Arc::new(ManualClock::starting_at(moment()));
         Self {
             projects: ProjectService::new(
@@ -84,12 +86,20 @@ impl Computer {
                 members.clone(),
                 views.clone(),
                 tag_store.clone(),
+                field_store.clone(),
             ),
             tags: TagService::new(
                 projects.clone(),
                 tasks.clone(),
                 views.clone(),
                 tag_store,
+                clock.clone(),
+            ),
+            fields: FieldService::new(
+                projects.clone(),
+                tasks.clone(),
+                views.clone(),
+                field_store,
                 clock.clone(),
             ),
             checklists: ChecklistService::new(tasks.clone(), clock.clone()),
@@ -143,6 +153,9 @@ impl Computer {
             }
             for area in self.areas.list_for_project(project.id()).unwrap() {
                 text.push_str(&format!("  {area:?}\n"));
+            }
+            for field in self.fields.list_for_project(project.id()).unwrap() {
+                text.push_str(&format!("  {field:?}\n"));
             }
             for tag in self.tags.list_for_project(project.id()).unwrap() {
                 text.push_str(&format!("  {tag:?}\n"));
@@ -914,6 +927,7 @@ fn a_view_that_showed_a_member_who_left_elsewhere_shows_everybody_again() {
                 assignee: ViewAssignee::Member(engineer.id()),
                 hides_finished: true,
                 tag: None,
+                field: None,
             },
         )
         .unwrap();
@@ -925,6 +939,7 @@ fn a_view_that_showed_a_member_who_left_elsewhere_shows_everybody_again() {
         assignee: ViewAssignee::Anyone,
         hides_finished: true,
         tag: None,
+        field: None,
     };
     assert_eq!(view_named(&desk, &project, "Board").filter(), shown);
     assert_eq!(view_named(&laptop, &project, "Board").filter(), shown);
@@ -1735,4 +1750,285 @@ fn a_project_made_from_a_template_reaches_the_other_computer_whole() {
     keep_in_step(&desk, &laptop);
 
     assert_eq!(laptop.everything(), desk.everything());
+}
+
+/// A choice field "Supplier" with two choices, a yes-or-no field "Ordered"
+/// and a number field "Unit cost" in a project, made on a computer.
+fn hardware_fields(
+    computer: &Computer,
+    project: &Project,
+) -> (
+    teamwright_domain::Field,
+    teamwright_domain::Field,
+    teamwright_domain::Field,
+) {
+    use teamwright_domain::FieldKind;
+    let supplier = computer
+        .fields
+        .add(project.id(), "Supplier", FieldKind::Choice, None)
+        .unwrap();
+    computer
+        .fields
+        .add_choice(supplier.id(), "Mouser", None)
+        .unwrap();
+    let supplier = computer
+        .fields
+        .add_choice(supplier.id(), "LCSC", None)
+        .unwrap();
+    let ordered = computer
+        .fields
+        .add(project.id(), "Ordered", FieldKind::YesNo, None)
+        .unwrap();
+    let cost = computer
+        .fields
+        .add(project.id(), "Unit cost", FieldKind::Number, Some("€"))
+        .unwrap();
+    (supplier, ordered, cost)
+}
+
+fn number(value: f64) -> teamwright_domain::FieldValue {
+    teamwright_domain::FieldValue::Number(teamwright_domain::FieldNumber::new(value).unwrap())
+}
+
+#[test]
+fn two_computers_that_set_different_fields_of_one_task_both_keep_theirs() {
+    use teamwright_domain::FieldValue;
+    let (desk, laptop, project, task) = desk_and_laptop();
+    let (supplier, ordered, cost) = hardware_fields(&desk, &project);
+    desk.fields
+        .set_value(task.id(), cost.id(), number(2.5))
+        .unwrap();
+    keep_in_step(&desk, &laptop);
+
+    let mouser = supplier.choices()[0].id();
+    desk.fields
+        .set_value(task.id(), supplier.id(), FieldValue::Choice(mouser))
+        .unwrap();
+    laptop
+        .fields
+        .set_value(task.id(), ordered.id(), FieldValue::YesNo(true))
+        .unwrap();
+    laptop.fields.clear_value(task.id(), cost.id()).unwrap();
+    keep_in_step(&desk, &laptop);
+
+    let values = desk.task(&task).unwrap().field_values().clone();
+    assert_eq!(values.len(), 2);
+    assert_eq!(values[&supplier.id()], FieldValue::Choice(mouser));
+    assert_eq!(values[&ordered.id()], FieldValue::YesNo(true));
+    assert_eq!(desk.everything(), laptop.everything());
+}
+
+#[test]
+fn two_computers_that_set_one_field_of_a_task_keep_one_value() {
+    let (desk, laptop, project, task) = desk_and_laptop();
+    let (_, _, cost) = hardware_fields(&desk, &project);
+    keep_in_step(&desk, &laptop);
+
+    desk.fields
+        .set_value(task.id(), cost.id(), number(2.5))
+        .unwrap();
+    laptop
+        .fields
+        .set_value(task.id(), cost.id(), number(3.0))
+        .unwrap();
+    keep_in_step(&desk, &laptop);
+
+    assert_eq!(desk.task(&task).unwrap().field_values().len(), 1);
+    assert_eq!(desk.everything(), laptop.everything());
+}
+
+#[test]
+fn two_computers_that_change_different_choices_of_one_field_both_keep_theirs() {
+    let (desk, laptop, project, _) = desk_and_laptop();
+    let (supplier, _, _) = hardware_fields(&desk, &project);
+    keep_in_step(&desk, &laptop);
+
+    desk.fields
+        .add_choice(supplier.id(), "Digi-Key", None)
+        .unwrap();
+    let lcsc = supplier.choices()[1].id();
+    laptop
+        .fields
+        .rename_choice(supplier.id(), lcsc, "LCSC (Shenzhen)")
+        .unwrap();
+    laptop
+        .fields
+        .add_choice(supplier.id(), "Farnell", None)
+        .unwrap();
+    keep_in_step(&desk, &laptop);
+
+    let field = desk
+        .fields
+        .list_for_project(project.id())
+        .unwrap()
+        .remove(0);
+    let mut names: Vec<String> = field
+        .choices()
+        .iter()
+        .map(|choice| choice.name().to_string())
+        .collect();
+    names.sort();
+    assert_eq!(names, ["Digi-Key", "Farnell", "LCSC (Shenzhen)", "Mouser"]);
+    assert_eq!(desk.everything(), laptop.everything());
+}
+
+#[test]
+fn a_field_removed_on_one_computer_is_cleared_from_a_task_the_other_set_it_on() {
+    use teamwright_domain::{FieldFilter, FieldValue, TaskChangeKind};
+    let (desk, laptop, project, task) = desk_and_laptop();
+    let (_, ordered, cost) = hardware_fields(&desk, &project);
+    let board = view_named(&desk, &project, "Board");
+    desk.views
+        .set_filter(
+            board.id(),
+            ViewFilter {
+                field: Some(FieldFilter::YesNo {
+                    field: ordered.id(),
+                    yes: true,
+                }),
+                ..ViewFilter::EVERY_TASK
+            },
+        )
+        .unwrap();
+    keep_in_step(&desk, &laptop);
+
+    desk.fields.remove(ordered.id()).unwrap();
+    laptop
+        .fields
+        .set_value(task.id(), ordered.id(), FieldValue::YesNo(true))
+        .unwrap();
+    laptop
+        .fields
+        .set_value(task.id(), cost.id(), number(4.0))
+        .unwrap();
+    keep_in_step(&desk, &laptop);
+
+    let values = desk.task(&task).unwrap().field_values().clone();
+    assert_eq!(values.keys().copied().collect::<Vec<_>>(), [cost.id()]);
+    assert_eq!(
+        view_named(&desk, &project, "Board").filter(),
+        ViewFilter::EVERY_TASK
+    );
+    let cleared = laptop
+        .tasks
+        .history(task.id())
+        .unwrap()
+        .into_iter()
+        .any(|change| {
+            matches!(change.kind, TaskChangeKind::FieldValueChanged { field, to: None, .. }
+                if field == ordered.id())
+        });
+    assert!(
+        cleared,
+        "the history of the task says the value was cleared"
+    );
+    assert_eq!(desk.everything(), laptop.everything());
+}
+
+#[test]
+fn a_choice_removed_on_one_computer_is_cleared_from_a_task_the_other_gave_it() {
+    use teamwright_domain::{FieldFilter, FieldValue};
+    let (desk, laptop, project, task) = desk_and_laptop();
+    let (supplier, _, _) = hardware_fields(&desk, &project);
+    let other = desk
+        .tasks
+        .create(NewTask::titled(project.id(), "Order the connectors"))
+        .unwrap();
+    let (mouser, lcsc) = (supplier.choices()[0].id(), supplier.choices()[1].id());
+    desk.fields
+        .set_value(other.id(), supplier.id(), FieldValue::Choice(lcsc))
+        .unwrap();
+    let board = view_named(&desk, &project, "Board");
+    desk.views
+        .set_filter(
+            board.id(),
+            ViewFilter {
+                field: Some(FieldFilter::Choice {
+                    field: supplier.id(),
+                    choice: mouser,
+                }),
+                ..ViewFilter::EVERY_TASK
+            },
+        )
+        .unwrap();
+    keep_in_step(&desk, &laptop);
+
+    desk.fields.remove_choice(supplier.id(), mouser).unwrap();
+    laptop
+        .fields
+        .set_value(task.id(), supplier.id(), FieldValue::Choice(mouser))
+        .unwrap();
+    keep_in_step(&desk, &laptop);
+
+    assert!(desk.task(&task).unwrap().field_values().is_empty());
+    assert_eq!(
+        desk.task(&other).unwrap().field_values()[&supplier.id()],
+        FieldValue::Choice(lcsc)
+    );
+    assert_eq!(
+        view_named(&laptop, &project, "Board").filter(),
+        ViewFilter::EVERY_TASK
+    );
+    assert_eq!(desk.everything(), laptop.everything());
+}
+
+#[test]
+fn two_fields_or_choices_given_one_name_on_two_computers_are_told_apart_by_a_number() {
+    use teamwright_domain::FieldKind;
+    let (desk, laptop, project, _) = desk_and_laptop();
+    let supplier = desk
+        .fields
+        .add(project.id(), "Supplier", FieldKind::Choice, None)
+        .unwrap();
+    laptop
+        .fields
+        .add(project.id(), "supplier", FieldKind::Text, None)
+        .unwrap();
+    keep_in_step(&desk, &laptop);
+
+    desk.fields
+        .add_choice(supplier.id(), "Mouser", None)
+        .unwrap();
+    laptop
+        .fields
+        .add_choice(supplier.id(), "MOUSER", None)
+        .unwrap();
+    keep_in_step(&desk, &laptop);
+
+    let fields = desk.fields.list_for_project(project.id()).unwrap();
+    // Whichever of the two is younger is numbered.
+    let mut names: Vec<String> = fields
+        .iter()
+        .map(|field| field.name().as_str().to_lowercase())
+        .collect();
+    names.sort();
+    assert_eq!(names, ["supplier", "supplier 2"]);
+    let choice_field = fields
+        .iter()
+        .find(|field| field.id() == supplier.id())
+        .unwrap();
+    let mut choices: Vec<String> = choice_field
+        .choices()
+        .iter()
+        .map(|choice| choice.name().as_str().to_lowercase())
+        .collect();
+    choices.sort();
+    assert_eq!(choices, ["mouser", "mouser 2"]);
+    assert_eq!(desk.everything(), laptop.everything());
+}
+
+#[test]
+fn deleting_a_project_on_one_computer_removes_its_fields_on_the_other() {
+    let (desk, laptop, project, task) = desk_and_laptop();
+    let (_, _, cost) = hardware_fields(&desk, &project);
+    desk.fields
+        .set_value(task.id(), cost.id(), number(1.25))
+        .unwrap();
+    keep_in_step(&desk, &laptop);
+
+    desk.projects.delete(project.id()).unwrap();
+    keep_in_step(&desk, &laptop);
+
+    assert!(laptop.projects.list().unwrap().is_empty());
+    assert_eq!(desk.everything(), laptop.everything());
 }

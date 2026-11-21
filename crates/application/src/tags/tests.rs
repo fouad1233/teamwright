@@ -64,6 +64,7 @@ fn workspace() -> Workspace {
         members_store,
         views_store.clone(),
         tags_store.clone(),
+        Arc::new(crate::in_memory::InMemoryFieldRepository::default()),
     );
     let tags = TagService::new(projects_store, tasks_store, views_store, tags_store, clock);
     let project = projects
@@ -318,6 +319,7 @@ fn removing_a_tag_takes_it_off_its_tasks_and_out_of_the_filters_of_views() {
         assignee: ViewAssignee::Manager,
         hides_finished: true,
         tag: Some(tag.id()),
+        field: None,
     };
     workspace.views.set_filter(board.id(), filter).unwrap();
 

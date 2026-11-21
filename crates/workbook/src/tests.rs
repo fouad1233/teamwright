@@ -59,6 +59,7 @@ fn sample() -> Workbook {
                         Column::named("Estimate (hours)"),
                         Column::named("Due"),
                         Column::named("Points"),
+                        Column::named("Unit cost (€)"),
                     ],
                     rows: vec![
                         vec![
@@ -70,6 +71,7 @@ fn sample() -> Workbook {
                             Cell::Hours(1.5),
                             Cell::Date(day(20)),
                             Cell::Whole(5),
+                            Cell::Number(0.375),
                         ],
                         vec![
                             text("SH-2"),
@@ -80,6 +82,7 @@ fn sample() -> Workbook {
                             Cell::Empty,
                             Cell::Empty,
                             Cell::Whole(-1),
+                            Cell::Empty,
                         ],
                     ],
                 }),
@@ -120,7 +123,14 @@ fn a_list_has_its_header_on_the_first_row_and_its_cells_with_their_types() {
         .collect();
     assert_eq!(
         header,
-        ["Task", "Title", "Estimate (hours)", "Due", "Points"]
+        [
+            "Task",
+            "Title",
+            "Estimate (hours)",
+            "Due",
+            "Points",
+            "Unit cost (€)"
+        ]
     );
 
     assert_eq!(
@@ -138,6 +148,7 @@ fn a_list_has_its_header_on_the_first_row_and_its_cells_with_their_types() {
     }
     assert_eq!(tasks.get_value((1, 4)), Some(&Data::Float(5.0)));
     assert_eq!(tasks.get_value((2, 4)), Some(&Data::Float(-1.0)));
+    assert_eq!(tasks.get_value((1, 5)), Some(&Data::Float(0.375)));
 }
 
 #[test]

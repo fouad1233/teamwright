@@ -278,10 +278,12 @@ fn wraps(table: &Table, index: usize) -> bool {
 
 /// Whether a column of a table holds numbers.
 fn holds_numbers(table: &Table, index: usize) -> bool {
-    table
-        .rows
-        .iter()
-        .any(|row| matches!(row.get(index), Some(Cell::Whole(_) | Cell::Hours(_))))
+    table.rows.iter().any(|row| {
+        matches!(
+            row.get(index),
+            Some(Cell::Whole(_) | Cell::Hours(_) | Cell::Number(_))
+        )
+    })
 }
 
 /// Whether a column of a table holds dates.
@@ -342,6 +344,14 @@ fn write_cell(
         Cell::Hours(value) => {
             worksheet.write_number_with_format(row, column, *value, hours)?;
         }
+        Cell::Number(value) => {
+            let format = if place.numbers_left {
+                &styles.number_left
+            } else {
+                &styles.number
+            };
+            worksheet.write_number_with_format(row, column, *value, format)?;
+        }
         Cell::Date(date) => {
             worksheet.write_datetime_with_format(
                 row,
@@ -391,6 +401,8 @@ struct Styles {
     whole_left: Format,
     hours: Format,
     hours_left: Format,
+    number: Format,
+    number_left: Format,
     date: Format,
     date_set_in: Format,
     header_of_dates: Format,
@@ -432,6 +444,10 @@ impl Styles {
             whole,
             hours_left: hours.clone().set_align(FormatAlign::Left),
             hours,
+            // A number of a field keeps the decimals it has: the general
+            // format of the spreadsheet shows 12 as 12 and 12.5 as 12.5.
+            number_left: ruled.clone().set_align(FormatAlign::Left),
+            number: ruled.clone(),
             date_set_in: ruled
                 .clone()
                 .set_num_format(DATE_FORMAT)
@@ -487,6 +503,7 @@ impl Widths {
             }
             Cell::Whole(number) => number.to_string().len() + number.to_string().len() / 3,
             Cell::Hours(hours) => format!("{hours:.1}").len(),
+            Cell::Number(number) => number.to_string().len(),
             // "13 Nov 2026"
             Cell::Date(_) => 11,
         };

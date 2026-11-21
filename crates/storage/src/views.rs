@@ -7,8 +7,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use teamwright_application::{StorageError, ViewRepository};
 use teamwright_domain::{
-    DomainError, Grouping, ProjectId, View, ViewAssignee, ViewFilter, ViewId, ViewName,
-    ViewSnapshot,
+    DomainError, FieldFilter, Grouping, ProjectId, View, ViewAssignee, ViewFilter, ViewId,
+    ViewName, ViewSnapshot,
 };
 
 use crate::codec;
@@ -19,17 +19,17 @@ use crate::operations::{Entity, OperationRecorder};
 /// The columns of the `views` table that every query reads.
 const VIEW_COLUMNS: &str =
     "id, project_id, kind, name, assignee_kind, assignee_member_id, hides_finished, position,
-     content, tag_id, grouping";
+     content, tag_id, grouping, field_id, field_value";
 
 // The row is updated in place, never replaced.
 const UPSERT_VIEW: &str = "
     INSERT INTO views (
         id, project_id, kind, name, assignee_kind, assignee_member_id, hides_finished, position,
-        content, tag_id, grouping
+        content, tag_id, grouping, field_id, field_value
     )
     VALUES (
         :id, :project_id, :kind, :name, :assignee_kind, :assignee_member_id, :hides_finished,
-        :position, :content, :tag_id, :grouping
+        :position, :content, :tag_id, :grouping, :field_id, :field_value
     )
     ON CONFLICT (id) DO UPDATE SET
         project_id = excluded.project_id,
@@ -41,7 +41,9 @@ const UPSERT_VIEW: &str = "
         position = excluded.position,
         content = excluded.content,
         tag_id = excluded.tag_id,
-        grouping = excluded.grouping";
+        grouping = excluded.grouping,
+        field_id = excluded.field_id,
+        field_value = excluded.field_value";
 
 /// A view as the database and the operation log keep it: plain text,
 /// numbers and a flag.
@@ -68,12 +70,25 @@ struct ViewRecord {
     /// views were grouped has no such key, and is read as grouped by status.
     #[serde(default = "default_grouping")]
     grouping: String,
+    /// The custom field the tasks it shows hold a value of, if it shows
+    /// only those, and the value: the identifier of a choice, or `yes` or
+    /// `no`. A state logged before there were fields has neither key, and
+    /// is read as a view that shows the tasks whatever they hold.
+    #[serde(default)]
+    field_id: Option<String>,
+    #[serde(default)]
+    field_value: Option<String>,
 }
 
 /// The grouping of a view whose state says none: by status.
 fn default_grouping() -> String {
     Grouping::Status.to_string()
 }
+
+/// How a filter by yes is written down.
+const YES: &str = "yes";
+/// How a filter by no is written down.
+const NO: &str = "no";
 
 impl ViewRecord {
     /// Takes the stored form of a view.
@@ -84,6 +99,16 @@ impl ViewRecord {
             ViewAssignee::Manager => ("manager", None),
             ViewAssignee::Member(member) => ("member", Some(member.to_string())),
             ViewAssignee::Nobody => ("nobody", None),
+        };
+        let (field_id, field_value) = match filter.field {
+            None => (None, None),
+            Some(FieldFilter::Choice { field, choice }) => {
+                (Some(field.to_string()), Some(choice.to_string()))
+            }
+            Some(FieldFilter::YesNo { field, yes }) => (
+                Some(field.to_string()),
+                Some((if yes { YES } else { NO }).to_owned()),
+            ),
         };
         Self {
             id: view.id().to_string(),
@@ -97,6 +122,8 @@ impl ViewRecord {
             content: view.content().map(str::to_owned),
             tag_id: filter.tag.map(|tag| tag.to_string()),
             grouping: view.grouping().to_string(),
+            field_id,
+            field_value,
         }
     }
 
@@ -114,7 +141,32 @@ impl ViewRecord {
             content: row.get("content")?,
             tag_id: row.get("tag_id")?,
             grouping: row.get("grouping")?,
+            field_id: row.get("field_id")?,
+            field_value: row.get("field_value")?,
         })
+    }
+
+    /// Reads the filter by a custom field from its two columns.
+    fn field_filter(&self) -> Result<Option<FieldFilter>, DatabaseError> {
+        match (self.field_id.as_deref(), self.field_value.as_deref()) {
+            (None, None) => Ok(None),
+            (Some(field), Some(YES)) => Ok(Some(FieldFilter::YesNo {
+                field: codec::parse(field)?,
+                yes: true,
+            })),
+            (Some(field), Some(NO)) => Ok(Some(FieldFilter::YesNo {
+                field: codec::parse(field)?,
+                yes: false,
+            })),
+            (Some(field), Some(choice)) => Ok(Some(FieldFilter::Choice {
+                field: codec::parse(field)?,
+                choice: codec::parse(choice)?,
+            })),
+            _ => Err(DatabaseError::Damaged(format!(
+                "the view {} is filtered by the field {:?} with the value {:?}",
+                self.id, self.field_id, self.field_value
+            ))),
+        }
     }
 
     /// Rebuilds the view, checking the stored values against the rules.
@@ -142,6 +194,7 @@ impl ViewRecord {
                 assignee,
                 hides_finished: self.hides_finished,
                 tag: self.tag_id.as_deref().map(codec::parse).transpose()?,
+                field: self.field_filter()?,
             },
             position: self.position,
             content: self.content.clone(),
@@ -322,6 +375,8 @@ fn write_rows(transaction: &Transaction<'_>, record: &ViewRecord) -> Result<(), 
             ":content": record.content,
             ":tag_id": record.tag_id,
             ":grouping": record.grouping,
+            ":field_id": record.field_id,
+            ":field_value": record.field_value,
         },
     )?;
     Ok(())
@@ -402,6 +457,40 @@ mod tests {
         state.insert("grouping".to_owned(), Value::String("owner".to_owned()));
 
         assert!(view_from_state(&state).is_err());
+    }
+
+    #[test]
+    fn a_filter_by_a_field_reads_back_and_a_state_from_before_fields_has_none() {
+        let mut view = View::add(
+            ProjectId::generate(),
+            ViewKind::Board,
+            ViewKind::Board.default_name(),
+            0,
+        );
+        let field = teamwright_domain::FieldId::generate();
+        for by_field in [
+            FieldFilter::YesNo { field, yes: false },
+            FieldFilter::YesNo { field, yes: true },
+            FieldFilter::Choice {
+                field,
+                choice: teamwright_domain::ChoiceId::generate(),
+            },
+        ] {
+            view.set_filter(ViewFilter {
+                field: Some(by_field),
+                ..ViewFilter::EVERY_TASK
+            })
+            .unwrap();
+            assert_eq!(view_from_state(&state_of(&view)).unwrap(), view);
+        }
+
+        let mut state = state_of(&view);
+        state.remove("field_id");
+        state.remove("field_value");
+        assert_eq!(view_from_state(&state).unwrap().filter().field, None);
+        let mut half = state_of(&view);
+        half.remove("field_value");
+        assert!(view_from_state(&half).is_err());
     }
 
     #[test]

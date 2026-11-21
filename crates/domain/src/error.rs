@@ -384,6 +384,52 @@ pub enum DomainError {
     #[error("the checklist of the task has no such item")]
     NoSuchChecklistItem,
 
+    /// A value was given to a custom field of another kind, such as a date
+    /// to a number field.
+    #[error("the field \"{field}\" holds a {kind}")]
+    FieldValueOfAnotherKind {
+        /// The name of the field.
+        field: String,
+        /// What the field holds, in words: "number", "date".
+        kind: &'static str,
+    },
+
+    /// A number for a custom field was not an ordinary number, or too far
+    /// from zero.
+    #[error("a number in a field lies between minus and plus a thousand billion")]
+    FieldNumberOutOfRange,
+
+    /// A unit was given to a custom field that does not hold numbers.
+    #[error("only a field of numbers has a unit")]
+    UnitWithoutNumbers,
+
+    /// A choice was to be added to, or named in, a custom field that is not
+    /// a choice.
+    #[error("the field \"{field}\" has no choices")]
+    FieldWithoutChoices {
+        /// The name of the field.
+        field: String,
+    },
+
+    /// A choice was named that its field does not have.
+    #[error("the field has no such choice")]
+    NoSuchChoice,
+
+    /// A choice was to get a name that another choice of its field has,
+    /// whatever the capitals.
+    #[error("the field already has a choice called \"{name}\"")]
+    ChoiceNameTaken {
+        /// The name that was requested, tidied.
+        name: String,
+    },
+
+    /// A choice was to be added to a field that has as many as it may.
+    #[error("a field has at most {max} choices")]
+    TooManyChoices {
+        /// The most choices a field may have.
+        max: usize,
+    },
+
     /// A path inside a folder of a project would lead outside it, by how
     /// it is written or through a link.
     #[error("the path {path} does not stay inside the folder")]
@@ -494,7 +540,8 @@ impl DomainError {
             Self::SprintCompleted { .. } => "sprint_completed",
             Self::ActiveSprintDeleted { .. } | Self::SprintAlreadyStarted { .. } => "sprint_active",
             Self::SprintNotStarted { .. } => "sprint_not_active",
-            Self::NoSuchChecklistItem => "not_found",
+            Self::NoSuchChecklistItem | Self::NoSuchChoice => "not_found",
+            Self::ChoiceNameTaken { .. } => "choice_name_taken",
             _ => "rule_broken",
         }
     }

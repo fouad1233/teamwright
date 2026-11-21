@@ -74,6 +74,9 @@ fn workspace() -> Workspace {
             Arc::new(teamwright_storage::SqliteTagRepository::new(
                 database.clone(),
             )),
+            Arc::new(teamwright_storage::SqliteFieldRepository::new(
+                database.clone(),
+            )),
         ),
         projects: project_service,
         project,
@@ -131,6 +134,7 @@ fn every_change_to_a_view_is_stored_and_logged() {
         assignee: ViewAssignee::Nobody,
         hides_finished: true,
         tag: None,
+        field: None,
     };
     workspace.views.set_filter(added.id(), filter).unwrap();
     workspace.views.move_to(added.id(), 0).unwrap();
@@ -285,6 +289,7 @@ fn a_member_who_leaves_is_forgotten_by_the_stored_views() {
                 assignee: ViewAssignee::Member(engineer.id()),
                 hides_finished: true,
                 tag: None,
+                field: None,
             },
         )
         .unwrap();
@@ -297,6 +302,7 @@ fn a_member_who_leaves_is_forgotten_by_the_stored_views() {
             assignee: ViewAssignee::Anyone,
             hides_finished: true,
             tag: None,
+            field: None,
         }
     );
 }

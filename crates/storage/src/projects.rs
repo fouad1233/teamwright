@@ -288,6 +288,9 @@ pub(crate) fn remove_project(
     )?;
     delete_rows_of_project(transaction, operations, "connectors", Entity::Connector, id)?;
     delete_rows_of_project(transaction, operations, "skills", Entity::Skill, id)?;
+    // The fields go after the tasks that hold their values and the views
+    // filtered by them.
+    delete_rows_of_project(transaction, operations, "fields", Entity::Field, id)?;
     delete_rows_of_project(transaction, operations, "members", Entity::Member, id)?;
     // The statuses are part of the project in the log, so their removal is
     // covered by the deletion of the project.

@@ -10,11 +10,14 @@
 use std::sync::Arc;
 
 use teamwright_domain::{
-    Grouping, ProjectId, View, ViewAssignee, ViewFilter, ViewId, ViewKind, ViewName,
+    FieldFilter, FieldKind, FieldValue, Grouping, ProjectId, View, ViewAssignee, ViewFilter,
+    ViewId, ViewKind, ViewName,
 };
 
 use crate::error::ApplicationError;
-use crate::ports::{MemberRepository, ProjectRepository, TagRepository, ViewRepository};
+use crate::ports::{
+    FieldRepository, MemberRepository, ProjectRepository, TagRepository, ViewRepository,
+};
 
 /// What is needed to add a view to a project.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -36,24 +39,28 @@ pub struct ViewService {
     members: Arc<dyn MemberRepository>,
     views: Arc<dyn ViewRepository>,
     tags: Arc<dyn TagRepository>,
+    fields: Arc<dyn FieldRepository>,
 }
 
 impl ViewService {
     /// Creates the service. The members are needed because a filter may
-    /// only name a member of the team of the project, and the tags because
-    /// it may only name a tag of the project.
+    /// only name a member of the team of the project, the tags because it
+    /// may only name a tag of the project, and the fields because it may
+    /// only name a field of the project and one of its values.
     #[must_use]
     pub fn new(
         projects: Arc<dyn ProjectRepository>,
         members: Arc<dyn MemberRepository>,
         views: Arc<dyn ViewRepository>,
         tags: Arc<dyn TagRepository>,
+        fields: Arc<dyn FieldRepository>,
     ) -> Self {
         Self {
             projects,
             members,
             views,
             tags,
+            fields,
         }
     }
 
@@ -127,7 +134,10 @@ impl ViewService {
     /// Returns an error if there is no such view, if its kind cannot be
     /// filtered, if the filter names a member who is not on the team
     /// (`member_not_on_team`), a tag that does not exist (`not_found`) or a
-    /// tag of another project (`different_projects`), or if storage fails.
+    /// tag of another project (`different_projects`), a field or a choice
+    /// that does not exist (`not_found`), a field of another project
+    /// (`different_projects`) or a field that is neither a choice nor yes
+    /// or no (`rule_broken`), or if storage fails.
     pub fn set_filter(&self, id: ViewId, filter: ViewFilter) -> Result<View, ApplicationError> {
         let mut view = self.require_view(id)?;
         // The kind is checked before the member: a backlog is refused as a
@@ -153,6 +163,9 @@ impl ViewService {
             if tag.project_id() != view.project_id() {
                 return Err(ApplicationError::TagOfAnotherProject);
             }
+        }
+        if let Some(by_field) = filter.field {
+            self.check_field_filter(&view, by_field)?;
         }
         self.views.save_all(std::slice::from_ref(&view))?;
         Ok(view)
@@ -259,6 +272,35 @@ impl ViewService {
                 kind: "project",
                 id: id.to_string(),
             })
+    }
+
+    /// Checks that a filter by a custom field names a field of the project
+    /// of the view, of a kind that filters (a choice, or yes or no), and,
+    /// for a choice, one of its choices.
+    fn check_field_filter(
+        &self,
+        view: &View,
+        by_field: FieldFilter,
+    ) -> Result<(), ApplicationError> {
+        let field_id = by_field.field();
+        let field = self
+            .fields
+            .find(field_id)?
+            .ok_or_else(|| ApplicationError::NotFound {
+                kind: "field",
+                id: field_id.to_string(),
+            })?;
+        if field.project_id() != view.project_id() {
+            return Err(ApplicationError::FieldOfAnotherProject);
+        }
+        match (by_field, field.kind()) {
+            (FieldFilter::Choice { choice, .. }, FieldKind::Choice) => {
+                field.check(&FieldValue::Choice(choice))?;
+                Ok(())
+            }
+            (FieldFilter::YesNo { .. }, FieldKind::YesNo) => Ok(()),
+            _ => Err(ApplicationError::FieldNotFilterable),
+        }
     }
 
     /// Loads a view, or reports that it does not exist.

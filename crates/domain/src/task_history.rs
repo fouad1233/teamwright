@@ -4,7 +4,8 @@
 //! a task has had, in its log of operations, and the history is read off
 //! those versions by comparing each one with the one before it.
 
-use crate::ids::{SprintId, StatusId, TagId, TaskId};
+use crate::field::FieldValue;
+use crate::ids::{FieldId, SprintId, StatusId, TagId, TaskId};
 use crate::sprint::StoryPoints;
 use crate::task::{Assignee, Priority, Schedule, Task};
 use crate::text::{ChecklistText, TaskTitle};
@@ -115,6 +116,17 @@ pub enum TaskChangeKind {
         /// The text of the item when it was unticked.
         item: ChecklistText,
     },
+    /// The value of a custom field was set, changed or cleared: by hand, or
+    /// because the field or the choice it held was removed. The field may
+    /// have been removed since.
+    FieldValueChanged {
+        /// The field.
+        field: FieldId,
+        /// The value before, if it held one.
+        from: Option<FieldValue>,
+        /// The value since, if it holds one.
+        to: Option<FieldValue>,
+    },
 }
 
 /// Tells what changed between two versions of a task, in the order the
@@ -215,6 +227,25 @@ pub fn changes_between(before: &Task, after: &Task) -> Vec<TaskChange> {
                 item: item.text().clone(),
             }),
             _ => {}
+        }
+    }
+    // The values of the fields, in the order of the identifiers of the
+    // fields: a value set, changed or cleared.
+    let fields: std::collections::BTreeSet<FieldId> = before
+        .field_values()
+        .keys()
+        .chain(after.field_values().keys())
+        .copied()
+        .collect();
+    for field in fields {
+        let from = before.field_values().get(&field);
+        let to = after.field_values().get(&field);
+        if from != to {
+            kinds.push(TaskChangeKind::FieldValueChanged {
+                field,
+                from: from.cloned(),
+                to: to.cloned(),
+            });
         }
     }
 
@@ -452,6 +483,44 @@ mod tests {
                 &TaskChangeKind::Untagged { tag: kept }
             ]
         );
+    }
+
+    #[test]
+    fn a_value_set_changed_and_cleared_is_told() {
+        let field = FieldId::generate();
+        let empty = task_in(&Workflow::standard());
+        let mut set = empty.clone();
+        set.set_field_value(field, FieldValue::YesNo(false), moment(10));
+        let mut changed = set.clone();
+        changed.set_field_value(field, FieldValue::YesNo(true), moment(11));
+        let mut cleared = changed.clone();
+        cleared.clear_field_value(field, moment(12));
+
+        assert_eq!(
+            kinds(&changes_between(&empty, &set)),
+            [&TaskChangeKind::FieldValueChanged {
+                field,
+                from: None,
+                to: Some(FieldValue::YesNo(false))
+            }]
+        );
+        assert_eq!(
+            kinds(&changes_between(&set, &changed)),
+            [&TaskChangeKind::FieldValueChanged {
+                field,
+                from: Some(FieldValue::YesNo(false)),
+                to: Some(FieldValue::YesNo(true))
+            }]
+        );
+        assert_eq!(
+            kinds(&changes_between(&changed, &cleared)),
+            [&TaskChangeKind::FieldValueChanged {
+                field,
+                from: Some(FieldValue::YesNo(true)),
+                to: None
+            }]
+        );
+        assert_eq!(changes_between(&cleared, &empty), []);
     }
 
     #[test]

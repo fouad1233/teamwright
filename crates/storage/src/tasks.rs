@@ -9,13 +9,15 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use teamwright_application::{StorageError, TaskRepository};
 use teamwright_domain::{
-    Area, Assignee, ChecklistItem, ChecklistText, ComputerId, DomainError, ProjectId, Rank,
-    Schedule, StoryPoints, TagId, Task, TaskId, TaskSnapshot, TaskTitle, Timestamp,
+    Area, Assignee, ChecklistItem, ChecklistText, ComputerId, DomainError, FieldId, FieldValue,
+    ProjectId, Rank, Schedule, StoryPoints, TagId, Task, TaskId, TaskSnapshot, TaskTitle,
+    Timestamp,
 };
 
 use crate::codec;
 use crate::database::Database;
 use crate::error::DatabaseError;
+use crate::fields;
 use crate::merge::MergedState;
 use crate::operations::{self, Entity, OperationRecorder};
 
@@ -27,6 +29,11 @@ pub(crate) const TAG_KEY: &str = "tag:";
 /// a task: `item:<identifier of the item>`, the item as an object, or null
 /// once it was removed.
 pub(crate) const ITEM_KEY: &str = "item:";
+/// The start of the key of the value of a custom field in the logged state
+/// of a task: `field:<identifier of the field>`, the value as
+/// [`fields::value_to_json`] writes it, or null once it was cleared
+/// (decision 0035).
+pub(crate) const FIELD_KEY: &str = "field:";
 
 /// An item of a checklist as the operation log keeps it, under its key in
 /// the state of its task.
@@ -211,6 +218,7 @@ impl TaskRecord {
             .collect::<Result<BTreeSet<TaskId>, _>>()?;
 
         let (tags, checklist) = self.tags_and_checklist()?;
+        let field_values = self.field_values()?;
         let project_id: ProjectId = codec::parse(&self.project_id)?;
         let area_id = match self.area_id.as_deref() {
             Some(area_id) => codec::parse(area_id)?,
@@ -239,6 +247,7 @@ impl TaskRecord {
             rank: Rank::from_value(self.rank),
             tags,
             checklist,
+            field_values,
             created_at: codec::moment_from_text(&self.created_at)?,
             updated_at: codec::moment_from_text(&self.updated_at)?,
             completed_at: self
@@ -277,6 +286,20 @@ impl TaskRecord {
             }
         }
         Ok((tags, checklist))
+    }
+
+    /// Reads the values of the custom fields from their keys. A value
+    /// cleared is passed over.
+    fn field_values(&self) -> Result<BTreeMap<FieldId, FieldValue>, DatabaseError> {
+        let mut values = BTreeMap::new();
+        for (key, value) in &self.parts {
+            if let Some(field_id) = key.strip_prefix(FIELD_KEY)
+                && !value.is_null()
+            {
+                values.insert(codec::parse(field_id)?, fields::value_from_json(value)?);
+            }
+        }
+        Ok(values)
     }
 
     /// Reads who is responsible for the task from its two columns.
@@ -443,7 +466,8 @@ fn store(
             }
             if key.starts_with(TAG_KEY) && value == Value::Bool(true) {
                 logged.parts.insert(key, Value::Bool(false));
-            } else if key.starts_with(ITEM_KEY) && !value.is_null() {
+            } else if (key.starts_with(ITEM_KEY) || key.starts_with(FIELD_KEY)) && !value.is_null()
+            {
                 logged.parts.insert(key, Value::Null);
             }
         }
@@ -464,7 +488,11 @@ fn parts_of(task: &Task) -> BTreeMap<String, Value> {
             item_value(item.text().as_str(), item.is_done(), item.rank().value()),
         )
     });
-    tags.chain(items).collect()
+    let values = task
+        .field_values()
+        .iter()
+        .map(|(field, value)| (format!("{FIELD_KEY}{field}"), fields::value_to_json(value)));
+    tags.chain(items).chain(values).collect()
 }
 
 /// An item of a checklist as the log keeps it.
@@ -631,6 +659,35 @@ fn write_tags_and_checklist(
             },
         )?;
     }
+    write_field_values(transaction, record)
+}
+
+/// Writes the rows of the values a task holds for the custom fields of its
+/// project. Rows are added and updated in place, and the row of a value
+/// cleared is deleted.
+fn write_field_values(
+    transaction: &Transaction<'_>,
+    record: &TaskRecord,
+) -> Result<(), DatabaseError> {
+    let values = record.field_values()?;
+    let field_ids: Vec<String> = values.keys().map(ToString::to_string).collect();
+    transaction.execute(
+        "DELETE FROM task_field_values WHERE task_id = :task_id
+           AND field_id NOT IN (SELECT value FROM json_each(:kept))",
+        named_params! { ":task_id": record.id, ":kept": Value::from(field_ids).to_string() },
+    )?;
+    for (field_id, value) in &values {
+        transaction.execute(
+            "INSERT INTO task_field_values (task_id, field_id, value)
+             VALUES (:task_id, :field_id, :value)
+             ON CONFLICT (task_id, field_id) DO UPDATE SET value = excluded.value",
+            named_params! {
+                ":task_id": record.id,
+                ":field_id": field_id.to_string(),
+                ":value": fields::value_to_json(value).to_string(),
+            },
+        )?;
+    }
     Ok(())
 }
 
@@ -683,6 +740,30 @@ fn parts_in(
             format!("{ITEM_KEY}{item_id}"),
             item_value(&text, done, rank),
         );
+    }
+
+    let query = format!(
+        "SELECT held.task_id, held.field_id, held.value
+         FROM task_field_values AS held
+         JOIN tasks AS task ON task.id = held.task_id
+         WHERE {condition}"
+    );
+    let mut statement = connection.prepare(&query)?;
+    let rows = statement.query_map(named_params! { ":id": id }, |row| {
+        Ok((
+            row.get::<_, String>(0)?,
+            row.get::<_, String>(1)?,
+            row.get::<_, String>(2)?,
+        ))
+    })?;
+    for row in rows {
+        let (task_id, field_id, value) = row?;
+        let value: Value = serde_json::from_str(&value)
+            .map_err(|reason| DatabaseError::damaged("a value of a field", &value, reason))?;
+        parts
+            .entry(task_id)
+            .or_default()
+            .insert(format!("{FIELD_KEY}{field_id}"), value);
     }
     Ok(parts)
 }

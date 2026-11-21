@@ -17,14 +17,16 @@ use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
 use teamwright_domain::{
-    Assignee, CalendarDate, Color, Effort, Member, MemberId, MemberKind, Priority, Project,
-    ProjectId, Sprint, SprintState, SprintSummary, SprintUnit, Task, TaskId,
+    Assignee, CalendarDate, Color, Effort, Field, FieldKind, FieldValue, Member, MemberId,
+    MemberKind, Priority, Project, ProjectId, Sprint, SprintState, SprintSummary, SprintUnit, Task,
+    TaskId,
 };
 
 use crate::error::ApplicationError;
+use crate::fields::fields_of;
 use crate::ports::{
-    AreaRepository, Clock, ConversationRepository, MemberRepository, ProjectRepository,
-    SprintRepository, TagRepository, TaskRepository,
+    AreaRepository, Clock, ConversationRepository, FieldRepository, MemberRepository,
+    ProjectRepository, SprintRepository, TagRepository, TaskRepository,
 };
 use crate::sprints::{as_listed, counted, is_finished};
 use crate::tags::tags_of;
@@ -138,6 +140,9 @@ pub enum Cell {
     Whole(i64),
     /// A number of hours, shown with one decimal.
     Hours(f64),
+    /// A number with the decimals it has, such as the value of a number
+    /// field.
+    Number(f64),
     /// A day on the calendar.
     Date(CalendarDate),
     /// The status of a task: its name, and the color the project gives it.
@@ -182,6 +187,8 @@ pub struct WorkbookPorts {
     pub areas: Arc<dyn AreaRepository>,
     /// Where the tags of the projects are stored.
     pub tags: Arc<dyn TagRepository>,
+    /// Where the custom fields of the projects are stored.
+    pub fields: Arc<dyn FieldRepository>,
     /// Where the members of the teams are stored.
     pub members: Arc<dyn MemberRepository>,
     /// Where conversations and their turns are stored, for the tokens used.
@@ -242,6 +249,7 @@ impl WorkbookService {
             .into_iter()
             .map(|tag| (tag.id(), tag.name().to_string()))
             .collect();
+        let fields = fields_of(ports.fields.as_ref(), project_id)?;
         let tokens = self.tokens_by_user(project_id)?;
         let today = ports.clock.day_of(ports.clock.now());
 
@@ -252,6 +260,7 @@ impl WorkbookService {
             members: &members,
             area_names: &area_names,
             tag_names: &tag_names,
+            fields: &fields,
             today,
             clock: ports.clock.as_ref(),
         };
@@ -322,6 +331,8 @@ struct Gathered<'a> {
     area_names: &'a HashMap<teamwright_domain::AreaId, String>,
     /// The names of the tags of the project.
     tag_names: &'a HashMap<teamwright_domain::TagId, String>,
+    /// The custom fields of the project, in their order.
+    fields: &'a [Field],
     today: CalendarDate,
     /// The clock, which tells on which day a moment falls where the program runs.
     clock: &'a dyn Clock,
@@ -519,11 +530,16 @@ impl Gathered<'_> {
                     Cell::Date(self.clock.day_of(task.created_at())),
                     Cell::date(task.completed_at().map(|moment| self.clock.day_of(moment))),
                 ]
+                .into_iter()
+                .chain(self.fields.iter().map(|field| field_cell(field, task)))
+                .collect()
             })
             .collect();
 
         Table {
-            columns: vec![
+            // The custom fields come last, one column each, so that the
+            // columns every project has keep their places.
+            columns: [
                 Column::named("Task"),
                 Column::wrapping("Title"),
                 Column::named("Status"),
@@ -540,7 +556,10 @@ impl Gathered<'_> {
                 Column::named("Part of"),
                 Column::named("Created"),
                 Column::named("Finished"),
-            ],
+            ]
+            .into_iter()
+            .chain(self.fields.iter().map(field_column))
+            .collect(),
             rows,
         }
     }
@@ -775,6 +794,38 @@ const fn sprint_state_in_words(state: SprintState) -> &'static str {
         SprintState::Planned => "Planned",
         SprintState::Active => "Running",
         SprintState::Completed => "Completed",
+    }
+}
+
+/// The column of a custom field on the Tasks sheet: its name, with its
+/// unit if it has one, "Unit cost (€)". A text column wraps.
+fn field_column(field: &Field) -> Column {
+    let name = match field.unit() {
+        Some(unit) => format!("{} ({unit})", field.name()),
+        None => field.name().to_string(),
+    };
+    if matches!(field.kind(), FieldKind::Text) {
+        Column::wrapping(&name)
+    } else {
+        Column::named(&name)
+    }
+}
+
+/// The value a task holds for a custom field, as a cell of its kind: a
+/// number is a number and a date a date, so that the spreadsheet can sum
+/// and sort them. A choice is its name; a choice removed since is left
+/// out.
+fn field_cell(field: &Field, task: &Task) -> Cell {
+    match task.field_values().get(&field.id()) {
+        None => Cell::Empty,
+        Some(FieldValue::Text(text)) => Cell::text(text.as_str()),
+        Some(FieldValue::Number(number)) => Cell::Number(number.value()),
+        Some(FieldValue::Date(date)) => Cell::Date(*date),
+        Some(FieldValue::YesNo(yes)) => Cell::text(if *yes { "Yes" } else { "No" }),
+        Some(FieldValue::Choice(choice)) => field
+            .choice(*choice)
+            .map_or(Cell::Empty, |choice| Cell::text(choice.name().as_str())),
+        Some(FieldValue::Link(address)) => Cell::text(address.as_str()),
     }
 }
 

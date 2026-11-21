@@ -103,11 +103,14 @@ pub(crate) enum Entity {
     /// What a specialist was given of the library. Its identifier is the
     /// member's.
     MemberKit,
+    /// A custom field of a project, with its choices. The values the tasks
+    /// hold are a part of the state of each task.
+    Field,
 }
 
 impl Entity {
     /// Every kind of thing whose changes are logged.
-    pub(crate) const ALL: [Self; 24] = [
+    pub(crate) const ALL: [Self; 25] = [
         Self::Project,
         Self::Task,
         Self::Member,
@@ -132,6 +135,7 @@ impl Entity {
         Self::Skill,
         Self::Connector,
         Self::MemberKit,
+        Self::Field,
     ];
 
     /// The entity of a name in the log, if this version knows it.
@@ -166,6 +170,7 @@ impl Entity {
             Self::Skill => "skill",
             Self::Connector => "connector",
             Self::MemberKit => "member_kit",
+            Self::Field => "field",
         }
     }
 }

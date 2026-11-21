@@ -9,6 +9,7 @@ pub mod areas;
 pub mod checklists;
 pub mod coordinator;
 pub mod digests;
+pub mod fields;
 pub mod files;
 pub mod github;
 pub mod google_drive;

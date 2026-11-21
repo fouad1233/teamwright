@@ -116,6 +116,19 @@ define_id!(
 );
 
 define_id!(
+    /// Identifies a custom field of a project: a property of its tasks the
+    /// manager defines, such as "Supplier" or "Unit cost".
+    FieldId,
+    kind = "field identifier"
+);
+
+define_id!(
+    /// Identifies one choice of a custom field of the kind choice.
+    ChoiceId,
+    kind = "choice identifier"
+);
+
+define_id!(
     /// Identifies a conversation with an AI specialist.
     ConversationId,
     kind = "conversation identifier"

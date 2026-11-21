@@ -12,23 +12,23 @@ use tauri::{AppHandle, Emitter, Manager};
 use teamwright_application::{
     AgentRuntime, AppearanceService, ApplicationError, AreaService, ChecklistService,
     CoordinatorPorts, CoordinatorService, DeliveryPorts, DeliveryService, DigestRepository,
-    DigestService, DiskEntry, DriveSurroundings, FileSystem, FolderReader, GitHubPorts,
-    GitHubService, GoogleDriveService, GroupingService, IntegrationSettings, NotificationService,
-    OperatingSystem, PlacesService, ProjectEvent, ProjectFilesService, ProjectFolders,
-    ProjectService, RoundReport, SprintService, StorageError, SyncPorts, SyncService, SystemClock,
-    TagService, TaskService, TeamService, UpdateService, ViewService, WorkListener, WorkPorts,
-    WorkService, WorkbookPorts, WorkbookService,
+    DigestService, DiskEntry, DriveSurroundings, FieldService, FileSystem, FolderReader,
+    GitHubPorts, GitHubService, GoogleDriveService, GroupingService, IntegrationSettings,
+    NotificationService, OperatingSystem, PlacesService, ProjectEvent, ProjectFilesService,
+    ProjectFolders, ProjectService, RoundReport, SprintService, StorageError, SyncPorts,
+    SyncService, SystemClock, TagService, TaskService, TeamService, UpdateService, ViewService,
+    WorkListener, WorkPorts, WorkService, WorkbookPorts, WorkbookService,
 };
 use teamwright_domain::{ComputerId, Conversation, Project, Turn};
 use teamwright_integrations::{GhCommandLine, GhLocator, GitHubReleases, HttpsSender};
 use teamwright_runtime::{ClaudeCode, EarlierConversationsOnDisk};
 use teamwright_storage::{
     Database, FolderOfComputers, SqliteAreaRepository, SqliteConversationRepository,
-    SqliteCoordinatorRepository, SqliteDigestRepository, SqliteIntegrationStore,
-    SqliteMemberRepository, SqliteNotificationChoice, SqlitePlacesRepository,
-    SqlitePlanningRepository, SqliteProjectRepository, SqliteSprintRepository, SqliteSyncLedger,
-    SqliteTagRepository, SqliteTaskRepository, SqliteThemeStore, SqliteUpdateChoice,
-    SqliteViewRepository,
+    SqliteCoordinatorRepository, SqliteDigestRepository, SqliteFieldRepository,
+    SqliteIntegrationStore, SqliteMemberRepository, SqliteNotificationChoice,
+    SqlitePlacesRepository, SqlitePlanningRepository, SqliteProjectRepository,
+    SqliteSprintRepository, SqliteSyncLedger, SqliteTagRepository, SqliteTaskRepository,
+    SqliteThemeStore, SqliteUpdateChoice, SqliteViewRepository,
 };
 
 use crate::coordinating::{CoordinatorNudge, start_coordinating};
@@ -142,6 +142,8 @@ pub struct AppState {
     /// The library of skills and connectors of a project, and what each
     /// specialist is given of it.
     pub kits: teamwright_application::KitService,
+    /// The use cases for the custom fields of a project.
+    pub fields: FieldService,
     /// The use cases for the team of a project.
     pub team: TeamService,
     /// The use cases for the folders of a project.
@@ -215,6 +217,7 @@ impl AppState {
         let view_repository = Arc::new(SqliteViewRepository::new(database.clone()));
         let area_repository = Arc::new(SqliteAreaRepository::new(database.clone()));
         let tag_repository = Arc::new(SqliteTagRepository::new(database.clone()));
+        let field_repository = Arc::new(SqliteFieldRepository::new(database.clone()));
         let conversation_repository = Arc::new(SqliteConversationRepository::new(database.clone()));
         let planning_repository = Arc::new(SqlitePlanningRepository::new(database.clone()));
         let teamwork_repository = Arc::new(teamwright_storage::SqliteTeamworkRepository::new(
@@ -351,6 +354,7 @@ impl AppState {
             sprints: sprint_repository.clone(),
             areas: area_repository.clone(),
             tags: tag_repository.clone(),
+            fields: field_repository.clone(),
             members: member_repository.clone(),
             conversations: conversation_repository.clone(),
             clock: clock.clone(),
@@ -413,12 +417,20 @@ impl AppState {
                 member_repository.clone(),
                 view_repository.clone(),
                 tag_repository.clone(),
+                field_repository.clone(),
             ),
             tags: TagService::new(
                 project_repository.clone(),
                 task_repository.clone(),
                 view_repository.clone(),
                 tag_repository,
+                clock.clone(),
+            ),
+            fields: FieldService::new(
+                project_repository.clone(),
+                task_repository.clone(),
+                view_repository.clone(),
+                field_repository,
                 clock.clone(),
             ),
             checklists: ChecklistService::new(task_repository.clone(), clock.clone()),

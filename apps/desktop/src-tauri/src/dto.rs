@@ -4,6 +4,7 @@
 //! of the application. `src/shared/api/types.ts` mirrors them, and the two
 //! must be changed together. Field names are camelCase on the wire.
 
+use std::collections::BTreeMap;
 use std::path::Path;
 use std::str::FromStr;
 
@@ -22,12 +23,12 @@ use teamwright_application::{
 use teamwright_application::{DueOutcome, ProjectReport, ReportTask, UsageLine, WorkShare};
 use teamwright_domain::{
     Area, Assignee, CalendarDate, Color, ComputerId, ContextUse, Conversation, DecisionOption,
-    DecisionRequest, DomainError, Effort, EventKind, EventKinds, Fill, GroupKey, Interview,
-    InterviewAnswer, Member, MemberKind, Priority, Project, ProjectTemplate, Proposal,
-    ProposedOwner, Schedule, ScopeTask, Sprint, SprintSummary, Status, StatusCategory, StatusLoad,
-    Step, StepContent, StoryPoints, Tag, Task, TaskChange, TaskChangeKind, TaskGroup, Timestamp,
-    TokenCounts, Turn, Velocity, View, ViewAssignee, ViewFilter, ViewKind, WorkInProgressLimit,
-    context_of,
+    DecisionRequest, DomainError, Effort, EventKind, EventKinds, Field, FieldFilter, FieldNumber,
+    FieldText, FieldValue, Fill, GroupKey, Interview, InterviewAnswer, Member, MemberKind,
+    Priority, Project, ProjectTemplate, Proposal, ProposedOwner, Schedule, ScopeTask, Sprint,
+    SprintSummary, Status, StatusCategory, StatusLoad, Step, StepContent, StoryPoints, Tag, Task,
+    TaskChange, TaskChangeKind, TaskGroup, Timestamp, TokenCounts, Turn, Velocity, View,
+    ViewAssignee, ViewFilter, ViewKind, WorkInProgressLimit, context_of,
 };
 
 use crate::error::CommandError;
@@ -188,6 +189,9 @@ pub struct TaskDto {
     tag_ids: Vec<String>,
     /// The items of its checklist, in their order.
     checklist: Vec<ChecklistItemDto>,
+    /// The values it holds for the custom fields of its project, by the
+    /// identifier of the field.
+    field_values: BTreeMap<String, FieldValueDto>,
     created_at: String,
     updated_at: String,
     completed_at: Option<String>,
@@ -241,6 +245,194 @@ impl TaggedTaskDto {
     }
 }
 
+/// A custom field of a project as the interface sees it.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FieldDto {
+    id: String,
+    project_id: String,
+    name: String,
+    kind: &'static str,
+    /// The unit after its numbers, for a number field that has one.
+    unit: Option<String>,
+    position: u32,
+    /// The choices of a choice field, in their order; empty for the others.
+    choices: Vec<FieldChoiceDto>,
+}
+
+/// One choice of a choice field.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FieldChoiceDto {
+    id: String,
+    name: String,
+    color: &'static str,
+}
+
+impl From<&Field> for FieldDto {
+    fn from(field: &Field) -> Self {
+        Self {
+            id: field.id().to_string(),
+            project_id: field.project_id().to_string(),
+            name: field.name().to_string(),
+            kind: field.kind().as_str(),
+            unit: field.unit().map(ToString::to_string),
+            position: field.position(),
+            choices: field
+                .choices()
+                .iter()
+                .map(|choice| FieldChoiceDto {
+                    id: choice.id().to_string(),
+                    name: choice.name().to_string(),
+                    color: choice.color().as_str(),
+                })
+                .collect(),
+        }
+    }
+}
+
+/// The value of a custom field, both ways:
+/// `{"kind": "number", "number": 12.5}`, `{"kind": "date", "date":
+/// "2026-11-30"}`, `{"kind": "choice", "choiceId": "…"}` and so on. What
+/// comes in is checked by the rules of the domain when it is read.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(
+    tag = "kind",
+    rename_all = "snake_case",
+    rename_all_fields = "camelCase"
+)]
+pub enum FieldValueDto {
+    /// One line of text.
+    Text {
+        /// The text.
+        text: String,
+    },
+    /// A number.
+    Number {
+        /// The number.
+        number: f64,
+    },
+    /// A day, year-month-day.
+    Date {
+        /// The day.
+        date: String,
+    },
+    /// Yes or no.
+    YesNo {
+        /// Whether it says yes.
+        yes: bool,
+    },
+    /// One choice of the field.
+    Choice {
+        /// The choice.
+        choice_id: String,
+    },
+    /// A web address that starts with `https://`.
+    Link {
+        /// The address.
+        address: String,
+    },
+}
+
+impl From<&FieldValue> for FieldValueDto {
+    fn from(value: &FieldValue) -> Self {
+        match value {
+            FieldValue::Text(text) => Self::Text {
+                text: text.to_string(),
+            },
+            FieldValue::Number(number) => Self::Number {
+                number: number.value(),
+            },
+            FieldValue::Date(date) => Self::Date {
+                date: date_to_text(*date),
+            },
+            FieldValue::YesNo(yes) => Self::YesNo { yes: *yes },
+            FieldValue::Choice(choice) => Self::Choice {
+                choice_id: choice.to_string(),
+            },
+            FieldValue::Link(address) => Self::Link {
+                address: address.as_str().to_owned(),
+            },
+        }
+    }
+}
+
+impl TryFrom<FieldValueDto> for FieldValue {
+    type Error = CommandError;
+
+    fn try_from(value: FieldValueDto) -> Result<Self, Self::Error> {
+        Ok(match value {
+            FieldValueDto::Text { text } => Self::Text(FieldText::parse(&text)?),
+            FieldValueDto::Number { number } => Self::Number(FieldNumber::new(number)?),
+            FieldValueDto::Date { date } => Self::Date(parse_date(&date)?),
+            FieldValueDto::YesNo { yes } => Self::YesNo(yes),
+            FieldValueDto::Choice { choice_id } => Self::Choice(parse_id(&choice_id)?),
+            FieldValueDto::Link { address } => Self::link(&address)?,
+        })
+    }
+}
+
+/// The value of a custom field a view is filtered by:
+/// `{"kind": "choice", "fieldId": "…", "choiceId": "…"}` or
+/// `{"kind": "yes_no", "fieldId": "…", "yes": true}`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(
+    tag = "kind",
+    rename_all = "snake_case",
+    rename_all_fields = "camelCase"
+)]
+pub enum FieldFilterDto {
+    /// The tasks that hold one choice of a choice field.
+    Choice {
+        /// The field.
+        field_id: String,
+        /// The choice.
+        choice_id: String,
+    },
+    /// The tasks whose yes-or-no field says yes, or no (or nothing).
+    YesNo {
+        /// The field.
+        field_id: String,
+        /// Yes or no.
+        yes: bool,
+    },
+}
+
+impl From<FieldFilter> for FieldFilterDto {
+    fn from(filter: FieldFilter) -> Self {
+        match filter {
+            FieldFilter::Choice { field, choice } => Self::Choice {
+                field_id: field.to_string(),
+                choice_id: choice.to_string(),
+            },
+            FieldFilter::YesNo { field, yes } => Self::YesNo {
+                field_id: field.to_string(),
+                yes,
+            },
+        }
+    }
+}
+
+impl TryFrom<FieldFilterDto> for FieldFilter {
+    type Error = CommandError;
+
+    fn try_from(filter: FieldFilterDto) -> Result<Self, Self::Error> {
+        Ok(match filter {
+            FieldFilterDto::Choice {
+                field_id,
+                choice_id,
+            } => Self::Choice {
+                field: parse_id(&field_id)?,
+                choice: parse_id(&choice_id)?,
+            },
+            FieldFilterDto::YesNo { field_id, yes } => Self::YesNo {
+                field: parse_id(&field_id)?,
+                yes,
+            },
+        })
+    }
+}
+
 /// Reads the name of a color, such as `"blue"`.
 pub fn parse_color(text: &str) -> Result<Color, CommandError> {
     Ok(text.parse::<Color>()?)
@@ -276,6 +468,11 @@ impl From<&Task> for TaskDto {
                     text: item.text().to_string(),
                     done: item.is_done(),
                 })
+                .collect(),
+            field_values: task
+                .field_values()
+                .iter()
+                .map(|(field, value)| (field.to_string(), FieldValueDto::from(value)))
                 .collect(),
             created_at: moment_to_text(task.created_at()),
             updated_at: moment_to_text(task.updated_at()),
@@ -734,7 +931,8 @@ impl From<&Area> for AreaDto {
 
 /// Which tasks a view shows:
 /// `{"assignee": {"kind": "anyone"}, "hidesFinished": false, "tagId": null}`.
-/// A filter without `tagId` shows the tasks with any tag.
+/// A filter without `tagId` shows the tasks with any tag, and one without
+/// `fieldFilter` the tasks whatever their custom fields hold.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ViewFilterDto {
@@ -742,6 +940,8 @@ pub struct ViewFilterDto {
     hides_finished: bool,
     #[serde(default)]
     tag_id: Option<String>,
+    #[serde(default)]
+    field_filter: Option<FieldFilterDto>,
 }
 
 impl From<ViewFilter> for ViewFilterDto {
@@ -750,6 +950,7 @@ impl From<ViewFilter> for ViewFilterDto {
             assignee: ViewAssigneeDto::from(filter.assignee),
             hides_finished: filter.hides_finished,
             tag_id: filter.tag.map(|tag| tag.to_string()),
+            field_filter: filter.field.map(FieldFilterDto::from),
         }
     }
 }
@@ -762,6 +963,7 @@ impl TryFrom<ViewFilterDto> for ViewFilter {
             assignee: ViewAssignee::try_from(filter.assignee)?,
             hides_finished: filter.hides_finished,
             tag: filter.tag_id.as_deref().map(parse_id).transpose()?,
+            field: filter.field_filter.map(FieldFilter::try_from).transpose()?,
         })
     }
 }
@@ -931,6 +1133,15 @@ pub enum TaskChangeKindDto {
         /// The text of the item.
         item: String,
     },
+    /// The value of a custom field was set, changed or cleared.
+    FieldValueChanged {
+        /// The field, which may have been removed since.
+        field_id: String,
+        /// The value before, if it held one.
+        from: Option<FieldValueDto>,
+        /// The value since, if it holds one.
+        to: Option<FieldValueDto>,
+    },
 }
 
 /// The dates of a task: when it starts and when it is due.
@@ -1005,6 +1216,13 @@ impl From<&TaskChange> for TaskChangeDto {
             TaskChangeKind::Unticked { item } => TaskChangeKindDto::Unticked {
                 item: item.to_string(),
             },
+            TaskChangeKind::FieldValueChanged { field, from, to } => {
+                TaskChangeKindDto::FieldValueChanged {
+                    field_id: field.to_string(),
+                    from: from.as_ref().map(FieldValueDto::from),
+                    to: to.as_ref().map(FieldValueDto::from),
+                }
+            }
         };
         Self {
             at: moment_to_text(change.at),

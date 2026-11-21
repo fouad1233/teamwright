@@ -10,10 +10,12 @@ use teamwright_domain::{
 };
 
 use super::*;
+use crate::fields::FieldService;
 use crate::in_memory::{
-    InMemoryAreaRepository, InMemoryConversationRepository, InMemoryMemberRepository,
-    InMemoryPlacesRepository, InMemoryProjectRepository, InMemorySprintRepository,
-    InMemoryTagRepository, InMemoryTaskRepository, InMemoryViewRepository, ManualClock,
+    InMemoryAreaRepository, InMemoryConversationRepository, InMemoryFieldRepository,
+    InMemoryMemberRepository, InMemoryPlacesRepository, InMemoryProjectRepository,
+    InMemorySprintRepository, InMemoryTagRepository, InMemoryTaskRepository,
+    InMemoryViewRepository, ManualClock,
 };
 use crate::projects::{NewProject, ProjectService};
 use crate::sprints::{NewSprint, SprintService, SprintStart};
@@ -28,6 +30,7 @@ struct Fixture {
     sprints: SprintService,
     team: TeamService,
     tags: TagService,
+    fields: FieldService,
     conversations: Arc<InMemoryConversationRepository>,
     workbook: WorkbookService,
     project: Project,
@@ -51,6 +54,7 @@ fn fixture() -> Fixture {
     let areas_store = Arc::new(InMemoryAreaRepository::default());
     let views_store = Arc::new(InMemoryViewRepository::default());
     let tags_store = Arc::new(InMemoryTagRepository::default());
+    let fields_store = Arc::new(InMemoryFieldRepository::default());
     let clock = Arc::new(ManualClock::starting_at(moment()));
     let projects = ProjectService::new(
         projects_store.clone(),
@@ -89,8 +93,15 @@ fn fixture() -> Fixture {
     let tags = TagService::new(
         projects_store.clone(),
         tasks_store.clone(),
-        views_store,
+        views_store.clone(),
         tags_store.clone(),
+        clock.clone(),
+    );
+    let fields = FieldService::new(
+        projects_store.clone(),
+        tasks_store.clone(),
+        views_store,
+        fields_store.clone(),
         clock.clone(),
     );
     let workbook = WorkbookService::new(WorkbookPorts {
@@ -99,6 +110,7 @@ fn fixture() -> Fixture {
         sprints: sprints_store,
         areas: areas_store,
         tags: tags_store,
+        fields: fields_store.clone(),
         members: members_store,
         conversations: conversations.clone(),
         clock,
@@ -116,6 +128,7 @@ fn fixture() -> Fixture {
         sprints,
         team,
         tags,
+        fields,
         conversations,
         workbook,
         project,
@@ -501,6 +514,86 @@ fn the_tags_of_a_task_are_named_by_name_and_a_task_without_any_has_none() {
 
     assert_eq!(cell(&tasks, 0, "Tags"), text("emc, Power"));
     assert_eq!(cell(&tasks, 1, "Tags"), Cell::Empty);
+}
+
+#[test]
+fn every_field_is_a_column_at_the_end_with_real_numbers_and_dates() {
+    let fixture = fixture();
+    let project = fixture.project.id();
+    let held = fixture.task("Order the sensors");
+    fixture.task("Write the brief");
+    let fields = &fixture.fields;
+    let supplier = fields
+        .add(project, "Supplier", FieldKind::Choice, None)
+        .unwrap();
+    let supplier = fields.add_choice(supplier.id(), "Mouser", None).unwrap();
+    let cost = fields
+        .add(project, "Unit cost", FieldKind::Number, Some("€"))
+        .unwrap();
+    let arrives = fields
+        .add(project, "Arrives", FieldKind::Date, None)
+        .unwrap();
+    let ordered = fields
+        .add(project, "Ordered", FieldKind::YesNo, None)
+        .unwrap();
+    let datasheet = fields
+        .add(project, "Datasheet", FieldKind::Link, None)
+        .unwrap();
+    let values = [
+        (
+            supplier.id(),
+            FieldValue::Choice(supplier.choices()[0].id()),
+        ),
+        (
+            cost.id(),
+            FieldValue::Number(teamwright_domain::FieldNumber::new(12.5).unwrap()),
+        ),
+        (arrives.id(), FieldValue::Date(day(30))),
+        (ordered.id(), FieldValue::YesNo(true)),
+        (
+            datasheet.id(),
+            FieldValue::link("https://www.ti.com/lit/ds/symlink/tps62840.pdf").unwrap(),
+        ),
+    ];
+    for (field, value) in values {
+        fields.set_value(held.id(), field, value).unwrap();
+    }
+
+    let tasks = fixture.list("Tasks");
+
+    let names: Vec<&str> = tasks
+        .columns
+        .iter()
+        .rev()
+        .take(6)
+        .map(|column| column.name.as_str())
+        .collect();
+    assert_eq!(
+        names,
+        [
+            "Datasheet",
+            "Ordered",
+            "Arrives",
+            "Unit cost (€)",
+            "Supplier",
+            "Finished"
+        ]
+    );
+    assert_eq!(cell(&tasks, 0, "Supplier"), text("Mouser"));
+    assert_eq!(cell(&tasks, 0, "Unit cost (€)"), Cell::Number(12.5));
+    assert_eq!(cell(&tasks, 0, "Arrives"), Cell::Date(day(30)));
+    assert_eq!(cell(&tasks, 0, "Ordered"), text("Yes"));
+    assert_eq!(
+        cell(&tasks, 0, "Datasheet"),
+        text("https://www.ti.com/lit/ds/symlink/tps62840.pdf")
+    );
+    assert_eq!(cell(&tasks, 1, "Unit cost (€)"), Cell::Empty);
+    assert!(
+        tasks
+            .rows
+            .iter()
+            .all(|row| row.len() == tasks.columns.len())
+    );
 }
 
 #[test]
