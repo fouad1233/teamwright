@@ -101,12 +101,40 @@ impl ProjectRepository for InMemoryProjectRepository {
 }
 
 /// Keeps tasks in memory, together with every version they were stored in.
-#[derive(Debug, Default)]
+#[derive(Default)]
 pub struct InMemoryTaskRepository {
     tasks: Mutex<BTreeMap<TaskId, Task>>,
     /// Every version of every task, in the order they were stored. Real
     /// storage reads them from its log of operations.
     versions: Mutex<BTreeMap<TaskId, Vec<Task>>>,
+    /// When each deleted task was deleted, by the clock it was given.
+    deletions: Mutex<BTreeMap<TaskId, Timestamp>>,
+    /// The clock that tells when a task is deleted. Without one, the
+    /// repository does not know.
+    clock: Option<Arc<dyn Clock>>,
+}
+
+impl std::fmt::Debug for InMemoryTaskRepository {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("InMemoryTaskRepository")
+            .field("tasks", &self.tasks)
+            .field("versions", &self.versions)
+            .field("deletions", &self.deletions)
+            .finish_non_exhaustive()
+    }
+}
+
+impl InMemoryTaskRepository {
+    /// A repository that notes when a task is deleted by `clock`, as real
+    /// storage notes it in its log.
+    #[must_use]
+    pub fn with_clock(clock: Arc<dyn Clock>) -> Self {
+        Self {
+            clock: Some(clock),
+            ..Self::default()
+        }
+    }
 }
 
 impl TaskRepository for InMemoryTaskRepository {
@@ -138,14 +166,23 @@ impl TaskRepository for InMemoryTaskRepository {
 
     fn delete(&self, ids: &[TaskId]) -> Result<(), StorageError> {
         let mut stored = lock(&self.tasks);
+        let mut deletions = lock(&self.deletions);
         for id in ids {
-            stored.remove(id);
+            if stored.remove(id).is_some()
+                && let Some(clock) = &self.clock
+            {
+                deletions.insert(*id, clock.now());
+            }
         }
         Ok(())
     }
 
     fn versions_of(&self, id: TaskId) -> Result<Vec<Task>, StorageError> {
         Ok(lock(&self.versions).get(&id).cloned().unwrap_or_default())
+    }
+
+    fn deleted_at(&self, id: TaskId) -> Result<Option<Timestamp>, StorageError> {
+        Ok(lock(&self.deletions).get(&id).copied())
     }
 
     fn ids_ever_in_project(&self, project_id: ProjectId) -> Result<Vec<TaskId>, StorageError> {

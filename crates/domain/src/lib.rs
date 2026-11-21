@@ -30,6 +30,7 @@ pub mod project;
 pub mod project_files;
 pub mod ready_made;
 pub mod sprint;
+pub mod sprint_course;
 pub mod tag;
 pub mod task;
 pub mod task_history;
@@ -71,6 +72,9 @@ pub use ready_made::ReadyMadeSpecialist;
 pub use sprint::{
     CountedTask, Sprint, SprintDates, SprintSnapshot, SprintState, SprintSummary, SprintUnit,
     StoryPoints,
+};
+pub use sprint_course::{
+    CourseDay, MovedOn, ScopeChange, ScopeTask, SprintCourse, TaskPast, course_of,
 };
 pub use tag::{Tag, TagSnapshot};
 pub use task::{Assignee, Priority, Rank, Schedule, Task, TaskDraft, TaskSnapshot};

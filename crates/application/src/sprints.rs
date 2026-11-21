@@ -9,8 +9,9 @@ use std::cmp::{Ordering, Reverse};
 use std::sync::Arc;
 
 use teamwright_domain::{
-    CalendarDate, CountedTask, Project, ProjectId, Sprint, SprintDates, SprintId, SprintName,
-    SprintState, SprintSummary, SprintUnit, StatusCategory, Task,
+    CalendarDate, CountedTask, MovedOn, Project, ProjectId, ScopeChange, Sprint, SprintDates,
+    SprintId, SprintName, SprintState, SprintSummary, SprintUnit, StatusCategory, Task, TaskPast,
+    course_of,
 };
 
 use crate::error::ApplicationError;
@@ -84,25 +85,35 @@ pub struct SprintDay {
     /// The work that remained at the end of the day. Nothing for a day that
     /// has not come yet, or that came after the sprint was completed.
     pub remaining: Option<u32>,
+    /// All the work the sprint held at the end of the day, finished or
+    /// not. Nothing for a day that has not come.
+    pub scope: Option<u32>,
 }
 
 /// The course of a sprint, for its burndown chart.
 ///
-/// It counts the tasks that are in the sprint now, from the moments at which
-/// they were finished. Tasks that joined or left the sprint while it ran are
-/// not followed: a task added in the middle counts as if it had been there
-/// from the first day.
+/// It follows the tasks that joined or left the sprint while it ran, read
+/// off the versions of the tasks in the log of operations
+/// ([`course_of`](teamwright_domain::course_of)).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SprintReport {
     /// The sprint the report is about.
     pub sprint_id: SprintId,
     /// What the work is counted in.
     pub unit: SprintUnit,
-    /// The work of all the tasks of the sprint.
+    /// The work the sprint holds now, or held just before it was completed.
     pub total: u32,
+    /// The work the sprint held when it was started; for a planned sprint,
+    /// what it holds now.
+    pub committed: u32,
     /// Every day from the start date to the end date, in order. Empty
     /// without both dates.
     pub days: Vec<SprintDay>,
+    /// The days on which tasks joined or left the sprint, or changed their
+    /// points, in order.
+    pub changes: Vec<ScopeChange>,
+    /// The tasks that moved on when the sprint was completed.
+    pub moved_on: Vec<MovedOn>,
 }
 
 /// The use cases that plan, change, remove, start and complete sprints.
@@ -338,13 +349,16 @@ impl SprintService {
     }
 
     /// Tells how much work remained in a sprint at the end of each of its
-    /// days.
+    /// days, what it held, which tasks joined or left it on which day, and,
+    /// once it is completed, which tasks moved on.
     ///
-    /// A task that was finished counts as done from the day it was
-    /// finished, or from the first day if that was earlier. Days after
-    /// today, and after the day the sprint was completed, have not come for
-    /// the sprint: they have no value. A planned sprint has not come at
-    /// all. Days are those of the clock, where the program runs.
+    /// It is read off every version every task of the project has had, so
+    /// that a task counts only while it was in the sprint. A task that was
+    /// finished counts as done from the day it was finished, or from the
+    /// first day if that was earlier. Days after today, and after the day
+    /// the sprint was completed, have not come for the sprint: they have no
+    /// value. A planned sprint has not come at all. Days are those of the
+    /// clock, where the program runs.
     ///
     /// # Errors
     ///
@@ -352,60 +366,53 @@ impl SprintService {
     pub fn report(&self, id: SprintId) -> Result<SprintReport, ApplicationError> {
         let sprint = self.require_sprint(id)?;
         let project = self.require_project(sprint.project_id())?;
-        let counted_tasks: Vec<CountedTask> = self
-            .tasks_of_sprint(&sprint)?
+        let mut versions = Vec::new();
+        let mut deletions = Vec::new();
+        for task_id in self.tasks.ids_ever_in_project(project.id())? {
+            let mut past = self.tasks.versions_of(task_id)?;
+            let current = self.tasks.find(task_id)?;
+            if past.is_empty() {
+                // Storage that kept no versions still knows the task as it
+                // is, if it is there.
+                past.extend(current.clone());
+            }
+            let deleted_at = if current.is_none() {
+                self.tasks.deleted_at(task_id)?
+            } else {
+                None
+            };
+            versions.push(past);
+            deletions.push(deleted_at);
+        }
+        let pasts: Vec<TaskPast<'_>> = versions
             .iter()
-            .filter(|task| task.parent_id().is_none())
-            .map(|task| counted(&project, task))
-            .collect();
-
-        let unit = SprintUnit::of(&counted_tasks);
-        let total = unit.work_of_all(&counted_tasks);
-        let finished: Vec<(CalendarDate, u32)> = counted_tasks
-            .iter()
-            .filter(|task| task.is_finished)
-            .filter_map(|task| {
-                task.completed_at
-                    .map(|moment| (self.clock.day_of(moment), unit.work_of(task)))
+            .zip(&deletions)
+            .map(|(versions, deleted_at)| TaskPast {
+                versions,
+                deleted_at: *deleted_at,
             })
             .collect();
 
         let today = self.clock.day_of(self.clock.now());
-        let last_day_come = match sprint.state() {
-            SprintState::Planned => None,
-            SprintState::Active | SprintState::Completed => Some(
-                sprint
-                    .completed_at()
-                    .map_or(today, |moment| today.min(self.clock.day_of(moment))),
-            ),
-        };
-
-        let dates = sprint.dates();
-        let days = match (dates.start_on(), dates.end_on()) {
-            (Some(start_on), Some(end_on)) => start_on
-                .iter_days()
-                .take_while(|day| *day <= end_on)
-                .map(|date| {
-                    let has_come = last_day_come.is_some_and(|last| date <= last);
-                    let done = finished
-                        .iter()
-                        .filter(|(day, _)| *day <= date)
-                        .map(|(_, work)| *work)
-                        .fold(0, u32::saturating_add);
-                    SprintDay {
-                        date,
-                        remaining: has_come.then(|| total.saturating_sub(done)),
-                    }
-                })
-                .collect(),
-            _ => Vec::new(),
-        };
-
+        let course = course_of(&sprint, project.workflow(), &pasts, today, &|moment| {
+            self.clock.day_of(moment)
+        });
         Ok(SprintReport {
             sprint_id: sprint.id(),
-            unit,
-            total,
-            days,
+            unit: course.unit,
+            total: course.total,
+            committed: course.committed,
+            days: course
+                .days
+                .iter()
+                .map(|day| SprintDay {
+                    date: day.date,
+                    remaining: day.remaining,
+                    scope: day.scope,
+                })
+                .collect(),
+            changes: course.changes,
+            moved_on: course.moved_on,
         })
     }
 

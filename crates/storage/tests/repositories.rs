@@ -632,6 +632,22 @@ fn the_log_knows_every_task_a_project_has_had_the_deleted_ones_too() {
 }
 
 #[test]
+fn the_log_knows_when_a_task_was_deleted() {
+    let store = Store::in_memory();
+    let project = store.project("Smart sensor node");
+    let kept = store.task(&project, 1, "Choose the microcontroller");
+    let deleted = store.task(&project, 2, "Draw the schematic");
+    let before = chrono::Utc::now() - chrono::TimeDelta::seconds(1);
+    store.tasks.delete(&[deleted.id()]).unwrap();
+    let after = chrono::Utc::now() + chrono::TimeDelta::seconds(1);
+
+    let moment = store.tasks.deleted_at(deleted.id()).unwrap().unwrap();
+
+    assert!(before <= moment && moment <= after);
+    assert_eq!(store.tasks.deleted_at(kept.id()).unwrap(), None);
+}
+
+#[test]
 fn a_task_that_was_never_stored_has_no_versions() {
     let store = Store::in_memory();
 
@@ -2143,10 +2159,16 @@ fn the_sprint_use_cases_work_on_the_real_database_and_are_logged() {
         tasks.get(firmware.id()).unwrap().sprint_id(),
         Some(first.id())
     );
+    // The report reads the log: the board stayed in the sprint to its end,
+    // and the version stored as the sprint was completed says where it went.
     let report = sprints.report(first.id()).unwrap();
-    assert_eq!(report.total, 3);
+    assert_eq!(report.total, 8);
     let remaining: Vec<Option<u32>> = report.days.iter().map(|day| day.remaining).collect();
-    assert_eq!(remaining, [Some(0), Some(0), None]);
+    assert_eq!(remaining, [Some(5), Some(5), None]);
+    assert_eq!(report.changes, []);
+    assert_eq!(report.moved_on.len(), 1);
+    assert_eq!(report.moved_on[0].task.task_id, board.id());
+    assert_eq!(report.moved_on[0].to, Some(next.id()));
     let listed: Vec<SprintId> = sprints
         .list_for_project(project.id())
         .unwrap()

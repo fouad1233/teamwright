@@ -145,6 +145,17 @@ pub trait TaskRepository: Send + Sync {
         Ok(Vec::new())
     }
 
+    /// When a task was deleted, if it was and storage knows. The course of
+    /// a sprint uses it to tell the day a deleted task left the sprint.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if stored data could not be read.
+    fn deleted_at(&self, id: TaskId) -> Result<Option<Timestamp>, StorageError> {
+        let _ = id;
+        Ok(None)
+    }
+
     /// The identifiers of every task a project has had, those deleted since
     /// included, in no particular order. Storage that forgets deleted tasks
     /// answers with the tasks the project has now.

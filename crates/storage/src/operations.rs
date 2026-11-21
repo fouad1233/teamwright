@@ -13,7 +13,7 @@
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use rusqlite::{Connection, Transaction, named_params};
+use rusqlite::{Connection, OptionalExtension, Transaction, named_params};
 use serde::Serialize;
 use serde_json::{Map, Value};
 use teamwright_domain::ComputerId;
@@ -247,6 +247,31 @@ pub(crate) fn states_of(
         )?
         .collect::<Result<_, _>>()?;
     Ok(states)
+}
+
+/// When something was last deleted, by the clock part of the stamp of its
+/// deletion, in milliseconds since 1 January 1970, UTC. Nothing if it was
+/// never deleted.
+pub(crate) fn deleted_millis_of(
+    connection: &Connection,
+    entity: Entity,
+    entity_id: &str,
+) -> Result<Option<i64>, DatabaseError> {
+    let stamp: Option<String> = connection
+        .query_row(
+            "SELECT stamp FROM operations
+             WHERE entity = :entity AND entity_id = :entity_id AND kind = 'delete'
+               AND waiting IS NULL
+             ORDER BY stamp DESC, sequence DESC
+             LIMIT 1",
+            named_params! { ":entity": entity.as_str(), ":entity_id": entity_id },
+            |row| row.get(0),
+        )
+        .optional()?;
+    Ok(stamp
+        .as_deref()
+        .and_then(Stamp::from_text)
+        .map(Stamp::millis))
 }
 
 /// The computers that made the states [`states_of`] reads, in the same

@@ -10,7 +10,7 @@ use serde_json::{Map, Value};
 use teamwright_application::{StorageError, TaskRepository};
 use teamwright_domain::{
     Area, Assignee, ChecklistItem, ChecklistText, ComputerId, DomainError, ProjectId, Rank,
-    Schedule, StoryPoints, TagId, Task, TaskId, TaskSnapshot, TaskTitle,
+    Schedule, StoryPoints, TagId, Task, TaskId, TaskSnapshot, TaskTitle, Timestamp,
 };
 
 use crate::codec;
@@ -366,6 +366,17 @@ impl TaskRepository for SqliteTaskRepository {
                     record.into_task()
                 })
                 .collect()
+        })
+    }
+
+    fn deleted_at(&self, id: TaskId) -> Result<Option<Timestamp>, StorageError> {
+        self.database.read(|connection| {
+            // The log keeps the deletion with the stamp of the moment it was
+            // made, also when another computer made it.
+            Ok(
+                operations::deleted_millis_of(connection, Entity::Task, &id.to_string())?
+                    .and_then(chrono::DateTime::from_timestamp_millis),
+            )
         })
     }
 

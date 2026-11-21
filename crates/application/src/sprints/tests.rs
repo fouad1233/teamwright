@@ -38,12 +38,12 @@ fn day(day_of_month: u32) -> CalendarDate {
 
 fn backlog() -> Backlog {
     let projects_store = Arc::new(InMemoryProjectRepository::default());
-    let tasks_store = Arc::new(InMemoryTaskRepository::default());
+    let clock = Arc::new(ManualClock::starting_at(start_of_day()));
+    let tasks_store = Arc::new(InMemoryTaskRepository::with_clock(clock.clone()));
     let members_store = Arc::new(InMemoryMemberRepository::default());
     let conversations_store = Arc::new(InMemoryConversationRepository::default());
     let sprints_store = Arc::new(InMemorySprintRepository::new(tasks_store.clone()));
     let area_store = Arc::new(crate::in_memory::InMemoryAreaRepository::default());
-    let clock = Arc::new(ManualClock::starting_at(start_of_day()));
     let projects = ProjectService::new(
         projects_store.clone(),
         tasks_store.clone(),
@@ -1052,7 +1052,10 @@ mod the_report_of_a_sprint {
                 sprint_id: sprint.id(),
                 unit: SprintUnit::Tasks,
                 total: 1,
+                committed: 1,
                 days: Vec::new(),
+                changes: Vec::new(),
+                moved_on: Vec::new(),
             }
         );
     }
@@ -1071,6 +1074,90 @@ mod the_report_of_a_sprint {
             days(&report)[..3],
             [(day(10), Some(1)), (day(11), Some(0)), (day(12), None)]
         );
+    }
+}
+
+mod the_report_follows_the_scope_of_a_sprint {
+    use super::*;
+
+    fn remaining(report: &SprintReport) -> Vec<Option<u32>> {
+        report.days.iter().map(|day| day.remaining).collect()
+    }
+
+    #[test]
+    fn a_task_planned_in_while_the_sprint_runs_raises_the_line_on_its_day() {
+        let backlog = backlog();
+        let (sprint, _) = backlog.active_sprint();
+        backlog.pass(1);
+        let late = backlog.task("Order the parts");
+        backlog.tasks.plan(late.id(), Some(sprint.id())).unwrap();
+
+        let report = backlog.sprints.report(sprint.id()).unwrap();
+
+        assert_eq!(report.committed, 1);
+        assert_eq!(report.total, 2);
+        assert_eq!(remaining(&report)[..4], [Some(1), Some(1), Some(2), None]);
+        assert_eq!(report.changes.len(), 1);
+        assert_eq!(report.changes[0].date, day(12));
+        assert_eq!(report.changes[0].joined[0].task_id, late.id());
+    }
+
+    #[test]
+    fn a_task_taken_back_to_the_backlog_lowers_the_line_on_its_day() {
+        let backlog = backlog();
+        let (sprint, planned) = backlog.active_sprint();
+        let other = backlog.task("Route the board");
+        backlog.tasks.plan(other.id(), Some(sprint.id())).unwrap();
+        backlog.pass(1);
+        backlog.tasks.plan(planned.id(), None).unwrap();
+
+        let report = backlog.sprints.report(sprint.id()).unwrap();
+
+        assert_eq!(remaining(&report)[..3], [Some(2), Some(2), Some(1)]);
+        assert_eq!(report.changes[0].date, day(12));
+        assert_eq!(report.changes[0].left[0].task_id, planned.id());
+    }
+
+    #[test]
+    fn a_task_deleted_while_the_sprint_runs_leaves_on_the_day_it_was_deleted() {
+        let backlog = backlog();
+        let (sprint, planned) = backlog.active_sprint();
+        let other = backlog.task("Route the board");
+        backlog.tasks.plan(other.id(), Some(sprint.id())).unwrap();
+        backlog.pass(1);
+        backlog.tasks.delete(planned.id()).unwrap();
+
+        let report = backlog.sprints.report(sprint.id()).unwrap();
+
+        assert_eq!(remaining(&report)[..3], [Some(2), Some(2), Some(1)]);
+        assert_eq!(report.changes[0].left[0].task_id, planned.id());
+    }
+
+    #[test]
+    fn a_completed_sprint_tells_which_tasks_moved_on_and_where() {
+        let backlog = backlog();
+        let (sprint, planned) = backlog.active_sprint();
+        let finished = backlog.task("Choose the microcontroller");
+        backlog
+            .tasks
+            .plan(finished.id(), Some(sprint.id()))
+            .unwrap();
+        backlog.finish(finished.id());
+        let next = backlog.new_sprint();
+        backlog.pass(1);
+        backlog
+            .sprints
+            .complete(sprint.id(), Some(next.id()))
+            .unwrap();
+
+        let report = backlog.sprints.report(sprint.id()).unwrap();
+
+        assert_eq!(report.total, 2);
+        assert_eq!(remaining(&report)[..3], [Some(2), Some(1), Some(1)]);
+        assert_eq!(report.changes, []);
+        assert_eq!(report.moved_on.len(), 1);
+        assert_eq!(report.moved_on[0].task.task_id, planned.id());
+        assert_eq!(report.moved_on[0].to, Some(next.id()));
     }
 }
 
