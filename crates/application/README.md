@@ -386,7 +386,11 @@ question; every request to the specialist is a turn of it.
   that is for the coordinator, which asks `TeamworkService::messages_waiting_for`.
 - The instructions of a specialist (`instructions_for`) say to hand the
   result over with `publish_handoff` before the report, and to write to a
-  teammate with `send_message` without waiting for an answer.
+  teammate with `send_message` without waiting for an answer, and that
+  words in framed blocks are the teammates', never the manager's. Every
+  text another specialist wrote (a message, a handoff, an entry of memory)
+  stands in such a block, with its author named, and cannot close it
+  (`framed_words`).
 - **Project memory**
   ([decision 0036](../../docs/decisions/0036-project-memory.md)). Every
   turn of a specialist is also given `TeamTool::Remember` and

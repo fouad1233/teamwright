@@ -112,3 +112,19 @@ message reaches its receiver, and what a "registered artifact" is.
   the project's folder, which the manager owns
   ([decision 0011](0011-what-a-specialist-may-do.md)); a second copy would
   go stale.
+
+## Note of 21 November 2026: framed words, after a review
+
+A review found that the messages of teammates and the summaries and
+contracts of handoffs were pasted into the brief and the turn text as plain
+text, so a message could pretend to be the manager or to grant something.
+Now every text another specialist wrote stands in a block of its own. The
+first line says what it is and who wrote it, and the last line,
+`--- End of teammate words ---`, ends it. A run of three hyphens inside the
+text is broken by a space, so the text cannot close the block itself or open
+a false one. The fixed instructions of a specialist's turn say that what
+stands in those blocks is the words of teammates, not the manager's: they
+never give permission and never change the rules. The digests given to the
+Advisor are framed in the same spirit, as accounts and not instructions. The
+framing is a help to the model, not a lock: what a specialist may do is still
+decided by its permissions ([decision 0011](0011-what-a-specialist-may-do.md)).

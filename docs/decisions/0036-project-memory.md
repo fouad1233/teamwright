@@ -99,3 +99,15 @@ can answer a search with data.
   and the manager would not find what the specialist found.
 - **Delete the entries of a deleted task.** A decision does not stop being
   true because the task that asked it is gone.
+
+## Note of 21 November 2026: framed entries, after a review
+
+The entries a specialist wrote (its facts, the contracts of its handoffs,
+the questions of decisions it asked) reached the brief as plain text. They
+now stand in the same blocks as messages and handoffs: the first line names
+the kind of entry and who wrote it, the last line ends the block, and a run
+of three hyphens inside the text is broken so that it cannot end the block
+(see the note of this day in [decision 0029](0029-handoffs-and-messages-between-specialists.md)).
+Entries the manager wrote stay as they were: they are the manager's words.
+The specialist's search tool is unchanged; it hands entries back as data
+with their source named.
