@@ -102,7 +102,9 @@ pub enum WriteError {
 /// Writes a workbook to a file, replacing a file that is there.
 ///
 /// The whole file is made in memory first, so that a failure of the
-/// writer leaves an existing file as it was.
+/// writer leaves an existing file as it was. It is then written through a
+/// temporary file that is renamed, and a symbolic link at the path is
+/// refused ([`write_whole_file`]).
 ///
 /// # Errors
 ///
@@ -115,7 +117,7 @@ pub fn write_workbook(workbook: &Workbook, title: &str, path: &Path) -> Result<(
         path: shown.clone(),
         reason: error.to_string(),
     })?;
-    std::fs::write(path, bytes).map_err(|error| io_failure(&error, shown))
+    write_whole_file(path, &bytes).map_err(|error| io_failure(&error, shown))
 }
 
 /// Makes the bytes of the `.xlsx` file of a workbook. `title` goes into the

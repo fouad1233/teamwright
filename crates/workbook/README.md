@@ -14,7 +14,7 @@ Rust: no Excel is needed on the computer.
 
 | Item | Contents |
 |---|---|
-| `write_workbook` | Writes a workbook to a path, replacing a file that is there. The file is made in memory first and written in one go. |
+| `write_workbook` | Writes a workbook to a path, replacing a file that is there. The file is made in memory first, then written with `write_whole_file`: through a temporary file that is renamed, and never through a symbolic link. |
 | `write_whole_file` | Writes bytes to a path through a temporary file of a unique name in the same folder, flushed and then renamed, so that a half-written file is never left. A symbolic link at the path is refused. The report of a project is written with it ([decision 0042](../../docs/decisions/0042-the-report-of-a-whole-project.md)). |
 | `to_bytes` | The bytes of the file, for whoever wants to keep them elsewhere. |
 | `WriteError` | Why a file could not be written, in plain words: it is open in another program or may not be changed (`InUse`), the disk is full (`DiskFull`), its folder is gone (`NoFolder`), or something else, which is named (`Failed`). |

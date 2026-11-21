@@ -194,6 +194,36 @@ fn a_file_is_written_and_replaces_one_that_was_there() {
     assert!(excel.worksheet_range("Tasks").is_ok());
 }
 
+#[cfg(unix)]
+#[test]
+fn a_link_at_the_name_is_refused_and_its_target_is_not_overwritten() {
+    let folder = tempfile::tempdir().unwrap();
+    let target = folder.path().join("precious.txt");
+    std::fs::write(&target, "precious").unwrap();
+    let path = folder.path().join("Smart home hub.xlsx");
+    std::os::unix::fs::symlink(&target, &path).unwrap();
+
+    let error = write_workbook(&sample(), "Smart home hub", &path).unwrap_err();
+
+    assert!(matches!(error, WriteError::Failed { .. }));
+    assert!(error.to_string().contains("link"));
+    assert_eq!(std::fs::read(&target).unwrap(), b"precious");
+}
+
+#[test]
+fn a_workbook_leaves_no_temporary_file_beside_it() {
+    let folder = tempfile::tempdir().unwrap();
+    let path = folder.path().join("Smart home hub.xlsx");
+
+    write_workbook(&sample(), "Smart home hub", &path).unwrap();
+
+    let names: Vec<_> = std::fs::read_dir(folder.path())
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name())
+        .collect();
+    assert_eq!(names, ["Smart home hub.xlsx"]);
+}
+
 #[test]
 fn a_file_in_a_folder_that_does_not_exist_is_refused_in_plain_words() {
     let folder = tempfile::tempdir().unwrap();

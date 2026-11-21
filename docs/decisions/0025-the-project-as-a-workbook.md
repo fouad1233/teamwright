@@ -84,3 +84,13 @@ interface ([decision 0020](0020-a-dashboard-worked-out-not-written.md)).
 - **Formulas in the workbook for the missing figures** (late tasks counted
   by Excel against `TODAY()`). It would write the rule a third time, in a
   third language.
+
+## Note of 21 November 2026: the file is written without following a link, after a review
+
+The workbook was written with a plain write, which follows a symbolic link
+at the name. The work folder of a project, where a workbook may be saved, is
+one a specialist can write in. The workbook is now written the way the report
+of a project is ([decision 0042](0042-the-report-of-a-whole-project.md)):
+through a temporary file of a unique name in the same folder that is renamed
+to the wanted name, with a link at the name refused. A half-written workbook
+is never left either.
