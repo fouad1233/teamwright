@@ -129,6 +129,9 @@ pub fn notification_of(event: &ProjectEvent) -> Option<Notification> {
                         event.project_name
                     ),
                 ),
+                WaitsFor::Permission { what } => {
+                    (format!("{name} asks for permission"), format!("To {what}."))
+                }
             };
             (NotificationKind::Waiting, title, body)
         }

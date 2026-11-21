@@ -110,6 +110,7 @@ fn office_on(this_computer: ComputerId) -> Office {
         )),
         teamwork: teamwork.clone(),
         digests: Arc::new(crate::in_memory::InMemoryDigestRepository::default()),
+        permissions: Arc::new(crate::in_memory::InMemoryPermissionRepository::default()),
         memory: Arc::new(crate::in_memory::InMemoryMemoryRepository::default()),
         folders: Arc::new(FixedProjectFolders::inside("projects")),
         places: Arc::new(InMemoryPlacesRepository::default()),

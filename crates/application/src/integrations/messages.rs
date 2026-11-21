@@ -64,6 +64,7 @@ pub fn channel_message_of(event: &ProjectEvent) -> String {
                     counted(*members, "member", "members"),
                     counted(*tasks, "task", "tasks")
                 ),
+                WaitsFor::Permission { what } => format!("permission to {what}."),
             };
             format!("{} waits for you{on}, for {what}", agent.name())
         }
@@ -215,6 +216,7 @@ pub fn payload_of(event: &ProjectEvent, project_key: &str) -> EventPayload {
                     ("answers", Some(first_words(first_question)))
                 }
                 WaitsFor::Approval { .. } => ("approval", None),
+                WaitsFor::Permission { what } => ("permission", Some(what.clone())),
             };
             payload.waits_for = Some(kind);
             payload.question = question;

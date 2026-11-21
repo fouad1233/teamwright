@@ -14,8 +14,9 @@
 //! the events of a sprint after the manager started or completed one.
 
 use teamwright_domain::{
-    Assignee, Conversation, ConversationId, Member, MemberId, Project, ProjectId, Sprint, SprintId,
-    SprintUnit, Status, StatusCategory, Task, TaskId, Timestamp, Turn, TurnState,
+    Assignee, Conversation, ConversationId, Member, MemberId, PermissionRequest, Project,
+    ProjectId, Sprint, SprintId, SprintUnit, Status, StatusCategory, Task, TaskId, Timestamp, Turn,
+    TurnState,
 };
 
 use crate::work::reference_of;
@@ -221,6 +222,11 @@ pub enum WaitsFor {
         /// How many tasks it proposes.
         tasks: usize,
     },
+    /// A permission a specialist asked for (decision 0038).
+    Permission {
+        /// What it asks to do, in words: "run the command `npm test`".
+        what: String,
+    },
 }
 
 /// The event of a turn that has just ended, or nothing if its end is not
@@ -291,6 +297,46 @@ pub fn event_of_ended_turn(
         project_name: project.name().as_str().to_owned(),
         at,
         happening,
+    })
+}
+
+/// The event of a turn that has just ended with a request for a permission
+/// that is still open: the specialist waits for the manager. Nothing if the
+/// turn has not finished, or if its event is something else already (the
+/// turn asked a question as well, which a turn cannot, or failed).
+#[must_use]
+pub fn event_of_permission_request(
+    ended: Option<ProjectEvent>,
+    conversation: &Conversation,
+    turn: &Turn,
+    member: Option<&Member>,
+    request: &PermissionRequest,
+) -> Option<ProjectEvent> {
+    if turn.state() != TurnState::Finished || !request.is_open() {
+        return ended;
+    }
+    let ended = ended?;
+    let task = match ended.happening {
+        Happening::TaskFinished { task, .. } => Some(task),
+        Happening::WaitsForManager { .. } | Happening::AgentStopped { .. } => return Some(ended),
+        _ => None,
+    };
+    Some(ProjectEvent {
+        happening: Happening::WaitsForManager {
+            conversation_id: conversation.id(),
+            agent: Agent::Specialist {
+                member_id: member.map(Member::id),
+                name: member.map_or_else(
+                    || "A specialist".to_owned(),
+                    |member| member.name().as_str().to_owned(),
+                ),
+            },
+            task,
+            waits_for: WaitsFor::Permission {
+                what: request.asked().in_words(),
+            },
+        },
+        ..ended
     })
 }
 

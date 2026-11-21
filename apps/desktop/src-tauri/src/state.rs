@@ -234,6 +234,9 @@ impl AppState {
             Arc::new(SqliteDigestRepository::new(database.clone()));
         let coordinator_repository = Arc::new(SqliteCoordinatorRepository::new(database.clone()));
         let (coordinator_nudge, coordinator_inbox) = CoordinatorNudge::new();
+        let permission_repository = Arc::new(teamwright_storage::SqlitePermissionRepository::new(
+            database.clone(),
+        ));
         let runtime: Arc<dyn AgentRuntime> = Arc::new(agent_program());
         let kit_repository = Arc::new(teamwright_storage::SqliteKitRepository::new(
             database.clone(),
@@ -304,6 +307,7 @@ impl AppState {
             teamwork: teamwork_repository.clone(),
             memory: memory_repository.clone(),
             digests: digest_repository.clone(),
+            permissions: permission_repository.clone(),
             folders: folders.clone(),
             places: places_repository.clone(),
             file_system: file_system.clone(),

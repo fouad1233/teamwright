@@ -34,6 +34,7 @@ pub mod integrations;
 pub mod kits;
 pub mod memory;
 pub mod notifications;
+pub mod permissions;
 pub mod places;
 pub mod plan_limit;
 pub mod ports;
@@ -111,6 +112,7 @@ pub use notifications::{
     Notification, NotificationChoice, NotificationChoiceStore, NotificationKind,
     NotificationPermission, NotificationService, notification_for, notification_of,
 };
+pub use permissions::PermissionService;
 pub use places::{ChosenPlaces, PlacesService, ProjectPlaces, REFERENCES_FOLDER};
 pub use plan_limit::{
     PlanLimitChange, PlanLimitService, PlanLimitState, PlanLimitStore, PlanReport, ReachedLimit,
@@ -126,7 +128,7 @@ pub use ports::{
 pub use project_events::{
     Agent, Happening, ProjectEvent, StatusOfEvent, TaskOfEvent, WaitsFor,
     event_of_completed_sprint, event_of_created_task, event_of_ended_turn, event_of_moved_task,
-    event_of_started_sprint,
+    event_of_permission_request, event_of_started_sprint,
 };
 pub use project_report::markdown::{report_file_name, report_in_markdown};
 pub use project_report::{
@@ -161,8 +163,8 @@ pub use usage::{AgentUsage, MemberUsage, ProjectUsage, usage_of};
 pub use views::{NewView, ViewService};
 pub use work::{
     AgentProgram, AgentProgramState, ApprovedMember, ApprovedOwner, ApprovedProposal, ApprovedTask,
-    ConversationWithTurns, ProposalEdit, WorkPorts, WorkService, answers_in_words, brief_for,
-    brief_with_memory, digests_for_advisor, instructions_for, instructions_for_advisor,
+    ConversationWithTurns, PermissionReply, ProposalEdit, WorkPorts, WorkService, answers_in_words,
+    brief_for, brief_with_memory, digests_for_advisor, instructions_for, instructions_for_advisor,
 };
 pub use workbook::{
     Cell, Column, Section, Sheet, SheetContent, Table, Workbook, WorkbookPorts, WorkbookService,

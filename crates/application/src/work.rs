@@ -14,6 +14,10 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError, Weak};
 
 use teamwright_domain::{
+    Answered, PermissionKind, PermissionRequest, PermissionRequestId, PermissionRule,
+    PermissionScope, TurnAbout, granted_rules,
+};
+use teamwright_domain::{
     Assignee, ComputerId, Conversation, ConversationId, DecisionOption, DecisionRequest,
     DomainError, Handoff, HandoffContent, Interview, InterviewQuestion, Member, MemberId,
     MemberKind, MemberName, MemoryContent, MemoryEntry, MemoryKind, MemoryOrigin, ModelName,
@@ -24,7 +28,7 @@ use teamwright_domain::{
 
 use crate::agent_runtime::{
     self, AgentEvent, AgentRuntime, AgentRuntimeError, ManagerInterview, ManagerQuestion,
-    PermissionProfile, PlanProposal, PlannedOwner, ProgramVersion, PublishedHandoff,
+    PermissionAsk, PermissionProfile, PlanProposal, PlannedOwner, ProgramVersion, PublishedHandoff,
     RememberedFact, RunningTurn, SentMessage, SessionChoice, SessionId, SignIn, TeamTool,
     TurnFailure, TurnOutcome, TurnRequest,
 };
@@ -38,10 +42,10 @@ use crate::places::{PlacesService, REFERENCES_FOLDER};
 use crate::plan_limit::PlanReport;
 use crate::ports::{
     AreaRepository, Clock, ConversationRepository, DigestRepository, FileSystem, MemberRepository,
-    MemoryRepository, PlacesRepository, PlanningRepository, ProjectFolders, ProjectRepository,
-    TaskRepository, TeamworkRepository, WorkListener,
+    MemoryRepository, PermissionRepository, PlacesRepository, PlanningRepository, ProjectFolders,
+    ProjectRepository, TaskRepository, TeamworkRepository, WorkListener,
 };
-use crate::project_events::{ProjectEvent, event_of_ended_turn};
+use crate::project_events::{ProjectEvent, event_of_ended_turn, event_of_permission_request};
 use crate::teamwork::{handoffs_in_words, messages_in_words, messages_waiting_for};
 use crate::usage::{ProjectUsage, usage_of};
 
@@ -168,6 +172,9 @@ pub struct WorkPorts {
     /// Where the digests of earlier conversations are stored. The Advisor
     /// starts from them.
     pub digests: Arc<dyn DigestRepository>,
+    /// Where the permission requests of the specialists are kept, with the
+    /// manager's answers (decision 0038).
+    pub permissions: Arc<dyn PermissionRepository>,
     /// The folder Teamwright gives each project.
     pub folders: Arc<dyn ProjectFolders>,
     /// Where the folders the manager chose for each project are stored.
@@ -368,6 +375,7 @@ impl WorkService {
                 answered_turn: None,
                 turn,
                 prompt: None,
+                answered_permission: None,
             },
             Worker::Specialist(&member),
             &project,
@@ -431,6 +439,7 @@ impl WorkService {
                 answered_turn: None,
                 turn,
                 prompt: None,
+                answered_permission: None,
             },
             Worker::Specialist(&member),
             &project,
@@ -498,6 +507,7 @@ impl WorkService {
                 answered_turn: Some(answered_turn),
                 turn,
                 prompt: None,
+                answered_permission: None,
             },
             Worker::Specialist(&member),
             &project,
@@ -506,6 +516,90 @@ impl WorkService {
             ports.memory.save_entries(&[decided])?;
         }
         Ok(started)
+    }
+
+    /// Answers a specialist's request for a permission (decision 0038):
+    /// allowed, with the rule the manager saw, once, for the task or always;
+    /// or refused. The specialist goes on in the same session, with the
+    /// answer as the request of a new turn, and that turn is started with
+    /// the allowed rule added to what it may do. Nothing else is added, and
+    /// a refused request adds nothing.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if there is no such request, if it was answered
+    /// already (`rule_broken`), if the rule the manager edited could never
+    /// be allowed (`rule_broken`), if a permission for the task is asked
+    /// in a conversation that is not about a task (`rule_broken`), if the
+    /// specialist has left the team or is working on something, if the
+    /// conversation runs on another computer (`runs_elsewhere`), if the
+    /// program cannot start the turn, or if storage fails.
+    pub fn answer_permission(
+        &self,
+        request_id: PermissionRequestId,
+        answer: PermissionReply,
+    ) -> Result<ConversationWithTurns, ApplicationError> {
+        let _work = self.inner.hold_work();
+        let ports = &self.inner.ports;
+        let mut request = ports
+            .permissions
+            .find_request(request_id)?
+            .ok_or_else(|| not_found("permission request", request_id))?;
+        if !request.is_open() {
+            return Err(DomainError::AlreadyAnswered.into());
+        }
+        let conversation = self
+            .inner
+            .require_conversation_here(request.said_in().conversation_id)?;
+        let member = self.inner.specialist_of(&conversation)?;
+        self.inner.guard().refuse_while_busy(&member)?;
+        let earlier_turns = ports.conversations.turns_of(conversation.id())?;
+        if open_decision_of(&earlier_turns).is_some() {
+            return Err(ApplicationError::DecisionOpen {
+                name: member.name().to_string(),
+            });
+        }
+        let now = ports.clock.now();
+        let words = permission_answer_in_words(&request, &answer);
+        let turn = Turn::start(conversation.id(), &words, TurnOrigin::Decision, now)?;
+        let answered = Answered {
+            at: now,
+            computer: ports.this_computer,
+            next_turn: turn.id(),
+        };
+        match answer {
+            PermissionReply::Allow {
+                scope,
+                kind,
+                text,
+                note,
+            } => {
+                if scope == PermissionScope::Task && conversation.task_id().is_none() {
+                    return Err(DomainError::PermissionNotPossible {
+                        reason: "the conversation is not about a task; allow it once or always"
+                            .to_owned(),
+                    }
+                    .into());
+                }
+                let rule = PermissionRule::new(kind, &text)?;
+                request.allow(scope, rule, &note, answered)?;
+            }
+            PermissionReply::Refuse { note } => request.refuse(&note, answered)?,
+        }
+        let project = self.inner.require_project(conversation.project_id())?;
+        self.begin_turn(
+            NewTurn {
+                conversation,
+                is_new_conversation: false,
+                earlier_turns,
+                answered_turn: None,
+                turn,
+                prompt: None,
+                answered_permission: Some(request),
+            },
+            Worker::Specialist(&member),
+            &project,
+        )
     }
 
     /// Lists the conversations that wait for the manager, in every project
@@ -582,6 +676,7 @@ impl WorkService {
                 answered_turn: None,
                 turn,
                 prompt: None,
+                answered_permission: None,
             },
             Worker::Specialist(&member),
             &project,
@@ -736,6 +831,7 @@ impl WorkService {
             answered_turn,
             turn,
             prompt,
+            answered_permission,
         } = new_turn;
 
         let session = match conversation.session_id() {
@@ -780,11 +876,29 @@ impl WorkService {
                 // What the manager gave the specialist, as far as this
                 // computer has it (decision 0039).
                 kit = turn_kit_of(ports.kits.as_ref(), ports.shelf.as_ref(), member)?;
+                // What the manager allowed this specialist, for this turn
+                // (decision 0038): the standing permissions, those of the
+                // task, and the one the answer that starts it allows.
+                let about = TurnAbout {
+                    project_id: project.id(),
+                    member_id: member.id(),
+                    task_id: conversation.task_id(),
+                    turn_id: turn.id(),
+                    computer: ports.this_computer,
+                };
+                let mut requests = ports.permissions.requests_of_project(project.id())?;
+                requests.extend(answered_permission.iter().cloned());
+                let granted = granted_rules(&requests, &about);
+                let mut instructions = instructions_for(member, project, &readable_folders);
+                if let Some(words) = granted_in_words(&granted) {
+                    instructions.push_str("\n\n");
+                    instructions.push_str(&words);
+                }
                 (
                     member.model().map(ToString::to_string),
                     member.effort(),
-                    instructions_for(member, project, &readable_folders),
-                    PermissionProfile::specialist(),
+                    instructions,
+                    PermissionProfile::specialist().with_granted(&granted),
                     tools,
                 )
             }
@@ -831,6 +945,13 @@ impl WorkService {
                 answered_turn.as_ref(),
                 &turn,
             )
+            .and_then(|()| {
+                // The answer is kept once the turn it starts is stored.
+                if let Some(answered) = &answered_permission {
+                    ports.permissions.save_request(answered)?;
+                }
+                Ok(())
+            })
             .and_then(|()| {
                 // The messages were handed to the program with the turn, so
                 // they are delivered once the turn is stored.
@@ -890,6 +1011,10 @@ struct NewTurn {
     /// The earlier turn whose question or interview the new turn answers,
     /// with the answer recorded. It is stored only if the new turn starts.
     answered_turn: Option<Turn>,
+    /// The permission request the new turn answers, with the answer
+    /// recorded. Its rule, if it allows one, is given to the new turn, and
+    /// it is stored only if the new turn starts.
+    answered_permission: Option<PermissionRequest>,
     turn: Turn,
     /// What the worker is told, where that is more than the request of the
     /// turn: the request with what happened in the program since the worker
@@ -1044,8 +1169,9 @@ impl Inner {
             AgentEvent::FactRemembered(fact) => {
                 self.record_fact(&conversation, turn, &fact, now)?
             }
-            // Recorded with the permission requests of the project.
-            AgentEvent::PermissionAsked(_) => return Ok(()),
+            AgentEvent::PermissionAsked(asked) => {
+                self.record_permission_request(&conversation, turn, asked, now)?
+            }
             AgentEvent::TurnEnded(outcome) => {
                 let ended = end_turn(turn, &outcome, now);
                 if ended.is_ok() {
@@ -1072,10 +1198,16 @@ impl Inner {
         // Work that ends in a question is not ready to be checked: the task
         // stays in work until the manager has decided and the specialist
         // has gone on.
+        let asked_permission = if turn.state() == TurnState::Finished {
+            self.open_request_of(&conversation, turn.id())?
+        } else {
+            None
+        };
         let ready_to_check = turn.state() == TurnState::Finished
             && turn.decision().is_none()
             && turn.interview().is_none()
-            && turn.proposal().is_none();
+            && turn.proposal().is_none()
+            && asked_permission.is_none();
         ports.conversations.save_turn(turn)?;
         if let Some(task_id) = conversation.task_id().filter(|_| ready_to_check) {
             self.move_task(task_id, &[StatusCategory::Active], StatusCategory::Review)?;
@@ -1083,7 +1215,10 @@ impl Inner {
         ports.listener.conversation_changed(&conversation, &turns);
         // A turn ends once: events that arrive after its end are not
         // recorded, so this tells every end at most once.
-        if ends_the_turn && let Some(event) = self.event_of_end(&conversation, &turns[index])? {
+        if ends_the_turn
+            && let Some(event) =
+                self.event_of_end(&conversation, &turns[index], asked_permission.as_ref())?
+        {
             ports.listener.happened(&event);
         }
         if let Some(report) = plan_report {
@@ -1256,11 +1391,69 @@ impl Inner {
         Ok(Ok(()))
     }
 
+    /// Records a request for a permission a specialist made in a running
+    /// turn (decision 0038), and says so among the steps of the turn. The
+    /// turn goes on as it was started: nothing is allowed by asking.
+    fn record_permission_request(
+        &self,
+        conversation: &Conversation,
+        turn: &mut Turn,
+        asked: PermissionAsk,
+        now: Timestamp,
+    ) -> Result<Result<(), DomainError>, ApplicationError> {
+        let Some(member_id) = conversation.member_id() else {
+            return Ok(Err(DomainError::NothingAsked));
+        };
+        if !turn.is_running() {
+            return Ok(Err(DomainError::TurnStillRunning));
+        }
+        let request = match PermissionRequest::ask(
+            conversation.project_id(),
+            SaidIn {
+                member_id,
+                conversation_id: conversation.id(),
+                turn_id: turn.id(),
+            },
+            conversation.task_id(),
+            asked.rule,
+            &asked.reason,
+            now,
+        ) {
+            Ok(request) => request,
+            Err(broken) => return Ok(Err(broken)),
+        };
+        self.ports.permissions.save_request(&request)?;
+        Ok(turn.notice(
+            format!(
+                "Asked the manager for permission to {}. Why: {}",
+                request.asked().in_words(),
+                request.reason()
+            ),
+            now,
+        ))
+    }
+
+    /// The request for a permission a turn made, if the manager has not
+    /// answered it yet.
+    fn open_request_of(
+        &self,
+        conversation: &Conversation,
+        turn_id: TurnId,
+    ) -> Result<Option<PermissionRequest>, ApplicationError> {
+        Ok(self
+            .ports
+            .permissions
+            .requests_of_project(conversation.project_id())?
+            .into_iter()
+            .find(|request| request.said_in().turn_id == turn_id && request.is_open()))
+    }
+
     /// The event of a turn that has just ended, if its end is one.
     fn event_of_end(
         &self,
         conversation: &Conversation,
         turn: &Turn,
+        asked_permission: Option<&PermissionRequest>,
     ) -> Result<Option<ProjectEvent>, ApplicationError> {
         let ports = &self.ports;
         let project = self.require_project(conversation.project_id())?;
@@ -1272,13 +1465,14 @@ impl Inner {
             Some(id) => ports.tasks.find(id)?,
             None => None,
         };
-        Ok(event_of_ended_turn(
-            &project,
-            conversation,
-            turn,
-            member.as_ref(),
-            task.as_ref(),
-        ))
+        let ended =
+            event_of_ended_turn(&project, conversation, turn, member.as_ref(), task.as_ref());
+        Ok(match asked_permission {
+            Some(request) => {
+                event_of_permission_request(ended, conversation, turn, member.as_ref(), request)
+            }
+            None => ended,
+        })
     }
 
     /// Moves a task whose status is of one of the categories `from` to the
@@ -1369,8 +1563,90 @@ impl Inner {
     }
 }
 
+/// The manager's answer to a request for a permission (decision 0038).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PermissionReply {
+    /// Allowed: the rule the manager saw, which may be the manager's edit of
+    /// what was asked, checked by the same rules; and for how long.
+    Allow {
+        /// For how long.
+        scope: PermissionScope,
+        /// The kind of the rule.
+        kind: PermissionKind,
+        /// The command, the prefix or the domain.
+        text: String,
+        /// What the manager adds in words. May be empty.
+        note: String,
+    },
+    /// Refused.
+    Refuse {
+        /// Why, in the manager's words. May be empty.
+        note: String,
+    },
+}
+
+/// The answer to a request for a permission as the specialist reads it.
+fn permission_answer_in_words(request: &PermissionRequest, answer: &PermissionReply) -> String {
+    let (said, note) = match answer {
+        PermissionReply::Allow {
+            scope,
+            kind,
+            text,
+            note,
+        } => {
+            let what = PermissionRule::new(*kind, text)
+                .map_or_else(|_| request.asked().in_words(), |rule| rule.in_words());
+            let how_long = match scope {
+                PermissionScope::Once => "for this turn only",
+                PermissionScope::Task => "for every turn of yours on this task",
+                PermissionScope::Always => {
+                    "for every turn of yours in this project, until the \
+                                            manager takes it back"
+                }
+            };
+            (
+                format!(
+                    "Permission: the manager allowed you to {what}, {how_long}. It is available \
+                     now. Go on with your work."
+                ),
+                note,
+            )
+        }
+        PermissionReply::Refuse { note } => (
+            format!(
+                "Permission: the manager refused your request to {}. Do not try it another \
+                 way. Go on without it, and say in your report what could not be done.",
+                request.asked().in_words()
+            ),
+            note,
+        ),
+    };
+    if note.trim().is_empty() {
+        said
+    } else {
+        format!("{said}\n\nThe manager adds: {}", note.trim())
+    }
+}
+
+/// What a turn is allowed beyond its profile, in words for the specialist,
+/// or nothing if it is allowed nothing more.
+fn granted_in_words(granted: &[PermissionRule]) -> Option<String> {
+    if granted.is_empty() {
+        return None;
+    }
+    let lines: Vec<String> = granted
+        .iter()
+        .map(|rule| format!("- {}", rule.in_words()))
+        .collect();
+    Some(format!(
+        "The manager has allowed you, in this turn, to:\n{}\nNothing else that needs a \
+         permission is allowed. Ask with ask_permission for anything more.",
+        lines.join("\n")
+    ))
+}
+
 /// The tools of the team bus a specialist is given for a turn: it may
-/// always ask the manager; it may hand over a result when the conversation
+/// always ask the manager, to decide or for a permission; it may hand over a result when the conversation
 /// is about a task; it may write to the other AI specialists of its team,
 /// if there are any.
 fn specialist_tools(
@@ -1378,7 +1654,7 @@ fn specialist_tools(
     working_folder: &std::path::Path,
     teammates: Vec<String>,
 ) -> Vec<TeamTool> {
-    let mut tools = vec![TeamTool::AskManager];
+    let mut tools = vec![TeamTool::AskManager, TeamTool::AskPermission];
     if conversation.task_id().is_some() {
         tools.push(TeamTool::PublishHandoff {
             folder: working_folder.to_path_buf(),
@@ -1867,8 +2143,11 @@ pub fn instructions_for(
     ));
     lines.extend(
         [
-            "- You cannot run commands and you cannot fetch anything from the internet. If the \
-             task needs one of these, say so in your report instead of working around it.",
+            "- On your own you cannot run commands and you cannot fetch anything from the \
+             internet. If the task needs one, ask with the tool ask_permission for the narrowest \
+             thing that does the job (one command, the commands of one program and subcommand, \
+             or one web domain) and say why, then end your turn: the manager allows or refuses \
+             it, and the answer comes as your next message. Never work around a refusal.",
             "- Decide small things yourself, and write down what you decided. A decision that \
              changes what is built, what it costs or when it is ready is the manager's: do not \
              guess, but ask with the tool ask_manager (the question, why it matters, two to \
@@ -1943,10 +2222,12 @@ mod tests {
         InMemoryTaskRepository, ManualClock, PretendFileSystem, RecordingWorkListener,
         ScriptedRuntime,
     };
+    use crate::permissions::PermissionService;
     use crate::places::PlacesService;
     use crate::projects::{NewProject, ProjectService, WorkflowTemplate};
     use crate::tasks::{NewTask, TaskService};
     use crate::team::{NewMember, TeamService};
+    use teamwright_domain::PermissionDecision;
 
     const SESSION: &str = "0196f3a2-7c1e-7d53-9b6f-2f1a4c8e9d10";
     const REPORT: &str = "Done: Draw the schematic.\n1. I drew it.";
@@ -1976,6 +2257,7 @@ mod tests {
         conversations: Arc<InMemoryConversationRepository>,
         teamwork: Arc<crate::in_memory::InMemoryTeamworkRepository>,
         memory: Arc<crate::in_memory::InMemoryMemoryRepository>,
+        permissions: Arc<crate::in_memory::InMemoryPermissionRepository>,
         places: Arc<InMemoryPlacesRepository>,
         file_system: Arc<PretendFileSystem>,
         kits: Arc<crate::kits::InMemoryKitRepository>,
@@ -2003,6 +2285,7 @@ mod tests {
                 teamwork: self.teamwork.clone(),
                 memory: self.memory.clone(),
                 digests: Arc::new(crate::in_memory::InMemoryDigestRepository::default()),
+                permissions: self.permissions.clone(),
                 folders: Arc::new(FixedProjectFolders::inside("projects")),
                 places: self.places.clone(),
                 file_system: self.file_system.clone(),
@@ -2041,6 +2324,7 @@ mod tests {
             conversations: Arc::new(InMemoryConversationRepository::default()),
             teamwork: Arc::new(crate::in_memory::InMemoryTeamworkRepository::default()),
             memory: Arc::new(crate::in_memory::InMemoryMemoryRepository::default()),
+            permissions: Arc::new(crate::in_memory::InMemoryPermissionRepository::default()),
             places: Arc::new(InMemoryPlacesRepository::default()),
             file_system: Arc::new(PretendFileSystem::default()),
             kits: Arc::new(crate::kits::InMemoryKitRepository::default()),
@@ -2430,6 +2714,7 @@ mod tests {
             request.team_tools,
             [
                 TeamTool::AskManager,
+                TeamTool::AskPermission,
                 TeamTool::PublishHandoff {
                     folder: PathBuf::from("projects").join("SSN")
                 },
@@ -4256,6 +4541,7 @@ mod tests {
             workspace.ports.runtime.requests()[0].team_tools,
             [
                 TeamTool::AskManager,
+                TeamTool::AskPermission,
                 TeamTool::SendMessage {
                     teammates: vec!["Firmware engineer".to_owned(), "Tester".to_owned()]
                 },
@@ -4546,6 +4832,326 @@ mod tests {
                 ),
                 ("Display bus", "remembered by Hardware engineer"),
             ]
+        );
+    }
+
+    // Permission requests (decision 0038).
+
+    fn echo_asked() -> AgentEvent {
+        AgentEvent::PermissionAsked(PermissionAsk {
+            rule: PermissionRule::new(PermissionKind::Command, "echo hello").unwrap(),
+            reason: "To see that commands run.".to_owned(),
+        })
+    }
+
+    impl Workspace {
+        /// Starts work on the schematic and lets the specialist ask for
+        /// permission to run `echo hello`, and end its turn.
+        fn asked_permission(&self) -> (ConversationWithTurns, PermissionRequest) {
+            let started = self.work.start_work(self.schematic.id()).unwrap();
+            let turn = self.ports.runtime.requests().len() - 1;
+            self.deliver(turn, session_started());
+            self.deliver(turn, echo_asked());
+            self.deliver(turn, ended(None, WAITING));
+            let requests = self
+                .ports
+                .permissions
+                .requests_of_project(self.project.id())
+                .unwrap();
+            let request = requests.last().unwrap().clone();
+            (self.conversation(started.conversation.id()), request)
+        }
+
+        fn allow(
+            &self,
+            request: &PermissionRequest,
+            scope: PermissionScope,
+        ) -> ConversationWithTurns {
+            self.work
+                .answer_permission(
+                    request.id(),
+                    PermissionReply::Allow {
+                        scope,
+                        kind: PermissionKind::Command,
+                        text: "echo hello".to_owned(),
+                        note: String::new(),
+                    },
+                )
+                .unwrap()
+        }
+
+        fn stored_request(&self, request: &PermissionRequest) -> PermissionRequest {
+            self.ports
+                .permissions
+                .find_request(request.id())
+                .unwrap()
+                .unwrap()
+        }
+    }
+
+    fn echo_rule() -> PermissionRule {
+        PermissionRule::new(PermissionKind::Command, "echo hello").unwrap()
+    }
+
+    #[test]
+    fn a_request_for_a_permission_is_recorded_shown_and_waits_for_the_manager() {
+        let workspace = workspace();
+        let (conversation, request) = workspace.asked_permission();
+
+        assert!(request.is_open());
+        assert_eq!(request.asked(), &echo_rule());
+        assert_eq!(request.reason(), "To see that commands run.");
+        assert_eq!(request.member_id(), workspace.engineer.id());
+        assert_eq!(request.task_id(), Some(workspace.schematic.id()));
+        let turn = &conversation.turns[0];
+        assert_eq!(request.said_in().turn_id, turn.id());
+        assert!(turn.steps().iter().any(|step| matches!(
+            &step.content,
+            teamwright_domain::StepContent::Notice { message }
+                if message.contains("permission to run the command `echo hello`")
+        )));
+        // The work waits for the manager, so the task stays in work.
+        assert_eq!(
+            workspace.stored_task(workspace.schematic.id()).status_id(),
+            workspace.status_of(StatusCategory::Active)
+        );
+        let events = workspace.ports.listener.events();
+        let [event] = events.as_slice() else {
+            panic!("{events:?}");
+        };
+        let crate::project_events::Happening::WaitsForManager {
+            waits_for, task, ..
+        } = &event.happening
+        else {
+            panic!("{event:?}");
+        };
+        assert_eq!(
+            waits_for,
+            &crate::project_events::WaitsFor::Permission {
+                what: "run the command `echo hello`".to_owned()
+            }
+        );
+        assert_eq!(task.as_ref().unwrap().task_id, workspace.schematic.id());
+    }
+
+    #[test]
+    fn the_turn_that_asks_is_started_without_the_rule_and_with_the_tool_to_ask() {
+        let workspace = workspace();
+        workspace.asked_permission();
+        let first = &workspace.ports.runtime.requests()[0];
+        assert_eq!(first.permissions, PermissionProfile::specialist());
+        assert!(first.team_tools.contains(&TeamTool::AskPermission));
+    }
+
+    #[test]
+    fn allowed_once_the_next_turn_has_exactly_the_rule_and_the_turn_after_does_not() {
+        let workspace = workspace();
+        let (conversation, request) = workspace.asked_permission();
+        workspace.ports.clock.advance(TimeDelta::seconds(60));
+
+        let answered = workspace.allow(&request, PermissionScope::Once);
+
+        let turn = &answered.turns[1];
+        assert_eq!(turn.origin(), TurnOrigin::Decision);
+        assert!(turn.request().starts_with(
+            "Permission: the manager allowed you to run the command `echo hello`, for this turn \
+             only."
+        ));
+        let second = &workspace.ports.runtime.requests()[1];
+        assert_eq!(
+            second.permissions,
+            PermissionProfile::specialist().with_granted(&[echo_rule()])
+        );
+        assert!(second.extra_instructions.as_deref().unwrap().contains(
+            "The manager has allowed you, in this turn, to:\n- run the command `echo hello`"
+        ));
+        let stored = workspace.stored_request(&request);
+        assert!(!stored.is_open());
+        assert_eq!(stored.answer().unwrap().next_turn, turn.id());
+
+        workspace.play_whole_turn(1);
+        workspace
+            .work
+            .reply(conversation.conversation.id(), "Now tidy up.")
+            .unwrap();
+        let third = &workspace.ports.runtime.requests()[2];
+        assert_eq!(third.permissions, PermissionProfile::specialist());
+    }
+
+    #[test]
+    fn allowed_always_every_later_turn_of_the_specialist_has_it_until_it_is_taken_back() {
+        let workspace = workspace();
+        let (_, request) = workspace.asked_permission();
+        workspace.allow(&request, PermissionScope::Always);
+        workspace.play_whole_turn(1);
+
+        workspace
+            .work
+            .ask(workspace.engineer.id(), "Anything else?")
+            .unwrap();
+        let later = workspace.ports.runtime.requests()[2].clone();
+        assert_eq!(
+            later.permissions,
+            PermissionProfile::specialist().with_granted(&[echo_rule()])
+        );
+        workspace.play_whole_turn(2);
+
+        PermissionService::new(
+            workspace.ports.projects.clone(),
+            workspace.ports.permissions.clone(),
+            workspace.ports.clock.clone(),
+        )
+        .withdraw(request.id())
+        .unwrap();
+        workspace
+            .work
+            .ask(workspace.engineer.id(), "And now?")
+            .unwrap();
+        let after = &workspace.ports.runtime.requests()[3];
+        assert_eq!(after.permissions, PermissionProfile::specialist());
+    }
+
+    #[test]
+    fn refused_the_next_turn_is_told_and_may_do_nothing_more() {
+        let workspace = workspace();
+        let (_, request) = workspace.asked_permission();
+
+        let answered = workspace
+            .work
+            .answer_permission(
+                request.id(),
+                PermissionReply::Refuse {
+                    note: "Not on this computer.".to_owned(),
+                },
+            )
+            .unwrap();
+
+        assert!(answered.turns[1].request().starts_with(
+            "Permission: the manager refused your request to run the command `echo hello`."
+        ));
+        assert!(
+            answered.turns[1]
+                .request()
+                .ends_with("The manager adds: Not on this computer.")
+        );
+        assert_eq!(
+            workspace.ports.runtime.requests()[1].permissions,
+            PermissionProfile::specialist()
+        );
+        assert!(matches!(
+            workspace
+                .stored_request(&request)
+                .answer()
+                .unwrap()
+                .decision,
+            PermissionDecision::Refused
+        ));
+    }
+
+    #[test]
+    fn the_manager_may_narrow_or_change_the_rule_but_never_to_one_that_cannot_be_allowed() {
+        let workspace = workspace();
+        let (_, request) = workspace.asked_permission();
+
+        let refused = workspace.work.answer_permission(
+            request.id(),
+            PermissionReply::Allow {
+                scope: PermissionScope::Once,
+                kind: PermissionKind::CommandPrefix,
+                text: "bash -c".to_owned(),
+                note: String::new(),
+            },
+        );
+        assert!(matches!(
+            refused,
+            Err(ApplicationError::Rule(
+                DomainError::PermissionNotPossible { .. }
+            ))
+        ));
+        // Nothing was started and nothing was kept.
+        assert_eq!(workspace.ports.runtime.requests().len(), 1);
+        assert!(workspace.stored_request(&request).is_open());
+
+        workspace
+            .work
+            .answer_permission(
+                request.id(),
+                PermissionReply::Allow {
+                    scope: PermissionScope::Task,
+                    kind: PermissionKind::CommandPrefix,
+                    text: "cargo test".to_owned(),
+                    note: String::new(),
+                },
+            )
+            .unwrap();
+        assert!(
+            workspace.ports.runtime.requests()[1]
+                .permissions
+                .allowed_tools
+                .contains(&"Bash(cargo test *)".to_owned())
+        );
+        // Answered once only.
+        assert!(
+            workspace
+                .work
+                .answer_permission(
+                    request.id(),
+                    PermissionReply::Refuse {
+                        note: String::new()
+                    }
+                )
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn a_permission_for_the_task_needs_a_conversation_about_a_task() {
+        let workspace = workspace();
+        let asked = workspace
+            .work
+            .ask(workspace.engineer.id(), "Can you run the tests?")
+            .unwrap();
+        workspace.deliver(0, session_started());
+        workspace.deliver(0, echo_asked());
+        workspace.deliver(0, ended(None, WAITING));
+        let request = workspace
+            .ports
+            .permissions
+            .requests_of_project(workspace.project.id())
+            .unwrap()
+            .pop()
+            .unwrap();
+        assert_eq!(request.said_in().conversation_id, asked.conversation.id());
+
+        assert!(
+            workspace
+                .work
+                .answer_permission(
+                    request.id(),
+                    PermissionReply::Allow {
+                        scope: PermissionScope::Task,
+                        kind: PermissionKind::Command,
+                        text: "echo hello".to_owned(),
+                        note: String::new(),
+                    },
+                )
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn a_request_after_the_end_of_a_turn_is_not_recorded() {
+        let workspace = workspace();
+        workspace.work.start_work(workspace.schematic.id()).unwrap();
+        workspace.play_whole_turn(0);
+        workspace.deliver(0, echo_asked());
+        assert!(
+            workspace
+                .ports
+                .permissions
+                .requests_of_project(workspace.project.id())
+                .unwrap()
+                .is_empty()
         );
     }
 }
