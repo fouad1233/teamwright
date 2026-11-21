@@ -259,7 +259,7 @@ describe('the history of a project in the DemoBackend', () => {
     const history = await sample.listProjectHistory(first?.id ?? '', 200);
     const kindsSeen = new Set(history.map((change) => change.kind));
 
-    expect(kindsSeen).toEqual(new Set(['created', 'assigned', 'moved']));
+    expect(kindsSeen).toEqual(new Set(['created', 'assigned', 'moved', 'planned', 'pointed']));
     expect(history.every((change) => change.at <= '2026-11-11T09:00:00.000Z')).toBe(true);
     const moments = history.map((change) => change.at);
     expect([...moments].sort().reverse()).toEqual(moments);

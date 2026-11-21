@@ -16,6 +16,7 @@ import { describeFailure } from '@/shared/ui/Toast';
 
 import { useOpenArea } from '../areas/AreaContext';
 import switchStyles from '../sprints/SprintBoard.module.css';
+import { useSprints } from '../sprints/sprintQueries';
 import { changeAfterTaskName, changeInWords, type HistoryNames } from '../tasks/taskHistoryModel';
 import { useTags } from '../tags/tagQueries';
 import { useTeamMembers } from '../team/TeamContext';
@@ -69,9 +70,10 @@ export function ActivityView({ project, tasks, everyTask }: KindProps) {
   const openTaskId = navigation.taskId;
   const todayDate = today();
 
+  const sprints = useSprints(project.id);
   const names = useMemo<HistoryNames>(
-    () => ({ project, tasks: everyTask, members, tags }),
-    [project, everyTask, members, tags],
+    () => ({ project, tasks: everyTask, members, tags, sprints: sprints.data }),
+    [project, everyTask, members, tags, sprints.data],
   );
   // While one area is open, the log tells only what happened to its tasks.
   const taskIds = useMemo(

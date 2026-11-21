@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type { Member, Project, Task, TaskChange } from '@/shared/api/types';
+import type { Member, Project, Sprint, Task, TaskChange } from '@/shared/api/types';
 
 import { changeAfterTaskName, changeInWords, type HistoryNames } from './taskHistoryModel';
 
@@ -33,7 +33,15 @@ const engineer: Member = {
 
 const pins = { id: 'pins', number: 3 } as Task;
 
-const names: HistoryNames = { project, tasks: [pins], members: [engineer] };
+const sprintFour = { id: 'four', name: 'Sprint 4' } as Sprint;
+const sprintFive = { id: 'five', name: 'Sprint 5' } as Sprint;
+
+const names: HistoryNames = {
+  project,
+  tasks: [pins],
+  members: [engineer],
+  sprints: [sprintFour, sprintFive],
+};
 
 const at = '2026-11-11T09:00:00.000Z';
 
@@ -51,6 +59,30 @@ describe('changeInWords', () => {
       'Renamed from "Draw it"',
     );
     expect(words({ kind: 'described' })).toBe('Description changed');
+  });
+
+  it('names the sprint a task was planned into, and the backlog', () => {
+    expect(words({ kind: 'planned', fromSprintId: null, toSprintId: 'four' })).toBe(
+      'Planned into Sprint 4',
+    );
+    expect(words({ kind: 'planned', fromSprintId: 'four', toSprintId: 'five' })).toBe(
+      'Planned into Sprint 5, from Sprint 4',
+    );
+    expect(words({ kind: 'planned', fromSprintId: 'four', toSprintId: null })).toBe(
+      'Taken back to the backlog from Sprint 4',
+    );
+    expect(words({ kind: 'planned', fromSprintId: null, toSprintId: 'gone' })).toBe(
+      'Planned into a sprint that was deleted',
+    );
+  });
+
+  it('tells the points a task got, changed or lost', () => {
+    expect(words({ kind: 'pointed', from: null, to: 5 })).toBe('Given 5 points');
+    expect(words({ kind: 'pointed', from: 3, to: 1 })).toBe('Points changed from 3 to 1');
+    expect(words({ kind: 'pointed', from: 3, to: null })).toBe('Points taken away');
+    expect(changeAfterTaskName({ at, kind: 'pointed', from: null, to: 1 }, names)).toBe(
+      'was given 1 point',
+    );
   });
 
   it('names the statuses a task moved between', () => {

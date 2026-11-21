@@ -632,6 +632,20 @@ pub enum TaskChangeKindDto {
         /// The estimate since.
         to: Option<u32>,
     },
+    /// It was planned into another sprint, or back into the backlog.
+    Planned {
+        /// The sprint before, or nothing for the backlog.
+        from_sprint_id: Option<String>,
+        /// The sprint since, or nothing for the backlog.
+        to_sprint_id: Option<String>,
+    },
+    /// Its story points changed.
+    Pointed {
+        /// The points before.
+        from: Option<u16>,
+        /// The points since.
+        to: Option<u16>,
+    },
     /// Its dates changed.
     Rescheduled {
         /// The dates before.
@@ -712,6 +726,14 @@ impl From<&TaskChange> for TaskChangeDto {
             TaskChangeKind::Estimated { from, to } => TaskChangeKindDto::Estimated {
                 from: *from,
                 to: *to,
+            },
+            TaskChangeKind::Planned { from, to } => TaskChangeKindDto::Planned {
+                from_sprint_id: from.map(|sprint| sprint.to_string()),
+                to_sprint_id: to.map(|sprint| sprint.to_string()),
+            },
+            TaskChangeKind::Pointed { from, to } => TaskChangeKindDto::Pointed {
+                from: from.map(StoryPoints::value),
+                to: to.map(StoryPoints::value),
             },
             TaskChangeKind::Rescheduled { from, to } => TaskChangeKindDto::Rescheduled {
                 from: TaskDatesDto::from(*from),

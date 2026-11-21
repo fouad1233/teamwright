@@ -1,4 +1,13 @@
-import type { Assignee, Id, Member, Project, Tag, Task, TaskChange } from '@/shared/api/types';
+import type {
+  Assignee,
+  Id,
+  Member,
+  Project,
+  Sprint,
+  Tag,
+  Task,
+  TaskChange,
+} from '@/shared/api/types';
 import { formatDate, formatEstimate, taskReference } from '@/shared/lib/format';
 
 import { priorityLabel } from './TaskBadges';
@@ -12,6 +21,8 @@ export interface HistoryNames {
   members: readonly Member[];
   /** The tags of the project, to name a tag put on or taken off. */
   tags?: readonly Tag[];
+  /** The sprints of the project, to name the sprints a task went into. Left out while they load. */
+  sprints?: readonly Sprint[];
 }
 
 /**
@@ -81,6 +92,32 @@ function wordingOf(change: TaskChange, names: HistoryNames): Wording {
             ? `estimate set to ${formatEstimate(change.to)}`
             : `estimate changed from ${formatEstimate(change.from)} to ${formatEstimate(change.to)}`,
       };
+    case 'planned': {
+      if (change.toSprintId === null) {
+        return {
+          joinedBy: 'was',
+          words: `taken back to the backlog from ${sprintName(names, change.fromSprintId)}`,
+        };
+      }
+      const into = `planned into ${sprintName(names, change.toSprintId)}`;
+      return {
+        joinedBy: 'was',
+        words:
+          change.fromSprintId === null
+            ? into
+            : `${into}, from ${sprintName(names, change.fromSprintId)}`,
+      };
+    }
+    case 'pointed':
+      if (change.to === null) {
+        return { joinedBy: 'had its', words: 'points taken away' };
+      }
+      return change.from === null
+        ? { joinedBy: 'was', words: `given ${pointsInWords(change.to)}` }
+        : {
+            joinedBy: 'had its',
+            words: `points changed from ${change.from.toString()} to ${change.to.toString()}`,
+          };
     case 'rescheduled': {
       const { startOn, dueOn } = change.to;
       if (startOn !== null && dueOn !== null) {
@@ -121,6 +158,20 @@ function statusName({ project }: HistoryNames, statusId: Id): string {
   return (
     project.statuses.find((status) => status.id === statusId)?.name ?? 'a status that was removed'
   );
+}
+
+function sprintName({ sprints }: HistoryNames, sprintId: Id | null): string {
+  if (sprintId === null) {
+    return 'the backlog';
+  }
+  if (sprints === undefined) {
+    return 'a sprint';
+  }
+  return sprints.find((sprint) => sprint.id === sprintId)?.name ?? 'a sprint that was deleted';
+}
+
+function pointsInWords(points: number): string {
+  return `${points.toString()} ${points === 1 ? 'point' : 'points'}`;
 }
 
 function assigneeName({ members }: HistoryNames, assignee: Assignee | null): string {

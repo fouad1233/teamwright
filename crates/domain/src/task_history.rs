@@ -4,7 +4,8 @@
 //! a task has had, in its log of operations, and the history is read off
 //! those versions by comparing each one with the one before it.
 
-use crate::ids::{StatusId, TagId, TaskId};
+use crate::ids::{SprintId, StatusId, TagId, TaskId};
+use crate::sprint::StoryPoints;
 use crate::task::{Assignee, Priority, Schedule, Task};
 use crate::text::{ChecklistText, TaskTitle};
 use crate::time::Timestamp;
@@ -60,6 +61,21 @@ pub enum TaskChangeKind {
         from: Option<u32>,
         /// The estimate since.
         to: Option<u32>,
+    },
+    /// It was planned into another sprint, or back into the backlog. A
+    /// sprint may have been deleted since.
+    Planned {
+        /// The sprint it was in before, or nothing for the backlog.
+        from: Option<SprintId>,
+        /// The sprint it is in since, or nothing for the backlog.
+        to: Option<SprintId>,
+    },
+    /// Its story points changed, or it got or lost them.
+    Pointed {
+        /// The points before.
+        from: Option<StoryPoints>,
+        /// The points since.
+        to: Option<StoryPoints>,
     },
     /// Its dates changed.
     Rescheduled {
@@ -141,6 +157,18 @@ pub fn changes_between(before: &Task, after: &Task) -> Vec<TaskChange> {
         kinds.push(TaskChangeKind::Estimated {
             from: before.estimate_minutes(),
             to: after.estimate_minutes(),
+        });
+    }
+    if before.sprint_id() != after.sprint_id() {
+        kinds.push(TaskChangeKind::Planned {
+            from: before.sprint_id(),
+            to: after.sprint_id(),
+        });
+    }
+    if before.points() != after.points() {
+        kinds.push(TaskChangeKind::Pointed {
+            from: before.points(),
+            to: after.points(),
         });
     }
     if before.schedule() != after.schedule() {
@@ -358,6 +386,22 @@ mod tests {
             [&TaskChangeKind::Estimated {
                 from: None,
                 to: Some(90)
+            }]
+        );
+        let sprint = crate::ids::SprintId::generate();
+        let points = crate::sprint::StoryPoints::new(5).unwrap();
+        assert_eq!(
+            kinds(&change(&|task| task.plan_into(Some(sprint), moment(10)))),
+            [&TaskChangeKind::Planned {
+                from: None,
+                to: Some(sprint)
+            }]
+        );
+        assert_eq!(
+            kinds(&change(&|task| task.set_points(Some(points), moment(10)))),
+            [&TaskChangeKind::Pointed {
+                from: None,
+                to: Some(points)
             }]
         );
         assert_eq!(

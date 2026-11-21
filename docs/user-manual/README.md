@@ -298,7 +298,7 @@ everything about it:
 | Work | What the AI specialist the task is given to does with it. See [the work of a specialist](#the-work-of-a-specialist). |
 | Waits for | The tasks that must be finished before this one can start. |
 | Subtasks | The parts of this task. |
-| History | What has happened to the task since it was opened, the latest change first: who it was given to, where it moved, which dates it got. |
+| History | What has happened to the task since it was opened, the latest change first: who it was given to, where it moved, which dates it got, which sprint it was planned into and how many points it was given. |
 
 Changes are saved as you make them. The title, the description and the
 estimate are saved when you leave the field or press Enter. Escape undoes an

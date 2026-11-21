@@ -26,8 +26,9 @@ use teamwright_domain::{
     MemberInstructions, MemberKind, MemberName, MemberProfile, ModelName, Priority, Project,
     ProjectKey, ProjectName, Proposal, ProposalChange, ProposedMember, ProposedOwner, ProposedTask,
     Rank, Schedule, Sprint, SprintDates, SprintId, SprintName, SprintSummary, SprintUnit, Status,
-    StatusCategory, StatusId, StatusName, StepContent, StoryPoints, Task, TaskDraft, TaskId,
-    TaskTitle, Timestamp, TokenCounts, ToolOutcome, Turn, TurnOrigin, TurnState, Workflow,
+    StatusCategory, StatusId, StatusName, StepContent, StoryPoints, Task, TaskChangeKind,
+    TaskDraft, TaskId, TaskTitle, Timestamp, TokenCounts, ToolOutcome, Turn, TurnOrigin, TurnState,
+    Workflow,
 };
 use teamwright_storage::{
     Database, Operation, SqliteConversationRepository, SqliteMemberRepository,
@@ -2184,9 +2185,32 @@ fn the_sprint_use_cases_work_on_the_real_database_and_are_logged() {
             .next_sprint_number(),
         3
     );
-    // Planning and points are changes to a task and are kept in its
-    // versions, but they are not part of its history.
-    assert_eq!(tasks.history(board.id()).unwrap().len(), 1);
+    // Planning and points are changes to a task, kept in its versions, and
+    // its history tells them: planned in, given points, and moved on.
+    let told: Vec<TaskChangeKind> = tasks
+        .history(board.id())
+        .unwrap()
+        .into_iter()
+        .map(|change| change.kind)
+        .collect();
+    assert_eq!(
+        told,
+        [
+            TaskChangeKind::Created,
+            TaskChangeKind::Planned {
+                from: None,
+                to: Some(first.id())
+            },
+            TaskChangeKind::Pointed {
+                from: None,
+                to: Some(StoryPoints::new(5).unwrap())
+            },
+            TaskChangeKind::Planned {
+                from: Some(first.id()),
+                to: Some(next.id())
+            },
+        ]
+    );
 
     let start = database.operations().unwrap().len();
     projects.delete(project.id()).unwrap();

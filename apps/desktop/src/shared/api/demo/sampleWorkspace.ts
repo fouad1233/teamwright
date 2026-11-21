@@ -1020,7 +1020,7 @@ function pastOf(sample: SampleTask | undefined, task: Task, today: Date): Task[]
       // in another status went there a day after it was begun.
       const reachedAt =
         task.completedAt === null
-          ? Math.min(startedAt + DAY, today.getTime() - HOUR)
+          ? Math.min(startedAt + DAY - 2 * HOUR, today.getTime() - HOUR)
           : Date.parse(task.completedAt);
       events.push({
         at: reachedAt,

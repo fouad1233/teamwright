@@ -36,6 +36,17 @@ export function changesBetween(before: Task, after: Task): TaskChange[] {
       to: after.estimateMinutes,
     });
   }
+  if (before.sprintId !== after.sprintId) {
+    changes.push({
+      at,
+      kind: 'planned',
+      fromSprintId: before.sprintId,
+      toSprintId: after.sprintId,
+    });
+  }
+  if (before.points !== after.points) {
+    changes.push({ at, kind: 'pointed', from: before.points, to: after.points });
+  }
   if (before.startOn !== after.startOn || before.dueOn !== after.dueOn) {
     changes.push({
       at,

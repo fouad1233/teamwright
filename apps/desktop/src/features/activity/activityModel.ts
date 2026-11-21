@@ -54,7 +54,7 @@ const MILLISECONDS_PER_MINUTE = 60 * 1000;
  * "Finished" means that the task went into a status of the category done
  * from one that is not, whatever the statuses are called. "Planned" is
  * everything that says when and in what order the work is to be done: the
- * dates, the estimate, and what the task waits for.
+ * dates, the estimate, the sprint, the points, and what the task waits for.
  */
 export function isShownBy(narrowing: Narrowing, change: ProjectChange, project: Project): boolean {
   switch (narrowing) {
@@ -74,6 +74,8 @@ export function isShownBy(narrowing: Narrowing, change: ProjectChange, project: 
       return (
         change.kind === 'rescheduled' ||
         change.kind === 'estimated' ||
+        change.kind === 'planned' ||
+        change.kind === 'pointed' ||
         change.kind === 'now_waits_for' ||
         change.kind === 'no_longer_waits_for'
       );

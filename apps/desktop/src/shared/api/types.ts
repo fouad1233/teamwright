@@ -978,6 +978,10 @@ export type TaskChange = {
   | { kind: 'prioritized'; from: Priority; to: Priority }
   /** The estimate changed. The numbers are minutes. */
   | { kind: 'estimated'; from: number | null; to: number | null }
+  /** The task went into another sprint, or back to the backlog (null). A sprint may have been deleted since. */
+  | { kind: 'planned'; fromSprintId: Id | null; toSprintId: Id | null }
+  /** Its story points changed, or it got or lost them. */
+  | { kind: 'pointed'; from: number | null; to: number | null }
   | { kind: 'rescheduled'; from: TaskDates; to: TaskDates }
   /** The task began to wait for another task, which may have been removed since. */
   | { kind: 'now_waits_for'; taskId: Id }
