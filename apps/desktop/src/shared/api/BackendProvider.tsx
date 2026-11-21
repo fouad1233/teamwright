@@ -1,10 +1,15 @@
 import { isTauri } from '@tauri-apps/api/core';
 import { createContext, useContext, type ReactNode } from 'react';
 
+import { isPublicDemo } from '@/shared/lib/publicDemo';
+
 import type { Backend } from './backend';
 import { DemoBackend } from './demo/demoBackend';
 import { sampleWorkspace } from './demo/sampleWorkspace';
 import { TauriBackend } from './tauriBackend';
+
+/** How long after the public demo opens its first specialist begins, in milliseconds. */
+const FIRST_WORK_PAUSE = 1500;
 
 /** The backend the interface works with, and whether it is the demo. */
 export interface BackendConnection {
@@ -31,6 +36,11 @@ export function connectToBackend(): BackendConnection {
   // Scenarios that take pictures of the demo reach it here, to show what a
   // browser cannot make happen, such as a sync folder that is gone.
   window.teamwrightDemo = demo;
+  // The public demo on the website opens with a specialist at work, a
+  // moment after the first view is drawn (decision 0032).
+  if (isPublicDemo && workspace) {
+    demo.beginSampleWork(FIRST_WORK_PAUSE);
+  }
   return { backend: demo, isDemo: true };
 }
 

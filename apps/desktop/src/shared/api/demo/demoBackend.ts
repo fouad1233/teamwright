@@ -1875,28 +1875,25 @@ export class DemoBackend implements Backend {
       oldest.isHere = false;
       this.tellListeners(oldest);
     } else {
-      this.startWorkOnLaptop(project);
+      this.startWorkThatAsks(project, LAPTOP);
     }
     this.noteVersions();
     return [project.id];
   }
 
   /**
-   * A specialist starts on a task of a project on Laptop: the first task in
-   * work that is given to an AI specialist. Its steps arrive one after the
-   * other, and it ends with a question for the manager.
+   * A specialist starts on a task of a project, on Laptop or on this
+   * computer: the first task in work that is given to an AI specialist. Its
+   * steps arrive one after the other, and it ends with a question for the
+   * manager. Nothing happens if there is no such task, or if work on it has
+   * begun.
    */
-  private startWorkOnLaptop(project: Project): void {
-    const task = this.tasksOfProject(project.id)
-      .sort((a, b) => a.number - b.number)
-      .find((candidate) => {
-        const member =
-          candidate.assignee?.kind === 'member'
-            ? this.members.get(candidate.assignee.memberId)
-            : undefined;
-        return member?.kind === 'agent' && this.categoryOf(candidate) === 'active';
-      });
-    if (task?.assignee?.kind !== 'member') {
+  private startWorkThatAsks(project: Project, homeComputer: string): void {
+    const task = this.firstTaskInWorkOfSpecialist(project);
+    if (
+      task?.assignee?.kind !== 'member' ||
+      this.conversationsOf(project.id).some((other) => other.taskId === task.id)
+    ) {
       return;
     }
     const conversation: Conversation = {
@@ -1906,8 +1903,8 @@ export class DemoBackend implements Backend {
       memberId: task.assignee.memberId,
       taskId: task.id,
       startedAt: this.nowAsText(),
-      homeComputer: LAPTOP,
-      isHere: false,
+      homeComputer,
+      isHere: homeComputer === THIS_COMPUTER,
       turns: [],
       context: null,
     };
@@ -1919,6 +1916,38 @@ export class DemoBackend implements Backend {
       scriptForChoice(task),
     );
     this.tellListeners(conversation);
+  }
+
+  /** The task in work with the lowest number that is given to an AI specialist, if any. */
+  private firstTaskInWorkOfSpecialist(project: Project): Task | undefined {
+    return this.tasksOfProject(project.id)
+      .sort((a, b) => a.number - b.number)
+      .find((candidate) => {
+        const member =
+          candidate.assignee?.kind === 'member'
+            ? this.members.get(candidate.assignee.memberId)
+            : undefined;
+        return member?.kind === 'agent' && this.categoryOf(candidate) === 'active';
+      });
+  }
+
+  /**
+   * After a pause, lets a specialist begin on the first task in work of
+   * the first project, on this computer, as if the manager had started it.
+   * It works for a few seconds and then asks the manager to decide. The
+   * public demo on the website does this when it opens, so that a visitor
+   * sees work going on, and then something that waits for them, before
+   * doing anything (decision 0032).
+   */
+  beginSampleWork(pause: number): void {
+    const later = this.environment.later ?? ((work, wait) => void setTimeout(work, wait));
+    later(() => {
+      const [project] = this.allProjects().filter((candidate) => candidate.archivedAt === null);
+      if (project) {
+        this.startWorkThatAsks(project, THIS_COMPUTER);
+        this.noteVersions();
+      }
+    }, pause);
   }
 
   /** The conversations of a project, the oldest first. */
