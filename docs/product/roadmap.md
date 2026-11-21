@@ -69,7 +69,15 @@ A single specialist that really works through Claude Code.
   yet run against the real app
 - ⬜ Run a Claude Code that npm installed. On Windows that is a script,
   and a turn on it is refused with the reason
-- ⬜ The limits of the plan that the program reports
+- ✅ The limits of the plan that the program reports
+  ([decision 0040](../decisions/0040-the-limit-of-the-plan.md)). A turn
+  that meets the limit of the Claude plan ends as its own kind of
+  ending, not as a failure of the specialist, and the manager is told
+  once, with the time it resets when Claude Code gives it. A line at the
+  foot of the navigation says so until it has reset. Tested on streams
+  built from the program's own schema and from the words of a real
+  limit met on 21 November 2026; never seen with a real run, and a reset
+  time in a time zone other than this computer's or UTC stays unknown
 - ✅ The model and the effort of a specialist
 - ✅ Instructions of a specialist's own, and a set of ready-made specialists
   ([decision 0031](../decisions/0031-instructions-and-ready-made-specialists.md)).
@@ -169,7 +177,19 @@ Several specialists working together with the manager in the loop.
   small project that runs to its end, a budget that stops it) and seen
   working in a browser on the demo. It has never started a real
   specialist and never ran in the built program
-- ⬜ Permission requests for risky actions routed to the manager
+- 🚧 Permission requests for risky actions routed to the manager
+  ([decision 0038](../decisions/0038-permission-requests-routed-to-the-manager.md)).
+  A specialist asks through the team bus for one command, a prefix of
+  commands or a web domain, and says why; the manager allows it once,
+  for the task or always, or refuses, and may narrow the rule first.
+  The next turn is started with exactly that rule added. Standing
+  permissions are listed in the Team place and can be taken back, and
+  they hold for one specialist, one project and one computer. What can
+  never be allowed is checked in code. Tested at every layer and seen in
+  a browser on the demo; never run against a signed-in Claude Code, and
+  the shape of the events it rests on was read from the documentation,
+  not seen. A command that is allowed runs with the manager's rights:
+  there is no sandbox around it
 
 ## M5 · Seeing the work 🚧
 
@@ -205,7 +225,9 @@ Several specialists working together with the manager in the loop.
   this week, the sprint and the tokens used
   ([decision 0020](../decisions/0020-a-dashboard-worked-out-not-written.md)).
   Seen in the built program on stored data, with nobody at work there.
-  Plan limits are not shown, because they are not known. The latest
+  The Usage part shows the Claude plan: whether its limit is reached,
+  when it resets, and the five hours and the week as Claude Code reports
+  them, otherwise the word unknown (decision 0040). The latest
   activity is the newest entries of the log of the project, as the
   Activity view tells them, which today means changes to tasks; seen on
   demo data only
@@ -338,7 +360,16 @@ Several specialists working together with the manager in the loop.
   at the head of its lane, in the red of trouble and marked "over" when
   it is exceeded. A limit never stops a task from moving. Tested in
   every layer and seen in the demo, not yet in the built program
-- ⬜ Custom fields
+- ✅ Custom fields
+  ([decision 0035](../decisions/0035-custom-fields.md)): six kinds
+  (text, a number with a unit, a date, yes or no, a choice from a
+  coloured list, a link), made for a project in a dialog and set in the
+  panel of a task. Each field is a column of the Table view and of the
+  workbook, a view can be filtered by a choice or by yes or no, and the
+  history says when a value changed. Synced value by value. Tested in
+  every layer, the taking in with two databases, and seen in a browser
+  on demo data; not yet run in the built program. A field's kind cannot
+  be changed, and there is no kind for a person
 - ✅ Templates: a new project starts from Standard, Kanban, Scrum,
   Hardware product or Engineering, which set its statuses and limits,
   its views, its areas and, for Scrum, a first sprint (decision 0033).
@@ -391,7 +422,13 @@ Several specialists working together with the manager in the loop.
   demo were verified; a look from the built program was not. Installing
   an update from inside the program is still not built: it needs signed
   update files and a signing key only the founder can make
-- ⬜ User manual
+- ✅ [User manual](../user-manual/README.md): a table of contents and
+  fifteen pages, written from the decision records, the roadmap and the
+  interface running on demo data, with eleven pictures from the demo.
+  Every page says what was never tried in the built program or with a
+  real specialist. Its links were checked. Nobody new to the program has
+  tried to follow it, and three older pictures of the built program no
+  longer match what it looks like
 - 🚧 Public demo in the browser
   ([decision 0032](../decisions/0032-a-public-demo-in-the-browser.md)):
   the interface, built for the browser (`npm run build:demo`), is
