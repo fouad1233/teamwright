@@ -371,6 +371,22 @@ mod tests {
         })
     }
 
+    #[test]
+    fn a_request_for_a_permission_waits_for_the_manager_and_says_what() {
+        let notification = notification_of(&event(Happening::WaitsForManager {
+            conversation_id: ConversationId::generate(),
+            agent: engineer(),
+            task: None,
+            waits_for: WaitsFor::Permission {
+                what: "run the command `npm test`".to_owned(),
+            },
+        }))
+        .unwrap();
+        assert_eq!(notification.kind, NotificationKind::Waiting);
+        assert_eq!(notification.title, "Hardware engineer asks for permission");
+        assert_eq!(notification.body, "To run the command `npm test`.");
+    }
+
     fn allowed() -> NotificationChoice {
         NotificationChoice {
             permission: NotificationPermission::Allowed,
