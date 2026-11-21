@@ -8,10 +8,14 @@ import type {
   ApprovedProposal,
   Area,
   Assignee,
+  BudgetQuestion,
+  BudgetScope,
   CalendarDate,
   Color,
   Conversation,
   ConversationsOfFolder,
+  Coordinator,
+  CoordinatorChanged,
   FolderListing,
   DataChanged,
   Deliveries,
@@ -747,7 +751,39 @@ export class TauriBackend implements Backend {
   removeDigest(digestId: Id): Promise<void> {
     return call('remove_digest', { digestId });
   }
+
+  coordinator(projectId: Id): Promise<Coordinator> {
+    return call('coordinator', { projectId });
+  }
+
+  switchCoordinator(projectId: Id, on: boolean): Promise<Coordinator> {
+    return call('switch_coordinator', { projectId, on });
+  }
+
+  setCoordinatorLimit(projectId: Id, limit: number): Promise<Coordinator> {
+    return call('set_coordinator_limit', { projectId, limit });
+  }
+
+  setBudget(projectId: Id, scope: BudgetScope, tokens: number | null): Promise<Coordinator> {
+    return call('set_budget', { projectId, scope, tokens });
+  }
+
+  answerBudget(projectId: Id, scope: BudgetScope, raiseBy: number | null): Promise<Coordinator> {
+    return call('answer_budget', { projectId, scope, raiseBy });
+  }
+
+  listBudgetQuestions(): Promise<BudgetQuestion[]> {
+    return call('budget_questions');
+  }
+
+  onCoordinatorChanged(listener: (change: CoordinatorChanged) => void): () => void {
+    // The shell sends the project after its coordinator acted.
+    return listenTo(COORDINATOR_CHANGED, listener);
+  }
 }
+
+/** The name of the event the shell sends after the coordinator of a project acted. */
+const COORDINATOR_CHANGED = 'coordinator-changed';
 
 /** The name of the event the shell sends when the manager pressed a notification. */
 const NOTIFICATION_PRESSED = 'notification-pressed';

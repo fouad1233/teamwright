@@ -21,6 +21,7 @@ fn tell_about_task(
     project_id: ProjectId,
     event_of: impl FnOnce(&Project, &[&Member]) -> Option<ProjectEvent>,
 ) {
+    state.coordinator_nudge.nudge(project_id);
     let Ok(project) = state.projects.get(project_id) else {
         return;
     };
@@ -99,6 +100,7 @@ pub async fn assign_task(
 ) -> Result<TaskDto, CommandError> {
     let assignee = assignee.map(Assignee::try_from).transpose()?;
     let task = state.tasks.assign(parse_id(&task_id)?, assignee)?;
+    state.coordinator_nudge.nudge(task.project_id());
     Ok(TaskDto::from(&task))
 }
 
@@ -157,6 +159,7 @@ pub async fn add_task_dependency(
     let task = state
         .tasks
         .add_dependency(parse_id(&task_id)?, parse_id(&blocker_id)?)?;
+    state.coordinator_nudge.nudge(task.project_id());
     Ok(TaskDto::from(&task))
 }
 
@@ -170,13 +173,18 @@ pub async fn remove_task_dependency(
     let task = state
         .tasks
         .remove_dependency(parse_id(&task_id)?, parse_id(&blocker_id)?)?;
+    state.coordinator_nudge.nudge(task.project_id());
     Ok(TaskDto::from(&task))
 }
 
 /// Removes a task together with its subtasks.
 #[tauri::command]
 pub async fn delete_task(state: State<'_, AppState>, task_id: String) -> Result<(), CommandError> {
-    state.tasks.delete(parse_id(&task_id)?)?;
+    let task_id = parse_id(&task_id)?;
+    // A task that waited for this one may be ready once it is gone.
+    let project_id = state.tasks.get(task_id)?.project_id();
+    state.tasks.delete(task_id)?;
+    state.coordinator_nudge.nudge(project_id);
     Ok(())
 }
 

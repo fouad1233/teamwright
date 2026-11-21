@@ -2812,6 +2812,276 @@ impl From<&teamwright_domain::MemoryEntry> for MemoryEntryDto {
     }
 }
 
+/// The coordinator of a project as the interface sees it (decision 0037).
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CoordinatorDto {
+    project_id: String,
+    /// "here", "elsewhere" or "off".
+    runs: &'static str,
+    /// The name of the computer it runs on, when that is another one and
+    /// its name is known.
+    runs_on_name: Option<String>,
+    /// When it was last switched on or off.
+    switched_at: Option<String>,
+    /// How many specialists may work at once.
+    limit: u8,
+    /// The least and the most the limit may be.
+    least_limit: u8,
+    most_limit: u8,
+    /// How many specialists are at work now, on every computer.
+    at_work: usize,
+    /// The budgets of the project that have tokens.
+    budgets: Vec<BudgetDto>,
+    /// What was spent against them, in tokens of every kind, once a turn
+    /// has ended.
+    spent: SpendingDto,
+    /// What could start but waits, in the order it would start.
+    waiting: Vec<WaitingDto>,
+    /// The latest entries of its record, the newest first.
+    entries: Vec<CoordinatorEntryDto>,
+}
+
+/// A budget in tokens.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BudgetDto {
+    /// "project", "member" or "task".
+    scope: &'static str,
+    /// The project, the member or the task.
+    target_id: String,
+    tokens: u64,
+    used: u64,
+    /// When the manager was asked about it, while the question is open.
+    asked_at: Option<String>,
+    /// The two raises offered when it is used up.
+    raises: [u64; 2],
+}
+
+/// What was spent in a project, by whom and on what.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SpendingDto {
+    project: u64,
+    members: Vec<SpentDto>,
+    tasks: Vec<SpentDto>,
+}
+
+/// What one member, or one task, spent.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SpentDto {
+    id: String,
+    tokens: u64,
+}
+
+/// Something that could start but waits.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WaitingDto {
+    task_id: Option<String>,
+    member_id: String,
+    /// "budget", "limit", "busy", "waits_for_manager", "waits_for_check",
+    /// "failed" or "message_limit".
+    reason: &'static str,
+    /// The task that waits to be accepted, for "waits_for_check".
+    check_task_id: Option<String>,
+    /// Why, in words, to follow a colon.
+    words: String,
+}
+
+/// An entry of the coordinator's record.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CoordinatorEntryDto {
+    id: String,
+    at: String,
+    /// "started", "woke", "held", "asked", "switched_on" or
+    /// "switched_off".
+    kind: &'static str,
+    text: String,
+    task_id: Option<String>,
+    member_id: Option<String>,
+}
+
+/// A question about a used-up budget, as the inbox shows it.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BudgetQuestionDto {
+    project_id: String,
+    project_name: String,
+    scope: &'static str,
+    target_id: String,
+    /// What the budget is called: "the budget of the project".
+    name: String,
+    tokens: u64,
+    used: u64,
+    asked_at: String,
+    raises: [u64; 2],
+}
+
+/// The scope of a budget, as the interface names it.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BudgetScopeInput {
+    /// "project", "member" or "task".
+    scope: String,
+    /// The member or the task; for the project, its own identifier.
+    target_id: String,
+}
+
+impl BudgetScopeInput {
+    /// The scope it names.
+    pub fn parse(&self) -> Result<teamwright_domain::BudgetScope, CommandError> {
+        use teamwright_domain::BudgetScope;
+        Ok(match self.scope.as_str() {
+            "project" => BudgetScope::Project,
+            "member" => BudgetScope::Member(parse_id(&self.target_id)?),
+            "task" => BudgetScope::Task(parse_id(&self.target_id)?),
+            other => {
+                return Err(CommandError::invalid_request(format!(
+                    "'{other}' is not a scope of a budget"
+                )));
+            }
+        })
+    }
+}
+
+/// The name of a reason to wait on the wire.
+const fn wait_reason_name(reason: teamwright_application::WaitReason) -> &'static str {
+    use teamwright_application::WaitReason;
+    match reason {
+        WaitReason::Budget(_) => "budget",
+        WaitReason::Limit => "limit",
+        WaitReason::SpecialistBusy => "busy",
+        WaitReason::SpecialistWaitsForManager => "waits_for_manager",
+        WaitReason::WaitsForCheck(_) => "waits_for_check",
+        WaitReason::Failed => "failed",
+        WaitReason::MessageLimit => "message_limit",
+    }
+}
+
+/// What the coordinator needs to be put into words for the interface.
+pub struct CoordinatorSurroundings<'state> {
+    /// The project.
+    pub project: &'state Project,
+    /// Its tasks.
+    pub tasks: &'state [Task],
+    /// Its team.
+    pub members: &'state [Member],
+    /// This computer.
+    pub this_computer: ComputerId,
+    /// The names of the other computers, where they are known.
+    pub computer_names: &'state [(ComputerId, String)],
+}
+
+impl CoordinatorDto {
+    /// The state of a coordinator, put into the words of the interface.
+    pub fn new(
+        state: &teamwright_application::CoordinatorState,
+        surroundings: &CoordinatorSurroundings<'_>,
+    ) -> Self {
+        use teamwright_application::coordinator::words;
+        let coordinator = &state.coordinator;
+        let runs_on = coordinator.runs_on();
+        let project_id = surroundings.project.id();
+        Self {
+            project_id: project_id.to_string(),
+            runs: match runs_on {
+                None => "off",
+                Some(computer) if computer == surroundings.this_computer => "here",
+                Some(_) => "elsewhere",
+            },
+            runs_on_name: runs_on
+                .filter(|computer| *computer != surroundings.this_computer)
+                .and_then(|computer| {
+                    surroundings
+                        .computer_names
+                        .iter()
+                        .find(|(id, _)| *id == computer)
+                        .map(|(_, name)| name.clone())
+                }),
+            switched_at: coordinator.switched_at().map(moment_to_text),
+            limit: coordinator.limit().value(),
+            least_limit: teamwright_domain::ConcurrencyLimit::MIN,
+            most_limit: teamwright_domain::ConcurrencyLimit::MAX,
+            at_work: state.at_work,
+            budgets: state
+                .budgets
+                .iter()
+                .filter_map(|budget| {
+                    let tokens = budget.tokens()?;
+                    Some(BudgetDto {
+                        scope: budget.scope().kind().as_str(),
+                        target_id: budget.id().to_string(),
+                        tokens: tokens.tokens(),
+                        used: state.spending.of(budget.scope()),
+                        asked_at: budget
+                            .open_question()
+                            .map(|question| moment_to_text(question.asked_at)),
+                        raises: tokens.raises(),
+                    })
+                })
+                .collect(),
+            spent: SpendingDto {
+                project: state.spending.project,
+                members: state
+                    .spending
+                    .members
+                    .iter()
+                    .map(|(id, tokens)| SpentDto {
+                        id: id.to_string(),
+                        tokens: *tokens,
+                    })
+                    .collect(),
+                tasks: state
+                    .spending
+                    .tasks
+                    .iter()
+                    .map(|(id, tokens)| SpentDto {
+                        id: id.to_string(),
+                        tokens: *tokens,
+                    })
+                    .collect(),
+            },
+            waiting: state
+                .waiting
+                .iter()
+                .map(|waiting| WaitingDto {
+                    task_id: waiting.task_id.map(|id| id.to_string()),
+                    member_id: waiting.member_id.to_string(),
+                    reason: wait_reason_name(waiting.reason),
+                    check_task_id: match waiting.reason {
+                        teamwright_application::WaitReason::WaitsForCheck(id) => {
+                            Some(id.to_string())
+                        }
+                        _ => None,
+                    },
+                    words: words::reason(
+                        waiting.reason,
+                        surroundings.project,
+                        surroundings.tasks,
+                        surroundings.members,
+                        waiting.member_id,
+                    ),
+                })
+                .collect(),
+            entries: state
+                .entries
+                .iter()
+                .map(|entry| CoordinatorEntryDto {
+                    id: entry.id.to_string(),
+                    at: moment_to_text(entry.at),
+                    kind: entry.kind.as_str(),
+                    text: entry.text.clone(),
+                    task_id: entry.task_id.map(|id| id.to_string()),
+                    member_id: entry.member_id.map(|id| id.to_string()),
+                })
+                .collect(),
+        }
+    }
+}
+
 /// A fact the manager adds to the memory of a project.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -3091,6 +3361,27 @@ impl From<ProjectReport> for ProjectReportDto {
     }
 }
 
+impl From<&teamwright_application::BudgetQuestionOfProject> for BudgetQuestionDto {
+    fn from(question: &teamwright_application::BudgetQuestionOfProject) -> Self {
+        let budget = &question.budget;
+        let tokens = budget.tokens();
+        Self {
+            project_id: question.project.id().to_string(),
+            project_name: question.project.name().to_string(),
+            scope: budget.scope().kind().as_str(),
+            target_id: budget.id().to_string(),
+            name: question.name.clone(),
+            tokens: tokens.map_or(0, teamwright_domain::TokenBudget::tokens),
+            used: question.used,
+            asked_at: budget
+                .open_question()
+                .map(|asked| moment_to_text(asked.asked_at))
+                .unwrap_or_default(),
+            raises: tokens.map_or([0, 0], teamwright_domain::TokenBudget::raises),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used)]
@@ -3177,6 +3468,25 @@ mod tests {
         assert_eq!(sent["task"]["number"], 7);
         assert_eq!(sent["task"]["title"], "Route the board");
         assert_eq!(sent["task"]["gone"], true);
+    }
+
+    #[test]
+    fn the_scope_of_a_budget_is_read_as_the_interface_names_it() {
+        let task_id = teamwright_domain::TaskId::generate();
+        let input = |scope: &str, target: String| BudgetScopeInput {
+            scope: scope.to_owned(),
+            target_id: target,
+        };
+        assert_eq!(
+            input("project", String::new()).parse().unwrap(),
+            teamwright_domain::BudgetScope::Project
+        );
+        assert_eq!(
+            input("task", task_id.to_string()).parse().unwrap(),
+            teamwright_domain::BudgetScope::Task(task_id)
+        );
+        assert!(input("task", "nonsense".to_owned()).parse().is_err());
+        assert!(input("sprint", task_id.to_string()).parse().is_err());
     }
 
     #[test]

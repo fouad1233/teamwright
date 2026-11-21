@@ -11,24 +11,25 @@ use chrono::Utc;
 use tauri::{AppHandle, Emitter, Manager};
 use teamwright_application::{
     AgentRuntime, AppearanceService, ApplicationError, AreaService, ChecklistService,
-    DeliveryPorts, DeliveryService, DigestRepository, DigestService, DiskEntry, DriveSurroundings,
-    FileSystem, FolderReader, GitHubPorts, GitHubService, GoogleDriveService, IntegrationSettings,
-    NotificationService, OperatingSystem, PlacesService, ProjectEvent, ProjectFilesService,
-    ProjectFolders, ProjectService, RoundReport, SprintService, StorageError, SyncPorts,
-    SyncService, SystemClock, TagService, TaskService, TeamService, ViewService, WorkListener,
-    WorkPorts, WorkService, WorkbookPorts, WorkbookService,
+    CoordinatorPorts, CoordinatorService, DeliveryPorts, DeliveryService, DigestRepository,
+    DigestService, DiskEntry, DriveSurroundings, FileSystem, FolderReader, GitHubPorts,
+    GitHubService, GoogleDriveService, IntegrationSettings, NotificationService, OperatingSystem,
+    PlacesService, ProjectEvent, ProjectFilesService, ProjectFolders, ProjectService, RoundReport,
+    SprintService, StorageError, SyncPorts, SyncService, SystemClock, TagService, TaskService,
+    TeamService, ViewService, WorkListener, WorkPorts, WorkService, WorkbookPorts, WorkbookService,
 };
 use teamwright_domain::{ComputerId, Conversation, Project, Turn};
 use teamwright_integrations::{GhCommandLine, GhLocator, HttpsSender};
 use teamwright_runtime::{ClaudeCode, EarlierConversationsOnDisk};
 use teamwright_storage::{
     Database, FolderOfComputers, SqliteAreaRepository, SqliteConversationRepository,
-    SqliteDigestRepository, SqliteIntegrationStore, SqliteMemberRepository,
-    SqliteNotificationChoice, SqlitePlacesRepository, SqlitePlanningRepository,
-    SqliteProjectRepository, SqliteSprintRepository, SqliteSyncLedger, SqliteTagRepository,
-    SqliteTaskRepository, SqliteThemeStore, SqliteViewRepository,
+    SqliteCoordinatorRepository, SqliteDigestRepository, SqliteIntegrationStore,
+    SqliteMemberRepository, SqliteNotificationChoice, SqlitePlacesRepository,
+    SqlitePlanningRepository, SqliteProjectRepository, SqliteSprintRepository, SqliteSyncLedger,
+    SqliteTagRepository, SqliteTaskRepository, SqliteThemeStore, SqliteViewRepository,
 };
 
+use crate::coordinating::{CoordinatorNudge, start_coordinating};
 use crate::dto::{ConversationDto, DataChangedDto, SyncStateDto};
 use crate::error::CommandError;
 use crate::events;
@@ -170,6 +171,12 @@ pub struct AppState {
     /// The identity of this computer, which tells a conversation that runs
     /// here from one that runs on another computer.
     pub this_computer: ComputerId,
+    /// The coordinator of the projects: what starts next, the budgets, and
+    /// its record.
+    pub coordinator: CoordinatorService,
+    /// Wakes the coordinator when something happened that may change what
+    /// can start.
+    pub coordinator_nudge: CoordinatorNudge,
 }
 
 impl AppState {
@@ -204,6 +211,8 @@ impl AppState {
         ));
         let digest_repository: Arc<dyn DigestRepository> =
             Arc::new(SqliteDigestRepository::new(database.clone()));
+        let coordinator_repository = Arc::new(SqliteCoordinatorRepository::new(database.clone()));
+        let (coordinator_nudge, coordinator_inbox) = CoordinatorNudge::new();
         let runtime: Arc<dyn AgentRuntime> = Arc::new(agent_program());
         let clock = Arc::new(SystemClock);
         let folders: Arc<dyn ProjectFolders> = Arc::new(FoldersOfProjects {
@@ -267,11 +276,24 @@ impl AppState {
                 this_computer,
                 notifications: notifications.clone(),
                 deliveries: deliveries.clone(),
+                coordinator_nudge: coordinator_nudge.clone(),
             }),
             clock: clock.clone(),
             this_computer,
         });
         work.recover()?;
+        let coordinator = CoordinatorService::new(CoordinatorPorts {
+            projects: project_repository.clone(),
+            tasks: task_repository.clone(),
+            members: member_repository.clone(),
+            conversations: conversation_repository.clone(),
+            teamwork: teamwork_repository.clone(),
+            coordinators: coordinator_repository,
+            clock: clock.clone(),
+            this_computer,
+            work: work.clone(),
+        });
+        start_coordinating(app.clone(), coordinator_inbox);
         let teamwork = teamwright_application::TeamworkService::new(
             project_repository.clone(),
             member_repository.clone(),
@@ -383,6 +405,8 @@ impl AppState {
             integrations,
             exported_workbooks: Mutex::new(Vec::new()),
             this_computer,
+            coordinator,
+            coordinator_nudge,
         })
     }
 }
@@ -429,6 +453,11 @@ pub fn run_round(app: &AppHandle, state: &AppState) -> Result<RoundReport, Comma
 /// deleted while they ran here.
 fn tell_interface(app: &AppHandle, state: &AppState, report: &RoundReport) {
     state.work.stop_turns(&report.turns_to_stop);
+    // A change from another computer may make a task ready, or move the
+    // coordinator of a project here or away.
+    for project_id in &report.changed_projects {
+        state.coordinator_nudge.nudge(*project_id);
+    }
     if !report.changed_projects.is_empty() {
         let _ = app.emit(
             DATA_CHANGED,
@@ -740,10 +769,16 @@ struct EventToInterface {
     this_computer: ComputerId,
     notifications: NotificationService,
     deliveries: DeliveryService,
+    coordinator_nudge: CoordinatorNudge,
 }
 
 impl WorkListener for EventToInterface {
     fn conversation_changed(&self, conversation: &Conversation, turns: &[Turn]) {
+        // A turn that has ended frees its specialist, and may have finished
+        // or failed a task: the coordinator looks again.
+        if !turns.last().is_some_and(Turn::is_running) {
+            self.coordinator_nudge.nudge(conversation.project_id());
+        }
         // A window that is closing cannot be told anything. The change is
         // stored, and the interface reads it when it lists the
         // conversations again.

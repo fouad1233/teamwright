@@ -7,6 +7,7 @@
 pub mod appearance;
 pub mod areas;
 pub mod checklists;
+pub mod coordinator;
 pub mod digests;
 pub mod files;
 pub mod github;

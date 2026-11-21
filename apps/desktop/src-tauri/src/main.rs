@@ -10,6 +10,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod commands;
+mod coordinating;
 mod dto;
 mod error;
 mod events;
@@ -40,6 +41,11 @@ fn main() -> ExitCode {
             app.manage(state);
             events::listen_for_presses(app.handle());
             state::start_syncing_in_the_background(app.handle().clone());
+            // A coordinator that was on when the program closed stays on and
+            // looks at once at what can start.
+            if let Some(state) = app.try_state::<AppState>() {
+                state.coordinator_nudge.nudge_everywhere();
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -152,6 +158,12 @@ fn main() -> ExitCode {
             commands::memory::add_memory_fact,
             commands::memory::change_memory_entry,
             commands::memory::remove_memory_entry,
+            commands::coordinator::coordinator,
+            commands::coordinator::switch_coordinator,
+            commands::coordinator::set_coordinator_limit,
+            commands::coordinator::set_budget,
+            commands::coordinator::answer_budget,
+            commands::coordinator::budget_questions,
             commands::sync::sync_state,
             commands::sync::choose_sync_folder,
             commands::sync::stop_syncing,

@@ -3,10 +3,14 @@ import type {
   ApprovedProposal,
   Area,
   Assignee,
+  BudgetQuestion,
+  BudgetScope,
   CalendarDate,
   Color,
   Conversation,
   ConversationsOfFolder,
+  Coordinator,
+  CoordinatorChanged,
   DataChanged,
   Deliveries,
   Delivery,
@@ -805,6 +809,37 @@ export interface Backend {
   listDigests(projectId: Id): Promise<Digest[]>;
   /** Removes a digest. The conversation it was made from is not touched. */
   removeDigest(digestId: Id): Promise<void>;
+
+  /**
+   * The coordinator of a project (decision 0037): whether and where it
+   * runs, its limit, the budgets against what was spent, what waits and
+   * why, and its latest record.
+   */
+  coordinator(projectId: Id): Promise<Coordinator>;
+  /**
+   * Switches the coordinator of a project on, on this computer (it then
+   * runs here, also if it ran on another computer), or off, wherever it
+   * runs. Work under way goes on either way.
+   */
+  switchCoordinator(projectId: Id, on: boolean): Promise<Coordinator>;
+  /** Sets how many specialists the coordinator lets work at once (`rule_broken` outside its range). */
+  setCoordinatorLimit(projectId: Id, limit: number): Promise<Coordinator>;
+  /**
+   * Sets a budget in tokens for the project, a member or a task, or takes
+   * it away with null. A member or a task of another project is
+   * `not_found`; fewer than 1,000 tokens is `rule_broken`.
+   */
+  setBudget(projectId: Id, scope: BudgetScope, tokens: number | null): Promise<Coordinator>;
+  /**
+   * Answers the question about a used-up budget: raise it by a number of
+   * tokens, or, with null, leave the work against it stopped. Refused when
+   * no question is open (`rule_broken`).
+   */
+  answerBudget(projectId: Id, scope: BudgetScope, raiseBy: number | null): Promise<Coordinator>;
+  /** The questions about used-up budgets in every project that is not put away, the oldest first. */
+  listBudgetQuestions(): Promise<BudgetQuestion[]>;
+  /** Calls the listener after the coordinator of a project acted. Returns the function that stops the calls. */
+  onCoordinatorChanged(listener: (change: CoordinatorChanged) => void): () => void;
 }
 
 /**

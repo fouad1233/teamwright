@@ -1672,3 +1672,116 @@ export interface ReportHandoff {
   contract: string;
   files: string[];
 }
+
+/** What a budget in tokens is for. */
+export type BudgetScopeKind = 'project' | 'member' | 'task';
+
+/** A budget, named by what it is for. For the project, `targetId` is the project. */
+export interface BudgetScope {
+  scope: BudgetScopeKind;
+  targetId: Id;
+}
+
+/**
+ * A budget in tokens (decision 0008). It counts every token in all, as the
+ * usage of a project does, once a turn has ended.
+ */
+export interface Budget extends BudgetScope {
+  tokens: number;
+  used: number;
+  /** When the manager was asked about it, while that question is open. */
+  askedAt: Moment | null;
+  /** The two raises offered when it is used up: half of it, and all of it again. */
+  raises: [number, number];
+}
+
+/** What one member, or one task, has spent, in tokens in all. */
+export interface Spent {
+  id: Id;
+  tokens: number;
+}
+
+/** What was spent in a project, against which the budgets count. */
+export interface CoordinatorSpending {
+  project: number;
+  members: Spent[];
+  tasks: Spent[];
+}
+
+/** Why something the coordinator could start waits. */
+export type WaitReason =
+  | 'budget'
+  | 'limit'
+  | 'busy'
+  | 'waits_for_manager'
+  | 'waits_for_check'
+  | 'failed'
+  | 'message_limit';
+
+/** Something the coordinator could start, and why it waits. */
+export interface CoordinatorWaiting {
+  /** The task, or null for a turn to answer what teammates asked. */
+  taskId: Id | null;
+  memberId: Id;
+  reason: WaitReason;
+  /** The task that waits to be accepted, for `waits_for_check`. */
+  checkTaskId: Id | null;
+  /** Why, in words, to follow a colon. */
+  words: string;
+}
+
+export type CoordinatorEntryKind =
+  'started' | 'woke' | 'held' | 'asked' | 'switched_on' | 'switched_off';
+
+/** One entry of the coordinator's record: what it did and why, in one sentence. */
+export interface CoordinatorEntry {
+  id: Id;
+  at: Moment;
+  kind: CoordinatorEntryKind;
+  text: string;
+  taskId: Id | null;
+  memberId: Id | null;
+}
+
+/**
+ * The coordinator of a project (decision 0037): the code that starts work
+ * when it is ready. It is off until the manager switches it on, and then
+ * runs on the computer where it was switched on.
+ */
+export interface Coordinator {
+  projectId: Id;
+  runs: 'here' | 'elsewhere' | 'off';
+  /** The name of the other computer it runs on, if known. */
+  runsOnName: string | null;
+  switchedAt: Moment | null;
+  /** How many specialists may work at once. */
+  limit: number;
+  leastLimit: number;
+  mostLimit: number;
+  /** How many specialists are at work now, on every computer. */
+  atWork: number;
+  /** The budgets that are set. */
+  budgets: Budget[];
+  spent: CoordinatorSpending;
+  /** What could start but waits, in the order it would start. */
+  waiting: CoordinatorWaiting[];
+  /** The latest entries of its record, the newest first. */
+  entries: CoordinatorEntry[];
+}
+
+/** A question about a used-up budget, as the inbox shows it. */
+export interface BudgetQuestion extends BudgetScope {
+  projectId: Id;
+  projectName: string;
+  /** What the budget is called: "the budget of the project". */
+  name: string;
+  tokens: number;
+  used: number;
+  askedAt: Moment;
+  raises: [number, number];
+}
+
+/** The payload of the event that says the coordinator of a project acted. */
+export interface CoordinatorChanged {
+  projectId: Id;
+}

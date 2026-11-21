@@ -27,7 +27,9 @@ export type Act =
   /** Hands the result of the task over, with the tool publish_handoff. */
   | { kind: 'handoff'; summary: string; contract: string; files: string[] }
   /** Records a fact in the memory of the project, with the tool remember. */
-  | { kind: 'remember'; title: string; text: string };
+  | { kind: 'remember'; title: string; text: string }
+  /** Writes a note to a teammate, with the tool send_message. */
+  | { kind: 'send'; to: string; text: string };
 
 /** The name of the tool search_memory as a session of Claude Code calls it. */
 export const SEARCH_MEMORY_TOOL = 'mcp__teamwright__search_memory';
@@ -239,6 +241,31 @@ function searchWordsFor(title: string): string {
     .split(/[^\p{L}\p{N}]+/u)
     .filter((word) => word.length > 3);
   return (words.length > 0 ? words : [title.toLowerCase()]).slice(0, 3).join(' ');
+}
+
+/**
+ * The script of a specialist the coordinator woke so that it answers what
+ * teammates asked: it writes each of them a note and ends.
+ */
+export function scriptForTeammates(askers: readonly Member[]): Script {
+  return {
+    acts: [
+      { after: 0, act: { kind: 'note', message: WHAT_THIS_IS } },
+      { after: 700, act: { kind: 'say', text: 'I am reading what my teammates asked me.' } },
+      ...askers.map((asker) => ({
+        after: 800,
+        act: {
+          kind: 'send' as const,
+          to: asker.id,
+          text: `This is the demo, so the answer is pretended: in the desktop program I would answer your question here, ${asker.name}.`,
+        },
+      })),
+    ],
+    endsAfter: 600,
+    answer: 'I answered what my teammates asked, and started no other work.',
+    tokens: { input: 20, output: 180, cacheRead: 9_400, cacheWritten: 1_200 },
+    contextAdded: 4_000,
+  };
 }
 
 /** A file name made from a title: small letters and digits, joined by hyphens. */

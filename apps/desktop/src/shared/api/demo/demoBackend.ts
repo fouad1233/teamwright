@@ -6,11 +6,15 @@ import type {
   ApprovedProposal,
   Area,
   Assignee,
+  BudgetQuestion,
+  BudgetScope,
   CalendarDate,
   Color,
   Computer,
   Conversation,
   ConversationsOfFolder,
+  Coordinator,
+  CoordinatorChanged,
   DataChanged,
   DecisionRequest,
   Deliveries,
@@ -89,6 +93,7 @@ import {
 } from './areas';
 import { isThemeName, rememberedTheme } from '@/shared/theme/themes';
 import { briefFor } from './brief';
+import { PretendedCoordinators, WAKE_REQUEST } from './coordinator';
 import { PretendedTeamTalk } from './teamwork';
 import { PretendedMemory, shorten } from './memory';
 import { PretendedEarlierConversations, type PretendedConversation } from './earlierConversations';
@@ -144,6 +149,7 @@ import {
   scriptForChoice,
   scriptForMessage,
   scriptForTask,
+  scriptForTeammates,
   type Act,
   type Script,
 } from './simulatedSpecialist';
@@ -351,9 +357,27 @@ export class DemoBackend implements Backend {
   private readonly dataListeners = new Set<(change: DataChanged) => void>();
   /** Syncing through a folder, pretended, with a second computer called "Laptop". */
   private readonly sync: PretendedSync;
+  /** The coordinators of the projects, their budgets and their records (decision 0037). */
+  private readonly coordinators: PretendedCoordinators;
+  private readonly coordinatorListeners = new Set<(change: CoordinatorChanged) => void>();
 
   constructor(workspace?: DemoWorkspace, environment: DemoEnvironment = browserEnvironment) {
     this.environment = environment;
+    this.coordinators = new PretendedCoordinators({
+      now: () => this.nowAsText(),
+      newId: () => this.environment.newId(),
+      project: (projectId) => this.requireProject(projectId),
+      tasks: (projectId) => this.tasksOfProject(projectId),
+      members: (projectId) => this.teamOf(projectId),
+      conversations: (projectId) => this.conversationsOf(projectId),
+      messages: (projectId) => this.teamwork.talkOf(projectId).messages,
+      startWork: (taskId) => {
+        this.beginWorkOn(taskId);
+      },
+      wake: (memberId) => {
+        this.wake(memberId);
+      },
+    });
     this.sync = new PretendedSync({
       now: () => environment.now(),
       later: environment.later ?? ((work, pause) => void setTimeout(work, pause)),
@@ -578,6 +602,7 @@ export class DemoBackend implements Backend {
       // The folders stay on the computer. Only what the project knew about
       // them goes with it: Teamwright never removes a file of the manager.
       this.places.delete(project.id);
+      this.coordinators.forgetProject(project.id);
       this.projects.delete(project.id);
     });
   }
@@ -970,6 +995,7 @@ export class DemoBackend implements Backend {
         completedAt: status.category === 'done' ? now : null,
       };
       this.tasks.set(task.id, task);
+      this.nudge(project.id);
       return task;
     });
   }
@@ -1001,10 +1027,12 @@ export class DemoBackend implements Backend {
 
   assignTask(taskId: Id, assignee: Assignee | null): Promise<Task> {
     return this.answer(() =>
-      this.change(taskId, (task) => {
-        this.checkAssignee(assignee, task.projectId);
-        task.assignee = assignee;
-      }),
+      this.nudged(
+        this.change(taskId, (task) => {
+          this.checkAssignee(assignee, task.projectId);
+          task.assignee = assignee;
+        }),
+      ),
     );
   }
 
@@ -1062,7 +1090,7 @@ export class DemoBackend implements Backend {
           member.updatedAt = now;
         });
       }
-      return task;
+      return this.nudged(task);
     });
   }
 
@@ -1088,19 +1116,23 @@ export class DemoBackend implements Backend {
           `${taskName} cannot wait for ${blockerName}, because ${blockerName} already waits for ${taskName}`,
         );
       }
-      return this.change(taskId, (changed) => {
-        if (!changed.blockedBy.includes(blockerId)) {
-          changed.blockedBy.push(blockerId);
-        }
-      });
+      return this.nudged(
+        this.change(taskId, (changed) => {
+          if (!changed.blockedBy.includes(blockerId)) {
+            changed.blockedBy.push(blockerId);
+          }
+        }),
+      );
     });
   }
 
   removeTaskDependency(taskId: Id, blockerId: Id): Promise<Task> {
     return this.answer(() =>
-      this.change(taskId, (task) => {
-        task.blockedBy = task.blockedBy.filter((id) => id !== blockerId);
-      }),
+      this.nudged(
+        this.change(taskId, (task) => {
+          task.blockedBy = task.blockedBy.filter((id) => id !== blockerId);
+        }),
+      ),
     );
   }
 
@@ -1128,6 +1160,7 @@ export class DemoBackend implements Backend {
           other.updatedAt = now;
         }
       }
+      this.nudge(task.projectId);
     });
   }
 
@@ -1349,49 +1382,52 @@ export class DemoBackend implements Backend {
   }
 
   startWork(taskId: Id): Promise<Conversation> {
-    return this.answer(() => {
-      const task = this.requireTask(taskId);
-      const project = this.requireProject(task.projectId);
-      const member =
-        task.assignee?.kind === 'member' ? this.members.get(task.assignee.memberId) : undefined;
-      if (member?.kind !== 'agent') {
-        throw new BackendError('no_specialist', 'the task is not given to an AI specialist');
-      }
-      if (this.conversationsOf(project.id).some((other) => other.taskId === task.id)) {
-        throw new BackendError(
-          'work_already_started',
-          `work on ${referenceOf(project, task)} has already started`,
-        );
-      }
-      this.refuseWhileBusy(member);
+    return this.answer(() => this.beginWorkOn(taskId));
+  }
 
-      const conversation: Conversation = {
-        id: this.environment.newId(),
-        projectId: project.id,
-        isWithAdvisor: false,
-        memberId: member.id,
-        taskId: task.id,
-        startedAt: this.nowAsText(),
-        homeComputer: THIS_COMPUTER,
-        isHere: true,
-        turns: [],
-        context: null,
-      };
-      this.conversations.set(conversation.id, conversation);
-      this.beginTurn(
-        conversation,
-        briefFor(
-          project,
-          task,
-          this.tasksOfProject(project.id),
-          this.teamwork.handoffsOf(project.id),
-          this.memory.of(project.id),
-        ),
-        'brief',
-        scriptForTask(task),
+  /** Starts the work on a task: the use case behind `startWork`, which the coordinator uses too. */
+  private beginWorkOn(taskId: Id): Conversation {
+    const task = this.requireTask(taskId);
+    const project = this.requireProject(task.projectId);
+    const member =
+      task.assignee?.kind === 'member' ? this.members.get(task.assignee.memberId) : undefined;
+    if (member?.kind !== 'agent') {
+      throw new BackendError('no_specialist', 'the task is not given to an AI specialist');
+    }
+    if (this.conversationsOf(project.id).some((other) => other.taskId === task.id)) {
+      throw new BackendError(
+        'work_already_started',
+        `work on ${referenceOf(project, task)} has already started`,
       );
-      return conversation;
-    });
+    }
+    this.refuseWhileBusy(member);
+
+    const conversation: Conversation = {
+      id: this.environment.newId(),
+      projectId: project.id,
+      isWithAdvisor: false,
+      memberId: member.id,
+      taskId: task.id,
+      startedAt: this.nowAsText(),
+      homeComputer: THIS_COMPUTER,
+      isHere: true,
+      turns: [],
+      context: null,
+    };
+    this.conversations.set(conversation.id, conversation);
+    this.beginTurn(
+      conversation,
+      briefFor(
+        project,
+        task,
+        this.tasksOfProject(project.id),
+        this.teamwork.handoffsOf(project.id),
+        this.memory.of(project.id),
+      ),
+      'brief',
+      scriptForTask(task),
+    );
+    return conversation;
   }
 
   reply(conversationId: Id, message: string): Promise<Conversation> {
@@ -1777,6 +1813,7 @@ export class DemoBackend implements Backend {
         turn.endedAt = this.nowAsText();
         turn.failure = 'Stopped by the manager.';
         this.tellListeners(conversation);
+        this.nudge(conversation.projectId);
       }
       return conversation;
     });
@@ -2095,6 +2132,60 @@ export class DemoBackend implements Backend {
     );
   }
 
+  coordinator(projectId: Id): Promise<Coordinator> {
+    return this.answer(() => this.coordinators.stateOf(this.requireProject(projectId).id));
+  }
+
+  switchCoordinator(projectId: Id, on: boolean): Promise<Coordinator> {
+    return this.answer(() => {
+      const project = this.requireProject(projectId);
+      if (on) {
+        this.coordinators.switchOn(project.id);
+      } else {
+        this.coordinators.switchOff(project.id);
+      }
+      this.nudge(project.id);
+      return this.coordinators.stateOf(project.id);
+    });
+  }
+
+  setCoordinatorLimit(projectId: Id, limit: number): Promise<Coordinator> {
+    return this.answer(() => {
+      const project = this.requireProject(projectId);
+      this.coordinators.setLimit(project.id, limit);
+      this.nudge(project.id);
+      return this.coordinators.stateOf(project.id);
+    });
+  }
+
+  setBudget(projectId: Id, scope: BudgetScope, tokens: number | null): Promise<Coordinator> {
+    return this.answer(() => {
+      const project = this.requireProject(projectId);
+      this.coordinators.setBudget(project.id, scope, tokens);
+      this.nudge(project.id);
+      return this.coordinators.stateOf(project.id);
+    });
+  }
+
+  answerBudget(projectId: Id, scope: BudgetScope, raiseBy: number | null): Promise<Coordinator> {
+    return this.answer(() => {
+      const project = this.requireProject(projectId);
+      this.coordinators.answer(project.id, scope, raiseBy);
+      this.nudge(project.id);
+      return this.coordinators.stateOf(project.id);
+    });
+  }
+
+  listBudgetQuestions(): Promise<BudgetQuestion[]> {
+    return this.answer(() =>
+      this.coordinators.questions(
+        this.allProjects()
+          .filter((project) => project.archivedAt === null)
+          .map((project) => project.id),
+      ),
+    );
+  }
+
   listDigests(projectId: Id): Promise<Digest[]> {
     return this.answer(() => this.earlier.digestsOf(this.requireProject(projectId).id));
   }
@@ -2103,6 +2194,80 @@ export class DemoBackend implements Backend {
     return this.answer(() => {
       this.earlier.remove(digestId);
     });
+  }
+
+  onCoordinatorChanged(listener: (change: CoordinatorChanged) => void): () => void {
+    this.coordinatorListeners.add(listener);
+    return () => {
+      this.coordinatorListeners.delete(listener);
+    };
+  }
+
+  /**
+   * Something happened in a project that may change what can start: its
+   * coordinator acts, if it is on, and whoever listens is told. The program
+   * does the same on a thread of its own (decision 0037).
+   */
+  private nudge(projectId: Id): void {
+    if (!this.projects.has(projectId) || !this.coordinators.isOn(projectId)) {
+      return;
+    }
+    this.coordinators.act(projectId);
+    this.noteVersions();
+    for (const listener of this.coordinatorListeners) {
+      listener({ projectId });
+    }
+  }
+
+  /** A task that changed, after the coordinator of its project was nudged. */
+  private nudged(task: Task): Task {
+    this.nudge(task.projectId);
+    return task;
+  }
+
+  /**
+   * Gives a specialist a turn to answer what teammates asked it: in its
+   * latest conversation that is not about a task and waits for nothing, so
+   * that its session knows what it said before, or in a new one.
+   */
+  private wake(memberId: Id): void {
+    const member = this.requireMember(memberId);
+    this.refuseWhileBusy(member);
+    const askers = this.teamwork
+      .talkOf(member.projectId)
+      .messages.filter((message) => message.toId === memberId && message.deliveredTurnId === null)
+      .map((message) => message.fromId)
+      .filter((id, place, all) => all.indexOf(id) === place)
+      .flatMap((id) => {
+        const asker = this.members.get(id);
+        return asker ? [asker] : [];
+      });
+    const earlier = this.conversationsOf(member.projectId)
+      .filter(
+        (conversation) =>
+          conversation.memberId === memberId &&
+          conversation.taskId === null &&
+          !conversation.isWithAdvisor &&
+          conversation.isHere &&
+          conversation.turns.at(-1)?.state !== 'running' &&
+          openDecisionOf(conversation) === undefined,
+      )
+      .at(-1);
+    const conversation: Conversation = earlier ?? {
+      id: this.environment.newId(),
+      projectId: member.projectId,
+      isWithAdvisor: false,
+      memberId: member.id,
+      taskId: null,
+      startedAt: this.nowAsText(),
+      homeComputer: THIS_COMPUTER,
+      isHere: true,
+      turns: [],
+      context: null,
+    };
+    this.conversations.set(conversation.id, conversation);
+    this.beginTurn(conversation, WAKE_REQUEST, 'message', scriptForTeammates(askers));
+    this.tellListeners(conversation);
   }
 
   private repositoryOf(project: Project): string {
@@ -2442,6 +2607,22 @@ export class DemoBackend implements Backend {
       turn.steps.push({ kind: 'text', at, text: act.text });
     } else if (act.kind === 'note') {
       turn.steps.push({ kind: 'notice', at, message: act.message });
+    } else if (act.kind === 'send') {
+      // A note to a teammate, with the tool send_message.
+      if (conversation.memberId !== null) {
+        this.teamwork.send(conversation.projectId, {
+          id: this.environment.newId(),
+          fromId: conversation.memberId,
+          toId: act.to,
+          conversationId: conversation.id,
+          turnId: turn.id,
+          kind: 'note',
+          text: act.text,
+          sentAt: at,
+          deliveredTurnId: null,
+          deliveredAt: null,
+        });
+      }
     } else if (act.kind === 'handoff') {
       // A handoff belongs to the task of the conversation and its specialist.
       if (conversation.taskId !== null && conversation.memberId !== null) {
@@ -2549,6 +2730,8 @@ export class DemoBackend implements Backend {
     }
     this.noteVersions();
     this.tellListeners(conversation);
+    // The specialist is free again: the coordinator looks at what can start.
+    this.nudge(conversation.projectId);
   }
 
   private tellListeners(conversation: Conversation): void {
