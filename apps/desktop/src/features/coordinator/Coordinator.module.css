@@ -1,0 +1,200 @@
+/* The coordinator in the Team place, in the manner of the section of
+   messages between teammates: a heading over a rule, then quiet lines. */
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  max-width: 760px;
+  margin-top: var(--space-6);
+}
+
+.header {
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--rule);
+}
+
+.limit {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.limitWords {
+  flex: 1;
+  color: var(--ink);
+}
+
+/* Counted, so it is set in the monospace. */
+.limitValue {
+  min-width: var(--space-5);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.budgets,
+.block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.note {
+  color: var(--ink-soft);
+  font-size: var(--text-small);
+}
+
+.budget {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.budgetLine {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.budgetLabel {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.amount {
+  color: var(--ink-soft);
+  font-family: var(--font-mono);
+  font-size: var(--text-small);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.track {
+  position: relative;
+  display: block;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--rule-strong);
+}
+
+.fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: calc(var(--share) * 100%);
+  border-radius: 1px;
+  background: var(--ink-faint);
+}
+
+/* Used up: the coordinator starts nothing more against it. */
+.usedUp .amount {
+  color: var(--danger);
+}
+
+.usedUp .fill {
+  background: var(--danger);
+}
+
+.budgetForm {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.budgetForm input {
+  max-width: 160px;
+}
+
+.problem {
+  color: var(--danger);
+  font-size: var(--text-small);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.itemWords {
+  flex: 1;
+  min-width: 0;
+  color: var(--ink-soft);
+}
+
+.subject {
+  color: var(--ink);
+}
+
+.entry {
+  display: flex;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.moment {
+  flex: none;
+  width: 140px;
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: var(--text-small);
+}
+
+/* A question about a budget in the inbox. */
+.questions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0 0 var(--space-4);
+  padding: 0;
+  list-style: none;
+}
+
+.question {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+}
+
+.questionAbout {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.questionText {
+  color: var(--ink);
+}
+
+.answers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.entryText {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}

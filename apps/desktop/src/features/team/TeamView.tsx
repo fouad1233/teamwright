@@ -9,6 +9,7 @@ import { Button, IconButton } from '@/shared/ui/Button';
 import { Dialog } from '@/shared/ui/Dialog';
 import { ActionMenu } from '@/shared/ui/Menu';
 
+import { CoordinatorPanel } from '../coordinator/CoordinatorPanel';
 import { Portrait } from '../office/characters/Portrait';
 import { TaskTally } from '../projects/TaskTally';
 import { usageInWords } from '../office/officeModel';
@@ -271,6 +272,8 @@ export function TeamView({ project, tasks }: TeamViewProps) {
       />
 
       {hasSpecialists && <ProgramStatus />}
+
+      {hasSpecialists && <CoordinatorPanel project={project} tasks={tasks} members={members} />}
 
       {hasSpecialists && <TeamMessages />}
 

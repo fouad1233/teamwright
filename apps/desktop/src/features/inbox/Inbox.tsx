@@ -6,6 +6,8 @@ import { Button } from '@/shared/ui/Button';
 import { describeFailure } from '@/shared/ui/Toast';
 
 import { advisorWaitsFor } from '../advisor/advisorModel';
+import { BudgetQuestions } from '../coordinator/BudgetQuestions';
+import { useBudgetQuestions } from '../coordinator/coordinatorQueries';
 import { AskToNotify } from '../notifications/AskToNotify';
 import { useComputerOf } from '../sync/RunsElsewhere';
 import { useTasks } from '../tasks/taskQueries';
@@ -33,6 +35,8 @@ interface InboxProps {
 export function Inbox({ projects }: InboxProps) {
   const waiting = useConversationsWaiting();
   const conversations = waiting.data ?? [];
+  // The questions of the coordinator about used-up budgets come first.
+  const budgetQuestions = useBudgetQuestions().data ?? [];
 
   return (
     <section className={styles.inbox} aria-label="Inbox">
@@ -48,7 +52,9 @@ export function Inbox({ projects }: InboxProps) {
       )}
       {waiting.isPending && <p className={styles.note}>Loading…</p>}
 
-      {waiting.data && conversations.length === 0 && (
+      {budgetQuestions.length > 0 && <BudgetQuestions questions={budgetQuestions} />}
+
+      {waiting.data && conversations.length === 0 && budgetQuestions.length === 0 && (
         <div className={classNames(styles.empty, 'pattern-band')}>
           <p className="label">Nothing to decide</p>
           <p className={styles.emptyText}>

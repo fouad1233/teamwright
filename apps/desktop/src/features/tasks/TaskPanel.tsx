@@ -30,6 +30,7 @@ import { useSprintCommands, useSprints } from '../sprints/sprintQueries';
 import { useTeamMembers } from '../team/TeamContext';
 import { TaskGitHub } from '../github/TaskGitHub';
 import { HandoffView } from '../teamwork/HandoffView';
+import { TaskBudget } from '../coordinator/TaskBudget';
 import { latestHandoffOf } from '../teamwork/teamworkModel';
 import { TaskWork } from '../work/TaskWork';
 import { useTeamTalkOfProject } from '../work/WorkContext';
@@ -295,6 +296,12 @@ export function TaskPanel({ project, task, tasks, onClose }: TaskPanelProps) {
         <Section title="Work">
           <TaskWork project={project} task={task} />
         </Section>
+
+        {task.assignee?.kind === 'member' && (
+          <Section title="Budget">
+            <TaskBudget project={project} task={task} />
+          </Section>
+        )}
 
         {handoff && (
           <Section title="Handoff">
