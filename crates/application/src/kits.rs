@@ -812,6 +812,34 @@ fn copy_here(shelf: &dyn SkillShelf, skill: &Skill) -> CopyHere {
     CopyHere::Usable(kept)
 }
 
+/// Whether the manager gave a specialist a connector that is handed a
+/// secret in an environment variable, whether or not this computer has the
+/// variable now. Such a specialist is given no command (decision 0038): a
+/// command could read the secret, wherever the program that runs the turn
+/// keeps it.
+///
+/// # Errors
+///
+/// Returns an error if storage fails.
+pub fn kit_names_a_secret(
+    kits: &dyn KitRepository,
+    member: &Member,
+) -> Result<bool, ApplicationError> {
+    let Some(kit) = kits.kit_of(member.id())? else {
+        return Ok(false);
+    };
+    if kit.connectors().is_empty() {
+        return Ok(false);
+    }
+    let connectors = kits.connectors_of_project(member.project_id())?;
+    Ok(kit.connectors().iter().any(|given| {
+        connectors
+            .iter()
+            .find(|connector| connector.id() == given.connector_id())
+            .is_some_and(|connector| !connector.start().variables().is_empty())
+    }))
+}
+
 /// The variables of a connector that are not set on this computer.
 fn missing_variables(shelf: &dyn SkillShelf, connector: &Connector) -> Vec<VariableName> {
     connector

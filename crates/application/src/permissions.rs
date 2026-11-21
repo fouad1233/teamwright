@@ -77,7 +77,8 @@ impl PermissionService {
         Ok(open)
     }
 
-    /// Takes back a permission that was allowed for a task or for always.
+    /// Takes back a permission that was allowed for a task or for always,
+    /// also a command allowed always, which no longer grants anything.
     /// Turns that start from now on are not given it; a turn that runs
     /// keeps what it was started with.
     ///
@@ -200,10 +201,10 @@ mod tests {
     #[test]
     fn a_standing_permission_is_taken_back_and_a_refused_one_cannot_be() {
         let scene = scene();
-        let mut always = asked(&scene.project);
-        always
+        let mut for_task = asked(&scene.project);
+        for_task
             .allow(
-                PermissionScope::Always,
+                PermissionScope::Task,
                 PermissionRule::new(PermissionKind::Command, "npm test").unwrap(),
                 "",
                 Answered {
@@ -213,11 +214,11 @@ mod tests {
                 },
             )
             .unwrap();
-        scene.permissions.save_request(&always).unwrap();
+        scene.permissions.save_request(&for_task).unwrap();
 
-        let withdrawn = scene.service.withdraw(always.id()).unwrap();
+        let withdrawn = scene.service.withdraw(for_task.id()).unwrap();
         assert!(withdrawn.standing().is_none());
-        assert!(scene.service.withdraw(always.id()).is_err());
+        assert!(scene.service.withdraw(for_task.id()).is_err());
         let open = asked(&scene.project);
         scene.permissions.save_request(&open).unwrap();
         assert!(scene.service.withdraw(open.id()).is_err());

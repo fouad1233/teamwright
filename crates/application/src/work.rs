@@ -14,7 +14,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError, Weak};
 
 use teamwright_domain::{
-    Answered, PermissionKind, PermissionRequest, PermissionRequestId, PermissionRule,
+    Answered, NoCommands, PermissionKind, PermissionRequest, PermissionRequestId, PermissionRule,
     PermissionScope, TurnAbout, granted_rules,
 };
 use teamwright_domain::{
@@ -33,7 +33,9 @@ use crate::agent_runtime::{
     TurnFailure, TurnOutcome, TurnRequest,
 };
 use crate::error::ApplicationError;
-use crate::kits::{KitRepository, SkillShelf, turn_kit_of, variables_of_the_library};
+use crate::kits::{
+    KitRepository, SkillShelf, kit_names_a_secret, turn_kit_of, variables_of_the_library,
+};
 use crate::memory::{
     MAX_FACT_LENGTH, MOST_FACTS_PER_TURN, contract_entries, decision_entry, facts_remembered_in,
     memory_in_words, remembered_entries,
@@ -377,6 +379,7 @@ impl WorkService {
                 turn,
                 prompt: None,
                 answered_permission: None,
+                started_by: StartedBy::Manager,
             },
             Worker::Specialist(&member),
             &project,
@@ -410,6 +413,32 @@ impl WorkService {
         conversation_id: ConversationId,
         message: &str,
     ) -> Result<ConversationWithTurns, ApplicationError> {
+        self.reply_as(conversation_id, message, StartedBy::Manager)
+    }
+
+    /// Goes on with a conversation so that its specialist answers the
+    /// messages of its teammates: the turn the coordinator gives a
+    /// specialist (decision 0037). Like [`Self::reply`], except that
+    /// nobody asked for the turn, so it is given no command, whatever was
+    /// allowed (decision 0038).
+    ///
+    /// # Errors
+    ///
+    /// As [`Self::reply`].
+    pub fn reply_to_teammates(
+        &self,
+        conversation_id: ConversationId,
+        message: &str,
+    ) -> Result<ConversationWithTurns, ApplicationError> {
+        self.reply_as(conversation_id, message, StartedBy::Coordinator)
+    }
+
+    fn reply_as(
+        &self,
+        conversation_id: ConversationId,
+        message: &str,
+        started_by: StartedBy,
+    ) -> Result<ConversationWithTurns, ApplicationError> {
         let _work = self.inner.hold_work();
         let ports = &self.inner.ports;
         let conversation = self.inner.require_conversation_here(conversation_id)?;
@@ -441,6 +470,7 @@ impl WorkService {
                 turn,
                 prompt: None,
                 answered_permission: None,
+                started_by,
             },
             Worker::Specialist(&member),
             &project,
@@ -509,6 +539,7 @@ impl WorkService {
                 turn,
                 prompt: None,
                 answered_permission: None,
+                started_by: StartedBy::Manager,
             },
             Worker::Specialist(&member),
             &project,
@@ -577,12 +608,16 @@ impl WorkService {
             } => {
                 if scope == PermissionScope::Task && conversation.task_id().is_none() {
                     return Err(DomainError::PermissionNotPossible {
-                        reason: "the conversation is not about a task; allow it once or always"
-                            .to_owned(),
+                        reason: "the conversation is not about a task; allow it once".to_owned(),
                     }
                     .into());
                 }
                 let rule = PermissionRule::new(kind, &text)?;
+                if rule.runs_commands()
+                    && let Some(no) = self.inner.no_commands_for(&member)?
+                {
+                    return Err(no.as_error().into());
+                }
                 request.allow(scope, rule, &note, answered)?;
             }
             PermissionReply::Refuse { note } => request.refuse(&note, answered)?,
@@ -597,6 +632,7 @@ impl WorkService {
                 turn,
                 prompt: None,
                 answered_permission: Some(request),
+                started_by: StartedBy::Manager,
             },
             Worker::Specialist(&member),
             &project,
@@ -649,6 +685,32 @@ impl WorkService {
         member_id: MemberId,
         message: &str,
     ) -> Result<ConversationWithTurns, ApplicationError> {
+        self.ask_as(member_id, message, StartedBy::Manager)
+    }
+
+    /// Opens a conversation in which a specialist answers the messages of
+    /// its teammates: the turn the coordinator gives a specialist that has
+    /// no conversation to answer them in (decision 0037). Like
+    /// [`Self::ask`], except that nobody asked for the turn, so it is given
+    /// no command, whatever was allowed (decision 0038).
+    ///
+    /// # Errors
+    ///
+    /// As [`Self::ask`].
+    pub fn ask_to_answer_teammates(
+        &self,
+        member_id: MemberId,
+        message: &str,
+    ) -> Result<ConversationWithTurns, ApplicationError> {
+        self.ask_as(member_id, message, StartedBy::Coordinator)
+    }
+
+    fn ask_as(
+        &self,
+        member_id: MemberId,
+        message: &str,
+        started_by: StartedBy,
+    ) -> Result<ConversationWithTurns, ApplicationError> {
         let _work = self.inner.hold_work();
         let ports = &self.inner.ports;
         let member = self.inner.require_member(member_id)?;
@@ -678,6 +740,7 @@ impl WorkService {
                 turn,
                 prompt: None,
                 answered_permission: None,
+                started_by,
             },
             Worker::Specialist(&member),
             &project,
@@ -833,6 +896,7 @@ impl WorkService {
             turn,
             prompt,
             answered_permission,
+            started_by,
         } = new_turn;
 
         let session = match conversation.session_id() {
@@ -879,13 +943,20 @@ impl WorkService {
                 kit = turn_kit_of(ports.kits.as_ref(), ports.shelf.as_ref(), member)?;
                 // What the manager allowed this specialist, for this turn
                 // (decision 0038): the standing permissions, those of the
-                // task, and the one the answer that starts it allows.
+                // task, and the one the answer that starts it allows. No
+                // command in a turn nobody asked for, next to a secret, or
+                // where no sandbox can hold it.
+                let no_commands = match started_by {
+                    StartedBy::Coordinator => Some(NoCommands::ForTeammates),
+                    StartedBy::Manager => self.inner.no_commands_for(member)?,
+                };
                 let about = TurnAbout {
                     project_id: project.id(),
                     member_id: member.id(),
                     task_id: conversation.task_id(),
                     turn_id: turn.id(),
                     computer: ports.this_computer,
+                    no_commands,
                 };
                 let mut requests = ports.permissions.requests_of_project(project.id())?;
                 requests.extend(answered_permission.iter().cloned());
@@ -1024,9 +1095,37 @@ struct NewTurn {
     /// turn: the request with what happened in the program since the worker
     /// last spoke, which its session did not see.
     prompt: Option<String>,
+    /// Who started the turn.
+    started_by: StartedBy,
+}
+
+/// Who started a turn, as far as its permissions go.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum StartedBy {
+    /// The manager: a brief, a message, an answer. Or the coordinator
+    /// starting or continuing work on a task, which the manager planned.
+    Manager,
+    /// The coordinator, to answer the messages of teammates. Nobody asked
+    /// for the turn, and nobody watches it, so it runs no command
+    /// (decision 0038).
+    Coordinator,
 }
 
 impl Inner {
+    /// Why a specialist can be given no command now, whatever the manager
+    /// allowed, if it can be given none: the program has no sandbox on this
+    /// computer, or the specialist has a connector handed a secret
+    /// (decision 0038).
+    fn no_commands_for(&self, member: &Member) -> Result<Option<NoCommands>, ApplicationError> {
+        if !self.ports.runtime.sandboxes_commands() {
+            return Ok(Some(NoCommands::NoSandbox));
+        }
+        if kit_names_a_secret(self.ports.kits.as_ref(), member)? {
+            return Ok(Some(NoCommands::SecretInReach));
+        }
+        Ok(None)
+    }
+
     /// Takes the lock on the work. A panic of another thread while it held
     /// the lock leaves nothing to repair: everything it guards is in
     /// storage.
@@ -1581,7 +1680,7 @@ pub enum PermissionReply {
         scope: PermissionScope,
         /// The kind of the rule.
         kind: PermissionKind,
-        /// The command, the prefix or the domain.
+        /// The command or the domain.
         text: String,
         /// What the manager adds in words. May be empty.
         note: String,
@@ -2154,9 +2253,10 @@ pub fn instructions_for(
         [
             "- On your own you cannot run commands and you cannot fetch anything from the \
              internet. If the task needs one, ask with the tool ask_permission for the narrowest \
-             thing that does the job (one command, the commands of one program and subcommand, \
-             or one web domain) and say why, then end your turn: the manager allows or refuses \
-             it, and the answer comes as your next message. Never work around a refusal.",
+             thing that does the job (one exact command, or one web domain) and say why, then \
+             end your turn: the manager allows or refuses it, and the answer comes as your next \
+             message. An allowed command runs in a sandbox that keeps it inside the folders of \
+             the project. Never work around a refusal.",
             "- Decide small things yourself, and write down what you decided. A decision that \
              changes what is built, what it costs or when it is ready is the manager's: do not \
              guess, but ask with the tool ask_manager (the question, why it matters, two to \
@@ -5024,15 +5124,15 @@ mod tests {
     }
 
     #[test]
-    fn allowed_always_every_later_turn_of_the_specialist_has_it_until_it_is_taken_back() {
+    fn allowed_for_the_task_every_later_turn_about_it_has_it_until_it_is_taken_back() {
         let workspace = workspace();
-        let (_, request) = workspace.asked_permission();
-        workspace.allow(&request, PermissionScope::Always);
+        let (conversation, request) = workspace.asked_permission();
+        workspace.allow(&request, PermissionScope::Task);
         workspace.play_whole_turn(1);
 
         workspace
             .work
-            .ask(workspace.engineer.id(), "Anything else?")
+            .reply(conversation.conversation.id(), "Run them again.")
             .unwrap();
         let later = workspace.ports.runtime.requests()[2].clone();
         assert_eq!(
@@ -5040,6 +5140,17 @@ mod tests {
             PermissionProfile::specialist().with_granted(&[echo_rule()])
         );
         workspace.play_whole_turn(2);
+
+        // A conversation that is not about the task does not have it.
+        workspace
+            .work
+            .ask(workspace.engineer.id(), "Anything else?")
+            .unwrap();
+        assert_eq!(
+            workspace.ports.runtime.requests()[3].permissions,
+            PermissionProfile::specialist()
+        );
+        workspace.play_whole_turn(3);
 
         PermissionService::new(
             workspace.ports.projects.clone(),
@@ -5050,10 +5161,207 @@ mod tests {
         .unwrap();
         workspace
             .work
-            .ask(workspace.engineer.id(), "And now?")
+            .reply(conversation.conversation.id(), "And now?")
             .unwrap();
-        let after = &workspace.ports.runtime.requests()[3];
+        let after = &workspace.ports.runtime.requests()[4];
         assert_eq!(after.permissions, PermissionProfile::specialist());
+    }
+
+    #[test]
+    fn a_command_is_never_allowed_always() {
+        let workspace = workspace();
+        let (_, request) = workspace.asked_permission();
+        let refused = workspace.work.answer_permission(
+            request.id(),
+            PermissionReply::Allow {
+                scope: PermissionScope::Always,
+                kind: PermissionKind::Command,
+                text: "echo hello".to_owned(),
+                note: String::new(),
+            },
+        );
+        assert!(matches!(
+            refused,
+            Err(ApplicationError::Rule(
+                DomainError::PermissionNotPossible { .. }
+            ))
+        ));
+        assert_eq!(workspace.ports.runtime.requests().len(), 1);
+        assert!(workspace.stored_request(&request).is_open());
+    }
+
+    #[test]
+    fn a_turn_the_coordinator_starts_for_teammates_gets_no_command() {
+        let workspace = workspace();
+        let (conversation, request) = workspace.asked_permission();
+        workspace.allow(&request, PermissionScope::Task);
+        workspace.play_whole_turn(1);
+
+        // The same conversation, about the same task: a turn the manager
+        // starts has the command, a turn the coordinator starts to answer
+        // teammates does not.
+        workspace
+            .work
+            .reply_to_teammates(conversation.conversation.id(), "Teammates asked you.")
+            .unwrap();
+        let for_teammates = &workspace.ports.runtime.requests()[2];
+        assert_eq!(for_teammates.permissions, PermissionProfile::specialist());
+        assert!(
+            !for_teammates
+                .extra_instructions
+                .as_deref()
+                .unwrap()
+                .contains("echo hello")
+        );
+        workspace.play_whole_turn(2);
+
+        workspace
+            .work
+            .ask_to_answer_teammates(workspace.engineer.id(), "Teammates asked you.")
+            .unwrap();
+        assert_eq!(
+            workspace.ports.runtime.requests()[3].permissions,
+            PermissionProfile::specialist()
+        );
+        workspace.play_whole_turn(3);
+
+        workspace
+            .work
+            .reply(conversation.conversation.id(), "Go on.")
+            .unwrap();
+        assert_eq!(
+            workspace.ports.runtime.requests()[4].permissions,
+            PermissionProfile::specialist().with_granted(&[echo_rule()])
+        );
+    }
+
+    /// Gives the engineer a connector that is handed a secret in an
+    /// environment variable.
+    fn give_a_connector_with_a_secret(workspace: &Workspace) {
+        use crate::kits::{KitChoice, KitService, NewConnector, NewConnectorStart};
+
+        let ports = &workspace.ports;
+        let kits = KitService::new(
+            ports.kits.clone(),
+            ports.shelf.clone(),
+            ports.projects.clone(),
+            ports.members.clone(),
+            ports.clock.clone(),
+        );
+        let connector = kits
+            .add_connector(
+                workspace.project.id(),
+                NewConnector {
+                    name: "parts".to_owned(),
+                    start: NewConnectorStart::Program {
+                        program: "parts-server".to_owned(),
+                        arguments: Vec::new(),
+                        variables: vec!["PARTS_TOKEN".to_owned()],
+                    },
+                    tools: vec!["search".to_owned()],
+                },
+            )
+            .unwrap();
+        kits.set_kit(
+            workspace.engineer.id(),
+            KitChoice {
+                skills: Vec::new(),
+                connectors: vec![(connector.id(), vec!["search".to_owned()])],
+            },
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn a_specialist_with_a_secret_in_reach_is_given_no_command() {
+        let workspace = workspace();
+        let (_, request) = workspace.asked_permission();
+        give_a_connector_with_a_secret(&workspace);
+
+        let refused = workspace.work.answer_permission(
+            request.id(),
+            PermissionReply::Allow {
+                scope: PermissionScope::Once,
+                kind: PermissionKind::Command,
+                text: "echo hello".to_owned(),
+                note: String::new(),
+            },
+        );
+        let Err(ApplicationError::Rule(DomainError::PermissionNotPossible { reason })) = refused
+        else {
+            panic!("{refused:?}");
+        };
+        assert_eq!(reason, NoCommands::SecretInReach.reason());
+        assert!(workspace.stored_request(&request).is_open());
+
+        // A permission for the task given before the connector grants
+        // nothing once the connector is there.
+    }
+
+    #[test]
+    fn a_permission_given_before_a_secret_came_in_reach_grants_nothing() {
+        let workspace = workspace();
+        let (conversation, request) = workspace.asked_permission();
+        workspace.allow(&request, PermissionScope::Task);
+        workspace.play_whole_turn(1);
+        give_a_connector_with_a_secret(&workspace);
+        workspace
+            .work
+            .reply(conversation.conversation.id(), "Again.")
+            .unwrap();
+        let after = &workspace.ports.runtime.requests()[2];
+        assert!(
+            !after
+                .permissions
+                .allowed_tools
+                .contains(&"Bash(echo hello)".to_owned())
+        );
+        assert_eq!(
+            after.permissions.built_in_tools,
+            PermissionProfile::specialist().built_in_tools
+        );
+    }
+
+    fn workspace_without_sandbox() -> Workspace {
+        let workspace = workspace();
+        workspace.ports.runtime.take_away_the_sandbox();
+        workspace
+    }
+
+    #[test]
+    fn without_a_sandbox_no_command_is_allowed_or_given() {
+        let workspace = workspace();
+        let (conversation, request) = workspace.asked_permission();
+        workspace.allow(&request, PermissionScope::Task);
+        workspace.play_whole_turn(1);
+        workspace.ports.runtime.take_away_the_sandbox();
+
+        workspace
+            .work
+            .reply(conversation.conversation.id(), "Again.")
+            .unwrap();
+        assert_eq!(
+            workspace.ports.runtime.requests()[2].permissions,
+            PermissionProfile::specialist()
+        );
+        workspace.play_whole_turn(2);
+
+        let other = workspace_without_sandbox();
+        let (_, asked) = other.asked_permission();
+        let refused = other.work.answer_permission(
+            asked.id(),
+            PermissionReply::Allow {
+                scope: PermissionScope::Once,
+                kind: PermissionKind::Command,
+                text: "echo hello".to_owned(),
+                note: String::new(),
+            },
+        );
+        let Err(ApplicationError::Rule(DomainError::PermissionNotPossible { reason })) = refused
+        else {
+            panic!("{refused:?}");
+        };
+        assert_eq!(reason, NoCommands::NoSandbox.reason());
     }
 
     #[test]
@@ -5102,8 +5410,8 @@ mod tests {
             request.id(),
             PermissionReply::Allow {
                 scope: PermissionScope::Once,
-                kind: PermissionKind::CommandPrefix,
-                text: "bash -c".to_owned(),
+                kind: PermissionKind::Command,
+                text: "echo hello > out.txt".to_owned(),
                 note: String::new(),
             },
         );
@@ -5123,7 +5431,7 @@ mod tests {
                 request.id(),
                 PermissionReply::Allow {
                     scope: PermissionScope::Task,
-                    kind: PermissionKind::CommandPrefix,
+                    kind: PermissionKind::Command,
                     text: "cargo test".to_owned(),
                     note: String::new(),
                 },
@@ -5133,7 +5441,7 @@ mod tests {
             workspace.ports.runtime.requests()[1]
                 .permissions
                 .allowed_tools
-                .contains(&"Bash(cargo test *)".to_owned())
+                .contains(&"Bash(cargo test)".to_owned())
         );
         // Answered once only.
         assert!(

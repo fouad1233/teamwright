@@ -3,13 +3,14 @@
 
 use std::sync::Arc;
 
-use rusqlite::{Row, Transaction, named_params};
+use rusqlite::{Connection, Row, Transaction, named_params};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use teamwright_application::{PermissionRepository, StorageError};
 use teamwright_domain::{
-    PermissionAnswer, PermissionDecision, PermissionKind, PermissionRequest, PermissionRequestId,
-    PermissionRequestSnapshot, PermissionRule, PermissionScope, ProjectId, SaidIn,
+    ComputerId, DomainError, PermissionAnswer, PermissionDecision, PermissionKind,
+    PermissionRequest, PermissionRequestId, PermissionRequestSnapshot, PermissionRule,
+    PermissionScope, ProjectId, SaidIn,
 };
 
 use crate::codec;
@@ -27,6 +28,11 @@ const ALLOWED: &str = "allowed";
 
 /// The decision of a refused request, as stored.
 const REFUSED: &str = "refused";
+
+/// The kind of a rule that was a prefix of commands, as stored for one day
+/// before prefixes were taken out (decision 0038, note of 21 November
+/// 2026). A request of that kind is not read back.
+const RETIRED_PREFIX: &str = "command_prefix";
 
 // The rows are updated in place, never replaced.
 const UPSERT_REQUEST: &str = "
@@ -151,10 +157,16 @@ impl RequestRecord {
 
     /// Rebuilds the request, checking the stored values against the rules:
     /// a rule that could never be allowed is not read back as allowed.
-    fn into_request(self) -> Result<PermissionRequest, DatabaseError> {
-        let broken = |reason| codec::damaged_record("permission request", &self.id, &reason);
-        let kind: PermissionKind = codec::parse(&self.kind)?;
-        let asked = PermissionRule::new(kind, &self.what).map_err(broken)?;
+    ///
+    /// A request whose rule can no longer be made, because it is a prefix
+    /// of commands or a command the stricter rules refuse, is not read back
+    /// at all: it grants nothing, and it is not shown. `answered_here` says
+    /// whether this computer's own log wrote the answer
+    /// ([`answered_here`]).
+    fn into_request(self, answered_here: bool) -> Result<Option<PermissionRequest>, DatabaseError> {
+        let Some(asked) = self.rule(&self.kind, &self.what)? else {
+            return Ok(None);
+        };
         let answer = match self.decision.as_deref() {
             None => None,
             Some(decision) => {
@@ -166,11 +178,10 @@ impl RequestRecord {
                             return Err(self.damaged("is allowed without saying what"));
                         };
                         let scope: PermissionScope = codec::parse(scope)?;
-                        let kind: PermissionKind = codec::parse(kind)?;
-                        PermissionDecision::Allowed {
-                            scope,
-                            rule: PermissionRule::new(kind, what).map_err(broken)?,
-                        }
+                        let Some(rule) = self.rule(kind, what)? else {
+                            return Ok(None);
+                        };
+                        PermissionDecision::Allowed { scope, rule }
                     }
                     REFUSED => PermissionDecision::Refused,
                     _ => return Err(self.damaged("has an unknown decision")),
@@ -191,23 +202,43 @@ impl RequestRecord {
                         .as_deref()
                         .map(codec::moment_from_text)
                         .transpose()?,
+                    answered_here,
                 })
             }
         };
-        Ok(PermissionRequest::restore(PermissionRequestSnapshot {
-            id: codec::parse(&self.id)?,
-            project_id: codec::parse(&self.project_id)?,
-            said_in: SaidIn {
-                member_id: codec::parse(&self.member_id)?,
-                conversation_id: codec::parse(&self.conversation_id)?,
-                turn_id: codec::parse(&self.turn_id)?,
+        Ok(Some(PermissionRequest::restore(
+            PermissionRequestSnapshot {
+                id: codec::parse(&self.id)?,
+                project_id: codec::parse(&self.project_id)?,
+                said_in: SaidIn {
+                    member_id: codec::parse(&self.member_id)?,
+                    conversation_id: codec::parse(&self.conversation_id)?,
+                    turn_id: codec::parse(&self.turn_id)?,
+                },
+                task_id: self.task_id.as_deref().map(codec::parse).transpose()?,
+                asked,
+                reason: self.reason.clone(),
+                asked_at: codec::moment_from_text(&self.asked_at)?,
+                answer,
             },
-            task_id: self.task_id.as_deref().map(codec::parse).transpose()?,
-            asked,
-            reason: self.reason.clone(),
-            asked_at: codec::moment_from_text(&self.asked_at)?,
-            answer,
-        }))
+        )))
+    }
+
+    /// A stored rule, or nothing if it can no longer be made.
+    fn rule(&self, kind: &str, what: &str) -> Result<Option<PermissionRule>, DatabaseError> {
+        if kind == RETIRED_PREFIX {
+            return Ok(None);
+        }
+        let kind: PermissionKind = codec::parse(kind)?;
+        match PermissionRule::new(kind, what) {
+            Ok(rule) => Ok(Some(rule)),
+            Err(DomainError::PermissionNotPossible { .. }) => Ok(None),
+            Err(broken) => Err(codec::damaged_record(
+                "permission request",
+                &self.id,
+                &broken,
+            )),
+        }
     }
 
     fn damaged(&self, what: &str) -> DatabaseError {
@@ -242,6 +273,7 @@ impl PermissionRepository for SqlitePermissionRepository {
         &self,
         project_id: ProjectId,
     ) -> Result<Vec<PermissionRequest>, StorageError> {
+        let this_computer = self.database.device_id();
         self.database.read(|connection| {
             let query = format!(
                 "SELECT {COLUMNS} FROM permission_requests WHERE project_id = :project_id
@@ -254,10 +286,12 @@ impl PermissionRepository for SqlitePermissionRepository {
                     RequestRecord::from_row,
                 )?
                 .collect::<Result<Vec<_>, _>>()?;
-            records
-                .into_iter()
-                .map(RequestRecord::into_request)
-                .collect()
+            let mut requests = Vec::with_capacity(records.len());
+            for record in records {
+                let here = answered_here(connection, &record.id, this_computer)?;
+                requests.extend(record.into_request(here)?);
+            }
+            Ok(requests)
         })
     }
 
@@ -265,6 +299,7 @@ impl PermissionRepository for SqlitePermissionRepository {
         &self,
         id: PermissionRequestId,
     ) -> Result<Option<PermissionRequest>, StorageError> {
+        let this_computer = self.database.device_id();
         self.database.read(|connection| {
             let query = format!("SELECT {COLUMNS} FROM permission_requests WHERE id = :id");
             let mut statement = connection.prepare(&query)?;
@@ -274,7 +309,11 @@ impl PermissionRepository for SqlitePermissionRepository {
                     RequestRecord::from_row,
                 )?
                 .collect::<Result<Vec<_>, _>>()?;
-            records.pop().map(RequestRecord::into_request).transpose()
+            let Some(record) = records.pop() else {
+                return Ok(None);
+            };
+            let here = answered_here(connection, &record.id, this_computer)?;
+            record.into_request(here)
         })
     }
 }
@@ -299,8 +338,57 @@ pub(crate) fn write_request_state(
     state: &Map<String, Value>,
 ) -> Result<(), DatabaseError> {
     let record: RequestRecord = codec::record_from_state("permission request", state)?;
-    let record = RequestRecord::of(&record.into_request()?);
-    write_request_row(transaction, &record)
+    // Whether it was answered here is not part of the row.
+    match record.into_request(false)? {
+        Some(request) => write_request_row(transaction, &RequestRecord::of(&request)),
+        // A rule that can no longer be made, written by a computer that
+        // still knew it, is not kept.
+        None => Ok(()),
+    }
+}
+
+/// Whether the answer to a request was written by this computer itself, as
+/// its own log of operations shows: every state of the request that
+/// carries an answer was made here. An answer is written once, by the
+/// computer the manager answered on; one that came through the sync folder
+/// was made by another computer, whatever computer it names. Anybody who
+/// can write in the sync folder can write such an answer, though never in
+/// the folder of this computer, which this computer does not read.
+fn answered_here(
+    connection: &Connection,
+    id: &str,
+    this_computer: ComputerId,
+) -> Result<bool, DatabaseError> {
+    let mut statement = connection.prepare(
+        "SELECT payload, device_id FROM operations
+         WHERE entity = :entity AND entity_id = :id AND payload IS NOT NULL
+           AND waiting IS NULL",
+    )?;
+    let states = statement
+        .query_map(
+            named_params! { ":entity": Entity::PermissionRequest.as_str(), ":id": id },
+            |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
+        )?
+        .collect::<Result<Vec<_>, _>>()?;
+    let here = this_computer.to_string();
+    let mut answered = false;
+    for (payload, computer) in states {
+        let state: Value = serde_json::from_str(&payload).map_err(|error| {
+            DatabaseError::Damaged(format!(
+                "a state of the permission request {id} cannot be read: {error}"
+            ))
+        })?;
+        if state
+            .get("decision")
+            .is_some_and(|decision| !decision.is_null())
+        {
+            if computer != here {
+                return Ok(false);
+            }
+            answered = true;
+        }
+    }
+    Ok(answered)
 }
 
 /// Writes the row of a request.

@@ -4455,9 +4455,9 @@ pub struct PermissionRequestDto {
     turn_id: String,
     /// The task the conversation is about, or null.
     task_id: Option<String>,
-    /// "command", "command_prefix" or "web_domain".
+    /// "command" or "web_domain".
     kind: &'static str,
-    /// The command, the prefix or the domain.
+    /// The command or the domain.
     what: String,
     reason: String,
     asked_at: String,
@@ -4479,7 +4479,8 @@ pub struct PermissionAnswerDto {
     note: String,
     answered_at: String,
     /// Whether it was answered on this computer, the only one where an
-    /// allowed permission holds.
+    /// allowed permission holds: the answer says so, and this computer's own
+    /// log wrote it. An answer that came through the sync folder is not.
     on_this_computer: bool,
     /// When an allowed permission was taken back, or null.
     withdrawn_at: Option<String>,
@@ -4521,7 +4522,7 @@ impl PermissionRequestDto {
                     what: allowed.map(|(_, rule)| rule.text().to_owned()),
                     note: answer.note.clone(),
                     answered_at: moment_to_text(answer.at),
-                    on_this_computer: answer.computer == this_computer,
+                    on_this_computer: answer.given_on(this_computer),
                     withdrawn_at: answer.withdrawn_at.map(moment_to_text),
                 }
             }),
@@ -4540,9 +4541,9 @@ pub enum PermissionAnswerInput {
     Allow {
         /// "once", "task" or "always".
         scope: String,
-        /// "command", "command_prefix" or "web_domain".
+        /// "command" or "web_domain".
         kind: String,
-        /// The command, the prefix or the domain.
+        /// The command or the domain.
         what: String,
         /// Words of the manager's. May be empty.
         #[serde(default)]
@@ -4588,14 +4589,14 @@ mod permission_tests {
     #[test]
     fn an_answer_to_a_permission_request_is_read_from_the_interface() {
         let allow: PermissionAnswerInput = serde_json::from_value(serde_json::json!({
-            "decision": "allow", "scope": "task", "kind": "command_prefix", "what": "cargo test"
+            "decision": "allow", "scope": "task", "kind": "command", "what": "cargo test"
         }))
         .unwrap();
         assert_eq!(
             allow.into_reply().unwrap(),
             teamwright_application::PermissionReply::Allow {
                 scope: teamwright_domain::PermissionScope::Task,
-                kind: teamwright_domain::PermissionKind::CommandPrefix,
+                kind: teamwright_domain::PermissionKind::Command,
                 text: "cargo test".to_owned(),
                 note: String::new(),
             }
@@ -4614,5 +4615,10 @@ mod permission_tests {
         }))
         .unwrap();
         assert!(anything.into_reply().is_err());
+        let prefix: PermissionAnswerInput = serde_json::from_value(serde_json::json!({
+            "decision": "allow", "scope": "task", "kind": "command_prefix", "what": "npm run"
+        }))
+        .unwrap();
+        assert!(prefix.into_reply().is_err());
     }
 }

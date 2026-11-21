@@ -596,11 +596,11 @@ mod tests {
     }
 
     #[test]
-    fn a_turn_allowed_a_prefix_and_a_domain_gets_both_rules_and_both_tools() {
+    fn a_turn_allowed_a_command_and_a_domain_gets_both_rules_and_both_tools() {
         let arguments = text(
             &turn_arguments(
                 &granted(&[
-                    (PermissionKind::CommandPrefix, "cargo test"),
+                    (PermissionKind::Command, "cargo test"),
                     (PermissionKind::WebDomain, "docs.rs"),
                 ]),
                 &[],
@@ -625,7 +625,7 @@ mod tests {
                 "Read",
                 "Glob",
                 "Grep",
-                "Bash(cargo test *)",
+                "Bash(cargo test)",
                 "WebFetch(domain:docs.rs)"
             ]
         );
@@ -664,7 +664,7 @@ mod tests {
     fn no_granted_turn_can_approve_everything_or_leave_its_folder() {
         for rules in [
             vec![(PermissionKind::Command, "echo hello")],
-            vec![(PermissionKind::CommandPrefix, "npm run")],
+            vec![(PermissionKind::Command, "npm run build")],
             vec![(PermissionKind::WebDomain, "*.example.com")],
         ] {
             let arguments = text(&turn_arguments(&granted(&rules), &[], None).unwrap());

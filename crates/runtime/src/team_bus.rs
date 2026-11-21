@@ -186,13 +186,12 @@ const ASK_MANAGER_DESCRIPTION: &str = "Ask the manager of the project to decide.
 
 /// What the tool `ask_permission` tells the model it is for.
 const ASK_PERMISSION_DESCRIPTION: &str = "Ask the manager for permission to do something you \
-     may not do on your own: run one command (such as \"npm test\"), run the commands that \
-     start with a program and its subcommand (such as \"cargo test\"), or fetch web pages from \
-     one domain (such as \"docs.rs\"). Ask for the narrowest thing that does the job, and say \
-     why. A command runs in the folder of the project: it cannot be joined to another, \
-     redirect its output, use variables or name paths outside the folder. Change files with \
-     your file tools, not with commands. After calling it, end your turn: the answer comes as \
-     your next message, and what is allowed can then be used.";
+     may not do on your own: run one exact command (such as \"npm test\"), or fetch web pages \
+     from one domain (such as \"docs.rs\"). Ask for the narrowest thing that does the job, and \
+     say why. A command runs in the folder of the project, in a sandbox: it cannot be joined to \
+     another, quote, redirect its output, use variables or name paths outside the folder. \
+     Change files with your file tools, not with commands. After calling it, end your turn: the \
+     answer comes as your next message, and what is allowed can then be used.";
 
 /// What the tool `interview` tells the model it is for.
 const INTERVIEW_DESCRIPTION: &str = "Ask the manager what you need to know before you can \
@@ -1031,7 +1030,7 @@ pub fn fact_from(arguments: &Value) -> Result<RememberedFact, String> {
 }
 
 /// Reads and checks the arguments of a call of `ask_permission`: a kind, the
-/// command, prefix or domain in "what", and a reason, checked by the rules
+/// command or domain in "what", and a reason, checked by the rules
 /// of a permission (decision 0038), so that a request the manager sees can
 /// always be allowed exactly as it reads.
 ///
@@ -1049,7 +1048,7 @@ pub fn permission_from(arguments: &Value) -> Result<PermissionAsk, String> {
     let kind = optional_text(arguments, "kind")?.unwrap_or_default();
     let kind: PermissionKind = kind
         .parse()
-        .map_err(|_| "\"kind\" is \"command\", \"command_prefix\" or \"web_domain\".".to_owned())?;
+        .map_err(|_| "\"kind\" is \"command\" or \"web_domain\".".to_owned())?;
     let what = optional_text(arguments, "what")?.unwrap_or_default();
     let rule = PermissionRule::new(kind, &what)
         .map_err(|problem| format!("This cannot be asked: {problem}."))?;
@@ -1388,15 +1387,14 @@ fn ask_permission_tool() -> Value {
             "properties": {
                 "kind": {
                     "type": "string",
-                    "enum": ["command", "command_prefix", "web_domain"],
-                    "description": "One exact command, the commands that start with a program \
-                                    and its subcommand, or a web domain."
+                    "enum": ["command", "web_domain"],
+                    "description": "One exact command, or a web domain."
                 },
                 "what": {
                     "type": "string",
                     "maxLength": PermissionRule::MAX_LENGTH,
-                    "description": "The command line, such as \"npm test\"; the prefix, such \
-                                    as \"cargo test\"; or the domain, such as \"docs.rs\"."
+                    "description": "The command line, such as \"npm test\", or the domain, \
+                                    such as \"docs.rs\"."
                 },
                 "reason": {
                     "type": "string",
@@ -1845,7 +1843,8 @@ mod tests {
             json!({ "kind": "anything", "what": "echo hello", "reason": "Why not." }),
             json!({ "kind": "command", "what": "echo hello", "reason": " " }),
             json!({ "kind": "command", "what": "npm test && rm -rf .", "reason": "Tests." }),
-            json!({ "kind": "command_prefix", "what": "bash -c", "reason": "Scripts." }),
+            json!({ "kind": "command_prefix", "what": "npm run", "reason": "Scripts." }),
+            json!({ "kind": "command", "what": "\"claude\" -p x", "reason": "Quotes." }),
             json!({ "kind": "command", "what": "claude config set", "reason": "Settings." }),
             json!({ "kind": "web_domain", "what": "localhost", "reason": "The server." }),
             json!("echo hello"),

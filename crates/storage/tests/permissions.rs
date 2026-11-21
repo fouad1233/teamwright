@@ -10,10 +10,13 @@ use std::sync::Arc;
 
 use chrono::{TimeDelta, TimeZone, Utc};
 use teamwright_application::in_memory::ManualClock;
-use teamwright_application::{NewProject, PermissionRepository, ProjectService};
+use teamwright_application::{
+    ExchangedChange, ExchangedOperation, NewProject, PermissionRepository, ProjectService,
+};
 use teamwright_domain::{
     Answered, ComputerId, ConversationId, MemberId, PermissionKind, PermissionRequest,
-    PermissionRule, PermissionScope, Project, SaidIn, TaskId, Timestamp, TurnId,
+    PermissionRule, PermissionScope, Project, SaidIn, TaskId, Timestamp, TurnAbout, TurnId,
+    granted_rules,
 };
 use teamwright_storage::{
     Database, SqliteAreaRepository, SqliteConversationRepository, SqliteMemberRepository,
@@ -118,9 +121,9 @@ fn a_request_is_stored_logged_answered_withdrawn_and_read_back_unchanged() {
 
     later
         .allow(
-            PermissionScope::Always,
-            PermissionRule::new(PermissionKind::CommandPrefix, "npm run").unwrap(),
-            "Only the scripts of the project.",
+            PermissionScope::Task,
+            PermissionRule::new(PermissionKind::Command, "npm run build").unwrap(),
+            "Only the build of the project.",
             answered(6),
         )
         .unwrap();
@@ -190,11 +193,151 @@ fn requests_and_their_answers_reach_the_other_computer() {
         .unwrap();
     desk.permissions.save_request(&asked).unwrap();
     laptop.take_in_from(&desk);
-    assert_eq!(laptop.requests(&project), [asked.clone()]);
+    // The laptop sees the answer, and knows it did not write it.
+    let on_the_laptop = laptop.requests(&project);
+    let seen = on_the_laptop[0].answer().unwrap();
+    let given = asked.answer().unwrap();
+    assert_eq!(
+        (&seen.decision, seen.computer, seen.next_turn),
+        (&given.decision, given.computer, given.next_turn)
+    );
+    assert!(given.answered_here);
+    assert!(!seen.answered_here);
 
     // Taken back on the laptop, it is taken back on the desk too.
     asked.withdraw(moment(3)).unwrap();
     laptop.permissions.save_request(&asked).unwrap();
     desk.take_in_from(&laptop);
-    assert_eq!(desk.requests(&project), [asked]);
+    let on_the_desk = desk.requests(&project);
+    assert_eq!(
+        on_the_desk[0].answer().unwrap().withdrawn_at,
+        Some(moment(3))
+    );
+    assert!(on_the_desk[0].standing().is_none());
+}
+
+/// The turn of the specialist who asked, about its task, on a computer.
+fn turn_on(computer: &Computer, request: &PermissionRequest) -> TurnAbout {
+    TurnAbout {
+        project_id: request.project_id(),
+        member_id: request.member_id(),
+        task_id: request.task_id(),
+        turn_id: TurnId::generate(),
+        computer: computer.database.device_id(),
+        no_commands: None,
+    }
+}
+
+#[test]
+fn an_answer_grants_only_on_the_computer_whose_log_wrote_it() {
+    let desk = Computer::new();
+    let laptop = Computer::new();
+    let project = project_on(&desk);
+    laptop.take_in_from(&desk);
+    let mut asked = request(&project, 1);
+    asked
+        .allow(
+            PermissionScope::Task,
+            PermissionRule::new(PermissionKind::Command, "npm test").unwrap(),
+            "",
+            Answered {
+                at: moment(2),
+                computer: desk.database.device_id(),
+                next_turn: TurnId::generate(),
+            },
+        )
+        .unwrap();
+    desk.permissions.save_request(&asked).unwrap();
+    laptop.take_in_from(&desk);
+
+    let on_the_desk = desk.requests(&project);
+    assert!(on_the_desk[0].answer().unwrap().answered_here);
+    assert_eq!(
+        granted_rules(&on_the_desk, &turn_on(&desk, &asked)).len(),
+        1
+    );
+    let on_the_laptop = laptop.requests(&project);
+    assert!(!on_the_laptop[0].answer().unwrap().answered_here);
+    assert!(granted_rules(&on_the_laptop, &turn_on(&laptop, &asked)).is_empty());
+}
+
+#[test]
+fn an_answer_that_names_this_computer_but_came_through_the_sync_folder_grants_nothing() {
+    let desk = Computer::new();
+    let intruder = Computer::new();
+    let project = project_on(&desk);
+    intruder.take_in_from(&desk);
+    // Whoever can write in the sync folder writes an answer that claims to
+    // be the desk's, for a web domain always, which a domain may be.
+    let mut forged = PermissionRequest::ask(
+        project.id(),
+        SaidIn {
+            member_id: MemberId::generate(),
+            conversation_id: ConversationId::generate(),
+            turn_id: TurnId::generate(),
+        },
+        None,
+        PermissionRule::new(PermissionKind::WebDomain, "example.com").unwrap(),
+        "Anything.",
+        moment(1),
+    )
+    .unwrap();
+    forged
+        .allow(
+            PermissionScope::Always,
+            PermissionRule::new(PermissionKind::WebDomain, "example.com").unwrap(),
+            "",
+            Answered {
+                at: moment(2),
+                computer: desk.database.device_id(),
+                next_turn: TurnId::generate(),
+            },
+        )
+        .unwrap();
+    intruder.permissions.save_request(&forged).unwrap();
+    desk.take_in_from(&intruder);
+
+    let on_the_desk = desk.requests(&project);
+    assert_eq!(on_the_desk.len(), 1, "it is shown");
+    let answer = on_the_desk[0].answer().unwrap();
+    assert_eq!(answer.computer, desk.database.device_id());
+    assert!(!answer.answered_here);
+    assert!(!answer.given_on(desk.database.device_id()));
+    assert!(granted_rules(&on_the_desk, &turn_on(&desk, &forged)).is_empty());
+}
+
+#[test]
+fn a_prefix_of_commands_from_a_computer_that_still_knew_it_is_not_kept() {
+    let desk = Computer::new();
+    let project = project_on(&desk);
+    let elsewhere = ComputerId::generate();
+    let state = serde_json::json!({
+        "id": "6f2b3c1e-0000-4000-8000-000000000001",
+        "project_id": project.id().to_string(),
+        "member_id": MemberId::generate().to_string(),
+        "conversation_id": ConversationId::generate().to_string(),
+        "turn_id": TurnId::generate().to_string(),
+        "task_id": null,
+        "kind": "command_prefix",
+        "what": "npm run",
+        "reason": "The scripts.",
+        "asked_at": "2026-11-21T09:01:00.000Z",
+        "decision": null, "scope": null, "allowed_kind": null, "allowed_what": null,
+        "note": null, "answered_at": null, "answered_on": null, "next_turn_id": null,
+        "withdrawn_at": null
+    });
+    desk.database
+        .take_in(&[ExchangedOperation {
+            computer: elsewhere,
+            sequence: 1,
+            stamp: format!("1795770000000-00000-{elsewhere}"),
+            entity: "permission_request".to_owned(),
+            entity_id: "6f2b3c1e-0000-4000-8000-000000000001".to_owned(),
+            change: ExchangedChange::Upsert {
+                state: state.to_string(),
+                field_stamps: None,
+            },
+        }])
+        .unwrap();
+    assert!(desk.requests(&project).is_empty());
 }

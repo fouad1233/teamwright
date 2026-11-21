@@ -952,6 +952,9 @@ pub struct ScriptedRuntime {
     refusal: Mutex<Option<AgentRuntimeError>>,
     turns: Mutex<Vec<ScriptedTurn>>,
     opened: Mutex<Vec<(SessionId, PathBuf)>>,
+    /// Whether the runtime pretends to be on a computer without a sandbox
+    /// for commands, as on Windows.
+    without_sandbox: AtomicBool,
 }
 
 /// A turn the scripted runtime has started.
@@ -987,7 +990,14 @@ impl ScriptedRuntime {
             refusal: Mutex::new(None),
             turns: Mutex::new(Vec::new()),
             opened: Mutex::new(Vec::new()),
+            without_sandbox: AtomicBool::new(false),
         }
+    }
+
+    /// Makes the runtime pretend to be on a computer without a sandbox for
+    /// commands, as on Windows.
+    pub fn take_away_the_sandbox(&self) {
+        self.without_sandbox.store(true, Ordering::SeqCst);
     }
 
     /// Decides what the runtime says about the installed program.
@@ -1077,6 +1087,10 @@ impl AgentRuntime for ScriptedRuntime {
     ) -> Result<(), AgentRuntimeError> {
         lock(&self.opened).push((session.clone(), working_folder.to_path_buf()));
         Ok(())
+    }
+
+    fn sandboxes_commands(&self) -> bool {
+        !self.without_sandbox.load(Ordering::SeqCst)
     }
 }
 

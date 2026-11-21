@@ -457,8 +457,10 @@ impl CoordinatorService {
 
         for wake in &plan.wakes {
             let started = match gathered.conversation_for_answers(wake.member_id, ports) {
-                Some(conversation) => ports.work.reply(conversation, WAKE_REQUEST),
-                None => ports.work.ask(wake.member_id, WAKE_REQUEST),
+                Some(conversation) => ports.work.reply_to_teammates(conversation, WAKE_REQUEST),
+                None => ports
+                    .work
+                    .ask_to_answer_teammates(wake.member_id, WAKE_REQUEST),
             };
             let text = match started {
                 Ok(_) => words::woke(members, wake.member_id, &wake.asked_by),

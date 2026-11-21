@@ -22,8 +22,8 @@ use teamwright_domain::{
 };
 
 use super::{
-    ConversationWithTurns, NewTurn, REFERENCES_FOLDER, WorkService, Worker, open_interview_of,
-    open_proposal_of, reference_of,
+    ConversationWithTurns, NewTurn, REFERENCES_FOLDER, StartedBy, WorkService, Worker,
+    open_interview_of, open_proposal_of, reference_of,
 };
 use crate::areas::first_area_of;
 use crate::digests::newest_kept_first;
@@ -215,6 +215,7 @@ impl WorkService {
                 turn,
                 prompt,
                 answered_permission: None,
+                started_by: StartedBy::Manager,
             },
             Worker::Advisor,
             &project,
@@ -276,6 +277,7 @@ impl WorkService {
                 turn,
                 prompt: None,
                 answered_permission: None,
+                started_by: StartedBy::Manager,
             },
             Worker::Advisor,
             &project,
@@ -544,6 +546,7 @@ impl WorkService {
                 turn,
                 prompt,
                 answered_permission: None,
+                started_by: StartedBy::Manager,
             },
             Worker::Advisor,
             &project,

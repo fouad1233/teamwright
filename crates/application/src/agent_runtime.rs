@@ -71,6 +71,14 @@ pub trait AgentRuntime: Send + Sync {
         session: &SessionId,
         working_folder: &Path,
     ) -> Result<(), AgentRuntimeError>;
+
+    /// Whether the program can run the commands of a turn in a sandbox on
+    /// this computer. A command is allowed only where it can (decision
+    /// 0038). Claude Code has a sandbox on macOS, Linux and WSL2, and none
+    /// on Windows.
+    fn sandboxes_commands(&self) -> bool {
+        !cfg!(windows)
+    }
 }
 
 /// A turn that has been started and may still be running.
@@ -1174,9 +1182,9 @@ mod tests {
     }
 
     #[test]
-    fn a_granted_prefix_is_a_rule_with_a_trailing_wildcard() {
+    fn two_granted_commands_give_the_shell_once_and_each_exact_rule() {
         let granted = PermissionProfile::specialist().with_granted(&[
-            rule(PermissionKind::CommandPrefix, "cargo test"),
+            rule(PermissionKind::Command, "cargo test"),
             rule(PermissionKind::Command, "npm test"),
         ]);
         let shells = granted
@@ -1190,9 +1198,15 @@ mod tests {
         assert!(
             granted
                 .allowed_tools
-                .contains(&"Bash(cargo test *)".to_owned())
+                .contains(&"Bash(cargo test)".to_owned())
         );
         assert!(granted.allowed_tools.contains(&"Bash(npm test)".to_owned()));
+        assert!(
+            !granted
+                .allowed_tools
+                .iter()
+                .any(|rule| rule.ends_with("*)"))
+        );
     }
 
     #[test]
