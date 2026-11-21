@@ -2,7 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useMemo } from 'react';
 
 import { useBackend } from '@/shared/api/BackendProvider';
-import type { Id, View, ViewFilter, ViewKind } from '@/shared/api/types';
+import type { Grouping, Id, View, ViewFilter, ViewKind } from '@/shared/api/types';
 import { describeFailure, useNotifier } from '@/shared/ui/Toast';
 
 import { withMovedView, withViewContent } from './viewModel';
@@ -86,6 +86,8 @@ export interface ViewCommands {
   /** Renames a view. Resolves to whether it was renamed. */
   rename(viewId: Id, name: string): Promise<boolean>;
   setFilter(viewId: Id, filter: ViewFilter): Promise<void>;
+  /** Changes what a board or a list groups its tasks by. */
+  setGrouping(viewId: Id, grouping: Grouping): Promise<void>;
   /** Moves a view to a place among the others. The move shows at once. */
   move(viewId: Id, index: number): Promise<void>;
   /** Removes a view. Resolves to whether it was removed. */
@@ -118,6 +120,9 @@ export function useViewCommands(projectId: Id): ViewCommands {
         (await inPlace(() => backend.renameView(viewId, name))) !== undefined,
       setFilter: async (viewId, filter) => {
         await inPlace(() => backend.setViewFilter(viewId, filter));
+      },
+      setGrouping: async (viewId, grouping) => {
+        await inPlace(() => backend.setViewGrouping(viewId, grouping));
       },
       move: async (viewId, index) => {
         // A tab that was dragged must not jump back while the backend answers.

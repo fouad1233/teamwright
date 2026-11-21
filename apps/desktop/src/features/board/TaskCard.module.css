@@ -317,6 +317,17 @@
   height: 1.4em;
 }
 
+/* The status of a card in a lane that is not the lane of its status: its
+   mark and its name, one of the notes of the facts line. A long name is cut. */
+.statusShown {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--ink-soft);
+  text-overflow: ellipsis;
+}
+
 /* The facts of a task, set small on one line like the notes on a drawing. */
 .facts {
   display: flex;

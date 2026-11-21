@@ -1,0 +1,20 @@
+/* A person at the head of a group: their picture, then their name. */
+.label {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The group of what has none: no area, no tag, no sprint. It reads as the
+   rest of the sheet, a step quieter than the named groups. */
+.quiet {
+  color: var(--ink-soft);
+}

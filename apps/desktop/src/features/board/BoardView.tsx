@@ -20,6 +20,7 @@ import { useNavigation } from '@/app/navigation';
 import type { Assignee, Id, Project, Task } from '@/shared/api/types';
 import { durationToken, easingToken, usePrefersReducedMotion } from '@/shared/ui/motion';
 
+import { StatusLabel } from '../tasks/TaskBadges';
 import { useSubtaskFolds } from '../tasks/subtaskFolds';
 import { indexById, indexSubtasks, unfinishedBlockers } from '../tasks/taskModel';
 import { useTaskCommands } from '../tasks/taskQueries';
@@ -48,7 +49,7 @@ const NO_ARRIVALS: ReadonlySet<Id> = new Set();
  * With motion turned down nothing travels: the copy fades where it was let
  * go, and the card is in its place.
  */
-function putDown(reducesMotion: boolean): DropAnimation {
+export function putDown(reducesMotion: boolean): DropAnimation {
   const sideEffects = defaultDropAnimationSideEffects({
     // The card in the lane stays hidden until the copy has landed on it.
     styles: { active: { opacity: '0' } },
@@ -165,6 +166,7 @@ export function BoardView({
     subtasksByParent,
     folds,
     arrivals,
+    showsStatus: false,
     onOpenTask: navigation.openTask,
   };
   const stored = useMemo(() => arrangementOf(project.statuses, tasks), [project.statuses, tasks]);
@@ -244,7 +246,9 @@ export function BoardView({
           <BoardLane
             key={status.id}
             board={board}
-            status={status}
+            id={status.id}
+            name={status.name}
+            label={<StatusLabel status={status} />}
             load={loads?.find((load) => load.statusId === status.id)}
             tasks={(arrangement.get(status.id) ?? [])
               .flatMap((taskId) => tasksById.get(taskId) ?? [])

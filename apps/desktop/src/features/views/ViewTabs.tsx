@@ -139,6 +139,9 @@ export function ViewTabs({ views, shownView, shownPlace, commands }: ViewTabsPro
                       onFilter={(filter) => {
                         void commands.setFilter(view.id, filter);
                       }}
+                      onGroup={(grouping) => {
+                        void commands.setGrouping(view.id, grouping);
+                      }}
                       onMove={(target) => {
                         void commands.move(view.id, target);
                       }}

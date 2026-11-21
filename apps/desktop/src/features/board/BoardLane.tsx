@@ -1,10 +1,11 @@
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 
-import type { Status, StatusLoad, Task } from '@/shared/api/types';
+import type { ReactNode } from 'react';
+
+import type { StatusLoad, Task } from '@/shared/api/types';
 import { classNames } from '@/shared/lib/classNames';
 
-import { StatusLabel } from '../tasks/TaskBadges';
 import { TaskComposer } from '../tasks/TaskComposer';
 import styles from './BoardLane.module.css';
 import { laneLimit, type LaneLimit } from './boardModel';
@@ -12,31 +13,58 @@ import { SortableTaskCard, type BoardContents } from './TaskCard';
 
 interface BoardLaneProps {
   board: BoardContents;
-  status: Status;
+  /** What a drop on the lane is told: the status of the lane, or the key of another group. */
+  id: string;
+  /** The name of the lane in words, for a reader of the screen. */
+  name: string;
+  /** What stands at the head of the lane. */
+  label: ReactNode;
   /**
-   * The tasks of the status from top to bottom, without the ones that are
+   * The tasks of the lane from top to bottom, without the ones that are
    * part of another task: those are shown under their parent.
    */
   tasks: Task[];
-  /** How many tasks of the whole project stand in the status, against its limit. */
+  /**
+   * How many tasks of the whole project stand in the status of the lane,
+   * against its limit. Only a lane of a status has one.
+   */
   load?: StatusLoad;
-  /** Opens a task in this status. Resolves to whether it was opened. */
-  onCreateTask: (title: string) => Promise<boolean>;
+  /**
+   * Opens a task in this lane. Resolves to whether it was opened. A lane
+   * that cannot open a task of its own has none, and no line to add one.
+   */
+  onCreateTask?: (title: string) => Promise<boolean>;
+  /** Whether a card cannot be dropped on the lane. */
+  isDropDisabled?: boolean;
+  /**
+   * What the card of a task has in the lane to drag it by. A card that is
+   * in two lanes at once, for a task with two tags, needs one for each.
+   */
+  dragIdOf?: (task: Task) => string;
 }
 
-/** One status of the board: its name, its cards, and a line to add a task. */
-export function BoardLane({ board, status, tasks, load, onCreateTask }: BoardLaneProps) {
+/** One lane of the board: its head, its cards, and a line to add a task. */
+export function BoardLane({
+  board,
+  id,
+  name,
+  label,
+  tasks,
+  load,
+  onCreateTask,
+  isDropDisabled = false,
+  dragIdOf,
+}: BoardLaneProps) {
   // The whole list accepts drops, so a card can be dropped into an empty
-  // status or below the last card.
-  const { setNodeRef, isOver } = useDroppable({ id: status.id });
+  // lane or below the last card.
+  const { setNodeRef, isOver } = useDroppable({ id, disabled: isDropDisabled });
   const limit = laneLimit(load);
+  const dragIds = tasks.map((task) => dragIdOf?.(task) ?? task.id);
 
   return (
-    <section className={styles.lane} aria-label={status.name}>
+    <section className={styles.lane} aria-label={name}>
       <header className={styles.header} data-fill={limit?.fill}>
-        <span className={styles.name}>
-          <StatusLabel status={status} />
-        </span>
+        <span className={styles.name}>{label}</span>
         {limit ? (
           <LimitFigure limit={limit} />
         ) : (
@@ -45,15 +73,20 @@ export function BoardLane({ board, status, tasks, load, onCreateTask }: BoardLan
         {limit && <LimitGauge limit={limit} />}
       </header>
 
-      <SortableContext items={tasks.map((task) => task.id)} strategy={verticalListSortingStrategy}>
+      <SortableContext items={dragIds} strategy={verticalListSortingStrategy}>
         <ul ref={setNodeRef} className={classNames(styles.cards, isOver && styles.dropTarget)}>
-          {tasks.map((task) => (
-            <SortableTaskCard key={task.id} board={board} task={task} />
+          {tasks.map((task, place) => (
+            <SortableTaskCard
+              key={dragIds[place]}
+              board={board}
+              task={task}
+              dragId={dragIds[place]}
+            />
           ))}
         </ul>
       </SortableContext>
 
-      <TaskComposer onCreate={onCreateTask} />
+      {onCreateTask && <TaskComposer onCreate={onCreateTask} />}
     </section>
   );
 }

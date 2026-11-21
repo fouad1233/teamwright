@@ -11,6 +11,7 @@ import type { ComponentType } from 'react';
 
 import type { Assignee, Project, Task, View, ViewKind } from '@/shared/api/types';
 
+import { GroupedBoard } from '../board/GroupedBoard';
 import { CalendarView } from '../calendar/CalendarView';
 import { DashboardView } from '../dashboard/DashboardView';
 import { GanttView } from '../gantt/GanttView';
@@ -56,7 +57,21 @@ export interface Kind {
  * dropped between the shown ones then lands where it was dropped, and a card
  * still counts a task it waits for that the filter hides.
  */
-function FilteredBoard({ project, everyTask, shows, assigneeOfNewTasks }: KindProps) {
+function FilteredBoard({ view, project, everyTask, shows, assigneeOfNewTasks }: KindProps) {
+  // A board grouped by something other than status has a lane for each
+  // group. The sprint switch of the board of statuses is left out: a sprint
+  // is a way of grouping of its own.
+  if (view.grouping !== 'status') {
+    return (
+      <GroupedBoard
+        project={project}
+        view={view}
+        tasks={everyTask}
+        shows={shows}
+        assigneeOfNewTasks={assigneeOfNewTasks}
+      />
+    );
+  }
   return (
     <SprintBoard
       project={project}
@@ -72,7 +87,7 @@ const FIRST_KINDS: readonly Kind[] = [
   {
     kind: 'board',
     label: 'Board',
-    purpose: 'A lane for every status',
+    purpose: 'A lane for every status, or another group',
     icon: SquareKanban,
     group: 'tasks',
     order: 10,
@@ -90,7 +105,7 @@ const FIRST_KINDS: readonly Kind[] = [
   {
     kind: 'list',
     label: 'List',
-    purpose: 'Every task in one table',
+    purpose: 'Every task in one table, in sections',
     icon: Rows3,
     group: 'tasks',
     order: 15,

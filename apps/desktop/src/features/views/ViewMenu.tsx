@@ -3,6 +3,7 @@ import {
   ArrowRight,
   Check,
   ChevronRight,
+  Layers,
   ListFilter,
   Pencil,
   Trash2,
@@ -11,7 +12,7 @@ import {
 import { DropdownMenu } from 'radix-ui';
 import { useRef, type ReactElement } from 'react';
 
-import type { View, ViewAssignee, ViewFilter } from '@/shared/api/types';
+import type { Grouping, View, ViewAssignee, ViewFilter } from '@/shared/api/types';
 import { classNames } from '@/shared/lib/classNames';
 import menuStyles from '@/shared/ui/Menu.module.css';
 
@@ -19,6 +20,7 @@ import { TagChip } from '../tags/TagChip';
 import { useTags } from '../tags/tagQueries';
 import { AssigneeAvatar } from '../team/Assignee';
 import { useTeamMembers } from '../team/TeamContext';
+import { GROUPINGS, isGroupable } from './groupModel';
 import { isFilterable } from './viewModel';
 import styles from './ViewTabs.module.css';
 
@@ -32,6 +34,7 @@ interface ViewMenuProps {
   onOpenChange: (open: boolean) => void;
   onRename: () => void;
   onFilter: (filter: ViewFilter) => void;
+  onGroup: (grouping: Grouping) => void;
   onMove: (index: number) => void;
   onRemove: () => void;
   /** The control that opens the menu. */
@@ -39,8 +42,9 @@ interface ViewMenuProps {
 }
 
 /**
- * The menu of the tab of a view: rename it, set its filter, move it left or
- * right, remove it. The last view of a project cannot be removed.
+ * The menu of the tab of a view: rename it, set its filter, choose what it
+ * groups its tasks by (a board and a list), move it left or right, remove
+ * it. The last view of a project cannot be removed.
  */
 export function ViewMenu({
   view,
@@ -50,6 +54,7 @@ export function ViewMenu({
   onOpenChange,
   onRename,
   onFilter,
+  onGroup,
   onMove,
   onRemove,
   children,
@@ -100,6 +105,47 @@ export function ViewMenu({
                   aria-label="Which tasks the view shows"
                 >
                   <FilterItems view={view} onFilter={onFilter} />
+                </DropdownMenu.SubContent>
+              </DropdownMenu.Portal>
+            </DropdownMenu.Sub>
+          )}
+          {isGroupable(view.kind) && (
+            <DropdownMenu.Sub>
+              <DropdownMenu.SubTrigger className={menuStyles.item}>
+                <span className={menuStyles.icon}>
+                  <Layers />
+                </span>
+                <span className={menuStyles.label}>Group by</span>
+                <span className={menuStyles.more}>
+                  <ChevronRight />
+                </span>
+              </DropdownMenu.SubTrigger>
+              <DropdownMenu.Portal>
+                <DropdownMenu.SubContent
+                  className={menuStyles.menu}
+                  sideOffset={2}
+                  aria-label="What the view groups its tasks by"
+                >
+                  <DropdownMenu.RadioGroup
+                    value={view.grouping}
+                    onValueChange={(chosen) => {
+                      onGroup(chosen as Grouping);
+                    }}
+                  >
+                    {GROUPINGS.map((choice) => (
+                      <DropdownMenu.RadioItem
+                        key={choice.grouping}
+                        value={choice.grouping}
+                        className={menuStyles.item}
+                      >
+                        <span className={styles.mark} />
+                        <span className={menuStyles.label}>{choice.label}</span>
+                        <DropdownMenu.ItemIndicator className={menuStyles.check}>
+                          <Check />
+                        </DropdownMenu.ItemIndicator>
+                      </DropdownMenu.RadioItem>
+                    ))}
+                  </DropdownMenu.RadioGroup>
                 </DropdownMenu.SubContent>
               </DropdownMenu.Portal>
             </DropdownMenu.Sub>

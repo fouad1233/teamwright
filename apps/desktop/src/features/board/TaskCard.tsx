@@ -13,7 +13,7 @@ import { TagChips } from '../tags/TagChip';
 import { tagsOf } from '../tags/tagModel';
 import { useTags } from '../tags/tagQueries';
 import { SubtaskFold } from '../tasks/SubtaskFold';
-import { PriorityFlag, StatusMark } from '../tasks/TaskBadges';
+import { PriorityFlag, StatusLabel, StatusMark } from '../tasks/TaskBadges';
 import type { SubtaskFolds } from '../tasks/subtaskFolds';
 import { statusOf, unfinishedBlockers } from '../tasks/taskModel';
 import { AssigneeAvatar } from '../team/Assignee';
@@ -31,6 +31,11 @@ export interface BoardContents {
   folds: SubtaskFolds;
   /** The tasks that have just come onto the board, whose cards arrive in their lane. */
   arrivals: ReadonlySet<Id>;
+  /**
+   * Whether a card says its own status. The lane says it when the board is
+   * grouped by status; grouped by anything else, the card has to.
+   */
+  showsStatus: boolean;
   onOpenTask: (taskId: Id) => void;
 }
 
@@ -58,6 +63,11 @@ interface TaskCardProps {
    * its status: a subtask stands under its parent, wherever that is.
    */
   status?: Status;
+  /**
+   * The status of the task, said on the facts line, for a card in a lane
+   * that is not the lane of its status.
+   */
+  statusShown?: Status;
   /** The subtasks of the task. A task that has some gets a row that folds them. */
   subtasks?: readonly Task[];
   areSubtasksShown?: boolean;
@@ -75,6 +85,7 @@ export function TaskCard({
   task,
   unfinishedBlockerCount,
   status,
+  statusShown,
   subtasks = NO_SUBTASKS,
   areSubtasksShown = false,
   onToggleSubtasks,
@@ -112,6 +123,11 @@ export function TaskCard({
 
         <div className={styles.facts}>
           <span className={styles.reference}>{taskReference(project, task)}</span>
+          {statusShown && (
+            <span className={styles.statusShown} title={`Status: ${statusShown.name}`}>
+              <StatusLabel status={statusShown} />
+            </span>
+          )}
           {waitsForManager && (
             <span className={styles.waitsForYou} title="A specialist waits for your decision">
               Waits for you
@@ -173,6 +189,7 @@ function cardOf(board: BoardContents, task: Task) {
   return {
     project: board.project,
     task,
+    statusShown: board.showsStatus ? statusOf(board.project, task) : undefined,
     unfinishedBlockerCount: unfinishedBlockers(task, board.tasksById).length,
     subtasks,
     areSubtasksShown: subtasks.length > 0 && board.folds.isOpen(task.id),
@@ -185,6 +202,8 @@ function cardOf(board: BoardContents, task: Task) {
 interface BoardCardProps {
   board: BoardContents;
   task: Task;
+  /** What the card is dragged by, if not the identifier of its task. */
+  dragId?: string;
 }
 
 /**
@@ -192,7 +211,7 @@ interface BoardCardProps {
  * keyboard, Space picks it up and drops it, the arrow keys move it, and
  * Enter opens the task. Its subtasks travel with it.
  */
-export function SortableTaskCard({ board, task }: BoardCardProps) {
+export function SortableTaskCard({ board, task, dragId }: BoardCardProps) {
   const {
     attributes,
     listeners,
@@ -201,7 +220,7 @@ export function SortableTaskCard({ board, task }: BoardCardProps) {
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: task.id });
+  } = useSortable({ id: dragId ?? task.id });
   const card = cardOf(board, task);
   const isArriving = board.arrivals.has(task.id) && !isDragging;
 
@@ -271,6 +290,7 @@ function SubtaskCard({ board, task }: BoardCardProps) {
     <li>
       <TaskCard
         {...card}
+        statusShown={undefined}
         status={statusOf(board.project, task)}
         face={{
           role: 'button',
