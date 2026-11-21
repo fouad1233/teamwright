@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest';
 import type { Status, Task } from '@/shared/api/types';
 
 import {
+  MOST_LIMIT_MARKS,
   arrangementOf,
+  laneLimit,
   locate,
   moveCard,
   newArrivals,
@@ -136,5 +138,43 @@ describe('newArrivals', () => {
     const tasks = [{ id: 'old', statusId: 'todo' }] as Task[];
 
     expect(newArrivals(new Set(['old']), tasks).size).toBe(0);
+  });
+});
+
+describe('laneLimit', () => {
+  it('says nothing about a status without a limit', () => {
+    expect(laneLimit(undefined)).toBeUndefined();
+    expect(laneLimit({ statusId: 'doing', count: 3, limit: null, fill: null })).toBeUndefined();
+  });
+
+  it('draws one mark for each task the limit allows', () => {
+    const shown = laneLimit({ statusId: 'doing', count: 2, limit: 3, fill: 'under' });
+
+    expect(shown?.figure).toBe('2/3');
+    expect(shown?.marks).toEqual([true, true, false]);
+    expect(shown?.words).toBe('2 tasks for a limit of 3, counted in the whole project');
+  });
+
+  it('says when a status is full and when it is over its limit', () => {
+    const full = laneLimit({ statusId: 'doing', count: 3, limit: 3, fill: 'at' });
+    const over = laneLimit({ statusId: 'doing', count: 5, limit: 3, fill: 'over' });
+
+    expect(full?.words).toBe('3 tasks, at the limit of 3, counted in the whole project');
+    expect(over?.figure).toBe('5/3');
+    expect(over?.fill).toBe('over');
+    expect(over?.marks).toEqual([true, true, true]);
+    expect(over?.words).toBe('5 tasks for a limit of 3: 2 over, counted in the whole project');
+  });
+
+  it('draws a large limit as one bar', () => {
+    const shown = laneLimit({
+      statusId: 'doing',
+      count: 10,
+      limit: MOST_LIMIT_MARKS + 8,
+      fill: 'under',
+    });
+
+    expect(shown?.marks).toBeNull();
+    expect(shown?.share).toBe(0.5);
   });
 });

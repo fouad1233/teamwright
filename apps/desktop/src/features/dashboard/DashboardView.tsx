@@ -6,6 +6,7 @@ import { today as todayWhereTheUserIs } from '@/shared/lib/format';
 
 import { reportVersionOf } from '../sprints/sprintModel';
 import { useSprintReport, useSprints } from '../sprints/sprintQueries';
+import { useStatusLoads } from '../projects/projectQueries';
 import { useTeamMembers } from '../team/TeamContext';
 import { useViews } from '../views/viewQueries';
 import { useConversationsOfProject, useUsageOfProject } from '../work/WorkContext';
@@ -85,6 +86,7 @@ function DashboardPage({ project, tasks, sprints, report }: DashboardPageProps) 
   const backlog = useViews(project.id).data?.find((view) => view.kind === 'backlog');
   // Today is read once when the view opens, like the rest of what it shows.
   const [today] = useState(() => todayWhereTheUserIs());
+  const loads = useStatusLoads(project).data ?? null;
 
   const { active, completed } = sprintsToShow(sprints ?? []);
   const activeReport = active && report?.sprintId === active.id ? report : null;
@@ -101,6 +103,7 @@ function DashboardPage({ project, tasks, sprints, report }: DashboardPageProps) 
     sprints,
     report: activeReport,
     today,
+    loads,
   });
   const atRisk = tasksAtRisk(project, tasks, today);
   const week = thisWeek(project, tasks, today);

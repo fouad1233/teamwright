@@ -10,6 +10,7 @@ import type {
   SprintReport,
   Status,
   StatusCategory,
+  StatusLoad,
   Task,
 } from '@/shared/api/types';
 import { calendarDateOfDay, dayNumberOf, mondayOf } from '@/shared/lib/days';
@@ -319,6 +320,11 @@ export interface StandingSources {
   /** The report of the running sprint, if there is one and it has come. */
   report: SprintReport | null;
   today: CalendarDate;
+  /**
+   * How full each status is against its limit, as the backend counted it,
+   * or nothing while it is loading.
+   */
+  loads?: readonly StatusLoad[] | null;
 }
 
 /**
@@ -328,12 +334,13 @@ export interface StandingSources {
  * say is left out.
  */
 export function standingInWords(sources: StandingSources): string[] {
-  const { project, tasks, members, conversations, sprints, report, today } = sources;
+  const { project, tasks, members, conversations, sprints, report, today, loads } = sources;
   const counts = countsOf(project, tasks, conversations, today);
   const sentences = [
     progressInWords(counts),
     atWorkInWords(whoIsAtWork(members, conversations)),
     counts.late === 0 ? null : lateCountInWords(counts.late),
+    overLimitInWords(project, loads ?? []),
     sprints === null ? null : sprintInWords(sprints, report, today),
     counts.waiting === 0 ? null : waitingInWords(counts.waiting),
   ];
@@ -380,6 +387,30 @@ export function atWorkInWords(names: readonly string[]): string | null {
 /** "1 task is late.", "2 tasks are late." */
 export function lateCountInWords(late: number): string {
   return `${count(late, 'task is', 'tasks are')} late.`;
+}
+
+/**
+ * The statuses over their work-in-progress limits, as the backend counted
+ * them: "In progress is over its limit, with 5 tasks for 4.", or "In
+ * progress and Review are over their limits." Nothing when none is.
+ */
+export function overLimitInWords(project: Project, loads: readonly StatusLoad[]): string | null {
+  const over = project.statuses.flatMap((status) => {
+    const load = loads.find((candidate) => candidate.statusId === status.id);
+    return load?.fill === 'over' && load.limit !== null
+      ? [{ name: status.name, count: load.count, limit: load.limit }]
+      : [];
+  });
+  const [first] = over;
+  if (first === undefined) {
+    return null;
+  }
+  if (over.length === 1) {
+    return `${first.name} is over its limit, with ${first.count.toString()} tasks for ${first.limit.toString()}.`;
+  }
+  const names = over.map((status) => status.name);
+  const last = names.pop() ?? '';
+  return `${names.join(', ')} and ${last} are over their limits.`;
 }
 
 /** "1 thing waits for you.", "3 things wait for you." */

@@ -110,3 +110,26 @@ export function isTheOnlyOneOfItsKind(statuses: readonly Status[], status: Statu
   const isRequired = status.category === 'todo' || status.category === 'done';
   return isRequired && statuses.filter((other) => other.category === status.category).length === 1;
 }
+
+/**
+ * Tells whether a status of a category can carry a work-in-progress limit.
+ * The backend refuses a limit on a status in which tasks are done, where
+ * finished work only piles up (decision 0033); the dialog uses this to say
+ * so beforehand.
+ */
+export function canCarryLimit(category: StatusCategory): boolean {
+  return category !== 'done';
+}
+
+/**
+ * What the manager typed as a limit: a whole number, nothing for no limit,
+ * or `undefined` for text that is not a number at all. Whether the number
+ * is in range is the backend's to say.
+ */
+export function typedLimit(text: string): number | null | undefined {
+  const tidy = text.trim();
+  if (tidy === '') {
+    return null;
+  }
+  return /^\d+$/.test(tidy) ? Number(tidy) : undefined;
+}

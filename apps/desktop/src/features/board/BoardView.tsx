@@ -23,6 +23,7 @@ import { durationToken, easingToken, usePrefersReducedMotion } from '@/shared/ui
 import { useSubtaskFolds } from '../tasks/subtaskFolds';
 import { indexById, indexSubtasks, unfinishedBlockers } from '../tasks/taskModel';
 import { useTaskCommands } from '../tasks/taskQueries';
+import { useStatusLoads } from '../projects/projectQueries';
 import { BoardLane } from './BoardLane';
 import {
   arrangementOf,
@@ -154,6 +155,7 @@ export function BoardView({
   const reducesMotion = usePrefersReducedMotion();
   const dropAnimation = useMemo(() => putDown(reducesMotion), [reducesMotion]);
   const { arrivals, forget: forgetArrivals } = useArrivals(project.id, tasks);
+  const loads = useStatusLoads(project).data;
 
   const tasksById = useMemo(() => indexById(tasks), [tasks]);
   const subtasksByParent = useMemo(() => indexSubtasks(tasks), [tasks]);
@@ -243,6 +245,7 @@ export function BoardView({
             key={status.id}
             board={board}
             status={status}
+            load={loads?.find((load) => load.statusId === status.id)}
             tasks={(arrangement.get(status.id) ?? [])
               .flatMap((taskId) => tasksById.get(taskId) ?? [])
               .filter((task) => shows?.(task) ?? true)}

@@ -8,6 +8,8 @@ import {
   isTheOnlyOneOfItsKind,
   suggestedStatus,
   withMovedStatus,
+  canCarryLimit,
+  typedLimit,
 } from './workflowModel';
 
 const todo: Status = { id: 'todo', name: 'To do', category: 'todo', color: 'gray' };
@@ -97,5 +99,26 @@ describe('isTheOnlyOneOfItsKind', () => {
     const withBacklog = [{ ...todo, id: 'backlog', name: 'Backlog' }, ...workflow];
 
     expect(isTheOnlyOneOfItsKind(withBacklog, todo)).toBe(false);
+  });
+});
+
+describe('canCarryLimit', () => {
+  it('lets every status carry a limit except one in which tasks are done', () => {
+    expect(canCarryLimit('todo')).toBe(true);
+    expect(canCarryLimit('active')).toBe(true);
+    expect(canCarryLimit('review')).toBe(true);
+    expect(canCarryLimit('done')).toBe(false);
+  });
+});
+
+describe('typedLimit', () => {
+  it('reads a whole number, nothing as no limit, and anything else as not a number', () => {
+    expect(typedLimit(' 4 ')).toBe(4);
+    expect(typedLimit('0')).toBe(0);
+    expect(typedLimit('')).toBeNull();
+    expect(typedLimit('  ')).toBeNull();
+    expect(typedLimit('four')).toBeUndefined();
+    expect(typedLimit('2.5')).toBeUndefined();
+    expect(typedLimit('-1')).toBeUndefined();
   });
 });

@@ -1,11 +1,11 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useMemo } from 'react';
 
 import { useBackend } from '@/shared/api/BackendProvider';
 import type { Id, NewProject, Project, ProjectPlaces, StatusProperties } from '@/shared/api/types';
 import { describeFailure, useNotifier } from '@/shared/ui/Toast';
 
-import { tasksKey } from '../tasks/taskQueries';
+import { tasksKey, useTasks } from '../tasks/taskQueries';
 import { withMovedStatus } from './workflowModel';
 
 /** The name under which the list of projects is cached. */
@@ -48,6 +48,35 @@ export function useCreateProject(): (project: NewProject) => Promise<Project> {
   );
 }
 
+/** The templates a new project can start from. They ship with the program and never change. */
+export function useProjectTemplates() {
+  const backend = useBackend();
+  return useQuery({
+    queryKey: ['project-templates'] as const,
+    queryFn: () => backend.listProjectTemplates(),
+    staleTime: Infinity,
+  });
+}
+
+/**
+ * How many tasks stand in each status of a project, against its limit, as
+ * the backend counts them (decision 0033). It is asked for again whenever
+ * the tasks of the project have been loaded again or a limit has changed,
+ * and the last answer stays on screen meanwhile.
+ */
+export function useStatusLoads(project: Project) {
+  const backend = useBackend();
+  const tasksLoadedAt = useTasks(project.id).dataUpdatedAt;
+  const limits = project.statuses
+    .map((status) => `${status.id}:${String(status.limit ?? '')}`)
+    .join(',');
+  return useQuery({
+    queryKey: ['status-loads', project.id, tasksLoadedAt, limits] as const,
+    queryFn: () => backend.listStatusLoads(project.id),
+    placeholderData: keepPreviousData,
+  });
+}
+
 /** What can be changed about a project in its form. */
 export interface ProjectChanges {
   name: string;
@@ -80,6 +109,8 @@ export interface ProjectCommands {
   moveStatus(project: Project, statusId: Id, index: number): Promise<void>;
   /** Removes a status and sends its tasks to another one. Resolves to whether that was done. */
   removeStatus(projectId: Id, statusId: Id, moveTasksTo?: Id): Promise<boolean>;
+  /** Gives a status a work-in-progress limit, or none. Resolves to whether that was done. */
+  setStatusLimit(projectId: Id, statusId: Id, limit: number | null): Promise<boolean>;
 }
 
 /** The commands for projects and their workflows. */
@@ -174,6 +205,12 @@ export function useProjectCommands(): ProjectCommands {
         );
         // The tasks of the status went to another one.
         await queryClient.invalidateQueries({ queryKey: tasksKey(projectId) });
+        return changed !== undefined;
+      },
+      setStatusLimit: async (projectId, statusId, limit) => {
+        const changed = await changeWorkflow(() =>
+          backend.setStatusLimit(projectId, statusId, limit),
+        );
         return changed !== undefined;
       },
     };

@@ -12,6 +12,7 @@
 }
 
 .header {
+  position: relative;
   display: flex;
   flex: none;
   align-items: baseline;
@@ -21,13 +22,108 @@
 }
 
 .name {
+  min-width: 0;
+  overflow: hidden;
   font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .count {
   color: var(--ink-faint);
   font-family: var(--font-mono);
   font-size: 11px;
+}
+
+/* The tasks of a status against its limit. Under the limit it is as quiet
+   as the plain count; at the limit it takes the ink of the name; over it,
+   the figure and its word take the color of trouble. Nothing glows. */
+.limit {
+  display: inline-flex;
+  flex: none;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.figure {
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.header[data-fill='at'] .figure {
+  color: var(--ink-soft);
+}
+
+.header[data-fill='over'] .figure,
+.overWord {
+  color: var(--danger);
+}
+
+.overWord {
+  font-size: var(--text-label);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* The gauge of a limit: one hairline mark for each task the limit allows,
+   spaced like the ticks of a rule, inked where a task stands. It lies along
+   the foot of the head, so that the cards of a lane with a limit start
+   where those of a lane without one do. */
+.gauge {
+  position: absolute;
+  right: 2px;
+  bottom: -3px;
+  left: 2px;
+  display: flex;
+  gap: 3px;
+  height: 3px;
+}
+
+.mark {
+  flex: 1;
+  border-radius: 1px;
+  box-shadow: inset 0 0 0 1px var(--rule-strong);
+}
+
+.mark[data-taken] {
+  background: var(--ink-faint);
+  box-shadow: none;
+}
+
+.gauge[data-fill='at'] .mark[data-taken] {
+  background: var(--ink-soft);
+}
+
+.gauge[data-fill='over'] .mark {
+  background: var(--danger);
+  box-shadow: none;
+}
+
+.bar {
+  position: relative;
+  flex: 1;
+  border-radius: 1px;
+  box-shadow: inset 0 0 0 1px var(--rule-strong);
+}
+
+.barFill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  border-radius: 1px;
+  background: var(--ink-faint);
+}
+
+.gauge[data-fill='at'] .barFill {
+  background: var(--ink-soft);
+}
+
+.gauge[data-fill='over'] .barFill {
+  background: var(--danger);
 }
 
 .cards {

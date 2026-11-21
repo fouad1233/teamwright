@@ -22,6 +22,7 @@ import {
   largestHolding,
   lateCountInWords,
   lateInWords,
+  overLimitInWords,
   progressInWords,
   shareOf,
   sprintInWords,
@@ -513,5 +514,47 @@ describe('standingInWords', () => {
     expect(standingInWords({ ...sources, sprints: null })).not.toContain(
       'Sprint 2 has 9 days left and 16 of 16 points to go.',
     );
+  });
+});
+
+describe('overLimitInWords', () => {
+  const project = {
+    id: 'p',
+    key: 'SSN',
+    name: 'Smart sensor node',
+    description: '',
+    createdAt: '2026-11-21T09:00:00.000Z',
+    archivedAt: null,
+    statuses: [
+      { id: 'ready', name: 'Ready', category: 'todo', color: 'teal', limit: 5 },
+      { id: 'doing', name: 'In progress', category: 'active', color: 'blue', limit: 3 },
+      { id: 'review', name: 'Review', category: 'review', color: 'amber', limit: 2 },
+      { id: 'done', name: 'Done', category: 'done', color: 'green', limit: null },
+    ],
+  } satisfies Project;
+
+  it('says nothing when no status is over its limit', () => {
+    expect(
+      overLimitInWords(project, [
+        { statusId: 'ready', count: 5, limit: 5, fill: 'at' },
+        { statusId: 'done', count: 40, limit: null, fill: null },
+      ]),
+    ).toBeNull();
+  });
+
+  it('names the one status over its limit with its figures', () => {
+    expect(
+      overLimitInWords(project, [{ statusId: 'doing', count: 5, limit: 3, fill: 'over' }]),
+    ).toBe('In progress is over its limit, with 5 tasks for 3.');
+  });
+
+  it('names several statuses over their limits in board order', () => {
+    expect(
+      overLimitInWords(project, [
+        { statusId: 'review', count: 3, limit: 2, fill: 'over' },
+        { statusId: 'ready', count: 6, limit: 5, fill: 'over' },
+        { statusId: 'doing', count: 4, limit: 3, fill: 'over' },
+      ]),
+    ).toBe('Ready, In progress and Review are over their limits.');
   });
 });

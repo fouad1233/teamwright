@@ -31,14 +31,24 @@ import { useProjectCommands } from './projectQueries';
 import {
   CATEGORIES,
   STATUS_COLORS,
+  canCarryLimit,
   categoryLabel,
   colorName,
   isTheOnlyOneOfItsKind,
   suggestedStatus,
+  typedLimit,
 } from './workflowModel';
 
 /** How far the pointer must move before a press on a grip becomes a drag, in pixels. */
 const DRAG_START_DISTANCE = 4;
+
+/** Why a status in which tasks are done has no limit. */
+const NO_LIMIT_WHEN_DONE =
+  'A status in which tasks are done has no limit: finished work only piles up there.';
+
+/** What a limit is, for the heading of its column. */
+const WHAT_A_LIMIT_IS =
+  'The most tasks that should stand in a status at once. It is shown on the board and never stops a task from moving.';
 
 /** Why the only status of a kind a workflow needs cannot be removed or given another meaning. */
 const MUST_STAY =
@@ -111,6 +121,9 @@ function StatusesEditor({ project, onDone }: { project: Project; onDone: () => v
       <div className={styles.headings} aria-hidden>
         <span className="label">Status</span>
         <span className="label">Means</span>
+        <span className="label" title={WHAT_A_LIMIT_IS}>
+          Limit
+        </span>
         <span className="label">Tasks</span>
       </div>
 
@@ -273,6 +286,12 @@ function StatusRow({
           </ValueButton>
         </ChoiceMenu>
 
+        <LimitEditor
+          key={`${status.id}:${String(status.limit ?? '')}`}
+          status={status}
+          onChange={(limit) => commands.setStatusLimit(project.id, status.id, limit)}
+        />
+
         <span className={styles.count}>{taskCount === 0 ? '' : taskCount}</span>
 
         <IconButton
@@ -346,6 +365,67 @@ function NameEditor({ name, takesFocus, onRename }: NameEditorProps) {
         setDraft(event.target.value);
       }}
       onBlur={save}
+      onKeyDown={handleKeyDown}
+    />
+  );
+}
+
+interface LimitEditorProps {
+  status: Status;
+  /** Resolves to whether the backend took the limit. */
+  onChange: (limit: number | null) => Promise<boolean>;
+}
+
+/**
+ * The work-in-progress limit of a status, edited in place like its name.
+ * Empty means no limit. Enter or leaving the field saves; Escape undoes;
+ * text that is not a whole number is undone. A status in which tasks are
+ * done takes none, and says why.
+ */
+function LimitEditor({ status, onChange }: LimitEditorProps) {
+  const limit = status.limit ?? null;
+  const [draft, setDraft] = useState(limit === null ? '' : limit.toString());
+  const canCarry = canCarryLimit(status.category);
+
+  function undo() {
+    setDraft(limit === null ? '' : limit.toString());
+  }
+
+  async function save() {
+    const typed = typedLimit(draft);
+    if (typed === undefined) {
+      undo();
+    } else if (typed !== limit && !(await onChange(typed))) {
+      // The backend refused, and said why; the field shows the limit again.
+      undo();
+    }
+  }
+
+  function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key === 'Enter') {
+      event.currentTarget.blur();
+    } else if (event.key === 'Escape') {
+      undo();
+    }
+  }
+
+  return (
+    <input
+      className={styles.limit}
+      value={canCarry ? draft : ''}
+      inputMode="numeric"
+      maxLength={3}
+      placeholder={canCarry ? 'none' : ''}
+      disabled={!canCarry}
+      title={canCarry ? WHAT_A_LIMIT_IS : NO_LIMIT_WHEN_DONE}
+      aria-label={`Limit of ${status.name}`}
+      data-escape-undoes
+      onChange={(event) => {
+        setDraft(event.target.value);
+      }}
+      onBlur={() => {
+        void save();
+      }}
       onKeyDown={handleKeyDown}
     />
   );
