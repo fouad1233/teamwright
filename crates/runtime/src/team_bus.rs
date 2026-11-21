@@ -11,7 +11,13 @@
 //! - `propose_plan`, with which the Advisor proposes a team and a plan;
 //! - `publish_handoff`, with which a specialist hands the result of its
 //!   task over to whoever builds on it;
-//! - `send_message`, with which a specialist writes to a teammate.
+//! - `send_message`, with which a specialist writes to a teammate;
+//! - `remember`, with which a specialist records a fact in the memory of
+//!   the project;
+//! - `search_memory`, with which a specialist searches that memory. It is
+//!   the one tool that answers with data: the entries that are current
+//!   when the turn starts reach the server in a file named with
+//!   `--memory` ([`crate::memory_file`]).
 //!
 //! The server only checks a call and answers the session: a question,
 //! interview or proposal ends the turn, a handoff or a message does not.
@@ -33,13 +39,18 @@ use std::path::{Path, PathBuf};
 
 use serde_json::{Map, Value, json};
 use teamwright_application::agent_runtime::Priority;
-use teamwright_application::{
-    Effort, InterviewQuestionAsked, ManagerInterview, ManagerQuestion, PlanProposal, PlannedMember,
-    PlannedOwner, PlannedTask, PublishedHandoff, QuestionOption, SentMessage, TeamTool,
+use teamwright_application::memory::{
+    FOUND_TEXT_LENGTH, MAX_FACT_LENGTH, MOST_FACTS_PER_TURN, MOST_FOUND, kind_in_words, search,
 };
+use teamwright_application::{
+    Effort, InterviewQuestionAsked, ManagerInterview, ManagerQuestion, MemoryKind, PlanProposal,
+    PlannedMember, PlannedOwner, PlannedTask, PublishedHandoff, QuestionOption, RememberedEntry,
+    RememberedFact, SentMessage, TeamTool,
+};
+use teamwright_domain::memory::shorten;
 use teamwright_domain::{
-    DependencyGraph, HandoffContent, MemberName, MessageKind, ModelName, PathInFolder, TaskTitle,
-    TeamMessage,
+    DependencyGraph, HandoffContent, MemberName, MemoryContent, MessageKind, ModelName,
+    PathInFolder, SearchWords, TaskTitle, TeamMessage,
 };
 
 /// The name of the tool server, as Claude Code is told it.
@@ -60,6 +71,12 @@ pub const PUBLISH_HANDOFF: &str = "publish_handoff";
 /// The name of the tool with which a specialist writes to a teammate.
 pub const SEND_MESSAGE: &str = "send_message";
 
+/// The name of the tool with which a specialist records a fact.
+pub const REMEMBER: &str = "remember";
+
+/// The name of the tool with which a specialist searches the memory.
+pub const SEARCH_MEMORY: &str = "search_memory";
+
 /// What Claude Code puts in front of the name of a tool of this server.
 const PREFIX_IN_SESSION: &str = "mcp__teamwright__";
 
@@ -77,6 +94,15 @@ pub const PUBLISH_HANDOFF_IN_SESSION: &str = "mcp__teamwright__publish_handoff";
 
 /// The name of `send_message` inside a session of Claude Code.
 pub const SEND_MESSAGE_IN_SESSION: &str = "mcp__teamwright__send_message";
+
+/// The name of `remember` inside a session of Claude Code.
+pub const REMEMBER_IN_SESSION: &str = "mcp__teamwright__remember";
+
+/// The name of `search_memory` inside a session of Claude Code.
+pub const SEARCH_MEMORY_IN_SESSION: &str = "mcp__teamwright__search_memory";
+
+/// The argument before the file that holds the memory of the project.
+pub const MEMORY_ARGUMENT: &str = "--memory";
 
 /// The argument before the name of a member of the team.
 const MEMBER_ARGUMENT: &str = "--member";
@@ -105,6 +131,15 @@ const TOO_MANY_MESSAGES: &str = "You have sent as many messages as one turn may.
 
 /// The most messages a session sends in one turn.
 const MOST_MESSAGES: usize = 5;
+
+/// What a session is told when its fact has been taken. It goes on.
+pub const FACT_TAKEN: &str = "The fact is in the memory of the project, for every teammate \
+                              and every later task. Go on with your work.";
+
+/// What a session is told when it has remembered as many facts as a turn
+/// may.
+const TOO_MANY_FACTS: &str = "You have remembered as many facts as one turn may. Put the rest \
+                              in your report or in a file.";
 
 /// What a session is told when its question has been taken.
 pub const QUESTION_TAKEN: &str = "Your question is with the manager. End your turn now with one \
@@ -158,6 +193,19 @@ const SEND_MESSAGE_DESCRIPTION: &str = "Send a question or a note to one teammat
      reaches the teammate at the start of its next turn, so do not wait for an answer now: \
      your turn goes on. A choice that is the manager's goes to ask_manager instead.";
 
+/// What the tool `remember` tells the model it is for.
+const REMEMBER_DESCRIPTION: &str = "Record a fact in the memory of the project: something true \
+     that teammates and later tasks will need, such as \"The display is on SPI2\" or \"The \
+     enclosure must stay under 12 mm\". Give a short title and the fact in a sentence or two. \
+     Do not record what is only true of your own work in progress, and record at most three in \
+     a turn. Your turn goes on.";
+
+/// What the tool `search_memory` tells the model it is for.
+const SEARCH_MEMORY_DESCRIPTION: &str = "Search the memory of the project: the decisions the \
+     manager made, the facts teammates recorded and the interface contracts of tasks. Give a \
+     few plain words; an entry fits when every word begins a word of it. Search before you ask \
+     the manager something that may have been decided already. Your turn goes on.";
+
 /// The fewest and the most options a question to decide may have.
 const FEWEST_OPTIONS: usize = 2;
 const MOST_OPTIONS: usize = 4;
@@ -206,6 +254,18 @@ impl TeamBus {
         })
         .to_string()
     }
+
+    /// The same bus, started with the file that holds the memory of the
+    /// project for `search_memory`.
+    pub(crate) fn with_memory_file(&self, file: &Path) -> Self {
+        let mut arguments = self.arguments.clone();
+        arguments.push(MEMORY_ARGUMENT.to_owned());
+        arguments.push(file.to_string_lossy().into_owned());
+        Self {
+            program: self.program.clone(),
+            arguments,
+        }
+    }
 }
 
 /// The name of a tool, as the server offers it.
@@ -217,6 +277,8 @@ pub const fn name_of(tool: &TeamTool) -> &'static str {
         TeamTool::ProposePlan { .. } => PROPOSE_PLAN,
         TeamTool::PublishHandoff { .. } => PUBLISH_HANDOFF,
         TeamTool::SendMessage { .. } => SEND_MESSAGE,
+        TeamTool::Remember => REMEMBER,
+        TeamTool::SearchMemory { .. } => SEARCH_MEMORY,
     }
 }
 
@@ -230,7 +292,10 @@ pub fn name_in_session(tool: &TeamTool) -> String {
 /// The arguments that name the tools to the server: the name of each tool;
 /// `--member <name>` for each member the project has when it may propose a
 /// plan; `--folder <path>` for the folder of a handoff; and
-/// `--teammate <name>` for each teammate a message may go to.
+/// `--teammate <name>` for each teammate a message may go to. The entries
+/// a search reads do not go as arguments: the runtime writes them to a
+/// file and names it with `--memory` among the arguments the bus is
+/// started with ([`crate::memory_file`]).
 #[must_use]
 pub fn bus_arguments(tools: &[TeamTool]) -> Vec<String> {
     let mut arguments = Vec::new();
@@ -253,7 +318,10 @@ pub fn bus_arguments(tools: &[TeamTool]) -> Vec<String> {
                     arguments.push(name.clone());
                 }
             }
-            TeamTool::AskManager | TeamTool::Interview => {}
+            TeamTool::AskManager
+            | TeamTool::Interview
+            | TeamTool::Remember
+            | TeamTool::SearchMemory { .. } => {}
         }
     }
     arguments
@@ -264,13 +332,18 @@ pub fn bus_arguments(tools: &[TeamTool]) -> Vec<String> {
 /// # Errors
 ///
 /// Returns what is wrong, in words, if an argument names no tool, if a
-/// `--member`, `--teammate` or `--folder` has nothing after it, or if
-/// `publish_handoff` has no folder.
+/// `--member`, `--teammate`, `--folder` or `--memory` has nothing after it,
+/// or if `publish_handoff` has no folder.
+///
+/// `search_memory` reads the entries from the file `--memory` names. A
+/// search without a file, or with a file that cannot be read, has no
+/// entries: the turn keeps its other tools, and a search finds nothing.
 pub fn tools_from_arguments(arguments: &[String]) -> Result<Vec<TeamTool>, String> {
     let mut tools = Vec::new();
     let mut team = Vec::new();
     let mut teammates = Vec::new();
     let mut folder = None;
+    let mut memory = Vec::new();
     let mut given = arguments.iter();
     let value_after = |given: &mut std::slice::Iter<'_, String>, argument: &str| {
         given
@@ -289,6 +362,14 @@ pub fn tools_from_arguments(arguments: &[String]) -> Result<Vec<TeamTool>, Strin
             SEND_MESSAGE => tools.push(TeamTool::SendMessage {
                 teammates: Vec::new(),
             }),
+            REMEMBER => tools.push(TeamTool::Remember),
+            SEARCH_MEMORY => tools.push(TeamTool::SearchMemory {
+                entries: Vec::new(),
+            }),
+            MEMORY_ARGUMENT => {
+                let file = value_after(&mut given, MEMORY_ARGUMENT)?;
+                memory = crate::memory_file::entries_from(Path::new(&file)).unwrap_or_default();
+            }
             MEMBER_ARGUMENT => team.push(value_after(&mut given, MEMBER_ARGUMENT)?),
             TEAMMATE_ARGUMENT => teammates.push(value_after(&mut given, TEAMMATE_ARGUMENT)?),
             FOLDER_ARGUMENT => {
@@ -306,7 +387,8 @@ pub fn tools_from_arguments(arguments: &[String]) -> Result<Vec<TeamTool>, Strin
                     .clone()
                     .ok_or_else(|| format!("{PUBLISH_HANDOFF} needs {FOLDER_ARGUMENT}"))?;
             }
-            TeamTool::AskManager | TeamTool::Interview => {}
+            TeamTool::SearchMemory { entries } => entries.clone_from(&memory),
+            TeamTool::AskManager | TeamTool::Interview | TeamTool::Remember => {}
         }
     }
     Ok(tools)
@@ -887,6 +969,99 @@ pub fn message_from(arguments: &Value, teammates: &[String]) -> Result<SentMessa
     })
 }
 
+/// Reads and checks the arguments of a call of `remember`.
+///
+/// The title says something on one line of at most 120 characters, and
+/// the fact says something in at most 2,000 characters. Whitespace around
+/// both is removed.
+///
+/// # Errors
+///
+/// Returns what to change, in plain words, if the arguments are not
+/// acceptable. The model reads it and tries again.
+pub fn fact_from(arguments: &Value) -> Result<RememberedFact, String> {
+    let Some(arguments) = arguments.as_object() else {
+        return Err("Give the fact as an object with \"title\" and \"text\".".to_owned());
+    };
+    let title = optional_text(arguments, "title")?.unwrap_or_default();
+    let text = optional_text(arguments, "text")?.unwrap_or_default();
+    let length = text.chars().count();
+    if length > MAX_FACT_LENGTH {
+        return Err(format!(
+            "The fact has {length} characters. Keep it under {MAX_FACT_LENGTH}: a sentence or \
+             two. A longer result belongs in a file."
+        ));
+    }
+    let content = MemoryContent::new(&title, &text)
+        .map_err(|problem| format!("The fact cannot be recorded: {problem}."))?;
+    Ok(RememberedFact {
+        title: content.title().to_owned(),
+        text: content.text().to_owned(),
+    })
+}
+
+/// Reads and checks the arguments of a call of `search_memory`: a few
+/// plain words in "query".
+///
+/// # Errors
+///
+/// Returns what to change, in plain words, if the arguments are not
+/// acceptable. The model reads it and tries again.
+pub fn search_from(arguments: &Value) -> Result<SearchWords, String> {
+    let query = arguments
+        .as_object()
+        .map(|arguments| optional_text(arguments, "query"))
+        .transpose()?
+        .flatten()
+        .unwrap_or_default();
+    SearchWords::parse(&query).map_err(|problem| {
+        format!("The memory was not searched: {problem}. Give a few plain words in \"query\".")
+    })
+}
+
+/// The answer to a search: the entries that fit, the newest first, at most
+/// [`MOST_FOUND`] of them, each text shortened to [`FOUND_TEXT_LENGTH`]
+/// characters, with how to narrow the search if more fit.
+#[must_use]
+pub fn found_in_words(entries: &[RememberedEntry], words: &SearchWords) -> String {
+    let searched = words.words().join(" ");
+    let found = search(entries, words);
+    if found.is_empty() {
+        return format!(
+            "No entry of the memory fits \"{searched}\". Try fewer or other words. If the \
+             question is the manager's to decide, ask with ask_manager."
+        );
+    }
+    let mut paragraphs = vec![if found.len() > MOST_FOUND {
+        format!(
+            "{} entries fit \"{searched}\". Here are the {MOST_FOUND} newest; add a word to \
+             narrow the search.",
+            found.len()
+        )
+    } else if found.len() == 1 {
+        format!("1 entry fits \"{searched}\".")
+    } else {
+        format!(
+            "{} entries fit \"{searched}\", the newest first.",
+            found.len()
+        )
+    }];
+    for (place, entry) in found.iter().take(MOST_FOUND).enumerate() {
+        let mut about = vec![entry.source.clone()];
+        about.extend(entry.task.clone());
+        about.push(entry.recorded_at.format("%Y-%m-%d").to_string());
+        paragraphs.push(format!(
+            "{}. {}: {}\n({})\n{}",
+            place + 1,
+            kind_in_words(entry.kind),
+            entry.title,
+            about.join(", "),
+            shorten(&entry.text, FOUND_TEXT_LENGTH)
+        ));
+    }
+    paragraphs.join("\n\n")
+}
+
 /// Reads a field that is text if it is there, trimmed.
 fn optional_text(object: &Map<String, Value>, key: &str) -> Result<Option<String>, String> {
     match object.get(key) {
@@ -910,6 +1085,9 @@ struct Bus {
     handed_over: bool,
     /// How many messages have been taken in this turn.
     messages_sent: usize,
+    /// The facts taken in this turn. A later search of the turn finds
+    /// them too.
+    remembered: Vec<RememberedEntry>,
 }
 
 impl Bus {
@@ -920,6 +1098,7 @@ impl Bus {
             taken: false,
             handed_over: false,
             messages_sent: 0,
+            remembered: Vec::new(),
         }
     }
 
@@ -978,6 +1157,17 @@ impl Bus {
                 let teammates = teammates.clone();
                 return Ok(self.send(&arguments, &teammates));
             }
+            TeamTool::Remember => return Ok(self.remember(&arguments)),
+            TeamTool::SearchMemory { entries } => {
+                return Ok(match search_from(&arguments) {
+                    Ok(words) => {
+                        let mut entries = entries.clone();
+                        entries.extend(self.remembered.iter().cloned());
+                        tool_result(&found_in_words(&entries, &words), false)
+                    }
+                    Err(problem) => tool_result(&problem, true),
+                });
+            }
             TeamTool::AskManager | TeamTool::Interview | TeamTool::ProposePlan { .. } => {}
         }
         let (checked, taken, not_sent) = match tool {
@@ -997,7 +1187,10 @@ impl Bus {
                 "The proposal was not sent to the manager.",
             ),
             // Answered above; they do not end the turn.
-            TeamTool::PublishHandoff { .. } | TeamTool::SendMessage { .. } => return Ok(json!({})),
+            TeamTool::PublishHandoff { .. }
+            | TeamTool::SendMessage { .. }
+            | TeamTool::Remember
+            | TeamTool::SearchMemory { .. } => return Ok(json!({})),
         };
         Ok(match checked {
             Ok(()) => {
@@ -1033,6 +1226,28 @@ impl Bus {
         }
         self.handed_over = true;
         tool_result(HANDOFF_TAKEN, false)
+    }
+
+    /// Takes a fact for the memory of the project, up to the most a turn
+    /// may remember.
+    fn remember(&mut self, arguments: &Value) -> Value {
+        if self.remembered.len() >= MOST_FACTS_PER_TURN {
+            return tool_result(TOO_MANY_FACTS, true);
+        }
+        match fact_from(arguments) {
+            Ok(fact) => {
+                self.remembered.push(RememberedEntry {
+                    kind: MemoryKind::Fact,
+                    title: fact.title,
+                    text: fact.text,
+                    source: "remembered by you in this turn".to_owned(),
+                    task: None,
+                    recorded_at: chrono::Utc::now(),
+                });
+                tool_result(FACT_TAKEN, false)
+            }
+            Err(problem) => tool_result(&format!("The fact was not remembered. {problem}"), true),
+        }
     }
 
     /// Takes a message to a teammate, up to the most a turn may send.
@@ -1081,7 +1296,54 @@ fn description_of(tool: &TeamTool) -> Value {
         TeamTool::ProposePlan { .. } => propose_plan_tool(),
         TeamTool::PublishHandoff { .. } => publish_handoff_tool(),
         TeamTool::SendMessage { teammates } => send_message_tool(teammates),
+        TeamTool::Remember => remember_tool(),
+        TeamTool::SearchMemory { .. } => search_memory_tool(),
     }
+}
+
+/// The description of `remember`.
+fn remember_tool() -> Value {
+    json!({
+        "name": REMEMBER,
+        "description": REMEMBER_DESCRIPTION,
+        "inputSchema": {
+            "type": "object",
+            "required": ["title", "text"],
+            "properties": {
+                "title": {
+                    "type": "string",
+                    "maxLength": MemoryContent::MAX_TITLE_LENGTH,
+                    "description": "What the fact is about, in a few words on one line."
+                },
+                "text": {
+                    "type": "string",
+                    "maxLength": MAX_FACT_LENGTH,
+                    "description": "The fact, in a sentence or two, complete: whoever reads it \
+                                    has not read your conversation."
+                }
+            }
+        }
+    })
+}
+
+/// The description of `search_memory`.
+fn search_memory_tool() -> Value {
+    json!({
+        "name": SEARCH_MEMORY,
+        "description": SEARCH_MEMORY_DESCRIPTION,
+        "inputSchema": {
+            "type": "object",
+            "required": ["query"],
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "maxLength": SearchWords::MAX_LENGTH,
+                    "description": "A few plain words, such as \"display bus\" or \"enclosure \
+                                    height\"."
+                }
+            }
+        }
+    })
 }
 
 /// The description of `publish_handoff`.
@@ -2241,5 +2503,216 @@ mod tests {
         answer_of(&mut asking, &call(&good_arguments()));
         let after = answer_of(&mut asking, &call_of(SEND_MESSAGE, &good_message()));
         assert_eq!(after["result"]["isError"], true);
+    }
+
+    // Memory
+
+    fn remembered(title: &str, text: &str, day: u32) -> RememberedEntry {
+        use chrono::TimeZone;
+        RememberedEntry {
+            kind: MemoryKind::Fact,
+            title: title.to_owned(),
+            text: text.to_owned(),
+            source: "remembered by Hardware engineer".to_owned(),
+            task: Some("SSN-1: Draw the schematic".to_owned()),
+            recorded_at: chrono::Utc
+                .with_ymd_and_hms(2026, 11, day, 9, 0, 0)
+                .unwrap(),
+        }
+    }
+
+    fn memory() -> Vec<RememberedEntry> {
+        vec![
+            remembered("Display bus", "The display is on SPI2.", 20),
+            remembered("Enclosure", "Under 12 mm.", 19),
+        ]
+    }
+
+    #[test]
+    fn a_good_fact_is_read_tidied_and_a_bad_one_is_refused_with_what_to_change() {
+        assert_eq!(
+            fact_from(&json!({ "title": " Display bus ", "text": " On SPI2. " })),
+            Ok(RememberedFact {
+                title: "Display bus".to_owned(),
+                text: "On SPI2.".to_owned(),
+            })
+        );
+        assert!(
+            fact_from(&json!({ "title": "", "text": "On SPI2." }))
+                .unwrap_err()
+                .contains("the title of a memory entry must not be empty")
+        );
+        assert!(
+            fact_from(&json!({ "title": "Two\nlines", "text": "On SPI2." }))
+                .unwrap_err()
+                .contains("one line")
+        );
+        assert!(
+            fact_from(&json!({ "title": "Long", "text": "x".repeat(2_001) }))
+                .unwrap_err()
+                .starts_with("The fact has 2001 characters")
+        );
+        assert!(fact_from(&json!({ "title": 3, "text": "x" })).is_err());
+        assert!(fact_from(&json!("a fact")).is_err());
+    }
+
+    #[test]
+    fn a_search_answers_with_the_entries_that_fit_the_newest_first() {
+        let words = search_from(&json!({ "query": "SPI display" })).unwrap();
+
+        assert_eq!(
+            found_in_words(&memory(), &words),
+            "1 entry fits \"spi display\".\n\n\
+             1. Fact: Display bus\n\
+             (remembered by Hardware engineer, SSN-1: Draw the schematic, 2026-11-20)\n\
+             The display is on SPI2."
+        );
+        let nothing = search_from(&json!({ "query": "solar" })).unwrap();
+        assert!(found_in_words(&memory(), &nothing).starts_with("No entry of the memory fits"));
+        assert!(
+            search_from(&json!({ "query": " , " }))
+                .unwrap_err()
+                .starts_with("The memory was not searched")
+        );
+        assert!(search_from(&json!({})).is_err());
+    }
+
+    #[test]
+    fn a_search_answers_with_at_most_eight_entries_each_shortened() {
+        let many: Vec<RememberedEntry> = (1..=12)
+            .map(|day| remembered(&format!("Pin {day}"), &"pin ".repeat(300), day))
+            .collect();
+        let words = search_from(&json!({ "query": "pin" })).unwrap();
+
+        let answer = found_in_words(&many, &words);
+
+        assert!(answer.starts_with(
+            "12 entries fit \"pin\". Here are the 8 newest; add a word to narrow the search."
+        ));
+        assert!(answer.contains("1. Fact: Pin 12\n"));
+        assert!(answer.contains("8. Fact: Pin 5\n"));
+        assert!(!answer.contains("Pin 4\n"));
+        assert!(answer.chars().count() < 100 + 8 * (FOUND_TEXT_LENGTH + 100));
+    }
+
+    #[test]
+    fn the_memory_goes_to_the_server_in_a_file_and_is_read_back() {
+        let folder = tempfile::tempdir().unwrap();
+        let file = crate::memory_file::MemoryFile::write_in(folder.path(), &memory()).unwrap();
+        let tools = vec![
+            TeamTool::Remember,
+            TeamTool::SearchMemory { entries: memory() },
+        ];
+
+        let mut arguments = vec![
+            MEMORY_ARGUMENT.to_owned(),
+            file.path().to_string_lossy().into_owned(),
+        ];
+        arguments.extend(bus_arguments(&tools));
+
+        assert_eq!(&arguments[2..], ["remember", "search_memory"]);
+        assert_eq!(tools_from_arguments(&arguments), Ok(tools));
+        // Without a file that can be read, a search finds nothing, and the
+        // other tools still work.
+        assert_eq!(
+            tools_from_arguments(&[
+                MEMORY_ARGUMENT.to_owned(),
+                folder
+                    .path()
+                    .join("gone.json")
+                    .to_string_lossy()
+                    .into_owned(),
+                "search_memory".to_owned(),
+                "ask_manager".to_owned(),
+            ]),
+            Ok(vec![
+                TeamTool::SearchMemory {
+                    entries: Vec::new()
+                },
+                TeamTool::AskManager
+            ])
+        );
+        assert!(tools_from_arguments(&[MEMORY_ARGUMENT.to_owned()]).is_err());
+        assert_eq!(name_in_session(&TeamTool::Remember), REMEMBER_IN_SESSION);
+        assert_eq!(
+            name_in_session(&TeamTool::SearchMemory {
+                entries: Vec::new()
+            }),
+            SEARCH_MEMORY_IN_SESSION
+        );
+    }
+
+    #[test]
+    fn the_server_offers_remember_and_search_memory_with_their_schemas() {
+        let mut bus = Bus::offering(vec![
+            TeamTool::Remember,
+            TeamTool::SearchMemory { entries: memory() },
+        ]);
+        let answer = answer_of(
+            &mut bus,
+            &json!({ "method": "tools/list", "jsonrpc": "2.0", "id": 1 }),
+        );
+        let tools = answer["result"]["tools"].as_array().unwrap();
+        assert_eq!(tools[0]["name"], "remember");
+        assert_eq!(
+            tools[0]["inputSchema"]["required"],
+            json!(["title", "text"])
+        );
+        assert_eq!(tools[1]["name"], "search_memory");
+        assert_eq!(tools[1]["inputSchema"]["required"], json!(["query"]));
+    }
+
+    #[test]
+    fn facts_are_taken_up_to_three_in_a_turn_and_a_later_search_finds_them() {
+        let mut bus = Bus::offering(vec![
+            TeamTool::Remember,
+            TeamTool::SearchMemory { entries: memory() },
+        ]);
+        let refused = answer_of(
+            &mut bus,
+            &call_of(REMEMBER, &json!({ "title": "", "text": "Nothing." })),
+        );
+        assert_eq!(refused["result"]["isError"], true);
+        for title in ["Clock", "Sensor bus", "Battery"] {
+            let taken = answer_of(
+                &mut bus,
+                &call_of(REMEMBER, &json!({ "title": title, "text": "Known now." })),
+            );
+            assert_eq!(text_of(&taken["result"]), FACT_TAKEN);
+        }
+        let fourth = answer_of(
+            &mut bus,
+            &call_of(REMEMBER, &json!({ "title": "More", "text": "Too many." })),
+        );
+        assert_eq!(text_of(&fourth["result"]), TOO_MANY_FACTS);
+
+        let searched = answer_of(
+            &mut bus,
+            &call_of(SEARCH_MEMORY, &json!({ "query": "clock" })),
+        );
+        assert_eq!(searched["result"].get("isError"), None);
+        assert!(
+            text_of(&searched["result"]).contains("Fact: Clock\n(remembered by you in this turn")
+        );
+        let bad = answer_of(&mut bus, &call_of(SEARCH_MEMORY, &json!({ "query": "" })));
+        assert_eq!(bad["result"]["isError"], true);
+    }
+
+    #[test]
+    fn the_memory_is_searched_even_after_the_manager_was_asked() {
+        let mut bus = Bus::offering(vec![
+            TeamTool::AskManager,
+            TeamTool::SearchMemory { entries: memory() },
+        ]);
+        answer_of(&mut bus, &call(&good_arguments()));
+
+        let searched = answer_of(
+            &mut bus,
+            &call_of(SEARCH_MEMORY, &json!({ "query": "enclosure" })),
+        );
+
+        // After a question nothing more is taken, a search included: the
+        // session is to end its turn.
+        assert_eq!(searched["result"]["isError"], true);
     }
 }

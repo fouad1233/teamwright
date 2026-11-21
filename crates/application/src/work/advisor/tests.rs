@@ -103,6 +103,7 @@ fn planning() -> Planning {
             conversations_store,
         )),
         teamwork: Arc::new(crate::in_memory::InMemoryTeamworkRepository::default()),
+        memory: Arc::new(crate::in_memory::InMemoryMemoryRepository::default()),
         folders: Arc::new(FixedProjectFolders::inside("projects")),
         places,
         file_system: Arc::new(PretendFileSystem::default()),

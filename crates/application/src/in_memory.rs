@@ -11,9 +11,9 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use chrono::TimeDelta;
 use teamwright_domain::{
-    Area, AreaId, Conversation, ConversationId, Handoff, HandoffId, Member, MemberId, Project,
-    ProjectId, Sprint, SprintId, Tag, TagId, Task, TaskId, TeamMessage, TeamMessageId, Timestamp,
-    Turn, TurnId, View, ViewId,
+    Area, AreaId, Conversation, ConversationId, Handoff, HandoffId, Member, MemberId, MemoryEntry,
+    MemoryEntryId, Project, ProjectId, Sprint, SprintId, Tag, TagId, Task, TaskId, TeamMessage,
+    TeamMessageId, Timestamp, Turn, TurnId, View, ViewId,
 };
 
 use crate::agent_runtime::{
@@ -25,8 +25,9 @@ use crate::notifications::{NotificationChoice, NotificationChoiceStore};
 use crate::places::ChosenPlaces;
 use crate::ports::{
     ApprovedPlan, AreaRepository, Clock, ConversationRepository, FileSystem, MemberRepository,
-    PlacesRepository, PlanningRepository, ProjectFolders, ProjectRepository, SprintRepository,
-    StorageError, TagRepository, TaskRepository, TeamworkRepository, ViewRepository, WorkListener,
+    MemoryRepository, PlacesRepository, PlanningRepository, ProjectFolders, ProjectRepository,
+    SprintRepository, StorageError, TagRepository, TaskRepository, TeamworkRepository,
+    ViewRepository, WorkListener,
 };
 use crate::project_events::ProjectEvent;
 
@@ -445,6 +446,41 @@ impl TeamworkRepository for InMemoryTeamworkRepository {
             .collect();
         messages.sort_by_key(|message| (message.sent_at(), message.id()));
         Ok(messages)
+    }
+}
+
+/// Keeps the memory of the projects in memory.
+#[derive(Debug, Default)]
+pub struct InMemoryMemoryRepository {
+    entries: Mutex<BTreeMap<MemoryEntryId, MemoryEntry>>,
+}
+
+impl MemoryRepository for InMemoryMemoryRepository {
+    fn save_entries(&self, entries: &[MemoryEntry]) -> Result<(), StorageError> {
+        let mut stored = lock(&self.entries);
+        for entry in entries {
+            stored.insert(entry.id(), entry.clone());
+        }
+        Ok(())
+    }
+
+    fn entries_of_project(&self, project_id: ProjectId) -> Result<Vec<MemoryEntry>, StorageError> {
+        let mut entries: Vec<MemoryEntry> = lock(&self.entries)
+            .values()
+            .filter(|entry| entry.project_id() == project_id)
+            .cloned()
+            .collect();
+        entries.sort_by_key(|entry| (entry.recorded_at(), entry.id()));
+        Ok(entries)
+    }
+
+    fn find_entry(&self, id: MemoryEntryId) -> Result<Option<MemoryEntry>, StorageError> {
+        Ok(lock(&self.entries).get(&id).cloned())
+    }
+
+    fn delete_entry(&self, id: MemoryEntryId) -> Result<(), StorageError> {
+        lock(&self.entries).remove(&id);
+        Ok(())
     }
 }
 

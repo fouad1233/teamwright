@@ -381,3 +381,75 @@ fn a_real_session_hands_its_result_over_through_the_team_bus() {
     // The turn went on after the handoff and ended with an answer.
     assert!(!outcome.final_text.trim().is_empty());
 }
+
+#[test]
+#[ignore = "needs the real Claude Code, signed in, the built program, and spends one turn"]
+fn a_real_session_searches_the_memory_and_remembers_a_fact_through_the_team_bus() {
+    use chrono::TimeZone;
+    use teamwright_application::{MemoryKind, RememberedEntry, TeamTool};
+
+    let folder = tempfile::tempdir().unwrap();
+    let folder = teamwright_runtime::full_form(folder.path()).unwrap();
+    let mut request = request(
+        &folder,
+        "This is a test of the memory of the project. Do these steps in order:\n\
+         1. Call the tool search_memory with the query \"display bus\".\n\
+         2. Call the tool remember with the title \"Sensor bus\" and the text \"The sensors \
+            are on I2C0.\"\n\
+         3. Answer with the name of the bus the display is on, as the search said, and \
+            nothing else.",
+        SessionChoice::New,
+    );
+    request.team_tools = vec![
+        TeamTool::Remember,
+        TeamTool::SearchMemory {
+            entries: vec![RememberedEntry {
+                kind: MemoryKind::Fact,
+                title: "Display bus".to_owned(),
+                text: "The display is on SPI2.".to_owned(),
+                source: "remembered by Hardware engineer".to_owned(),
+                task: None,
+                recorded_at: chrono::Utc.with_ymd_and_hms(2026, 11, 21, 9, 0, 0).unwrap(),
+            }],
+        },
+    ];
+    let events = Arc::new(Mutex::new(Vec::new()));
+    let collected = Arc::clone(&events);
+
+    let turn = runtime()
+        .with_team_bus(bus_program(), vec!["--team-bus".to_owned()])
+        .start_turn(
+            request,
+            Box::new(move |event| collected.lock().unwrap().push(event)),
+        )
+        .unwrap();
+    let outcome = turn.wait().unwrap();
+    let events = events.lock().unwrap().clone();
+    for event in &events {
+        println!("{event:?}");
+    }
+    println!("{}", outcome.final_text);
+    print_usage(&outcome);
+
+    assert_eq!(outcome.failure, None);
+    assert!(
+        tool_uses(&events)
+            .iter()
+            .any(|(tool, _, failed)| tool == "mcp__teamwright__search_memory" && !failed),
+        "the search was expected as a tool use that did not fail: {events:?}"
+    );
+    let facts: Vec<_> = events
+        .iter()
+        .filter_map(|event| match event {
+            AgentEvent::FactRemembered(fact) => Some(fact),
+            _ => None,
+        })
+        .collect();
+    let [fact] = facts.as_slice() else {
+        panic!("one fact was expected: {events:?}");
+    };
+    assert_eq!(fact.title, "Sensor bus");
+    assert!(fact.text.contains("I2C0"));
+    // The answer came from the memory the bus read from its file.
+    assert!(outcome.final_text.contains("SPI2"));
+}

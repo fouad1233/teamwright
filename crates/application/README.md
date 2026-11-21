@@ -19,14 +19,15 @@ window or agent runtime.
 | `files` | `ProjectFilesService`: what lies in the folders of a project, for the files view: `list` a folder at a path inside it, `locate` an entry to open or show, each path checked first |
 | `work` | `WorkService`: let AI specialists work: start on a task, ask, reply, answer a specialist's question, list what waits for the manager, stop, follow every event, open a session in the desktop app, recover after a restart; `brief_for` and `instructions_for`. Its part `advisor`: plan a project with the Advisor (`advise`, `answer_interview`, `change_proposal`, `approve_proposal`); `ProposalEdit`, `ApprovedProposal`, `answers_in_words` and `instructions_for_advisor` |
 | `teamwork` | `TeamworkService`: what specialists hand each other: every handoff and message of a project (`talk_of_project`, as `TeamTalk`) and the messages that wait for a member (`messages_waiting_for`, for the coordinator); the rules across stored things: `messages_waiting_for` (sent to the member, not delivered, the oldest first), `latest_handoff_of` (the handoff of a task that counts), `handoffs_in_words` (the part of a brief) and `messages_in_words` (what a turn is told) |
+| `memory` | `MemoryService`: the memory of a project, as the manager keeps it: every entry (`memory_of_project`), a search (`search`), a fact the manager writes (`add_fact`, `NewFact`), a change, which is a newer entry that replaces the older (`change`), and a removal (`remove`); the rules across stored things: `decision_entry` (an answered decision request as a decision), `contract_entries` (the contract of a handoff, replacing the earlier contract of its task), `facts_remembered_in` and `MOST_FACTS_PER_TURN`, `search` (the entries that fit, newest first, over anything `Searchable`), `memory_in_words` (the part of a brief, within `MEMORY_IN_BRIEF_LENGTH`) and `remembered_entries` (what a search of the team bus reads) ([decision 0036](../../docs/decisions/0036-project-memory.md)) |
 | `google_drive` | `GoogleDriveService`: the folder that Google Drive for desktop keeps on this computer (`find_drive_folders`, `look`, `prepare`), behind the port `DriveSurroundings`; see "Syncing through Google Drive" |
 | `sync` | `SyncService`: keep several computers of one manager in step through a folder the manager owns (`round`, `choose_folder`, `stop`, `rename_this_computer`, `accept`, `ignore`, `notices`, `dismiss`, `new_identity`); the ports `SyncFolder` and `SyncLedger`, and the operations that travel between computers |
 | `workbook` | `WorkbookService`: gather a project into a workbook of four sheets (summary, tasks, sprints, team) as plain data: `Workbook`, `Sheet`, `SheetContent`, `Section`, `Table`, `Column` and `Cell`, whose kind says whether it is text, a whole number, hours, a date or a status. Writing the file is done outside this crate ([decision 0025](../../docs/decisions/0025-the-project-as-a-workbook.md)) |
-| `ports` | The interfaces the services need: `ProjectRepository`, `TaskRepository`, `MemberRepository`, `ConversationRepository`, `PlanningRepository`, `PlacesRepository`, `SprintRepository`, `ViewRepository`, `AreaRepository`, `TagRepository`, `TeamworkRepository`, `ProjectFolders`, `FileSystem`, `FolderReader`, `WorkListener`, `Clock` (which also tells the day a moment falls on) |
+| `ports` | The interfaces the services need: `ProjectRepository`, `TaskRepository`, `MemberRepository`, `ConversationRepository`, `PlanningRepository`, `PlacesRepository`, `SprintRepository`, `ViewRepository`, `AreaRepository`, `TagRepository`, `TeamworkRepository`, `MemoryRepository`, `ProjectFolders`, `FileSystem`, `FolderReader`, `WorkListener`, `Clock` (which also tells the day a moment falls on) |
 | `agent_runtime` | `AgentRuntime`: the interface to the program that runs a team member's session, and the data it speaks |
 | `error` | `ApplicationError`, with a stable `code()` for interfaces |
 | `clock` | `SystemClock`, the real clock |
-| `in_memory` | In-memory repositories (`InMemoryPlanningRepository` stores an approved plan into the others, `InMemorySprintRepository` stores the tasks that change with a sprint into the task repository, `InMemoryViewRepository`, `InMemoryAreaRepository`, `InMemoryTagRepository`, `InMemoryTeamworkRepository`), fixed project folders, a pretended file system, a listener that records, a scripted agent runtime and a settable clock, for tests and demos |
+| `in_memory` | In-memory repositories (`InMemoryPlanningRepository` stores an approved plan into the others, `InMemorySprintRepository` stores the tasks that change with a sprint into the task repository, `InMemoryViewRepository`, `InMemoryAreaRepository`, `InMemoryTagRepository`, `InMemoryTeamworkRepository`, `InMemoryMemoryRepository`), fixed project folders, a pretended file system, a listener that records, a scripted agent runtime and a settable clock, for tests and demos |
 
 ## How a use case is built
 
@@ -372,6 +373,27 @@ question; every request to the specialist is a turn of it.
 - The instructions of a specialist (`instructions_for`) say to hand the
   result over with `publish_handoff` before the report, and to write to a
   teammate with `send_message` without waiting for an answer.
+- **Project memory**
+  ([decision 0036](../../docs/decisions/0036-project-memory.md)). Every
+  turn of a specialist is also given `TeamTool::Remember` and
+  `TeamTool::SearchMemory` with the current entries of the memory of its
+  project, newest first, each with where it came from and its task in
+  words (`remembered_entries`). Memory grows by itself in three places:
+  `answer_decision` stores the question and its answer as a decision
+  (`decision_entry`) once the turn that carries the answer is stored; a
+  handoff with an interface contract stores the contract of its task and
+  marks the earlier contracts of the task as replaced by it
+  (`contract_entries`); a fact a specialist remembers in a running turn is
+  stored with the task of the conversation, at most three in a turn, and
+  a fourth becomes a notice of the turn. `start_work` writes the brief
+  with `brief_with_memory`, which adds what memory says about the task
+  (`memory_in_words`): the entries of the task, then those of the tasks it
+  waits for (without the contracts their handoffs left, which the brief
+  carries already), then every other contract, then the entries of the
+  whole project, newest first in each group, at most eight and 3,000
+  characters, and in any case a sentence that says to search memory
+  before asking the manager. The instructions say the same, and how to
+  remember.
 - A question is open while it is the question of the latest turn of its
   conversation, that turn has ended, and the manager has not answered.
   `answer_decision` answers it with an option (counted from 0), with words,
@@ -494,11 +516,13 @@ The application only knows the trait `AgentRuntime`, implemented by the
 A turn request names the tools of the team bus the session is given
 (`team_tools`, each a `TeamTool`): `AskManager` to ask the manager to
 decide, `PublishHandoff { folder }` to hand the result of a task over and
-`SendMessage { teammates }` to write to a teammate, and `Interview` and
+`SendMessage { teammates }` to write to a teammate, `Remember` and
+`SearchMemory { entries }` for the memory of the project, and `Interview` and
 `ProposePlan { team }` for the Advisor, where `team` holds the names of the
 members the project has. What a session does with them arrives as
 `AgentEvent::ManagerAsked` (`ManagerQuestion`), `HandoffPublished`
-(`PublishedHandoff`), `MessageSent` (`SentMessage`), `InterviewAsked`
+(`PublishedHandoff`), `MessageSent` (`SentMessage`), `FactRemembered`
+(`RememberedFact`), `InterviewAsked`
 (`ManagerInterview`) or `PlanProposed` (`PlanProposal`), with every place
 counted from 0, and never as a tool use. A request may
 also name folders the session may read but not write (`readable_folders`).

@@ -243,6 +243,13 @@ pub(crate) fn remove_project(
     delete_rows_of_project(
         transaction,
         operations,
+        "memory_entries",
+        Entity::MemoryEntry,
+        id,
+    )?;
+    delete_rows_of_project(
+        transaction,
+        operations,
         "team_messages",
         Entity::TeamMessage,
         id,

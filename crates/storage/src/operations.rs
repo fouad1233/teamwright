@@ -82,11 +82,14 @@ pub(crate) enum Entity {
     /// A tag of a project. Which tasks carry it is a part of the state of
     /// each task.
     Tag,
+    /// An entry of the memory of a project. Only whether a newer entry
+    /// replaced it changes.
+    MemoryEntry,
 }
 
 impl Entity {
     /// Every kind of thing whose changes are logged.
-    pub(crate) const ALL: [Self; 16] = [
+    pub(crate) const ALL: [Self; 17] = [
         Self::Project,
         Self::Task,
         Self::Member,
@@ -103,6 +106,7 @@ impl Entity {
         Self::Handoff,
         Self::TeamMessage,
         Self::Tag,
+        Self::MemoryEntry,
     ];
 
     /// The entity of a name in the log, if this version knows it.
@@ -129,6 +133,7 @@ impl Entity {
             Self::Handoff => "handoff",
             Self::TeamMessage => "team_message",
             Self::Tag => "tag",
+            Self::MemoryEntry => "memory_entry",
         }
     }
 }

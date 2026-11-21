@@ -7,7 +7,7 @@ operation log.
 It implements the interfaces `ProjectRepository`, `TaskRepository`,
 `MemberRepository`, `ConversationRepository`, `PlanningRepository`,
 `PlacesRepository`, `SprintRepository`, `ViewRepository`, `AreaRepository`,
-`TagRepository` and `TeamworkRepository` that the
+`TagRepository`, `TeamworkRepository` and `MemoryRepository` that the
 application crate declares. Nothing outside this crate knows that SQLite is
 involved.
 
@@ -28,6 +28,7 @@ involved.
 | `conversations` | `SqliteConversationRepository`: conversations, their turns, the steps of the turns and the questions they asked the manager |
 | `planning` | The interviews and the proposals of the Advisor, as parts of their turns; `SqlitePlanningRepository`, which stores an approved plan |
 | `teamwork` | `SqliteTeamworkRepository`: the handoffs of tasks with their files, and the messages between specialists |
+| `memory` | `SqliteMemoryRepository`: the entries of the memory of the projects |
 | `places` | `SqlitePlacesRepository`: the work folder and the reference folders chosen for each project |
 | `operations` | The operation log, the hybrid logical clock, and the recorder that keeps the stamps of the fields |
 | `merge` | How each kind of thing merges field by field, and `MergedState`, a row of `merged_states` |
@@ -51,7 +52,7 @@ involved.
   `turn_interview_options`, `turn_proposals`, `turn_proposal_members`,
   `turn_proposal_tasks`, `turn_proposal_task_waits`, `sprints`, `views`,
   `areas`, `handoffs`, `handoff_files`, `team_messages`, `tags`, `task_tags`,
-  `checklist_items`.
+  `checklist_items`, `memory_entries`.
   The schema with its conventions is in
   [`schema/0001_initial.sql`](src/schema/0001_initial.sql); later files in
   that folder add to it.
@@ -219,6 +220,15 @@ involved.
   migration: a task state logged before version 19 has none of these keys
   and is read as a task without tags or a checklist, and a view state
   without `tag_id` as a view of the tasks with any tag.
+- **Project memory** (migration `0025_memory.sql`,
+  [decision 0036](../../docs/decisions/0036-project-memory.md)). An entry
+  has a row in `memory_entries` and is logged as the entity `memory_entry`
+  with its whole state. It merges by field with one field, `replaced_by`,
+  the only thing that changes once it is written. Only the project is a
+  reference the database enforces: an entry outlives the task it belongs
+  to, and the member, conversation and turn it came from are kept as they
+  were. Deleting a project deletes and logs its entries; an entry waits
+  for its project when it is taken in before it.
 - **An approved plan is one transaction.** `SqlitePlanningRepository`
   writes the project (with its next task number), every new member, every
   new task with what it waits for, and the turn with its approved proposal,

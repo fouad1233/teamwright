@@ -150,6 +150,9 @@ const AREA_FIELDS: &[Field] = &[later("name", &["name"]), later("position", &["p
 const TEAM_MESSAGE_FIELDS: &[Field] = &[later("delivery", &["delivered_turn_id", "delivered_at"])];
 
 const TAG_FIELDS: &[Field] = &[later("name", &["name"]), later("color", &["color"])];
+// An entry of memory merges by field, so that whether a newer entry
+// replaced it, the one thing that changes, is a field of its own.
+const MEMORY_ENTRY_FIELDS: &[Field] = &[later("replaced_by", &["replaced_by"])];
 
 const CONVERSATION_FIELDS: &[Field] = &[
     later("member", &["member_id"]),
@@ -175,6 +178,7 @@ pub(crate) const fn merging_of(entity: Entity) -> Merging {
         Entity::Tag => Merging::ByField(TAG_FIELDS),
         Entity::Conversation => Merging::ByField(CONVERSATION_FIELDS),
         Entity::TeamMessage => Merging::ByField(TEAM_MESSAGE_FIELDS),
+        Entity::MemoryEntry => Merging::ByField(MEMORY_ENTRY_FIELDS),
         Entity::Turn
         | Entity::TurnStep
         | Entity::Decision

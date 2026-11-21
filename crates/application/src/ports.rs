@@ -9,8 +9,8 @@ use std::path::{Path, PathBuf};
 
 use teamwright_domain::{
     Area, AreaId, CalendarDate, ComputerId, Conversation, ConversationId, Handoff, Member,
-    MemberId, Project, ProjectId, Sprint, SprintId, Tag, TagId, Task, TaskId, TeamMessage,
-    Timestamp, Turn, View, ViewId,
+    MemberId, MemoryEntry, MemoryEntryId, Project, ProjectId, Sprint, SprintId, Tag, TagId, Task,
+    TaskId, TeamMessage, Timestamp, Turn, View, ViewId,
 };
 
 use crate::places::ChosenPlaces;
@@ -422,6 +422,41 @@ pub trait TeamworkRepository: Send + Sync {
     ///
     /// Returns an error if stored data could not be read.
     fn messages_of_project(&self, project_id: ProjectId) -> Result<Vec<TeamMessage>, StorageError>;
+}
+
+/// Stores the memory of the projects: decisions, facts and contracts.
+pub trait MemoryRepository: Send + Sync {
+    /// Stores entries, replacing stored entries with the same identifiers.
+    /// Either all of them are stored or none is: a newer entry and the
+    /// older one it replaces are stored together.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the entries could not be written.
+    fn save_entries(&self, entries: &[MemoryEntry]) -> Result<(), StorageError>;
+
+    /// Lists the entries of a project, current and replaced, the oldest
+    /// first.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if stored data could not be read.
+    fn entries_of_project(&self, project_id: ProjectId) -> Result<Vec<MemoryEntry>, StorageError>;
+
+    /// Finds an entry by its identifier.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if stored data could not be read.
+    fn find_entry(&self, id: MemoryEntryId) -> Result<Option<MemoryEntry>, StorageError>;
+
+    /// Removes an entry. An entry that is not there is no error. An entry
+    /// it replaced keeps saying so: what was replaced stays replaced.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the entry could not be removed.
+    fn delete_entry(&self, id: MemoryEntryId) -> Result<(), StorageError>;
 }
 
 /// What approving a proposal of the Advisor creates and changes.

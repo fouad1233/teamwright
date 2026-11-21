@@ -26,6 +26,7 @@ mod claude_code;
 mod decode;
 mod environment;
 mod locate;
+pub mod memory_file;
 mod process;
 mod sign_in;
 pub mod team_bus;

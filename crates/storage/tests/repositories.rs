@@ -2465,6 +2465,9 @@ fn the_work_of_a_specialist_is_kept_on_the_real_database() {
             teamwork: Arc::new(
                 teamwright_application::in_memory::InMemoryTeamworkRepository::default(),
             ),
+            memory: Arc::new(
+                teamwright_application::in_memory::InMemoryMemoryRepository::default(),
+            ),
             folders: Arc::new(FixedProjectFolders::inside("projects")),
             places: places_repository.clone(),
             file_system: Arc::new(PretendFileSystem::default()),
@@ -2702,6 +2705,7 @@ fn approving_a_proposal_creates_the_team_and_the_plan_in_one_logged_write() {
         teamwork: Arc::new(
             teamwright_application::in_memory::InMemoryTeamworkRepository::default(),
         ),
+        memory: Arc::new(teamwright_application::in_memory::InMemoryMemoryRepository::default()),
         folders: Arc::new(FixedProjectFolders::inside("projects")),
         places: places_repository,
         file_system: Arc::new(PretendFileSystem::default()),

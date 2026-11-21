@@ -9,7 +9,7 @@ done with them. It does no input or output.
 
 | Module | Concepts |
 |---|---|
-| `ids` | `ProjectId`, `StatusId`, `TaskId`, `SprintId`, `ViewId`, `AreaId`, `TagId`, `ChecklistItemId`, `MemberId`, `ConversationId`, `TurnId`, `HandoffId`, `TeamMessageId`: one identifier type per kind of thing |
+| `ids` | `ProjectId`, `StatusId`, `TaskId`, `SprintId`, `ViewId`, `AreaId`, `TagId`, `ChecklistItemId`, `MemberId`, `ConversationId`, `TurnId`, `HandoffId`, `TeamMessageId`, `MemoryEntryId`: one identifier type per kind of thing |
 | `text` | `ProjectName`, `StatusName`, `TaskTitle`, `SprintName`, `ViewName`, `AreaName`, `TagName`, `ChecklistText`, `MemberName`: names that are never empty, never multi-line, never too long; `ModelName`: the name of a model |
 | `color` | `Color`: the named colors a status or a team member can have |
 | `workflow` | `Workflow`, `Status`, `StatusCategory` |
@@ -31,6 +31,7 @@ done with them. It does no input or output.
 | `conversation` | `Conversation`, `Turn`, `Step`, `TokenCounts`, `ContextUse` (how full the context of a session was after a turn; nearly full from 80 % of the window; `context_of` a conversation is that of its last turn that reported one): the work of an AI specialist or of the Advisor, one request at a time; `DecisionRequest`, `DecisionOption`, `DecisionAnswer`: a question a specialist asks the manager to decide |
 | `planning` | `Interview`, `InterviewQuestion`, `InterviewAnswer`: the questions the Advisor asks before it proposes; `Proposal`, `ProposedMember`, `ProposedTask`, `ProposedOwner`: the team and the plan it proposes; `ProposalChange`: one change of the manager's to it before approving |
 | `teamwork` | `Handoff`, `HandoffContent`: the result of a task for whoever builds on it (a summary, an interface contract, the files that hold it as `PathInFolder`s); `TeamMessage`, `MessageKind`, `MessageDelivery`: a question or a note from one specialist to another and when it reached its receiver; `SaidIn`: who said it, in which conversation and turn |
+| `memory` | `MemoryEntry`, `MemoryKind`, `MemoryContent`: an entry of the memory of a project, a decision, a fact or a contract, with a short title and a text; `MemoryOrigin`, `MemorySource`: where it came from (the manager, a specialist, an answered decision request, a handoff); `SearchWords`: the words of a search and whether an entry fits them ([decision 0036](../../docs/decisions/0036-project-memory.md)) |
 | `error` | `DomainError`: every rule that can be broken |
 | `time` | `Timestamp`, `CalendarDate` |
 
@@ -175,6 +176,15 @@ done with them. It does no input or output.
   rule once, for the tasks of a project (by identifier) and for those of a
   proposal (by place): `would_create_cycle` for one more dependency,
   `has_cycle` for a whole set.
+- An entry of memory has a title of one line (at most 120 characters) and
+  a text (at most 20,000), both saying something. It names the specialist,
+  conversation and turn it came from exactly when it did not come from the
+  manager. It is never changed in place: a newer entry replaces it, with
+  its kind and its task, and the older one says which entry replaced it.
+  Only a current entry can be replaced.
+- A search in memory has one to twelve words in at most 200 characters,
+  each counted once in small letters. An entry fits when each word begins
+  a word of its title or its text, whatever the capitals.
 
 ## How to work in it
 

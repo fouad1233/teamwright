@@ -396,6 +396,33 @@ pub enum DomainError {
         /// The path, as it was named the second time.
         path: String,
     },
+
+    /// The title of an entry of memory had more than one line.
+    #[error("the title of a memory entry is one line")]
+    TitleOnSeveralLines,
+
+    /// An entry of memory came from a specialist without saying which, or
+    /// from the manager and named a specialist.
+    #[error("a memory entry names a specialist exactly when one wrote it")]
+    MemoryOriginIncomplete,
+
+    /// An entry of memory that a newer one replaced was to be replaced
+    /// again. Only the current entry can be.
+    #[error("this memory entry was replaced by a newer one already")]
+    MemoryEntryReplaced,
+
+    /// An entry of memory named itself as its replacement.
+    #[error("a memory entry cannot replace itself")]
+    MemoryEntryReplacesItself,
+
+    /// A search in memory had more words than one may.
+    #[error("a search has at most {max} words, but this one has {count}")]
+    TooManySearchWords {
+        /// The most words of a search.
+        max: usize,
+        /// How many were given.
+        count: usize,
+    },
 }
 
 impl DomainError {

@@ -373,7 +373,8 @@ fn parents_of(
         | Entity::Area
         | Entity::Tag
         | Entity::Conversation
-        | Entity::TeamMessage => {
+        | Entity::TeamMessage
+        | Entity::MemoryEntry => {
             text_of(state, "project_id").map(|id| (Entity::Project, id.to_owned()))
         }
         // A handoff cannot exist without its task, which cannot exist

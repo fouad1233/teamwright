@@ -16,22 +16,28 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError, Weak};
 use teamwright_domain::{
     Assignee, ComputerId, Conversation, ConversationId, DecisionOption, DecisionRequest,
     DomainError, Handoff, HandoffContent, Interview, InterviewQuestion, Member, MemberId,
-    MemberKind, MemberName, ModelName, Project, ProjectId, Proposal, ProposedMember, ProposedOwner,
-    ProposedTask, Rank, SaidIn, StatusCategory, Task, TaskId, TaskTitle, TeamMessage, Timestamp,
-    Turn, TurnId, TurnOrigin, TurnState,
+    MemberKind, MemberName, MemoryContent, MemoryEntry, MemoryKind, MemoryOrigin, ModelName,
+    Project, ProjectId, Proposal, ProposedMember, ProposedOwner, ProposedTask, Rank, SaidIn,
+    StatusCategory, Task, TaskId, TaskTitle, TeamMessage, Timestamp, Turn, TurnId, TurnOrigin,
+    TurnState,
 };
 
 use crate::agent_runtime::{
     self, AgentEvent, AgentRuntime, AgentRuntimeError, ManagerInterview, ManagerQuestion,
-    PermissionProfile, PlanProposal, PlannedOwner, ProgramVersion, PublishedHandoff, RunningTurn,
-    SentMessage, SessionChoice, SessionId, SignIn, TeamTool, TurnFailure, TurnOutcome, TurnRequest,
+    PermissionProfile, PlanProposal, PlannedOwner, ProgramVersion, PublishedHandoff,
+    RememberedFact, RunningTurn, SentMessage, SessionChoice, SessionId, SignIn, TeamTool,
+    TurnFailure, TurnOutcome, TurnRequest,
 };
 use crate::error::ApplicationError;
+use crate::memory::{
+    MAX_FACT_LENGTH, MOST_FACTS_PER_TURN, contract_entries, decision_entry, facts_remembered_in,
+    memory_in_words, remembered_entries,
+};
 use crate::places::{PlacesService, REFERENCES_FOLDER};
 use crate::ports::{
-    AreaRepository, Clock, ConversationRepository, FileSystem, MemberRepository, PlacesRepository,
-    PlanningRepository, ProjectFolders, ProjectRepository, TaskRepository, TeamworkRepository,
-    WorkListener,
+    AreaRepository, Clock, ConversationRepository, FileSystem, MemberRepository, MemoryRepository,
+    PlacesRepository, PlanningRepository, ProjectFolders, ProjectRepository, TaskRepository,
+    TeamworkRepository, WorkListener,
 };
 use crate::project_events::{ProjectEvent, event_of_ended_turn};
 use crate::teamwork::{handoffs_in_words, messages_in_words, messages_waiting_for};
@@ -154,6 +160,9 @@ pub struct WorkPorts {
     /// Where the handoffs of tasks and the messages between specialists
     /// are stored.
     pub teamwork: Arc<dyn TeamworkRepository>,
+    /// Where the memory of the projects is kept: decisions, facts and
+    /// contracts.
+    pub memory: Arc<dyn MemoryRepository>,
     /// The folder Teamwright gives each project.
     pub folders: Arc<dyn ProjectFolders>,
     /// Where the folders the manager chose for each project are stored.
@@ -326,11 +335,12 @@ impl WorkService {
         self.inner.guard().refuse_while_busy(&member)?;
 
         let now = ports.clock.now();
-        let brief = brief_for(
+        let brief = brief_with_memory(
             &project,
             &task,
             &ports.tasks.list_for_project(project.id())?,
             &ports.teamwork.handoffs_of_project(project.id())?,
+            &ports.memory.entries_of_project(project.id())?,
         );
         let conversation = Conversation::start(
             project.id(),
@@ -465,9 +475,12 @@ impl WorkService {
             })
             .ok_or(ApplicationError::NoDecisionOpen)?;
         let answered_turn = asked.clone();
+        // The question and its answer become a decision in the memory of
+        // the project, once the answer is stored with the turn it starts.
+        let decided = decision_entry(&conversation, &answered_turn, &words, now);
         let turn = Turn::start(conversation.id(), &words, TurnOrigin::Decision, now)?;
         let project = self.inner.require_project(conversation.project_id())?;
-        self.begin_turn(
+        let started = self.begin_turn(
             NewTurn {
                 conversation,
                 is_new_conversation: false,
@@ -478,7 +491,11 @@ impl WorkService {
             },
             Worker::Specialist(&member),
             &project,
-        )
+        )?;
+        if let Some(decided) = decided {
+            ports.memory.save_entries(&[decided])?;
+        }
+        Ok(started)
     }
 
     /// Lists the conversations that wait for the manager, in every project
@@ -735,12 +752,26 @@ impl WorkService {
                     prompt = Some(format!("{request}\n\n{words}"));
                 }
                 let teammates = teammates_of(member, &team);
+                let mut tools = specialist_tools(&conversation, &working_folder, teammates);
+                // The memory as it is when the turn starts: the team bus
+                // searches it (decision 0036).
+                tools.extend([
+                    TeamTool::Remember,
+                    TeamTool::SearchMemory {
+                        entries: remembered_entries(
+                            project,
+                            &ports.memory.entries_of_project(project.id())?,
+                            &ports.tasks.list_for_project(project.id())?,
+                            &team,
+                        ),
+                    },
+                ]);
                 (
                     member.model().map(ToString::to_string),
                     member.effort(),
                     instructions_for(member, project, &readable_folders),
                     PermissionProfile::specialist(),
-                    specialist_tools(&conversation, &working_folder, teammates),
+                    tools,
                 )
             }
             Worker::Advisor => {
@@ -990,6 +1021,9 @@ impl Inner {
                 self.record_handoff(&conversation, turn, published, now)?
             }
             AgentEvent::MessageSent(sent) => self.record_message(&conversation, turn, sent, now)?,
+            AgentEvent::FactRemembered(fact) => {
+                self.record_fact(&conversation, turn, &fact, now)?
+            }
             AgentEvent::TurnEnded(outcome) => end_turn(turn, &outcome, now),
         };
         if recorded.is_err() {
@@ -1054,6 +1088,77 @@ impl Inner {
             now,
         );
         self.ports.teamwork.save_handoff(&handoff)?;
+        // Its interface contract becomes the contract of the task in the
+        // memory of the project.
+        let project = self.ports.projects.find(conversation.project_id())?;
+        let task = self.ports.tasks.find(task_id)?;
+        if let (Some(project), Some(task)) = (project, task) {
+            let existing = self.ports.memory.entries_of_project(project.id())?;
+            let entries = contract_entries(&project, &task, &handoff, &existing);
+            if !entries.is_empty() {
+                self.ports.memory.save_entries(&entries)?;
+            }
+        }
+        Ok(Ok(()))
+    }
+
+    /// Records a fact a specialist remembered in a running turn, in the
+    /// memory of its project, with the task of the conversation if it has
+    /// one. A turn remembers at most [`MOST_FACTS_PER_TURN`] facts; one
+    /// more is not recorded, and the turn says so.
+    fn record_fact(
+        &self,
+        conversation: &Conversation,
+        turn: &mut Turn,
+        fact: &RememberedFact,
+        now: Timestamp,
+    ) -> Result<Result<(), DomainError>, ApplicationError> {
+        let Some(member_id) = conversation.member_id() else {
+            return Ok(Err(DomainError::NothingAsked));
+        };
+        if !turn.is_running() {
+            return Ok(Err(DomainError::TurnStillRunning));
+        }
+        let existing = self
+            .ports
+            .memory
+            .entries_of_project(conversation.project_id())?;
+        if facts_remembered_in(&existing, turn) >= MOST_FACTS_PER_TURN {
+            return Ok(turn.notice(
+                format!(
+                    "The fact \"{}\" was not remembered: a turn remembers at most \
+                     {MOST_FACTS_PER_TURN}.",
+                    fact.title.trim()
+                ),
+                now,
+            ));
+        }
+        if fact.text.trim().chars().count() > MAX_FACT_LENGTH {
+            return Ok(Err(DomainError::TextTooLong {
+                field: "fact",
+                max_length: MAX_FACT_LENGTH,
+                actual_length: fact.text.trim().chars().count(),
+            }));
+        }
+        let content = match MemoryContent::new(&fact.title, &fact.text) {
+            Ok(content) => content,
+            Err(broken) => return Ok(Err(broken)),
+        };
+        let entry = MemoryEntry::record(
+            conversation.project_id(),
+            MemoryKind::Fact,
+            content,
+            MemoryOrigin::Specialist(SaidIn {
+                member_id,
+                conversation_id: conversation.id(),
+                turn_id: turn.id(),
+            }),
+            conversation.task_id(),
+            now,
+        );
+        self.ports.memory.save_entries(&[entry])?;
+        // Nothing of the turn itself changed: the interface shows the fact
+        // among the steps from the memory, which it reads again.
         Ok(Ok(()))
     }
 
@@ -1569,6 +1674,21 @@ impl WorkInProgress<'_> {
 /// the project, and `handoffs` the handoffs of its tasks.
 #[must_use]
 pub fn brief_for(project: &Project, task: &Task, tasks: &[Task], handoffs: &[Handoff]) -> String {
+    brief_with_memory(project, task, tasks, handoffs, &[])
+}
+
+/// Writes the brief of a task as [`brief_for`] does, with what the memory
+/// of the project says that bears on the task, within a budget
+/// ([`memory_in_words`]), and how to search it for the rest. `memory`
+/// holds the entries of the project.
+#[must_use]
+pub fn brief_with_memory(
+    project: &Project,
+    task: &Task,
+    tasks: &[Task],
+    handoffs: &[Handoff],
+    memory: &[MemoryEntry],
+) -> String {
     let status_name = |other: &Task| {
         project.workflow().status(other.status_id()).map_or_else(
             || "unknown status".to_owned(),
@@ -1636,6 +1756,11 @@ pub fn brief_for(project: &Project, task: &Task, tasks: &[Task], handoffs: &[Han
     }
     if let Some(due_on) = task.schedule().due_on() {
         paragraphs.push(format!("It is due on {}.", due_on.format("%Y-%m-%d")));
+    }
+    // What was decided and agreed before, so that the specialist does not
+    // ask twice.
+    if let Some(remembered) = memory_in_words(project, task, &blockers, memory, tasks) {
+        paragraphs.push(remembered);
     }
     paragraphs.push(
         [
@@ -1716,6 +1841,11 @@ pub fn instructions_for(
              send_message with its name. It reads the message when it next starts to work, so \
              do not wait for an answer in this turn. Messages from teammates come with your \
              request.",
+            "- The project keeps a memory of decisions, facts and contracts. Before you ask the \
+             manager something, search it with the tool search_memory: it may have been decided \
+             already. When you learn something true about the project that others will need, \
+             record it with the tool remember: a short title and a sentence or two, at most \
+             three in a turn.",
             "- Write in plain words. Your manager reads your report first, and may read nothing \
              else.",
         ]
@@ -1804,6 +1934,7 @@ mod tests {
         members: Arc<InMemoryMemberRepository>,
         conversations: Arc<InMemoryConversationRepository>,
         teamwork: Arc<crate::in_memory::InMemoryTeamworkRepository>,
+        memory: Arc<crate::in_memory::InMemoryMemoryRepository>,
         places: Arc<InMemoryPlacesRepository>,
         file_system: Arc<PretendFileSystem>,
         runtime: Arc<ScriptedRuntime>,
@@ -1827,6 +1958,7 @@ mod tests {
                     self.conversations.clone(),
                 )),
                 teamwork: self.teamwork.clone(),
+                memory: self.memory.clone(),
                 folders: Arc::new(FixedProjectFolders::inside("projects")),
                 places: self.places.clone(),
                 file_system: self.file_system.clone(),
@@ -1862,6 +1994,7 @@ mod tests {
             members: Arc::new(InMemoryMemberRepository::default()),
             conversations: Arc::new(InMemoryConversationRepository::default()),
             teamwork: Arc::new(crate::in_memory::InMemoryTeamworkRepository::default()),
+            memory: Arc::new(crate::in_memory::InMemoryMemoryRepository::default()),
             places: Arc::new(InMemoryPlacesRepository::default()),
             file_system: Arc::new(PretendFileSystem::default()),
             runtime: Arc::new(ScriptedRuntime::new()),
@@ -2243,14 +2376,19 @@ mod tests {
         assert_eq!(request.session, SessionChoice::New);
         assert_eq!(request.permissions, PermissionProfile::specialist());
         // A turn about a task may hand its result over. Nobody else is on
-        // the team, so there is nobody to write to.
+        // the team, so there is nobody to write to. Every specialist may
+        // remember and search, in a memory that is empty so far.
         assert_eq!(
             request.team_tools,
             [
                 TeamTool::AskManager,
                 TeamTool::PublishHandoff {
                     folder: PathBuf::from("projects").join("SSN")
-                }
+                },
+                TeamTool::Remember,
+                TeamTool::SearchMemory {
+                    entries: Vec::new()
+                },
             ]
         );
         assert!(request.readable_folders.is_empty());
@@ -3797,18 +3935,20 @@ mod tests {
                 "How the team works:",
             ]
         );
-        assert_eq!(lines.len(), 12);
+        assert_eq!(lines.len(), 13);
         assert_eq!(
             lines[6],
             "- Single files the manager handed you are copies in the folder references inside \
              the folder of the project."
         );
-        assert!(lines[11].starts_with("- Write in plain words."));
+        assert!(lines[12].starts_with("- Write in plain words."));
+        assert!(lines[11].contains("search it with the tool search_memory"));
+        assert!(lines[11].contains("record it with the tool remember"));
         assert!(lines[8].contains("ask with the tool ask_manager"));
         assert!(lines[8].ends_with("The answer comes as your next message."));
         assert!(lines[9].contains("the tool publish_handoff before your report"));
         assert!(lines[10].contains("the tool send_message with its name"));
-        assert_eq!(shorter.lines().count(), 11);
+        assert_eq!(shorter.lines().count(), 12);
         assert!(!instructions.contains("Besides the folder of the project"));
         assert!(!shorter.contains("What you are on the team for"));
     }
@@ -3960,7 +4100,11 @@ mod tests {
                 TeamTool::AskManager,
                 TeamTool::SendMessage {
                     teammates: vec!["Firmware engineer".to_owned(), "Tester".to_owned()]
-                }
+                },
+                TeamTool::Remember,
+                TeamTool::SearchMemory {
+                    entries: Vec::new()
+                },
             ]
         );
     }
@@ -4050,6 +4194,199 @@ mod tests {
                               teammate."
                         .to_owned()
                 },
+            ]
+        );
+    }
+
+    // Project memory
+
+    impl Workspace {
+        fn memory(&self) -> Vec<MemoryEntry> {
+            self.ports
+                .memory
+                .entries_of_project(self.project.id())
+                .unwrap()
+        }
+    }
+
+    fn fact(title: &str) -> AgentEvent {
+        AgentEvent::FactRemembered(RememberedFact {
+            title: title.to_owned(),
+            text: "The display is on SPI2.".to_owned(),
+        })
+    }
+
+    #[test]
+    fn an_answered_decision_becomes_a_decision_in_memory() {
+        let workspace = workspace();
+        let (choice, asked) = workspace.asked();
+
+        workspace
+            .work
+            .answer_decision(asked.conversation.id(), Some(1), "Keep it small.")
+            .unwrap();
+
+        let memory = workspace.memory();
+        assert_eq!(memory.len(), 1);
+        let decision = &memory[0];
+        assert_eq!(decision.kind(), MemoryKind::Decision);
+        assert_eq!(
+            decision.title(),
+            "Which way should I take for \"Choose the battery\"?"
+        );
+        assert_eq!(
+            decision.text(),
+            "Asked: Which way should I take for \"Choose the battery\"?\n\n\
+             Decision: The compact way\n\nKeep it small."
+        );
+        assert_eq!(decision.task_id(), Some(choice.id()));
+        assert_eq!(
+            decision.origin(),
+            MemoryOrigin::DecisionRequest(SaidIn {
+                member_id: workspace.engineer.id(),
+                conversation_id: asked.conversation.id(),
+                turn_id: asked.turns[0].id(),
+            })
+        );
+    }
+
+    #[test]
+    fn a_decision_whose_answer_could_not_be_sent_is_not_remembered() {
+        let workspace = workspace();
+        let (_, asked) = workspace.asked();
+        workspace
+            .ports
+            .runtime
+            .refuse_next_turn(AgentRuntimeError::NotInstalled);
+
+        assert!(
+            workspace
+                .work
+                .answer_decision(asked.conversation.id(), Some(0), "")
+                .is_err()
+        );
+
+        assert!(workspace.memory().is_empty());
+    }
+
+    #[test]
+    fn the_contract_of_a_handoff_becomes_the_contract_of_its_task_and_a_later_one_replaces_it() {
+        let workspace = workspace();
+        workspace.work.start_work(workspace.schematic.id()).unwrap();
+        workspace.deliver(0, AgentEvent::HandoffPublished(pin_map_handoff()));
+        workspace.ports.clock.advance(TimeDelta::seconds(5));
+        workspace.deliver(
+            0,
+            AgentEvent::HandoffPublished(PublishedHandoff {
+                summary: "Pin map v2.".to_owned(),
+                contract: "SPI2 runs at 10 MHz.".to_owned(),
+                files: Vec::new(),
+            }),
+        );
+        workspace.deliver(
+            0,
+            AgentEvent::HandoffPublished(PublishedHandoff {
+                summary: "No contract this time.".to_owned(),
+                contract: String::new(),
+                files: Vec::new(),
+            }),
+        );
+
+        let memory = workspace.memory();
+        assert_eq!(memory.len(), 2);
+        let (older, newer) = (&memory[0], &memory[1]);
+        assert_eq!(newer.kind(), MemoryKind::Contract);
+        assert_eq!(newer.title(), "Interface of SSN-1: Draw the schematic");
+        assert_eq!(newer.text(), "SPI2 runs at 10 MHz.");
+        assert_eq!(newer.task_id(), Some(workspace.schematic.id()));
+        assert!(
+            matches!(newer.origin(), MemoryOrigin::Handoff(said) if said.member_id == workspace.engineer.id())
+        );
+        assert!(newer.is_current());
+        assert_eq!(older.text(), "SPI2 runs at 8 MHz.");
+        assert_eq!(older.replaced_by(), Some(newer.id()));
+    }
+
+    #[test]
+    fn a_specialist_remembers_at_most_three_facts_in_a_turn_and_the_turn_says_so() {
+        let workspace = workspace();
+        let started = workspace.work.start_work(workspace.schematic.id()).unwrap();
+        workspace.deliver(0, session_started());
+        for title in ["Display bus", "Sensor bus", "Clock", "One too many"] {
+            workspace.deliver(0, fact(title));
+        }
+        workspace.deliver(0, ended(None, REPORT));
+        workspace.deliver(0, fact("After the end"));
+
+        let memory = workspace.memory();
+        let titles: Vec<&str> = memory.iter().map(MemoryEntry::title).collect();
+        assert_eq!(titles, ["Display bus", "Sensor bus", "Clock"]);
+        assert_eq!(memory[0].kind(), MemoryKind::Fact);
+        assert_eq!(memory[0].task_id(), Some(workspace.schematic.id()));
+        assert_eq!(
+            memory[0].origin(),
+            MemoryOrigin::Specialist(SaidIn {
+                member_id: workspace.engineer.id(),
+                conversation_id: started.conversation.id(),
+                turn_id: started.turns[0].id(),
+            })
+        );
+        let turn = &workspace.only_conversation().turns[0];
+        assert!(turn.steps().iter().any(|step| {
+            step.content
+                == StepContent::Notice {
+                    message: "The fact \"One too many\" was not remembered: a turn remembers at \
+                          most 3."
+                        .to_owned(),
+                }
+        }));
+    }
+
+    #[test]
+    fn a_new_task_starts_with_what_memory_says_and_the_turn_may_search_it() {
+        let workspace = workspace();
+        workspace.work.start_work(workspace.schematic.id()).unwrap();
+        workspace.deliver(0, fact("Display bus"));
+        workspace.deliver(0, AgentEvent::HandoffPublished(pin_map_handoff()));
+        workspace.deliver(0, ended(None, REPORT));
+        let firmware = workspace.specialist("Firmware engineer");
+        let drivers =
+            workspace.task_for("Write the drivers", Some(Assignee::Member(firmware.id())));
+        workspace
+            .tasks
+            .add_dependency(drivers.id(), workspace.schematic.id())
+            .unwrap();
+
+        let started = workspace.work.start_work(drivers.id()).unwrap();
+
+        let brief = started.turns[0].request();
+        assert!(brief.contains(
+            "From the memory of the project, what bears on this task. Search the memory with \
+             the tool search_memory before you ask the manager something that may have been \
+             decided already.\n\n\
+             Fact: Display bus (SSN-1: Draw the schematic, 2026-11-11)\n\
+             The display is on SPI2."
+        ));
+        // The contract the handoff left is in the brief once, with the
+        // handoff.
+        assert_eq!(brief.matches("SPI2 runs at 8 MHz.").count(), 1);
+        assert!(brief.ends_with("4. what is still open."));
+        let request = workspace.ports.runtime.requests().pop().unwrap();
+        let Some(TeamTool::SearchMemory { entries }) = request.team_tools.last() else {
+            panic!("the turn may search memory");
+        };
+        let searched: Vec<(&str, &str)> = entries
+            .iter()
+            .map(|entry| (entry.title.as_str(), entry.source.as_str()))
+            .collect();
+        assert_eq!(
+            searched,
+            [
+                (
+                    "Interface of SSN-1: Draw the schematic",
+                    "handed over by Hardware engineer"
+                ),
+                ("Display bus", "remembered by Hardware engineer"),
             ]
         );
     }

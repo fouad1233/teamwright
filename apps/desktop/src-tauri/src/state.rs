@@ -193,6 +193,9 @@ impl AppState {
         let teamwork_repository = Arc::new(teamwright_storage::SqliteTeamworkRepository::new(
             database.clone(),
         ));
+        let memory_repository = Arc::new(teamwright_storage::SqliteMemoryRepository::new(
+            database.clone(),
+        ));
         let runtime: Arc<dyn AgentRuntime> = Arc::new(agent_program());
         let clock = Arc::new(SystemClock);
         let folders: Arc<dyn ProjectFolders> = Arc::new(FoldersOfProjects {
@@ -245,6 +248,7 @@ impl AppState {
             conversations: conversation_repository.clone(),
             planning: planning_repository,
             teamwork: teamwork_repository.clone(),
+            memory: memory_repository,
             folders: folders.clone(),
             places: places_repository.clone(),
             file_system: file_system.clone(),

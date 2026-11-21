@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use teamwright_application::{
     AgentEvent, AgentRuntime, AgentRuntimeError, Installation, ProgramVersion, RunningTurn,
-    SessionId, SignIn, TeamTool, TurnRequest,
+    SessionId, SignIn, TeamTool, TurnOutcome, TurnRequest,
 };
 
 use crate::arguments::{
@@ -15,6 +15,7 @@ use crate::arguments::{
 use crate::decode::Decoder;
 use crate::environment::Environment;
 use crate::locate::Locator;
+use crate::memory_file::MemoryFile;
 use crate::process::{command, run_briefly, start_turn};
 use crate::sign_in::parse_sign_in;
 use crate::team_bus::TeamBus;
@@ -148,7 +149,14 @@ impl AgentRuntime for ClaudeCode {
             .iter()
             .map(|folder| full_folder(folder))
             .collect::<Result<Vec<_>, _>>()?;
-        let arguments = turn_arguments(&request, &readable_folders, self.team_bus_for(&request))?;
+        // The memory a search of the turn reads is in a file of its own,
+        // which lives as long as the turn (decision 0036).
+        let memory = memory_file_for(&request)?;
+        let team_bus = self.team_bus_for(&request).map(|bus| match &memory {
+            Some(file) => bus.with_memory_file(file.path()),
+            None => bus.clone(),
+        });
+        let arguments = turn_arguments(&request, &readable_folders, team_bus.as_ref())?;
         let working_folder = full_folder(&request.working_folder)?;
         let program = self.program()?;
         refuse_a_script(&program)?;
@@ -181,7 +189,13 @@ impl AgentRuntime for ClaudeCode {
             Decoder::for_team(team).with_teammates(teammates),
             listener,
         )?;
-        Ok(Box::new(turn))
+        Ok(match memory {
+            Some(memory) => Box::new(TurnWithMemory {
+                turn: Box::new(turn),
+                _memory: memory,
+            }),
+            None => Box::new(turn),
+        })
     }
 
     fn open_in_desktop_app(
@@ -217,6 +231,44 @@ impl AgentRuntime for ClaudeCode {
             }),
             _ => Ok(()),
         }
+    }
+}
+
+/// The file that holds the memory of the project for a turn that may
+/// search it, written now. Nothing for a turn without `search_memory`.
+fn memory_file_for(request: &TurnRequest) -> Result<Option<MemoryFile>, AgentRuntimeError> {
+    let Some(entries) = request.team_tools.iter().find_map(|tool| match tool {
+        TeamTool::SearchMemory { entries } => Some(entries),
+        _ => None,
+    }) else {
+        return Ok(None);
+    };
+    MemoryFile::write(entries)
+        .map(Some)
+        .map_err(|error| AgentRuntimeError::CouldNotRun {
+            message: format!("the memory of the project could not be written for it: {error}"),
+        })
+}
+
+/// A turn whose team bus reads the memory of the project from a file. The
+/// file is removed when the turn is dropped, after it has ended.
+struct TurnWithMemory {
+    turn: Box<dyn RunningTurn>,
+    _memory: MemoryFile,
+}
+
+impl RunningTurn for TurnWithMemory {
+    fn stop(&self) {
+        self.turn.stop();
+    }
+
+    fn is_finished(&self) -> bool {
+        self.turn.is_finished()
+    }
+
+    fn wait(self: Box<Self>) -> Result<TurnOutcome, AgentRuntimeError> {
+        let Self { turn, _memory } = *self;
+        turn.wait()
     }
 }
 
@@ -390,6 +442,46 @@ mod tests {
             .unwrap();
 
         assert_eq!(refusal.code(), "agent_invalid_request");
+    }
+
+    #[test]
+    fn a_turn_that_may_search_memory_gets_the_memory_in_a_file_and_names_it_to_the_bus() {
+        use teamwright_application::{PermissionProfile, SessionChoice};
+
+        let mut request = TurnRequest {
+            working_folder: PathBuf::from("work"),
+            prompt: "Hello".to_owned(),
+            session: SessionChoice::New,
+            model: None,
+            effort: None,
+            extra_instructions: None,
+            permissions: PermissionProfile::specialist(),
+            team_tools: vec![TeamTool::AskManager],
+            readable_folders: Vec::new(),
+        };
+        assert!(memory_file_for(&request).unwrap().is_none());
+
+        request.team_tools.push(TeamTool::SearchMemory {
+            entries: Vec::new(),
+        });
+        let file = memory_file_for(&request).unwrap().unwrap();
+        assert_eq!(
+            crate::memory_file::entries_from(file.path()),
+            Ok(Vec::new())
+        );
+        let bus = TeamBus {
+            program: PathBuf::from("teamwright"),
+            arguments: vec!["--team-bus".to_owned()],
+        }
+        .with_memory_file(file.path());
+        assert_eq!(
+            bus.arguments,
+            [
+                "--team-bus".to_owned(),
+                "--memory".to_owned(),
+                file.path().to_string_lossy().into_owned()
+            ]
+        );
     }
 
     #[test]

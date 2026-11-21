@@ -449,7 +449,40 @@ pub enum TeamTool {
         /// specialists of the project.
         teammates: Vec<String>,
     },
+    /// `remember`: a specialist records a fact about the project in its
+    /// memory. It is reported as [`AgentEvent::FactRemembered`].
+    Remember,
+    /// `search_memory`: a specialist searches the memory of the project
+    /// with a few words. The answer is data, read from the entries that
+    /// are current when the turn starts (decision 0036).
+    SearchMemory {
+        /// The current entries of the memory of the project, newest first.
+        entries: Vec<RememberedEntry>,
+    },
 }
+
+/// An entry of the memory of a project, put into words for a session that
+/// searches it.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct RememberedEntry {
+    /// A decision, a fact or a contract.
+    pub kind: MemoryKind,
+    /// The short title.
+    pub title: String,
+    /// The text.
+    pub text: String,
+    /// Where it came from, in words: "remembered by Firmware engineer".
+    pub source: String,
+    /// The task it belongs to, in words ("SSN-3: Draw the schematic"), if
+    /// any.
+    pub task: Option<String>,
+    /// When it was recorded.
+    pub recorded_at: Timestamp,
+}
+
+/// What an entry of memory is. It belongs to the domain; it is named here
+/// too because an entry for the team bus carries it.
+pub use teamwright_domain::MemoryKind;
 
 /// What is needed to run one turn of a session.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -528,6 +561,10 @@ pub enum AgentEvent {
     /// A specialist sent a teammate a message, and goes on with its turn.
     /// Like a handoff, it is reported only once the team bus has taken it.
     MessageSent(SentMessage),
+    /// A specialist recorded a fact in the memory of the project, and goes
+    /// on with its turn. Like a handoff, it is reported only once the team
+    /// bus has taken it, which allows only a few in a turn.
+    FactRemembered(RememberedFact),
     /// A request to the model failed and is tried again.
     Retrying {
         /// Which attempt this is, if reported.
@@ -675,6 +712,15 @@ pub struct SentMessage {
 /// What a message is. It belongs to the domain; it is named here too
 /// because a sent message carries it.
 pub use teamwright_domain::MessageKind;
+
+/// A fact a specialist records in the memory of the project.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RememberedFact {
+    /// A short title of one line.
+    pub title: String,
+    /// What is true, in a few sentences.
+    pub text: String,
+}
 
 /// What a session has at its start.
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -24,6 +24,7 @@ pub mod error;
 pub mod ids;
 pub mod integration;
 pub mod member;
+pub mod memory;
 pub mod planning;
 pub mod project;
 pub mod project_files;
@@ -51,11 +52,15 @@ pub use conversation::{
 pub use dependencies::DependencyGraph;
 pub use error::DomainError;
 pub use ids::{
-    AreaId, ChecklistItemId, ComputerId, ConversationId, HandoffId, MemberId, ProjectId, SprintId,
-    StatusId, TagId, TaskId, TeamMessageId, TurnId, ViewId,
+    AreaId, ChecklistItemId, ComputerId, ConversationId, HandoffId, MemberId, MemoryEntryId,
+    ProjectId, SprintId, StatusId, TagId, TaskId, TeamMessageId, TurnId, ViewId,
 };
 pub use integration::{EventKind, EventKinds, RepositoryName, WebAddress};
 pub use member::{Effort, Member, MemberInstructions, MemberKind, MemberProfile, MemberSnapshot};
+pub use memory::{
+    MemoryContent, MemoryEntry, MemoryEntrySnapshot, MemoryKind, MemoryOrigin, MemorySource,
+    SearchWords,
+};
 pub use planning::{
     Interview, InterviewAnswer, InterviewQuestion, InterviewSnapshot, Proposal, ProposalChange,
     ProposalSnapshot, ProposedMember, ProposedOwner, ProposedTask,

@@ -19,8 +19,8 @@ use teamwright_application::{
 
 use crate::team_bus::{
     ASK_MANAGER_IN_SESSION, INTERVIEW_IN_SESSION, PROPOSE_PLAN_IN_SESSION,
-    PUBLISH_HANDOFF_IN_SESSION, SEND_MESSAGE_IN_SESSION, handoff_from, interview_from,
-    message_from, proposal_from, question_from,
+    PUBLISH_HANDOFF_IN_SESSION, REMEMBER_IN_SESSION, SEND_MESSAGE_IN_SESSION, fact_from,
+    handoff_from, interview_from, message_from, proposal_from, question_from,
 };
 
 /// The longest summary of a tool's input, in characters.
@@ -459,6 +459,9 @@ impl Decoder {
             SEND_MESSAGE_IN_SESSION => message_from(input, &self.teammates)
                 .ok()
                 .map(AgentEvent::MessageSent),
+            // The bus allows only a few facts in a turn, so a fact too is
+            // reported only once the bus took it.
+            REMEMBER_IN_SESSION => fact_from(input).ok().map(AgentEvent::FactRemembered),
             _ => None,
         }
     }
@@ -1369,5 +1372,55 @@ mod tests {
             })]
         );
         assert!(matches!(to_nobody.as_slice(), [AgentEvent::ToolUse { .. }]));
+    }
+
+    #[test]
+    fn a_fact_is_reported_once_the_bus_has_taken_it_and_a_search_is_an_ordinary_tool_use() {
+        let mut decoder = Decoder::new();
+        let fact = serde_json::json!({ "title": "Sensor bus", "text": "On I2C0." });
+
+        let at_the_call = decoder.decode_line(&call_line(
+            "toolu_1",
+            crate::team_bus::REMEMBER_IN_SESSION,
+            &fact,
+        ));
+        let at_the_answer = decoder.decode_line(&answer_line("toolu_1", false));
+        decoder.decode_line(&call_line(
+            "toolu_2",
+            crate::team_bus::REMEMBER_IN_SESSION,
+            &fact,
+        ));
+        let refused = decoder.decode_line(&answer_line("toolu_2", true));
+        let searched = decoder.decode_line(&call_line(
+            "toolu_3",
+            crate::team_bus::SEARCH_MEMORY_IN_SESSION,
+            &serde_json::json!({ "query": "display bus" }),
+        ));
+
+        assert!(at_the_call.is_empty());
+        assert_eq!(
+            at_the_answer,
+            [AgentEvent::FactRemembered(
+                teamwright_application::RememberedFact {
+                    title: "Sensor bus".to_owned(),
+                    text: "On I2C0.".to_owned(),
+                }
+            )]
+        );
+        assert!(matches!(
+            refused.as_slice(),
+            [
+                AgentEvent::ToolUse { .. },
+                AgentEvent::ToolResult { failed: true, .. }
+            ]
+        ));
+        assert_eq!(
+            searched,
+            [AgentEvent::ToolUse {
+                id: "toolu_3".to_owned(),
+                tool: crate::team_bus::SEARCH_MEMORY_IN_SESSION.to_owned(),
+                summary: "display bus".to_owned(),
+            }]
+        );
     }
 }

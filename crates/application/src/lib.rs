@@ -26,6 +26,7 @@ pub mod files;
 pub mod google_drive;
 pub mod in_memory;
 pub mod integrations;
+pub mod memory;
 pub mod notifications;
 pub mod places;
 pub mod ports;
@@ -44,11 +45,12 @@ pub mod workbook;
 
 pub use agent_runtime::{
     AgentEvent, AgentRuntime, AgentRuntimeError, Effort, Installation, InterviewQuestionAsked,
-    ManagerInterview, ManagerQuestion, McpServer, MessageKind, ModelUsage, PermissionDenial,
-    PermissionMode, PermissionProfile, PlanProposal, PlanUsage, PlanWindow, PlanWindowKind,
-    PlannedMember, PlannedOwner, PlannedTask, ProgramVersion, PublishedHandoff, QuestionOption,
-    RunningTurn, SentMessage, SessionChoice, SessionContext, SessionId, SessionStarted, SignIn,
-    TeamTool, TokenCounts, TurnFailure, TurnOutcome, TurnRequest,
+    ManagerInterview, ManagerQuestion, McpServer, MemoryKind, MessageKind, ModelUsage,
+    PermissionDenial, PermissionMode, PermissionProfile, PlanProposal, PlanUsage, PlanWindow,
+    PlanWindowKind, PlannedMember, PlannedOwner, PlannedTask, ProgramVersion, PublishedHandoff,
+    QuestionOption, RememberedEntry, RememberedFact, RunningTurn, SentMessage, SessionChoice,
+    SessionContext, SessionId, SessionStarted, SignIn, TeamTool, TokenCounts, TurnFailure,
+    TurnOutcome, TurnRequest,
 };
 pub use appearance::{AppearanceService, Theme, ThemeStore};
 pub use areas::AreaService;
@@ -75,6 +77,10 @@ pub use integrations::{
     IntegrationSettings, IntegrationStore, ListeningAddress, ProjectIntegrations, SlackChannel,
     events_sent_to_an_address, events_told_in_a_channel,
 };
+pub use memory::{
+    MOST_FACTS_PER_TURN, MemoryService, NewFact, Searchable, contract_entries, decision_entry,
+    memory_in_words, remembered_entries, search,
+};
 pub use notifications::{
     Notification, NotificationChoice, NotificationChoiceStore, NotificationKind,
     NotificationPermission, NotificationService, notification_for, notification_of,
@@ -82,9 +88,9 @@ pub use notifications::{
 pub use places::{ChosenPlaces, PlacesService, ProjectPlaces, REFERENCES_FOLDER};
 pub use ports::{
     ApprovedPlan, AreaRepository, Clock, ConversationRepository, DiskEntry, FileSystem,
-    FolderReader, MemberRepository, PlacesRepository, PlanningRepository, ProjectFolders,
-    ProjectRepository, SprintRepository, StorageError, TagRepository, TaskRepository,
-    TeamworkRepository, ViewRepository, WorkListener,
+    FolderReader, MemberRepository, MemoryRepository, PlacesRepository, PlanningRepository,
+    ProjectFolders, ProjectRepository, SprintRepository, StorageError, TagRepository,
+    TaskRepository, TeamworkRepository, ViewRepository, WorkListener,
 };
 pub use project_events::{
     Agent, Happening, ProjectEvent, StatusOfEvent, TaskOfEvent, WaitsFor,
@@ -111,7 +117,7 @@ pub use views::{NewView, ViewService};
 pub use work::{
     AgentProgram, AgentProgramState, ApprovedMember, ApprovedOwner, ApprovedProposal, ApprovedTask,
     ConversationWithTurns, ProposalEdit, WorkPorts, WorkService, answers_in_words, brief_for,
-    instructions_for, instructions_for_advisor,
+    brief_with_memory, instructions_for, instructions_for_advisor,
 };
 pub use workbook::{
     Cell, Column, Section, Sheet, SheetContent, Table, Workbook, WorkbookPorts, WorkbookService,

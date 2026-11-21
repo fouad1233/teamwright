@@ -19,7 +19,8 @@ format of its output.
 | `process` | Starting the program, feeding it the prompt, reading it, stopping it |
 | `decode` | Turns the JSON lines of headless mode into `AgentEvent`s and a `TurnOutcome` |
 | `sign_in` | Reads the answer of `claude auth status --json` |
-| `team_bus` | The tool server through which a specialist asks the manager to decide, hands its result over and writes to a teammate, and the Advisor interviews and proposes |
+| `team_bus` | The tool server through which a specialist asks the manager to decide, hands its result over, writes to a teammate, and remembers and searches in the memory of the project, and the Advisor interviews and proposes |
+| `memory_file` | `MemoryFile`: the current entries of the memory of a project in a file of their own for one turn, which the team bus reads (`entries_from`) and which is removed when the turn is dropped |
 
 ## How a turn runs
 
@@ -113,9 +114,25 @@ arguments):
   `question` or a `note` (`kind`) with a `text` of at most 4,000
   characters. A turn sends at most five.
 
-Neither of the last two ends the turn: the server answers that the
-handoff is recorded, or that the message is on its way, and the session
-goes on ([decision 0029](../../docs/decisions/0029-handoffs-and-messages-between-specialists.md)).
+- `remember`: a specialist records a fact in the memory of the project: a
+  `title` of one line (at most 120 characters) and a `text` of at most
+  2,000. A turn remembers at most three.
+- `search_memory`: a specialist searches the memory with a few plain words
+  (`query`). The server answers with the entries that fit, the newest
+  first, at most eight, each text shortened to 600 characters, with where
+  each came from, its task and its day (`found_in_words`), and with how to
+  narrow the search if more fit. It is the one tool that answers with
+  data. The server never opens the database: the runtime writes the
+  current entries to a file (`memory_file`, readable by the user alone)
+  when the turn starts, names it with `--memory <file>` among the
+  arguments the bus is started with, and removes it when the turn is over.
+  A fact the turn remembered is found by a later search of the same turn
+  ([decision 0036](../../docs/decisions/0036-project-memory.md)).
+
+None of the last four ends the turn: the server answers that the
+handoff is recorded, that the message is on its way, that the fact is
+remembered or what the search found, and the session goes on
+([decision 0029](../../docs/decisions/0029-handoffs-and-messages-between-specialists.md)).
 
 A model counts from 1, so `recommended` and `waits_for` do; what comes out
 counts from 0. An estimate in hours becomes minutes. Texts are trimmed, and
@@ -152,7 +169,11 @@ until the answer of the server comes back in the stream. If the server took
 it, it becomes `AgentEvent::HandoffPublished` or `MessageSent`; if the
 server refused it (a file that is not there, or a sixth message), it
 becomes an ordinary tool use with a failed result. The decoder is told the
-names of the teammates (`Decoder::with_teammates`), as the server is.
+names of the teammates (`Decoder::with_teammates`), as the server is. A
+call of `remember` is held the same way and becomes
+`AgentEvent::FactRemembered`, because the server allows only a few in a
+turn. A call of `search_memory` changes nothing and is an ordinary tool
+use, with the words searched as its summary.
 
 ## Rules for code in this crate
 
