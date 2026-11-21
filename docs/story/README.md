@@ -37,3 +37,4 @@ two readers.
 | 9 | [The film](09-the-film.md) | 14 November 2026 |
 | 10 | [Every view](10-every-view.md) | 16 November 2026 |
 | 11 | [Ten themes and a release](11-ten-themes-and-a-release.md) | 18 November 2026 |
+| 12 | [A night on another computer](12-a-night-on-another-computer.md) | 22 November 2026 |

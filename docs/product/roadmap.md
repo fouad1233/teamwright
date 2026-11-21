@@ -175,8 +175,11 @@ Several specialists working together with the manager in the loop.
   still needs the manager's accept. It runs on one computer, and the
   others show where. Tested at every layer (the rule on 34 cases, a
   small project that runs to its end, a budget that stops it) and seen
-  working in a browser on the demo. It has never started a real
-  specialist and never ran in the built program
+  working in a browser on the demo. While the limit of the Claude plan
+  is reached it starts nothing and says why once; work the limit
+  stopped goes on by itself after the reset, once for each reset
+  (decision 0040). It has never started a real specialist and never ran
+  in the built program
 - 🚧 Permission requests for risky actions routed to the manager
   ([decision 0038](../decisions/0038-permission-requests-routed-to-the-manager.md)).
   A specialist asks through the team bus for one command, a prefix of
