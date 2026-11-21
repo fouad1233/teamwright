@@ -114,6 +114,54 @@ fn a_real_turn_writes_a_file_and_reports_its_tokens() {
     assert!(written.contains("yes"));
 }
 
+/// A real turn on a subscription reports the plan: whether it allows work,
+/// and of the five hours and the week how much is used and when each
+/// resets (decision 0040). If the limit is reached when this runs, the turn
+/// must end as `PlanLimitReached`, never as an ordinary failure; the test
+/// then prints what the program said, which is the shape the decoder
+/// relies on. With an API key the program reports no plan, and this test
+/// fails for that reason alone.
+#[test]
+#[ignore = "needs the real Claude Code, signed in with a subscription, and spends one turn"]
+fn a_real_turn_reports_the_plan_or_ends_at_its_limit() {
+    let folder = tempfile::tempdir().unwrap();
+    let events = Arc::new(Mutex::new(Vec::new()));
+    let collected = Arc::clone(&events);
+
+    let turn = runtime()
+        .start_turn(
+            request(folder.path(), "Say yes.", SessionChoice::New),
+            Box::new(move |event| collected.lock().unwrap().push(event)),
+        )
+        .unwrap();
+    let outcome = turn.wait().unwrap();
+    let events = events.lock().unwrap().clone();
+    let plans: Vec<_> = events
+        .iter()
+        .filter_map(|event| match event {
+            AgentEvent::PlanUsage(plan) => Some(plan.clone()),
+            _ => None,
+        })
+        .collect();
+    println!("{plans:#?}");
+    println!("{:?}", outcome.failure);
+
+    match &outcome.failure {
+        None => {
+            let plan = plans
+                .last()
+                .expect("a turn on a subscription reports the plan");
+            assert!(matches!(
+                plan.status.as_deref(),
+                Some("allowed" | "allowed_warning")
+            ));
+            assert!(!plan.windows.is_empty());
+        }
+        Some(TurnFailure::PlanLimitReached(hit)) => println!("{hit:?}"),
+        Some(other) => panic!("the turn failed otherwise: {other:?}"),
+    }
+}
+
 /// What a turn did with one tool: the tool, what it was used on, and
 /// whether the use failed or was refused.
 fn tool_uses(events: &[AgentEvent]) -> Vec<(String, String, bool)> {
