@@ -1,9 +1,9 @@
 //! The clock of the computer.
 
-use chrono::{DurationRound, Local, TimeDelta, Utc};
+use chrono::{DurationRound, FixedOffset, Local, NaiveDateTime, Offset, TimeDelta, TimeZone, Utc};
 use teamwright_domain::{CalendarDate, Timestamp};
 
-use crate::ports::Clock;
+use crate::ports::{Clock, utc_offset_of};
 
 /// Reads the time from the operating system.
 ///
@@ -25,6 +25,29 @@ impl Clock for SystemClock {
     /// manager is.
     fn day_of(&self, moment: Timestamp) -> CalendarDate {
         moment.with_timezone(&Local).date_naive()
+    }
+
+    fn local_time(&self, moment: Timestamp) -> NaiveDateTime {
+        moment.with_timezone(&Local).naive_local()
+    }
+
+    /// The zone of this computer is known by its offsets. Another zone is
+    /// known only if it is this computer's under its name, or Coordinated
+    /// Universal Time: the program carries no database of the zones of the
+    /// world. Claude Code runs on this computer and names its zone, so the
+    /// zone it names is nearly always this one.
+    fn offset_in(&self, zone: Option<&str>, local: NaiveDateTime) -> Option<FixedOffset> {
+        let is_here = match zone {
+            None => true,
+            Some(name) => iana_time_zone::get_timezone().is_ok_and(|here| here == name),
+        };
+        if is_here {
+            return Local
+                .from_local_datetime(&local)
+                .earliest()
+                .map(|moment| moment.offset().fix());
+        }
+        zone.and_then(utc_offset_of)
     }
 }
 

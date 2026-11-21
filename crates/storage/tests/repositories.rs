@@ -1172,6 +1172,40 @@ fn a_turn_keeps_how_full_its_context_was_with_or_without_a_window() {
     );
 }
 
+#[test]
+fn a_turn_at_the_limit_of_the_plan_is_kept_and_logged_as_one_and_others_are_logged_as_before() {
+    let store = Store::in_memory();
+    let (_, _, _, conversation) = stored_conversation(&store);
+    let mut at_limit = running_turn(&conversation, "Draw the schematic", moment(9));
+    at_limit.end_at_plan_limit(None, moment(10)).unwrap();
+    let mut failed = running_turn(&conversation, "Check it", moment(11));
+    failed
+        .fail("Overloaded.".to_owned(), None, moment(12))
+        .unwrap();
+    let start = store.database.operations().unwrap().len();
+
+    store.conversations.save_turn(&at_limit).unwrap();
+    store.conversations.save_turn(&failed).unwrap();
+
+    let turns = store.conversations.turns_of(conversation.id()).unwrap();
+    assert_eq!(turns, [at_limit, failed]);
+    assert!(turns[0].reached_plan_limit());
+    assert!(!turns[1].reached_plan_limit());
+    let payloads: Vec<String> = store
+        .database
+        .operations()
+        .unwrap()
+        .into_iter()
+        .skip(start)
+        .filter(|operation| operation.entity == "turn")
+        .filter_map(|operation| operation.payload)
+        .collect();
+    assert_eq!(payloads.len(), 2);
+    assert!(payloads[0].contains("\"plan_limit_reached\":true"));
+    // Every other turn is logged as an earlier version logged it.
+    assert!(!payloads[1].contains("plan_limit_reached"));
+}
+
 /// A finished turn that asked the manager which battery to use.
 fn turn_that_asked(conversation: &Conversation) -> Turn {
     let mut turn = running_turn(conversation, "Choose the battery", moment(9));
@@ -1264,6 +1298,7 @@ fn asking_and_answering_are_logged_with_the_whole_question() {
         decision: asked.decision().cloned(),
         interview: None,
         proposal: None,
+        plan_limit_reached: false,
     });
     let start = store.database.operations().unwrap().len();
 

@@ -826,6 +826,9 @@ pub struct PermissionDenial {
 pub struct PlanUsage {
     /// The limit windows that were reported.
     pub windows: Vec<PlanWindow>,
+    /// Whether the plan allows work now, as the program names it:
+    /// `allowed`, `allowed_warning` or `rejected`, if it said.
+    pub status: Option<String>,
 }
 
 /// One usage limit of the plan.
@@ -923,6 +926,57 @@ pub enum TurnFailure {
         /// lines the program wrote about errors.
         message: String,
     },
+    /// The limit of the user's Claude plan was reached, so the program
+    /// refused the work until the limit resets. It is no failure of the
+    /// specialist, and trying again before the reset fails the same way.
+    PlanLimitReached(PlanLimitHit),
+}
+
+/// What the program said when the limit of the plan was reached.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PlanLimitHit {
+    /// Which limit was reached, if the program said.
+    pub window: Option<PlanWindowKind>,
+    /// When it resets, as far as the program said.
+    pub resets: PlanReset,
+}
+
+/// When a limit of the plan resets, as the program said it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PlanReset {
+    /// At this moment: the program gave it as a number.
+    At(Timestamp),
+    /// At a time of day, perhaps on a date, perhaps in a named time zone:
+    /// the program gave it in words. Which moment that is depends on when
+    /// it was said, so the application works it out with its clock.
+    Said(SaidReset),
+    /// The program did not say, or said it in a way that is not
+    /// understood.
+    Unknown,
+}
+
+/// A reset time as the program wrote it, for example "10:40pm
+/// (Europe/Istanbul)" or "Nov 23, 10am (Europe/Istanbul)".
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SaidReset {
+    /// The time of day, on a clock of 24 hours.
+    pub time: chrono::NaiveTime,
+    /// The date, if one was given.
+    pub date: Option<SaidDate>,
+    /// The name of the time zone, if one was given, for example
+    /// `Europe/Istanbul`.
+    pub zone: Option<String>,
+}
+
+/// A date as the program wrote it with a reset time.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SaidDate {
+    /// The month, from 1 to 12.
+    pub month: u32,
+    /// The day of the month, from 1.
+    pub day: u32,
+    /// The year, if it was given.
+    pub year: Option<i32>,
 }
 
 /// The tokens one model used.

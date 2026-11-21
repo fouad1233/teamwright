@@ -35,6 +35,7 @@ use crate::memory::{
     memory_in_words, remembered_entries,
 };
 use crate::places::{PlacesService, REFERENCES_FOLDER};
+use crate::plan_limit::PlanReport;
 use crate::ports::{
     AreaRepository, Clock, ConversationRepository, DigestRepository, FileSystem, MemberRepository,
     MemoryRepository, PlacesRepository, PlanningRepository, ProjectFolders, ProjectRepository,
@@ -998,6 +999,7 @@ impl Inner {
         };
         let turn = &mut turns[index];
         let now = ports.clock.now();
+        let mut plan_report = None;
 
         let recorded = match event {
             AgentEvent::SessionStarted(started) => {
@@ -1019,9 +1021,13 @@ impl Inner {
                 turn.notice(retry_notice(reason.as_deref()), now)
             }
             AgentEvent::Warning { message } => turn.notice(message, now),
-            // How much of the plan's limits is used is not shown yet. It
-            // belongs with the budgets (decision 0008), which come later.
-            AgentEvent::PlanUsage(_) => return Ok(()),
+            // What the program says about the plan is a fact about this
+            // computer's Claude account, not about the turn
+            // (decision 0040).
+            AgentEvent::PlanUsage(usage) => {
+                ports.listener.plan_reported(&PlanReport::Usage(usage));
+                return Ok(());
+            }
             AgentEvent::ManagerAsked(question) => {
                 decision_from(question).and_then(|decision| turn.ask(decision))
             }
@@ -1038,7 +1044,21 @@ impl Inner {
             AgentEvent::FactRemembered(fact) => {
                 self.record_fact(&conversation, turn, &fact, now)?
             }
-            AgentEvent::TurnEnded(outcome) => end_turn(turn, &outcome, now),
+            AgentEvent::TurnEnded(outcome) => {
+                let ended = end_turn(turn, &outcome, now);
+                if ended.is_ok() {
+                    plan_report = match outcome.failure {
+                        Some(TurnFailure::PlanLimitReached(hit)) => {
+                            Some(PlanReport::LimitReached(hit))
+                        }
+                        None => Some(PlanReport::Worked {
+                            started_at: turn.started_at(),
+                        }),
+                        Some(_) => None,
+                    };
+                }
+                ended
+            }
         };
         if recorded.is_err() {
             // The turn ended before the event arrived (the manager stopped
@@ -1063,6 +1083,9 @@ impl Inner {
         // recorded, so this tells every end at most once.
         if ends_the_turn && let Some(event) = self.event_of_end(&conversation, &turns[index])? {
             ports.listener.happened(&event);
+        }
+        if let Some(report) = plan_report {
+            ports.listener.plan_reported(&report);
         }
         Ok(())
     }
@@ -1525,6 +1548,7 @@ fn end_turn(
     match &outcome.failure {
         None => turn.finish(&outcome.final_text, tokens, now),
         Some(TurnFailure::Stopped) => turn.stop(used, now),
+        Some(TurnFailure::PlanLimitReached(_)) => turn.end_at_plan_limit(used, now),
         Some(failure) => turn.fail(failure_text(failure, &outcome.final_text), used, now),
     }
 }
@@ -1538,6 +1562,7 @@ fn failure_text(failure: &TurnFailure, final_text: &str) -> String {
         TurnFailure::Stopped => Turn::STOPPED_BY_THE_MANAGER.to_owned(),
         // The runtime already says this in words for people.
         TurnFailure::ProgramEnded { message } => message.clone(),
+        TurnFailure::PlanLimitReached(_) => Turn::PLAN_LIMIT_REACHED.to_owned(),
     }
 }
 
@@ -2957,6 +2982,7 @@ mod tests {
             0,
             AgentEvent::PlanUsage(crate::agent_runtime::PlanUsage {
                 windows: Vec::new(),
+                status: None,
             }),
         );
 
@@ -2984,6 +3010,58 @@ mod tests {
             ]
         );
         assert_eq!(workspace.ports.listener.changes().len(), 5);
+    }
+
+    #[test]
+    fn a_turn_at_the_limit_of_the_plan_is_no_failure_of_the_specialist() {
+        let workspace = workspace();
+        workspace.work.start_work(workspace.schematic.id()).unwrap();
+        let hit = crate::agent_runtime::PlanLimitHit {
+            window: Some(crate::agent_runtime::PlanWindowKind::FiveHours),
+            resets: crate::agent_runtime::PlanReset::Unknown,
+        };
+        let usage = crate::agent_runtime::PlanUsage {
+            windows: Vec::new(),
+            status: Some("rejected".to_owned()),
+        };
+        workspace.deliver(0, AgentEvent::PlanUsage(usage.clone()));
+
+        workspace.deliver(
+            0,
+            ended(
+                Some(TurnFailure::PlanLimitReached(hit.clone())),
+                "You've hit your 5-hour limit",
+            ),
+        );
+
+        let turn = &workspace.only_conversation().turns[0];
+        assert_eq!(turn.state(), TurnState::Failed);
+        assert!(turn.reached_plan_limit());
+        assert_eq!(turn.failure(), Some(Turn::PLAN_LIMIT_REACHED));
+        // The task stays in work, and no specialist is told to have stopped.
+        assert_eq!(
+            workspace.stored_task(workspace.schematic.id()).status_id(),
+            workspace.status_of(StatusCategory::Active)
+        );
+        assert!(workspace.ports.listener.events().is_empty());
+        assert_eq!(
+            workspace.ports.listener.plan_reports(),
+            [PlanReport::Usage(usage), PlanReport::LimitReached(hit)]
+        );
+    }
+
+    #[test]
+    fn a_finished_turn_tells_that_the_plan_allowed_its_work() {
+        let workspace = workspace();
+        workspace.work.start_work(workspace.schematic.id()).unwrap();
+        let started_at = workspace.only_conversation().turns[0].started_at();
+
+        workspace.deliver(0, ended(None, "Done."));
+
+        assert_eq!(
+            workspace.ports.listener.plan_reports(),
+            [PlanReport::Worked { started_at }]
+        );
     }
 
     #[test]

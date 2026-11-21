@@ -13,9 +13,12 @@ use std::time::Duration;
 use chrono::{TimeZone, Utc};
 use serde_json::{Map, Value};
 use teamwright_application::{
-    AgentEvent, McpServer, ModelUsage, PermissionDenial, PlanUsage, PlanWindow, PlanWindowKind,
-    SessionContext, SessionId, SessionStarted, TokenCounts, TurnFailure, TurnOutcome,
+    AgentEvent, McpServer, ModelUsage, PermissionDenial, PlanLimitHit, PlanReset, PlanUsage,
+    PlanWindow, PlanWindowKind, SessionContext, SessionId, SessionStarted, TokenCounts,
+    TurnFailure, TurnOutcome,
 };
+
+use crate::plan_limit::limit_in_words;
 
 use crate::team_bus::{
     ASK_MANAGER_IN_SESSION, INTERVIEW_IN_SESSION, PROPOSE_PLAN_IN_SESSION,
@@ -28,6 +31,10 @@ const SUMMARY_LENGTH: usize = 120;
 
 /// How Claude Code names the failure of a turn because nobody is signed in.
 const NOT_SIGNED_IN: &str = "authentication_failed";
+
+/// How Claude Code names the status of a plan that refuses work, in a
+/// `rate_limit_event`.
+const REJECTED: &str = "rejected";
 
 /// How the process of a turn ended.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -66,6 +73,9 @@ pub struct Decoder {
     taken_use: Option<String>,
     last_text: String,
     failure_kind: Option<String>,
+    /// The limit of the plan, if the program reported that the plan
+    /// refuses work: a `rate_limit_event` whose status is `rejected`.
+    plan_refused: Option<PlanLimitHit>,
     /// The last request the session itself made to the model, not one of
     /// a helper it started: what it held, and the model it went to.
     last_request: Option<LastRequest>,
@@ -144,7 +154,12 @@ impl Decoder {
             }
             Some("assistant") => self.decode_assistant(&event),
             Some("user") => self.decode_user(&event),
-            Some("rate_limit_event") => decode_plan_usage(&event).into_iter().collect(),
+            Some("rate_limit_event") => {
+                if let Some(hit) = refused_by_plan(&event) {
+                    self.plan_refused = Some(hit);
+                }
+                decode_plan_usage(&event).into_iter().collect()
+            }
             Some("result") => {
                 self.result = Some(event);
                 Vec::new()
@@ -161,9 +176,19 @@ impl Decoder {
             None => {
                 let failure = match end {
                     ProcessEnd::Stopped => TurnFailure::Stopped,
-                    ProcessEnd::Exited { code, error_lines } => TurnFailure::ProgramEnded {
-                        message: describe_early_end(code, &error_lines),
-                    },
+                    ProcessEnd::Exited { code, error_lines } => {
+                        // A program that ended early may still have said
+                        // that the plan's limit was reached.
+                        let said = std::iter::once(self.last_text.as_str())
+                            .chain(error_lines.iter().map(String::as_str))
+                            .find_map(limit_in_words);
+                        match self.plan_refused.clone().or(said) {
+                            Some(hit) => TurnFailure::PlanLimitReached(hit),
+                            None => TurnFailure::ProgramEnded {
+                                message: describe_early_end(code, &error_lines),
+                            },
+                        }
+                    }
                 };
                 // Without the last message the window is not known; what
                 // the session held is.
@@ -305,6 +330,9 @@ impl Decoder {
         if self.failure_kind.as_deref() == Some(NOT_SIGNED_IN) {
             return TurnFailure::NotSignedIn;
         }
+        if let Some(hit) = self.plan_limit_in(result) {
+            return TurnFailure::PlanLimitReached(hit);
+        }
         // A failed turn can still have the subtype "success"; the kind is
         // then best told by the assistant's error or the terminal reason.
         let kind = self
@@ -317,6 +345,29 @@ impl Decoder {
             })
             .or_else(|| text(result, "terminal_reason").map(str::to_owned));
         TurnFailure::Reported { kind }
+    }
+
+    /// The limit of the plan, if the turn failed because it was reached.
+    /// What the program reported in fields comes first: a plan that
+    /// refused work. Its sentence for people is read next, from the result
+    /// and from the last text: "You've hit your 5-hour limit · resets
+    /// 10:40pm (Europe/Istanbul)". A moment given as a number is better
+    /// than one read from words, so the reset of the fields wins, and the
+    /// words fill in what the fields left out.
+    fn plan_limit_in(&self, result: &Map<String, Value>) -> Option<PlanLimitHit> {
+        let said = text(result, "result")
+            .and_then(limit_in_words)
+            .or_else(|| limit_in_words(&self.last_text));
+        match (self.plan_refused.clone(), said) {
+            (Some(reported), Some(said)) => Some(PlanLimitHit {
+                window: reported.window.or(said.window),
+                resets: match reported.resets {
+                    PlanReset::Unknown => said.resets,
+                    known @ (PlanReset::At(_) | PlanReset::Said(_)) => known,
+                },
+            }),
+            (reported, said) => reported.or(said),
+        }
     }
 
     fn decode_system(&self, event: &Map<String, Value>) -> Option<AgentEvent> {
@@ -544,14 +595,37 @@ impl Decoder {
     }
 }
 
+/// The limit of the plan, if a `rate_limit_event` says that the plan
+/// refuses work: its status is `rejected`. The window that limits is named
+/// by `rateLimitType`, and `resetsAt` is when it resets.
+fn refused_by_plan(event: &Map<String, Value>) -> Option<PlanLimitHit> {
+    let info = event.get("rate_limit_info")?.as_object()?;
+    if text(info, "status") != Some(REJECTED) {
+        return None;
+    }
+    Some(PlanLimitHit {
+        window: text(info, "rateLimitType").map(window_kind),
+        resets: info
+            .get("resetsAt")
+            .and_then(Value::as_i64)
+            .and_then(|seconds| Utc.timestamp_opt(seconds, 0).single())
+            .map_or(PlanReset::Unknown, PlanReset::At),
+    })
+}
+
+/// A window of the plan, by the program's name for it.
+fn window_kind(name: &str) -> PlanWindowKind {
+    match name {
+        "five_hour" => PlanWindowKind::FiveHours,
+        "seven_day" => PlanWindowKind::Week,
+        other => PlanWindowKind::Other(other.to_owned()),
+    }
+}
+
 fn decode_plan_usage(event: &Map<String, Value>) -> Option<AgentEvent> {
     let info = event.get("rate_limit_info")?.as_object()?;
     let window = |kind: &str, details: &Map<String, Value>| PlanWindow {
-        kind: match kind {
-            "five_hour" => PlanWindowKind::FiveHours,
-            "seven_day" => PlanWindowKind::Week,
-            other => PlanWindowKind::Other(other.to_owned()),
-        },
+        kind: window_kind(kind),
         used: details.get("utilization").and_then(Value::as_f64),
         resets_at: details
             .get("resetsAt")
@@ -568,7 +642,9 @@ fn decode_plan_usage(event: &Map<String, Value>) -> Option<AgentEvent> {
             .map(|kind| vec![window(kind, info)])
             .unwrap_or_default(),
     };
-    (!windows.is_empty()).then_some(AgentEvent::PlanUsage(PlanUsage { windows }))
+    let status = text(info, "status").map(str::to_owned);
+    (!windows.is_empty() || status.is_some())
+        .then_some(AgentEvent::PlanUsage(PlanUsage { windows, status }))
 }
 
 fn model_usage(models: &Map<String, Value>) -> Vec<ModelUsage> {
@@ -1238,6 +1314,124 @@ mod tests {
         assert_eq!(plan.windows[0].kind, PlanWindowKind::Week);
         assert_eq!(plan.windows[0].used, Some(0.9));
         assert_eq!(plan.windows[0].resets_at, None);
+    }
+
+    /// A turn that hit the limit of the plan, in the shape of tonight's
+    /// eight turns: an API error of type `rate_limit`, HTTP 429, and the
+    /// sentence of the program. Built from what was seen in the output of
+    /// the agents and from the schema in the program; it is not a
+    /// recording.
+    fn limit_reached_lines(with_event: bool) -> Vec<String> {
+        let mut lines = vec![
+            r#"{"type":"system","subtype":"init","session_id":"0196f3a2-7c1e-7d53-9b6f-2f1a4c8e9d31","model":"claude-sample","cwd":"/work"}"#.to_owned(),
+        ];
+        if with_event {
+            lines.push(r#"{"type":"rate_limit_event","rate_limit_info":{"status":"rejected","resetsAt":1795030800,"rateLimitType":"five_hour","utilization":1.0},"session_id":"0196f3a2-7c1e-7d53-9b6f-2f1a4c8e9d31"}"#.to_owned());
+        }
+        lines.push(r#"{"type":"assistant","message":{"model":"<synthetic>","content":[{"type":"text","text":"You've hit your 5-hour limit · resets 10:40pm (Europe/Istanbul)"}]},"error":"rate_limit","is_api_error_message":true,"api_error_status":429,"session_id":"0196f3a2-7c1e-7d53-9b6f-2f1a4c8e9d31"}"#.to_owned());
+        lines.push(r#"{"type":"result","subtype":"success","is_error":true,"terminal_reason":"api_error","api_error_status":429,"result":"You've hit your 5-hour limit · resets 10:40pm (Europe/Istanbul)","session_id":"0196f3a2-7c1e-7d53-9b6f-2f1a4c8e9d31","modelUsage":{}}"#.to_owned());
+        lines
+    }
+
+    fn decoded(lines: &[String]) -> (Vec<AgentEvent>, TurnOutcome) {
+        let mut decoder = Decoder::new();
+        let events = lines
+            .iter()
+            .flat_map(|line| decoder.decode_line(line))
+            .collect();
+        (events, decoder.finish(exited()))
+    }
+
+    #[test]
+    fn a_plan_that_refuses_work_ends_the_turn_at_its_limit_with_the_moment_of_the_fields() {
+        let (events, outcome) = decoded(&limit_reached_lines(true));
+
+        let Some(TurnFailure::PlanLimitReached(hit)) = outcome.failure else {
+            panic!("{:?}", outcome.failure);
+        };
+        assert_eq!(hit.window, Some(PlanWindowKind::FiveHours));
+        assert_eq!(
+            hit.resets,
+            PlanReset::At(Utc.timestamp_opt(1_795_030_800, 0).unwrap())
+        );
+        // The refusal is also reported as the standing of the plan.
+        assert!(events.iter().any(|event| matches!(
+            event,
+            AgentEvent::PlanUsage(PlanUsage { status: Some(status), .. }) if status == "rejected"
+        )));
+    }
+
+    #[test]
+    fn without_the_event_the_limit_and_its_reset_are_read_from_the_words() {
+        let (_, outcome) = decoded(&limit_reached_lines(false));
+
+        let Some(TurnFailure::PlanLimitReached(hit)) = outcome.failure else {
+            panic!("{:?}", outcome.failure);
+        };
+        assert_eq!(hit.window, Some(PlanWindowKind::FiveHours));
+        let PlanReset::Said(said) = hit.resets else {
+            panic!("{:?}", hit.resets);
+        };
+        assert_eq!(
+            said.time,
+            chrono::NaiveTime::from_hms_opt(22, 40, 0).unwrap()
+        );
+        assert_eq!(said.zone.as_deref(), Some("Europe/Istanbul"));
+    }
+
+    #[test]
+    fn a_program_that_ends_after_saying_the_limit_is_at_the_limit() {
+        let decoder = Decoder::new();
+        let outcome = decoder.finish(ProcessEnd::Exited {
+            code: Some(1),
+            error_lines: vec!["You've hit your weekly limit".to_owned()],
+        });
+        let Some(TurnFailure::PlanLimitReached(hit)) = outcome.failure else {
+            panic!("{:?}", outcome.failure);
+        };
+        assert_eq!(hit.window, Some(PlanWindowKind::Week));
+        assert_eq!(hit.resets, PlanReset::Unknown);
+    }
+
+    #[test]
+    fn an_ordinary_rate_limit_error_is_an_ordinary_failure() {
+        let mut decoder = Decoder::new();
+        for line in [
+            r#"{"type":"assistant","message":{"model":"<synthetic>","content":[{"type":"text","text":"API Error: Rate limit reached for requests"}]},"error":"rate_limit","session_id":"abc"}"#,
+            r#"{"type":"result","subtype":"success","is_error":true,"result":"API Error: Rate limit reached for requests","session_id":"abc"}"#,
+        ] {
+            decoder.decode_line(line);
+        }
+        assert_eq!(
+            decoder.finish(exited()).failure,
+            Some(TurnFailure::Reported {
+                kind: Some("rate_limit".to_owned())
+            })
+        );
+    }
+
+    #[test]
+    fn a_plan_that_allows_work_is_no_limit() {
+        let (_, decoder) = replay(TEXT_REPLY);
+        assert_eq!(decoder.finish(exited()).failure, None);
+
+        let mut decoder = Decoder::new();
+        let events = decoder.decode_line(
+            r#"{"type":"rate_limit_event","rate_limit_info":{"status":"allowed_warning","rateLimitType":"five_hour","utilization":0.92,"resetsAt":1795030800}}"#,
+        );
+        let [AgentEvent::PlanUsage(plan)] = events.as_slice() else {
+            panic!("{events:?}");
+        };
+        assert_eq!(plan.status.as_deref(), Some("allowed_warning"));
+        decoder.decode_line(
+            r#"{"type":"result","subtype":"error_during_execution","is_error":true,"result":"Overloaded"}"#,
+        );
+        assert_eq!(
+            decoder.finish(exited()).failure,
+            Some(TurnFailure::Reported {
+                kind: Some("error_during_execution".to_owned())
+            })
+        );
     }
 
     #[test]

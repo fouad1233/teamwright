@@ -738,6 +738,12 @@ pub trait WorkListener: Send + Sync {
     /// [`Self::conversation_changed`]. A listener that does not care leaves
     /// it as it is.
     fn happened(&self, _event: &ProjectEvent) {}
+
+    /// A turn told something about the limits of the Claude plan: how much
+    /// is used, that a limit was reached, or that work went through. It is
+    /// called after the turn's change was stored and told. A listener that
+    /// does not care leaves it as it is.
+    fn plan_reported(&self, _report: &crate::plan_limit::PlanReport) {}
 }
 
 /// Tells the time.
@@ -756,6 +762,46 @@ pub trait Clock: Send + Sync {
     fn day_of(&self, moment: Timestamp) -> CalendarDate {
         moment.date_naive()
     }
+
+    /// The time on the clocks where the program runs, at a moment.
+    ///
+    /// Without a time zone of its own a clock tells Coordinated Universal
+    /// Time.
+    fn local_time(&self, moment: Timestamp) -> chrono::NaiveDateTime {
+        moment.naive_utc()
+    }
+
+    /// How far a time zone is ahead of Coordinated Universal Time when its
+    /// clocks show `local`: of the zone where the program runs if `zone`
+    /// is nothing, otherwise of the zone of that name, such as
+    /// `Europe/Istanbul`. Nothing if the zone is not known, or if its
+    /// clocks never show that time (they were put forward over it).
+    ///
+    /// Without a time zone of its own a clock runs in Coordinated
+    /// Universal Time and knows no other zone.
+    fn offset_in(
+        &self,
+        zone: Option<&str>,
+        local: chrono::NaiveDateTime,
+    ) -> Option<chrono::FixedOffset> {
+        let _ = local;
+        match zone {
+            None => chrono::FixedOffset::east_opt(0),
+            Some(name) => utc_offset_of(name),
+        }
+    }
+}
+
+/// The offset of a name that always means Coordinated Universal Time, or
+/// nothing.
+#[must_use]
+pub fn utc_offset_of(zone: &str) -> Option<chrono::FixedOffset> {
+    matches!(
+        zone,
+        "UTC" | "Etc/UTC" | "GMT" | "Etc/GMT" | "Universal" | "Etc/Universal" | "Zulu" | "Etc/Zulu"
+    )
+    .then(|| chrono::FixedOffset::east_opt(0))
+    .flatten()
 }
 
 /// Stores the coordinator of each project, its budgets and the record of

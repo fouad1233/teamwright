@@ -24,6 +24,7 @@ use crate::agent_runtime::{
 use crate::appearance::{Theme, ThemeStore};
 use crate::notifications::{NotificationChoice, NotificationChoiceStore};
 use crate::places::ChosenPlaces;
+use crate::plan_limit::{PlanLimitState, PlanLimitStore, PlanReport};
 use crate::ports::{
     ApprovedPlan, AreaRepository, Clock, ConversationRepository, DigestRepository,
     EarlierConversations, FieldRepository, FileSystem, FoundConversation, MemberRepository,
@@ -54,6 +55,23 @@ impl NotificationChoiceStore for InMemoryNotificationChoice {
 
     fn set_choice(&self, choice: &NotificationChoice) -> Result<(), StorageError> {
         *lock(&self.choice) = Some(*choice);
+        Ok(())
+    }
+}
+
+/// Keeps what this computer knows about its Claude plan in memory.
+#[derive(Debug, Default)]
+pub struct InMemoryPlanLimitStore {
+    state: Mutex<PlanLimitState>,
+}
+
+impl PlanLimitStore for InMemoryPlanLimitStore {
+    fn plan_limit(&self) -> Result<PlanLimitState, StorageError> {
+        Ok(lock(&self.state).clone())
+    }
+
+    fn set_plan_limit(&self, state: &PlanLimitState) -> Result<(), StorageError> {
+        lock(&self.state).clone_from(state);
         Ok(())
     }
 }
@@ -846,9 +864,16 @@ impl FileSystem for PretendFileSystem {
 pub struct RecordingWorkListener {
     changes: Mutex<Vec<(Conversation, Vec<Turn>)>>,
     events: Mutex<Vec<ProjectEvent>>,
+    plan_reports: Mutex<Vec<PlanReport>>,
 }
 
 impl RecordingWorkListener {
+    /// Everything it was told about the plan, in order.
+    #[must_use]
+    pub fn plan_reports(&self) -> Vec<PlanReport> {
+        lock(&self.plan_reports).clone()
+    }
+
     /// Every event it was told about, in order.
     #[must_use]
     pub fn events(&self) -> Vec<ProjectEvent> {
@@ -875,6 +900,10 @@ impl WorkListener for RecordingWorkListener {
 
     fn happened(&self, event: &ProjectEvent) {
         lock(&self.events).push(event.clone());
+    }
+
+    fn plan_reported(&self, report: &PlanReport) {
+        lock(&self.plan_reports).push(report.clone());
     }
 }
 

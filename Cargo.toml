@@ -21,6 +21,9 @@ teamwright-workbook = { path = "crates/workbook" }
 # Reads spreadsheets; the tests of the workbook read their own files back.
 calamine = "0.38"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+# The name of the time zone of this computer, which the calendar library
+# already uses; Claude Code names the zone of a reset time by it.
+iana-time-zone = "0.1"
 # SQLite is compiled into the program, so users need no database installed.
 rusqlite = { version = "0.42", features = ["bundled"] }
 # Writes Excel workbooks in pure Rust, so no Excel is needed to make one.

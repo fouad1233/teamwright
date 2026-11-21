@@ -10,6 +10,7 @@ publish.workspace = true
 teamwright-domain.workspace = true
 
 chrono.workspace = true
+iana-time-zone.workspace = true
 thiserror.workspace = true
 
 [lints]

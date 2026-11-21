@@ -1,0 +1,15 @@
+-- Teamwright database: a turn that ended because the limit of the Claude
+-- plan was reached (decision 0040).
+--
+-- The conventions of version 1 hold.
+--
+-- Such a turn is failed, with words that say so, and this column marks it,
+-- so that it is not counted as a failure of the specialist. 1 for such a
+-- turn, 0 for every other. A turn logged before this version has no field
+-- for it and is read as 0, on every computer; a version that does not know
+-- the column shows the turn as failed, with its words.
+--
+-- What is known about the limit itself (whether it is reached now, and
+-- when it resets) is a fact about the Claude account of this computer. It
+-- is kept in `meta`, under 'plan_limit', and is not logged.
+ALTER TABLE turns ADD COLUMN plan_limit_reached INTEGER NOT NULL DEFAULT 0;

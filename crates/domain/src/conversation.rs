@@ -604,6 +604,9 @@ pub struct TurnSnapshot {
     pub interview: Option<Interview>,
     /// What the Advisor proposed in this turn, if anything.
     pub proposal: Option<Proposal>,
+    /// Whether the turn ended because the limit of the Claude plan was
+    /// reached.
+    pub plan_limit_reached: bool,
 }
 
 /// One request to a specialist or to the Advisor, and what came of it.
@@ -629,11 +632,17 @@ pub struct Turn {
     decision: Option<DecisionRequest>,
     interview: Option<Interview>,
     proposal: Option<Proposal>,
+    plan_limit_reached: bool,
 }
 
 impl Turn {
     /// The failure text of a turn the manager stopped.
     pub const STOPPED_BY_THE_MANAGER: &'static str = "Stopped by the manager.";
+
+    /// The failure text of a turn that ended because the limit of the
+    /// Claude plan was reached. A version of Teamwright that does not know
+    /// this ending shows the turn as failed, with these words.
+    pub const PLAN_LIMIT_REACHED: &'static str = "The limit of the Claude plan was reached.";
 
     /// Starts a turn with a request. Whitespace around the request is
     /// removed.
@@ -668,6 +677,7 @@ impl Turn {
             decision: None,
             interview: None,
             proposal: None,
+            plan_limit_reached: false,
         })
     }
 
@@ -691,6 +701,7 @@ impl Turn {
             decision: snapshot.decision,
             interview: snapshot.interview,
             proposal: snapshot.proposal,
+            plan_limit_reached: snapshot.plan_limit_reached,
         }
     }
 
@@ -758,6 +769,14 @@ impl Turn {
     #[must_use]
     pub fn failure(&self) -> Option<&str> {
         self.failure.as_deref()
+    }
+
+    /// Whether the turn ended because the limit of the Claude plan was
+    /// reached. Such a turn is failed, but not by any fault of the
+    /// specialist: the plan refused the work until its limit resets.
+    #[must_use]
+    pub const fn reached_plan_limit(&self) -> bool {
+        self.plan_limit_reached
     }
 
     /// The model the turn ran on, once that is known.
@@ -1106,6 +1125,28 @@ impl Turn {
     ) -> Result<(), DomainError> {
         self.require_running()?;
         self.end(TurnState::Failed, Some(failure), tokens, now);
+        Ok(())
+    }
+
+    /// Ends the turn because the limit of the Claude plan was reached. The
+    /// tokens are those it used before, if they are known.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the turn has already ended.
+    pub fn end_at_plan_limit(
+        &mut self,
+        tokens: Option<TokenCounts>,
+        now: Timestamp,
+    ) -> Result<(), DomainError> {
+        self.require_running()?;
+        self.end(
+            TurnState::Failed,
+            Some(Self::PLAN_LIMIT_REACHED.to_owned()),
+            tokens,
+            now,
+        );
+        self.plan_limit_reached = true;
         Ok(())
     }
 
@@ -1497,9 +1538,31 @@ mod tests {
             decision: None,
             interview: None,
             proposal: None,
+            plan_limit_reached: false,
         };
 
         assert_eq!(Turn::restore(snapshot), turn);
+    }
+
+    #[test]
+    fn a_turn_at_the_limit_of_the_plan_is_failed_and_says_so() {
+        let mut turn = running_turn();
+
+        turn.end_at_plan_limit(None, moment(2)).unwrap();
+
+        assert_eq!(turn.state(), TurnState::Failed);
+        assert!(turn.reached_plan_limit());
+        assert_eq!(turn.failure(), Some(Turn::PLAN_LIMIT_REACHED));
+        assert_eq!(
+            turn.end_at_plan_limit(None, moment(3)),
+            Err(DomainError::TurnEnded)
+        );
+
+        let mut other = running_turn();
+        other
+            .fail("Overloaded.".to_owned(), None, moment(2))
+            .unwrap();
+        assert!(!other.reached_plan_limit());
     }
 
     fn context(held: u64, window: Option<u64>) -> ContextUse {

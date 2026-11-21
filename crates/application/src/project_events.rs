@@ -256,6 +256,10 @@ pub fn event_of_ended_turn(
 
     let happening = match turn.state() {
         TurnState::Running | TurnState::Stopped => return None,
+        // The limit of the plan is no failure of the agent. It is told
+        // once for the whole computer, not for every turn it ended
+        // (decision 0040).
+        TurnState::Failed if turn.reached_plan_limit() => return None,
         TurnState::Failed => Happening::AgentStopped {
             conversation_id,
             agent,

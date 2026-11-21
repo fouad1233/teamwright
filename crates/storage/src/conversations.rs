@@ -36,7 +36,7 @@ const CONVERSATION_COLUMNS: &str = "id, project_id, member_id, task_id, started_
 
 /// The columns of the `turns` table that every query reads.
 const TURN_COLUMNS: &str = "id, conversation_id, request, origin, state, started_at, ended_at, \
-     answer, failure, model, input_tokens, output_tokens, cache_read_tokens, cache_written_tokens, \n     context_tokens, context_window_tokens";
+     answer, failure, model, input_tokens, output_tokens, cache_read_tokens, cache_written_tokens, \n     context_tokens, context_window_tokens, plan_limit_reached";
 
 /// The columns of the `turn_steps` table that every query reads.
 const STEP_COLUMNS: &str = "turn_id, position, at, kind, text, tool_use_id, tool, summary, outcome";
@@ -68,12 +68,12 @@ const UPSERT_TURN: &str = "
     INSERT INTO turns (
         id, conversation_id, request, origin, state, started_at, ended_at, answer, failure,
         model, input_tokens, output_tokens, cache_read_tokens, cache_written_tokens,
-        context_tokens, context_window_tokens
+        context_tokens, context_window_tokens, plan_limit_reached
     )
     VALUES (
         :id, :conversation_id, :request, :origin, :state, :started_at, :ended_at, :answer,
         :failure, :model, :input_tokens, :output_tokens, :cache_read_tokens,
-        :cache_written_tokens, :context_tokens, :context_window_tokens
+        :cache_written_tokens, :context_tokens, :context_window_tokens, :plan_limit_reached
     )
     ON CONFLICT (id) DO UPDATE SET
         conversation_id = excluded.conversation_id,
@@ -90,7 +90,8 @@ const UPSERT_TURN: &str = "
         cache_read_tokens = excluded.cache_read_tokens,
         cache_written_tokens = excluded.cache_written_tokens,
         context_tokens = excluded.context_tokens,
-        context_window_tokens = excluded.context_window_tokens";
+        context_window_tokens = excluded.context_window_tokens,
+        plan_limit_reached = excluded.plan_limit_reached";
 
 const UPSERT_STEP: &str = "
     INSERT INTO turn_steps (
@@ -261,6 +262,20 @@ struct TurnRecord {
     /// The tokens the window of the model has, if the program said.
     #[serde(default)]
     context_window_tokens: Option<i64>,
+    /// Whether the turn ended because the limit of the Claude plan was
+    /// reached. A turn logged before version 32 has no such field, and did
+    /// not; one that did is written only when it is true, so that the
+    /// logged state of every other turn stays as it was.
+    #[serde(default, skip_serializing_if = "is_false")]
+    plan_limit_reached: bool,
+}
+
+#[expect(
+    clippy::trivially_copy_pass_by_ref,
+    reason = "serde passes the field by reference"
+)]
+const fn is_false(value: &bool) -> bool {
+    !*value
 }
 
 impl TurnRecord {
@@ -288,6 +303,7 @@ impl TurnRecord {
                 .context()
                 .and_then(|context| context.window)
                 .map(stored_count),
+            plan_limit_reached: turn.reached_plan_limit(),
         }
     }
 
@@ -310,6 +326,7 @@ impl TurnRecord {
             cache_written_tokens: row.get("cache_written_tokens")?,
             context_tokens: row.get("context_tokens")?,
             context_window_tokens: row.get("context_window_tokens")?,
+            plan_limit_reached: row.get("plan_limit_reached")?,
         })
     }
 
@@ -349,6 +366,7 @@ impl TurnRecord {
             decision: decision.map(DecisionRecord::into_decision).transpose()?,
             interview: interview.map(InterviewRecord::into_interview).transpose()?,
             proposal: proposal.map(ProposalRecord::into_proposal).transpose()?,
+            plan_limit_reached: self.plan_limit_reached,
         }))
     }
 
@@ -990,6 +1008,7 @@ fn write_turn(transaction: &Transaction<'_>, record: &TurnRecord) -> Result<(), 
             ":cache_written_tokens": record.cache_written_tokens,
             ":context_tokens": record.context_tokens,
             ":context_window_tokens": record.context_window_tokens,
+            ":plan_limit_reached": record.plan_limit_reached,
         },
     )?;
     Ok(())

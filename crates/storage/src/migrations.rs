@@ -37,6 +37,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("schema/0027_skills_and_connectors.sql"),
     include_str!("schema/0030_view_grouping.sql"),
     include_str!("schema/0024_custom_fields.sql"),
+    include_str!("schema/0032_plan_limit_turns.sql"),
 ];
 
 /// Applies the migrations a database has not seen yet. Each one runs in its

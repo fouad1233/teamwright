@@ -35,6 +35,7 @@ pub mod kits;
 pub mod memory;
 pub mod notifications;
 pub mod places;
+pub mod plan_limit;
 pub mod ports;
 pub mod project_events;
 pub mod project_report;
@@ -54,11 +55,11 @@ pub mod workbook;
 pub use agent_runtime::{
     AgentEvent, AgentRuntime, AgentRuntimeError, Effort, Installation, InterviewQuestionAsked,
     ManagerInterview, ManagerQuestion, McpServer, MemoryKind, MessageKind, ModelUsage,
-    PermissionDenial, PermissionMode, PermissionProfile, PlanProposal, PlanUsage, PlanWindow,
-    PlanWindowKind, PlannedMember, PlannedOwner, PlannedTask, ProgramVersion, PublishedHandoff,
-    QuestionOption, RememberedEntry, RememberedFact, RunningTurn, SentMessage, SessionChoice,
-    SessionContext, SessionId, SessionStarted, SignIn, TeamTool, TokenCounts, TurnFailure,
-    TurnOutcome, TurnRequest,
+    PermissionDenial, PermissionMode, PermissionProfile, PlanLimitHit, PlanProposal, PlanReset,
+    PlanUsage, PlanWindow, PlanWindowKind, PlannedMember, PlannedOwner, PlannedTask,
+    ProgramVersion, PublishedHandoff, QuestionOption, RememberedEntry, RememberedFact, RunningTurn,
+    SaidDate, SaidReset, SentMessage, SessionChoice, SessionContext, SessionId, SessionStarted,
+    SignIn, TeamTool, TokenCounts, TurnFailure, TurnOutcome, TurnRequest,
 };
 pub use agent_runtime::{ConnectorStart, KitConnector, KitSkill, TurnKit};
 pub use appearance::{AppearanceService, Theme, ThemeStore};
@@ -111,6 +112,10 @@ pub use notifications::{
     NotificationPermission, NotificationService, notification_for, notification_of,
 };
 pub use places::{ChosenPlaces, PlacesService, ProjectPlaces, REFERENCES_FOLDER};
+pub use plan_limit::{
+    PlanLimitChange, PlanLimitService, PlanLimitState, PlanLimitStore, PlanReport, ReachedLimit,
+    WorkPermit, may_start_work, reset_moment,
+};
 pub use ports::{
     ApprovedPlan, AreaRepository, Clock, ConversationRepository, CoordinatorRepository,
     DigestRepository, DiskEntry, EarlierConversations, FieldRepository, FileSystem, FolderReader,
