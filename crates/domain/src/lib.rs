@@ -88,8 +88,9 @@ pub use memory::{
     SearchWords,
 };
 pub use permission::{
-    Answered, PermissionAnswer, PermissionDecision, PermissionKind, PermissionRequest,
-    PermissionRequestSnapshot, PermissionRule, PermissionScope, TurnAbout, granted_rules,
+    Answered, FILE_CHANGING_PROGRAMS, PermissionAnswer, PermissionDecision, PermissionKind,
+    PermissionRequest, PermissionRequestSnapshot, PermissionRule, PermissionScope, TurnAbout,
+    granted_rules,
 };
 pub use planning::{
     Interview, InterviewAnswer, InterviewQuestion, InterviewSnapshot, Proposal, ProposalChange,

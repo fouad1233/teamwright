@@ -8,12 +8,19 @@ use std::ffi::OsString;
 use std::path::PathBuf;
 
 use teamwright_application::{
-    AgentRuntimeError, Effort, PermissionMode, ProgramVersion, SessionChoice, SessionId,
-    TurnRequest,
+    AgentRuntimeError, Effort, PermissionMode, PermissionProfile, ProgramVersion, SessionChoice,
+    SessionId, TurnRequest,
 };
 
 use crate::kit::{SESSION_SETTINGS, connector_entry, skill_rule};
 use crate::team_bus::{SERVER_NAME, TeamBus, name_in_session};
+
+/// The settings that refuse reads outside the working folders, also for
+/// commands. The key is documented for Claude Code 2.1.257 and later. A
+/// key the program does not know could make it ignore the whole settings,
+/// so nothing else is put here.
+pub const READS_BLOCKED_SETTINGS: &str =
+    r#"{"permissions":{"blockReadsOutsideWorkingDirectories":true}}"#;
 
 /// The first version that can open a session in the Claude desktop app.
 pub const FIRST_VERSION_WITH_DESKTOP: ProgramVersion = ProgramVersion::new(2, 1, 285);
@@ -102,7 +109,13 @@ pub fn turn_arguments(
         // works in (decision 0039). Joined with `=`, because the list is
         // empty; the program forwards it in this form itself.
         arguments.push("--setting-sources=".into());
-        push_pair(&mut arguments, "--settings", SESSION_SETTINGS);
+    }
+    // One argument of settings, JSON, which restricted mode still reads:
+    // those of every confined session (decision 0039) and, for a turn that
+    // may run commands, the block on reads outside the folders (decision
+    // 0038). One argument, so that neither replaces the other.
+    if let Some(settings) = settings_of(permissions) {
+        push_pair(&mut arguments, "--settings", &settings);
     }
     if permissions.only_given_tool_servers {
         arguments.push("--strict-mcp-config".into());
@@ -174,6 +187,25 @@ pub fn turn_arguments(
     Ok(arguments)
 }
 
+/// The settings a session is started with, as one JSON object, or nothing.
+fn settings_of(permissions: &PermissionProfile) -> Option<String> {
+    match (
+        permissions.confined_to_working_folder,
+        permissions.reads_blocked_outside_working_folders,
+    ) {
+        (false, false) => None,
+        (true, false) => Some(SESSION_SETTINGS.to_owned()),
+        (false, true) => Some(READS_BLOCKED_SETTINGS.to_owned()),
+        // Both objects are constants of one level whose last character
+        // closes them, so the second's keys join the first's.
+        (true, true) => Some(format!(
+            "{},{}",
+            SESSION_SETTINGS.trim_end_matches('}'),
+            READS_BLOCKED_SETTINGS.trim_start_matches('{')
+        )),
+    }
+}
+
 fn push_pair(arguments: &mut Vec<OsString>, option: &str, value: &str) {
     arguments.push(option.into());
     arguments.push(value.into());
@@ -239,6 +271,7 @@ mod tests {
     use teamwright_application::{
         ConnectorStart, KitConnector, KitSkill, PermissionProfile, TeamTool, TurnKit,
     };
+    use teamwright_domain::{PermissionKind, PermissionRule};
     use teamwright_domain::{SecretHeader, VariableName};
 
     use super::*;
@@ -445,6 +478,215 @@ mod tests {
         );
     }
 
+    fn granted(rules: &[(PermissionKind, &str)]) -> TurnRequest {
+        let rules: Vec<PermissionRule> = rules
+            .iter()
+            .map(|(kind, text)| PermissionRule::new(*kind, text).unwrap())
+            .collect();
+        let mut granted = request();
+        granted.permissions = PermissionProfile::specialist().with_granted(&rules);
+        granted
+    }
+
+    #[test]
+    fn a_turn_allowed_one_command_has_exactly_these_arguments() {
+        let arguments = text(
+            &turn_arguments(
+                &granted(&[(PermissionKind::Command, "echo hello")]),
+                &[],
+                None,
+            )
+            .unwrap(),
+        );
+        assert_eq!(
+            arguments,
+            [
+                "-p",
+                "--output-format",
+                "stream-json",
+                "--verbose",
+                "--permission-mode",
+                "acceptEdits",
+                "--permission-prompts",
+                "none",
+                "--restricted",
+                "--setting-sources=",
+                "--settings",
+                r#"{"disableAllHooks":true,"disableSkillShellExecution":true,"disableClaudeAiConnectors":true,"permissions":{"blockReadsOutsideWorkingDirectories":true}}"#,
+                "--strict-mcp-config",
+                "--tools",
+                "Read",
+                "Glob",
+                "Grep",
+                "Edit",
+                "Write",
+                "NotebookEdit",
+                "Skill",
+                "ToolSearch",
+                "Bash",
+                "--allowedTools",
+                "Read",
+                "Glob",
+                "Grep",
+                "Bash(echo hello)",
+                "--disallowedTools",
+                "PowerShell",
+                "Bash(rm *)",
+                "Bash(rmdir *)",
+                "Bash(mv *)",
+                "Bash(cp *)",
+                "Bash(mkdir *)",
+                "Bash(touch *)",
+                "Bash(ln *)",
+                "Bash(chmod *)",
+                "Bash(chown *)",
+                "Bash(chgrp *)",
+                "Bash(dd *)",
+                "Bash(tee *)",
+                "Bash(truncate *)",
+                "Bash(shred *)",
+                "Bash(install *)",
+            ]
+        );
+    }
+
+    #[test]
+    fn the_settings_of_a_session_are_one_json_object_with_every_key() {
+        let mut profile = PermissionProfile::specialist();
+        profile.reads_blocked_outside_working_folders = true;
+        let settings: serde_json::Value =
+            serde_json::from_str(&settings_of(&profile).unwrap()).unwrap();
+        assert_eq!(settings["disableAllHooks"], true);
+        assert_eq!(settings["disableClaudeAiConnectors"], true);
+        assert_eq!(
+            settings["permissions"]["blockReadsOutsideWorkingDirectories"],
+            true
+        );
+        profile.confined_to_working_folder = false;
+        assert_eq!(
+            settings_of(&profile).as_deref(),
+            Some(READS_BLOCKED_SETTINGS)
+        );
+        profile.reads_blocked_outside_working_folders = false;
+        assert_eq!(settings_of(&profile), None);
+    }
+
+    #[test]
+    fn a_turn_allowed_a_prefix_and_a_domain_gets_both_rules_and_both_tools() {
+        let arguments = text(
+            &turn_arguments(
+                &granted(&[
+                    (PermissionKind::CommandPrefix, "cargo test"),
+                    (PermissionKind::WebDomain, "docs.rs"),
+                ]),
+                &[],
+                None,
+            )
+            .unwrap(),
+        );
+        let tools_at = arguments.iter().position(|a| a == "--tools").unwrap();
+        let allowed_at = arguments
+            .iter()
+            .position(|a| a == "--allowedTools")
+            .unwrap();
+        let denied_at = arguments
+            .iter()
+            .position(|a| a == "--disallowedTools")
+            .unwrap();
+        assert!(arguments[tools_at..allowed_at].contains(&"Bash".to_owned()));
+        assert!(arguments[tools_at..allowed_at].contains(&"WebFetch".to_owned()));
+        assert_eq!(
+            arguments[allowed_at + 1..denied_at],
+            [
+                "Read",
+                "Glob",
+                "Grep",
+                "Bash(cargo test *)",
+                "WebFetch(domain:docs.rs)"
+            ]
+        );
+    }
+
+    #[test]
+    fn a_turn_allowed_only_a_domain_has_no_shell_and_no_settings() {
+        let arguments = text(
+            &turn_arguments(
+                &granted(&[(PermissionKind::WebDomain, "docs.rs")]),
+                &[],
+                None,
+            )
+            .unwrap(),
+        );
+        let settings: Vec<&String> = arguments
+            .windows(2)
+            .filter(|pair| pair[0] == "--settings")
+            .map(|pair| &pair[1])
+            .collect();
+        assert_eq!(settings, [SESSION_SETTINGS]);
+        let denied_at = arguments
+            .iter()
+            .position(|a| a == "--disallowedTools")
+            .unwrap();
+        assert_eq!(arguments[denied_at + 1..], ["Bash", "PowerShell"]);
+        let tools_at = arguments.iter().position(|a| a == "--tools").unwrap();
+        let allowed_at = arguments
+            .iter()
+            .position(|a| a == "--allowedTools")
+            .unwrap();
+        assert!(!arguments[tools_at..allowed_at].contains(&"Bash".to_owned()));
+    }
+
+    #[test]
+    fn no_granted_turn_can_approve_everything_or_leave_its_folder() {
+        for rules in [
+            vec![(PermissionKind::Command, "echo hello")],
+            vec![(PermissionKind::CommandPrefix, "npm run")],
+            vec![(PermissionKind::WebDomain, "*.example.com")],
+        ] {
+            let arguments = text(&turn_arguments(&granted(&rules), &[], None).unwrap());
+            for kept in ["--restricted", "--strict-mcp-config"] {
+                assert!(arguments.contains(&kept.to_owned()));
+            }
+            assert!(
+                arguments
+                    .windows(2)
+                    .any(|pair| pair == ["--permission-prompts", "none"])
+            );
+            assert!(
+                arguments
+                    .windows(2)
+                    .any(|pair| pair == ["--permission-mode", "acceptEdits"])
+            );
+            for never in [
+                "--dangerously-skip-permissions",
+                "--allow-dangerously-skip-permissions",
+                "--permission-prompt-tool",
+                "bypassPermissions",
+                "auto",
+                "Bash",
+                "Bash(*)",
+                "WebFetch",
+                "WebFetch(domain:*)",
+            ] {
+                let allowed_at = arguments
+                    .iter()
+                    .position(|a| a == "--allowedTools")
+                    .unwrap();
+                let denied_at = arguments
+                    .iter()
+                    .position(|a| a == "--disallowedTools")
+                    .unwrap();
+                assert!(
+                    !arguments[allowed_at..denied_at].contains(&never.to_owned()),
+                    "{never} is allowed"
+                );
+                if never.starts_with("--") || never == "bypassPermissions" || never == "auto" {
+                    assert!(!arguments.contains(&never.to_owned()), "{never} is given");
+                }
+            }
+        }
+    }
+
     #[test]
     fn the_prompt_is_never_an_argument() {
         let arguments = text(&turn_arguments(&request(), &[], None).unwrap());
@@ -508,6 +750,7 @@ mod tests {
             deny_instead_of_asking: false,
             confined_to_working_folder: false,
             only_given_tool_servers: false,
+            reads_blocked_outside_working_folders: false,
         };
         let arguments = text(&turn_arguments(&open, &[], None).unwrap());
         assert_eq!(

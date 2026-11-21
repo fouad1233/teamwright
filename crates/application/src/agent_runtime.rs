@@ -16,7 +16,7 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use teamwright_domain::Timestamp;
+use teamwright_domain::{FILE_CHANGING_PROGRAMS, PermissionKind, PermissionRule, Timestamp};
 
 /// Runs the sessions of team members on an agent program.
 pub trait AgentRuntime: Send + Sync {
@@ -347,6 +347,10 @@ pub struct PermissionProfile {
     /// Whether the session sees only the tool servers it is given, and none
     /// of those the user has set up for themself.
     pub only_given_tool_servers: bool,
+    /// Whether reads outside the working folder and the readable folders
+    /// are refused also when a command makes them, and not only when a file
+    /// tool does. A turn that may run commands has it (decision 0038).
+    pub reads_blocked_outside_working_folders: bool,
 }
 
 impl PermissionProfile {
@@ -390,6 +394,7 @@ impl PermissionProfile {
             deny_instead_of_asking: true,
             confined_to_working_folder: true,
             only_given_tool_servers: true,
+            reads_blocked_outside_working_folders: false,
         }
     }
 
@@ -412,9 +417,60 @@ impl PermissionProfile {
             deny_instead_of_asking: true,
             confined_to_working_folder: true,
             only_given_tool_servers: true,
+            reads_blocked_outside_working_folders: false,
         }
     }
+
+    /// The same profile with the rules the manager allowed added to it
+    /// (decision 0038). Nothing else changes: the mode, denying instead of
+    /// asking, the confinement to the working folder and the tool servers
+    /// stay as they are, so a permission adds exactly its rule.
+    ///
+    /// A rule that runs a command needs the shell, which the profile denies
+    /// by name and which the confined mode removes unless it is named: the
+    /// shell is named among the built-in tools and no longer denied as a
+    /// whole. The programs that change files are denied by name, and reads
+    /// outside the folders are blocked for commands too. Every command
+    /// that no rule allows would need approval, which is denied at once.
+    /// A rule that fetches from a domain names the tool that fetches.
+    #[must_use]
+    pub fn with_granted(&self, rules: &[PermissionRule]) -> Self {
+        let mut profile = self.clone();
+        if rules.is_empty() {
+            return profile;
+        }
+        let runs_commands = rules.iter().any(PermissionRule::runs_commands);
+        let fetches = rules
+            .iter()
+            .any(|rule| rule.kind() == PermissionKind::WebDomain);
+        if let Some(tools) = profile.built_in_tools.as_mut() {
+            for (needed, name) in [(runs_commands, SHELL), (fetches, FETCH)] {
+                if needed && !tools.iter().any(|tool| tool == name) {
+                    tools.push(name.to_owned());
+                }
+            }
+        }
+        if runs_commands {
+            profile.disallowed_tools.retain(|rule| rule != SHELL);
+            profile.disallowed_tools.extend(
+                FILE_CHANGING_PROGRAMS
+                    .iter()
+                    .map(|program| format!("{SHELL}({program} *)")),
+            );
+            profile.reads_blocked_outside_working_folders = true;
+        }
+        profile
+            .allowed_tools
+            .extend(rules.iter().map(PermissionRule::tool_rule));
+        profile
+    }
 }
+
+/// The built-in tool of the agent program that runs commands.
+const SHELL: &str = "Bash";
+
+/// The built-in tool of the agent program that fetches web pages.
+const FETCH: &str = "WebFetch";
 
 /// A tool of the team bus that a session can be given for a turn.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -452,6 +508,10 @@ pub enum TeamTool {
     /// `remember`: a specialist records a fact about the project in its
     /// memory. It is reported as [`AgentEvent::FactRemembered`].
     Remember,
+    /// `ask_permission`: a specialist asks the manager for permission to
+    /// run a command or to fetch from a web domain. It is reported as
+    /// [`AgentEvent::PermissionAsked`] (decision 0038).
+    AskPermission,
     /// `search_memory`: a specialist searches the memory of the project
     /// with a few words. The answer is data, read from the entries that
     /// are current when the turn starts (decision 0036).
@@ -619,6 +679,11 @@ pub enum AgentEvent {
     /// on with its turn. Like a handoff, it is reported only once the team
     /// bus has taken it, which allows only a few in a turn.
     FactRemembered(RememberedFact),
+    /// The session asked the manager for permission to do something it may
+    /// not do on its own, and is told to end its turn; the answer is the
+    /// request of the next turn. A use of the tool is reported only this
+    /// way, not as a tool use (decision 0038).
+    PermissionAsked(PermissionAsk),
     /// A request to the model failed and is tried again.
     Retrying {
         /// Which attempt this is, if reported.
@@ -664,6 +729,15 @@ pub struct QuestionOption {
     pub label: String,
     /// What choosing it leads to. May be empty.
     pub consequence: String,
+}
+
+/// What a session asks to be allowed, checked by the rules of a permission.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PermissionAsk {
+    /// What it wants to do.
+    pub rule: PermissionRule,
+    /// Why, in its words. Not empty.
+    pub reason: String,
 }
 
 /// The questions the Advisor asks the manager before it proposes.
@@ -1017,6 +1091,102 @@ impl TokenCounts {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn rule(kind: PermissionKind, text: &str) -> PermissionRule {
+        PermissionRule::new(kind, text).unwrap()
+    }
+
+    #[test]
+    fn a_profile_without_granted_rules_is_unchanged() {
+        assert_eq!(
+            PermissionProfile::specialist().with_granted(&[]),
+            PermissionProfile::specialist()
+        );
+    }
+
+    #[test]
+    fn a_granted_command_adds_the_shell_with_exactly_its_rule_and_nothing_else() {
+        let granted = PermissionProfile::specialist()
+            .with_granted(&[rule(PermissionKind::Command, "npm test")]);
+        let specialist = PermissionProfile::specialist();
+
+        assert!(
+            granted
+                .built_in_tools
+                .as_ref()
+                .unwrap()
+                .contains(&"Bash".to_owned())
+        );
+        assert!(
+            !granted
+                .built_in_tools
+                .as_ref()
+                .unwrap()
+                .contains(&"WebFetch".to_owned())
+        );
+        assert_eq!(
+            granted.allowed_tools,
+            ["Read", "Glob", "Grep", "Bash(npm test)"]
+        );
+        assert!(!granted.disallowed_tools.contains(&"Bash".to_owned()));
+        assert!(granted.disallowed_tools.contains(&"PowerShell".to_owned()));
+        assert!(granted.disallowed_tools.contains(&"Bash(rm *)".to_owned()));
+        assert!(granted.disallowed_tools.contains(&"Bash(mv *)".to_owned()));
+        assert!(granted.reads_blocked_outside_working_folders);
+        // What decision 0011 closed stays closed.
+        assert_eq!(granted.mode, specialist.mode);
+        assert!(granted.deny_instead_of_asking);
+        assert!(granted.confined_to_working_folder);
+        assert!(granted.only_given_tool_servers);
+    }
+
+    #[test]
+    fn a_granted_domain_adds_the_fetching_tool_and_keeps_the_shell_away() {
+        let granted = PermissionProfile::specialist()
+            .with_granted(&[rule(PermissionKind::WebDomain, "docs.rs")]);
+        assert!(
+            granted
+                .built_in_tools
+                .as_ref()
+                .unwrap()
+                .contains(&"WebFetch".to_owned())
+        );
+        assert!(
+            !granted
+                .built_in_tools
+                .as_ref()
+                .unwrap()
+                .contains(&"Bash".to_owned())
+        );
+        assert!(granted.disallowed_tools.contains(&"Bash".to_owned()));
+        assert!(!granted.reads_blocked_outside_working_folders);
+        assert_eq!(
+            granted.allowed_tools.last().map(String::as_str),
+            Some("WebFetch(domain:docs.rs)")
+        );
+    }
+
+    #[test]
+    fn a_granted_prefix_is_a_rule_with_a_trailing_wildcard() {
+        let granted = PermissionProfile::specialist().with_granted(&[
+            rule(PermissionKind::CommandPrefix, "cargo test"),
+            rule(PermissionKind::Command, "npm test"),
+        ]);
+        let shells = granted
+            .built_in_tools
+            .as_ref()
+            .unwrap()
+            .iter()
+            .filter(|tool| *tool == "Bash")
+            .count();
+        assert_eq!(shells, 1);
+        assert!(
+            granted
+                .allowed_tools
+                .contains(&"Bash(cargo test *)".to_owned())
+        );
+        assert!(granted.allowed_tools.contains(&"Bash(npm test)".to_owned()));
+    }
 
     #[test]
     fn a_version_is_found_in_the_programs_answer() {

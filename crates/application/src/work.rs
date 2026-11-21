@@ -1044,6 +1044,8 @@ impl Inner {
             AgentEvent::FactRemembered(fact) => {
                 self.record_fact(&conversation, turn, &fact, now)?
             }
+            // Recorded with the permission requests of the project.
+            AgentEvent::PermissionAsked(_) => return Ok(()),
             AgentEvent::TurnEnded(outcome) => {
                 let ended = end_turn(turn, &outcome, now);
                 if ended.is_ok() {

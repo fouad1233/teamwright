@@ -642,3 +642,96 @@ fn a_real_session_gets_its_chosen_skill_and_connector_and_nothing_of_the_users_o
         );
     }
 }
+
+/// Decision 0038. A session that may not run commands asks for permission
+/// to run `echo`, and its first attempt is refused; the turn the manager's
+/// answer starts is given the rule, and runs it.
+///
+/// This test has never passed: the program was not signed in on the night
+/// it was written. It is the proof the feature waits for.
+#[test]
+#[ignore = "needs the real Claude Code, signed in, the built program, and spends two turns"]
+fn a_real_session_asks_to_run_a_command_and_runs_it_once_allowed() {
+    use teamwright_application::TeamTool;
+    use teamwright_domain::{PermissionKind, PermissionRule};
+
+    let folder = tempfile::tempdir().unwrap();
+    let folder = teamwright_runtime::full_form(folder.path()).unwrap();
+    let id = SessionId::parse(&uuid::Uuid::now_v7().to_string()).unwrap();
+
+    // The first turn: no command may run; the session asks.
+    let mut first = request(
+        &folder,
+        "This is a test of permissions. Run the shell command `echo teamwright-was-here`. If you \
+         cannot, call the tool ask_permission with kind \"command\", what \"echo \
+         teamwright-was-here\" and a reason, then end your turn.",
+        SessionChoice::NewWithId(id.clone()),
+    );
+    first.team_tools = vec![TeamTool::AskPermission];
+    let events = Arc::new(Mutex::new(Vec::new()));
+    let collected = Arc::clone(&events);
+    let outcome = runtime()
+        .with_team_bus(bus_program(), vec!["--team-bus".to_owned()])
+        .start_turn(
+            first,
+            Box::new(move |event| collected.lock().unwrap().push(event)),
+        )
+        .unwrap()
+        .wait()
+        .unwrap();
+    let events = events.lock().unwrap().clone();
+    for event in &events {
+        println!("{event:?}");
+    }
+    assert_eq!(outcome.failure, None);
+    let asked: Vec<_> = events
+        .iter()
+        .filter_map(|event| match event {
+            AgentEvent::PermissionAsked(asked) => Some(asked),
+            _ => None,
+        })
+        .collect();
+    let [asked] = asked.as_slice() else {
+        panic!("one request was expected: {events:?}");
+    };
+    assert_eq!(asked.rule.tool_rule(), "Bash(echo teamwright-was-here)");
+    assert!(
+        !tool_uses(&events)
+            .iter()
+            .any(|(tool, _, failed)| tool == "Bash" && !failed),
+        "no command may have run in the first turn: {events:?}"
+    );
+
+    // The manager allowed it once: the next turn has exactly that rule.
+    let rule = PermissionRule::new(PermissionKind::Command, "echo teamwright-was-here").unwrap();
+    let mut second = request(
+        &folder,
+        "The manager allowed you to run the command `echo teamwright-was-here`. Run it now, and \
+         answer with what it printed.",
+        SessionChoice::Resume(id),
+    );
+    second.permissions = PermissionProfile::specialist().with_granted(&[rule]);
+    let events = Arc::new(Mutex::new(Vec::new()));
+    let collected = Arc::clone(&events);
+    let outcome = runtime()
+        .start_turn(
+            second,
+            Box::new(move |event| collected.lock().unwrap().push(event)),
+        )
+        .unwrap()
+        .wait()
+        .unwrap();
+    let events = events.lock().unwrap().clone();
+    for event in &events {
+        println!("{event:?}");
+    }
+    print_usage(&outcome);
+    assert_eq!(outcome.failure, None);
+    assert!(
+        tool_uses(&events)
+            .iter()
+            .any(|(tool, _, failed)| tool == "Bash" && !failed),
+        "the command was expected to run: {events:?}"
+    );
+    assert!(outcome.final_text.contains("teamwright-was-here"));
+}

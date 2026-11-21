@@ -47,6 +47,16 @@ const NEVER_PROGRAMS: &[&str] = &[
     "gsudo",
 ];
 
+/// Programs that change files. A specialist changes files with the file
+/// tools, which stay inside the folder of its project; with a shell, the
+/// agent program would approve some of these on its own in that folder
+/// and in the folders it may only read. So they are never allowed, and a
+/// turn that may run commands is denied them by name as well.
+pub const FILE_CHANGING_PROGRAMS: &[&str] = &[
+    "rm", "rmdir", "mv", "cp", "mkdir", "touch", "ln", "chmod", "chown", "chgrp", "dd", "tee",
+    "truncate", "shred", "install",
+];
+
 /// Programs that run whatever follows them. A prefix that starts with one of
 /// them would allow any command at all, so it is never a prefix.
 const RUNS_ANYTHING: &[&str] = &[
@@ -89,7 +99,6 @@ const RUNS_ANYTHING: &[&str] = &[
     "scp",
     "curl",
     "wget",
-    "rm",
     "start",
     "open",
     "xdg-open",
@@ -267,6 +276,12 @@ fn checked_command(text: &str, prefix: bool) -> Result<String, DomainError> {
         return Err(not_possible(&format!(
             "\"{program}\" can never be allowed: it would change the agent program, \
              Teamwright, or run with other rights"
+        )));
+    }
+    if FILE_CHANGING_PROGRAMS.contains(&program.as_str()) {
+        return Err(not_possible(&format!(
+            "\"{program}\" changes files; a specialist changes files with its file tools, \
+             inside the folder of the project"
         )));
     }
     if prefix {
@@ -771,6 +786,9 @@ mod tests {
             "teamwright --team-bus",
             "/usr/bin/sudo ls",
             "su root",
+            "rm -rf build",
+            "mv a.txt b.txt",
+            "tee notes.md",
         ] {
             assert!(command(text).is_err(), "{text} was allowed");
         }

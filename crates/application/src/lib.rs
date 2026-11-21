@@ -55,8 +55,8 @@ pub mod workbook;
 pub use agent_runtime::{
     AgentEvent, AgentRuntime, AgentRuntimeError, Effort, Installation, InterviewQuestionAsked,
     ManagerInterview, ManagerQuestion, McpServer, MemoryKind, MessageKind, ModelUsage,
-    PermissionDenial, PermissionMode, PermissionProfile, PlanLimitHit, PlanProposal, PlanReset,
-    PlanUsage, PlanWindow, PlanWindowKind, PlannedMember, PlannedOwner, PlannedTask,
+    PermissionAsk, PermissionDenial, PermissionMode, PermissionProfile, PlanLimitHit, PlanProposal,
+    PlanReset, PlanUsage, PlanWindow, PlanWindowKind, PlannedMember, PlannedOwner, PlannedTask,
     ProgramVersion, PublishedHandoff, QuestionOption, RememberedEntry, RememberedFact, RunningTurn,
     SaidDate, SaidReset, SentMessage, SessionChoice, SessionContext, SessionId, SessionStarted,
     SignIn, TeamTool, TokenCounts, TurnFailure, TurnOutcome, TurnRequest,

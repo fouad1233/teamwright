@@ -21,9 +21,10 @@ use teamwright_application::{
 use crate::plan_limit::limit_in_words;
 
 use crate::team_bus::{
-    ASK_MANAGER_IN_SESSION, INTERVIEW_IN_SESSION, PROPOSE_PLAN_IN_SESSION,
-    PUBLISH_HANDOFF_IN_SESSION, REMEMBER_IN_SESSION, SEND_MESSAGE_IN_SESSION, fact_from,
-    handoff_from, interview_from, message_from, proposal_from, question_from,
+    ASK_MANAGER_IN_SESSION, ASK_PERMISSION_IN_SESSION, INTERVIEW_IN_SESSION,
+    PROPOSE_PLAN_IN_SESSION, PUBLISH_HANDOFF_IN_SESSION, REMEMBER_IN_SESSION,
+    SEND_MESSAGE_IN_SESSION, fact_from, handoff_from, interview_from, message_from,
+    permission_from, proposal_from, question_from,
 };
 
 /// The longest summary of a tool's input, in characters.
@@ -494,6 +495,9 @@ impl Decoder {
             PROPOSE_PLAN_IN_SESSION => proposal_from(input, &self.team)
                 .ok()
                 .map(AgentEvent::PlanProposed),
+            ASK_PERMISSION_IN_SESSION => {
+                permission_from(input).ok().map(AgentEvent::PermissionAsked)
+            }
             _ => None,
         }
     }
@@ -1489,6 +1493,83 @@ mod tests {
             }] }
         })
         .to_string()
+    }
+
+    // The lines of the next two tests were written from the documentation
+    // of Claude Code (the stream of `claude -p --output-format stream-json`,
+    // `SDKPermissionDeniedMessage` and the `permission_denials` of the
+    // result, in the reference of the Agent SDK for TypeScript). A real run
+    // that asks for a permission has never been recorded: the program was
+    // not signed in when this was written.
+
+    #[test]
+    fn a_request_for_a_permission_is_reported_as_such_and_not_as_a_tool_use() {
+        let mut decoder = Decoder::new();
+        let input = serde_json::json!({
+            "kind": "command",
+            "what": "echo hello",
+            "reason": "To show the manager that commands run."
+        });
+
+        let events = decoder.decode_line(&call_line(
+            "toolu_1",
+            crate::team_bus::ASK_PERMISSION_IN_SESSION,
+            &input,
+        ));
+        let [AgentEvent::PermissionAsked(asked)] = events.as_slice() else {
+            panic!("{events:?}");
+        };
+        assert_eq!(asked.rule.tool_rule(), "Bash(echo hello)");
+        assert_eq!(asked.reason, "To show the manager that commands run.");
+        // The answer of the bus is not a step of its own.
+        assert!(
+            decoder
+                .decode_line(&answer_line("toolu_1", false))
+                .is_empty()
+        );
+
+        // A second request in the same turn is an ordinary tool use, which
+        // the bus refuses.
+        let again = decoder.decode_line(&call_line(
+            "toolu_2",
+            crate::team_bus::ASK_PERMISSION_IN_SESSION,
+            &input,
+        ));
+        assert!(matches!(again.as_slice(), [AgentEvent::ToolUse { .. }]));
+    }
+
+    #[test]
+    fn a_request_that_could_never_be_allowed_is_an_ordinary_tool_use() {
+        let mut decoder = Decoder::new();
+        let events = decoder.decode_line(&call_line(
+            "toolu_1",
+            crate::team_bus::ASK_PERMISSION_IN_SESSION,
+            &serde_json::json!({ "kind": "command", "what": "sudo ls", "reason": "To look." }),
+        ));
+        assert!(matches!(events.as_slice(), [AgentEvent::ToolUse { .. }]));
+    }
+
+    #[test]
+    fn a_command_denied_without_a_prompt_is_a_denial_of_the_shell() {
+        let mut decoder = Decoder::new();
+        let denied = serde_json::json!({
+            "type": "system",
+            "subtype": "permission_denied",
+            "tool_name": "Bash",
+            "tool_use_id": "toolu_3",
+            "decision_reason_type": "mode",
+            "decision_reason": "no approval surface in this session; permission request denied automatically",
+            "message": "Permission for this tool use was denied.",
+            "uuid": "00000000-0000-4000-8000-000000000009",
+            "session_id": "0196f3a2-7c1e-7d53-9b6f-2f1a4c8e9d13"
+        });
+        assert_eq!(
+            decoder.decode_line(&denied.to_string()),
+            [AgentEvent::PermissionDenied(PermissionDenial {
+                tool: "Bash".to_owned(),
+                tool_use_id: Some("toolu_3".to_owned()),
+            })]
+        );
     }
 
     #[test]

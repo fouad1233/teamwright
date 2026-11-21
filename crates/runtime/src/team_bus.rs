@@ -14,6 +14,10 @@
 //! - `send_message`, with which a specialist writes to a teammate;
 //! - `remember`, with which a specialist records a fact in the memory of
 //!   the project;
+//! - `ask_permission`, with which a specialist asks the manager for
+//!   permission to run a command or to fetch from a web domain (decision
+//!   0038). Like a question, it ends the turn: nothing is allowed while the
+//!   turn runs;
 //! - `search_memory`, with which a specialist searches that memory. It is
 //!   the one tool that answers with data: the entries that are current
 //!   when the turn starts reach the server in a file named with
@@ -43,14 +47,15 @@ use teamwright_application::memory::{
     FOUND_TEXT_LENGTH, MAX_FACT_LENGTH, MOST_FACTS_PER_TURN, MOST_FOUND, kind_in_words, search,
 };
 use teamwright_application::{
-    Effort, InterviewQuestionAsked, ManagerInterview, ManagerQuestion, MemoryKind, PlanProposal,
-    PlannedMember, PlannedOwner, PlannedTask, PublishedHandoff, QuestionOption, RememberedEntry,
-    RememberedFact, SentMessage, TeamTool,
+    Effort, InterviewQuestionAsked, ManagerInterview, ManagerQuestion, MemoryKind, PermissionAsk,
+    PlanProposal, PlannedMember, PlannedOwner, PlannedTask, PublishedHandoff, QuestionOption,
+    RememberedEntry, RememberedFact, SentMessage, TeamTool,
 };
 use teamwright_domain::memory::shorten;
 use teamwright_domain::{
     DependencyGraph, HandoffContent, MemberName, MemoryContent, MessageKind, ModelName,
-    PathInFolder, SearchWords, TaskTitle, TeamMessage,
+    PathInFolder, PermissionKind, PermissionRequest, PermissionRule, SearchWords, TaskTitle,
+    TeamMessage,
 };
 
 /// The name of the tool server, as Claude Code is told it.
@@ -77,6 +82,9 @@ pub const REMEMBER: &str = "remember";
 /// The name of the tool with which a specialist searches the memory.
 pub const SEARCH_MEMORY: &str = "search_memory";
 
+/// The name of the tool with which a specialist asks for a permission.
+pub const ASK_PERMISSION: &str = "ask_permission";
+
 /// What Claude Code puts in front of the name of a tool of this server.
 const PREFIX_IN_SESSION: &str = "mcp__teamwright__";
 
@@ -97,6 +105,9 @@ pub const SEND_MESSAGE_IN_SESSION: &str = "mcp__teamwright__send_message";
 
 /// The name of `remember` inside a session of Claude Code.
 pub const REMEMBER_IN_SESSION: &str = "mcp__teamwright__remember";
+
+/// The name of `ask_permission` inside a session of Claude Code.
+pub const ASK_PERMISSION_IN_SESSION: &str = "mcp__teamwright__ask_permission";
 
 /// The name of `search_memory` inside a session of Claude Code.
 pub const SEARCH_MEMORY_IN_SESSION: &str = "mcp__teamwright__search_memory";
@@ -145,6 +156,13 @@ const TOO_MANY_FACTS: &str = "You have remembered as many facts as one turn may.
 pub const QUESTION_TAKEN: &str = "Your question is with the manager. End your turn now with one \
                                   sentence that says you are waiting for the decision.";
 
+/// What a session is told when its request for a permission has been taken.
+/// Nothing is allowed by it: the turn goes on as it was started.
+pub const PERMISSION_TAKEN: &str = "Your request is with the manager, who sees exactly what you \
+     asked and why. Nothing is allowed yet. Finish what you can do without it, then end your \
+     turn with one sentence that says what you are waiting for. The answer comes as your next \
+     message.";
+
 /// What the Advisor is told when its questions have been taken.
 pub const INTERVIEW_TAKEN: &str = "Your questions are with the manager. End your turn now with \
                                    one sentence that says you are waiting for the answers.";
@@ -165,6 +183,16 @@ const ASK_MANAGER_DESCRIPTION: &str = "Ask the manager of the project to decide.
      manager's, so do not guess. Give the question, why it matters, two to four options with \
      what each leads to, and the one you recommend. After calling it, end your turn: the answer \
      comes as the next message.";
+
+/// What the tool `ask_permission` tells the model it is for.
+const ASK_PERMISSION_DESCRIPTION: &str = "Ask the manager for permission to do something you \
+     may not do on your own: run one command (such as \"npm test\"), run the commands that \
+     start with a program and its subcommand (such as \"cargo test\"), or fetch web pages from \
+     one domain (such as \"docs.rs\"). Ask for the narrowest thing that does the job, and say \
+     why. A command runs in the folder of the project: it cannot be joined to another, \
+     redirect its output, use variables or name paths outside the folder. Change files with \
+     your file tools, not with commands. After calling it, end your turn: the answer comes as \
+     your next message, and what is allowed can then be used.";
 
 /// What the tool `interview` tells the model it is for.
 const INTERVIEW_DESCRIPTION: &str = "Ask the manager what you need to know before you can \
@@ -275,6 +303,7 @@ pub const fn name_of(tool: &TeamTool) -> &'static str {
         TeamTool::SendMessage { .. } => SEND_MESSAGE,
         TeamTool::Remember => REMEMBER,
         TeamTool::SearchMemory { .. } => SEARCH_MEMORY,
+        TeamTool::AskPermission => ASK_PERMISSION,
     }
 }
 
@@ -317,6 +346,7 @@ pub fn bus_arguments(tools: &[TeamTool]) -> Vec<String> {
             TeamTool::AskManager
             | TeamTool::Interview
             | TeamTool::Remember
+            | TeamTool::AskPermission
             | TeamTool::SearchMemory { .. } => {}
         }
     }
@@ -359,6 +389,7 @@ pub fn tools_from_arguments(arguments: &[String]) -> Result<Vec<TeamTool>, Strin
                 teammates: Vec::new(),
             }),
             REMEMBER => tools.push(TeamTool::Remember),
+            ASK_PERMISSION => tools.push(TeamTool::AskPermission),
             SEARCH_MEMORY => tools.push(TeamTool::SearchMemory {
                 entries: Vec::new(),
             }),
@@ -384,7 +415,10 @@ pub fn tools_from_arguments(arguments: &[String]) -> Result<Vec<TeamTool>, Strin
                     .ok_or_else(|| format!("{PUBLISH_HANDOFF} needs {FOLDER_ARGUMENT}"))?;
             }
             TeamTool::SearchMemory { entries } => entries.clone_from(&memory),
-            TeamTool::AskManager | TeamTool::Interview | TeamTool::Remember => {}
+            TeamTool::AskManager
+            | TeamTool::Interview
+            | TeamTool::Remember
+            | TeamTool::AskPermission => {}
         }
     }
     Ok(tools)
@@ -996,6 +1030,43 @@ pub fn fact_from(arguments: &Value) -> Result<RememberedFact, String> {
     })
 }
 
+/// Reads and checks the arguments of a call of `ask_permission`: a kind, the
+/// command, prefix or domain in "what", and a reason, checked by the rules
+/// of a permission (decision 0038), so that a request the manager sees can
+/// always be allowed exactly as it reads.
+///
+/// # Errors
+///
+/// Returns what to change, in plain words, if the arguments are not
+/// acceptable, including a rule that can never be allowed. The model reads
+/// it and tries again.
+pub fn permission_from(arguments: &Value) -> Result<PermissionAsk, String> {
+    let Some(arguments) = arguments.as_object() else {
+        return Err(
+            "Give the request as an object with \"kind\", \"what\" and \"reason\".".to_owned(),
+        );
+    };
+    let kind = optional_text(arguments, "kind")?.unwrap_or_default();
+    let kind: PermissionKind = kind
+        .parse()
+        .map_err(|_| "\"kind\" is \"command\", \"command_prefix\" or \"web_domain\".".to_owned())?;
+    let what = optional_text(arguments, "what")?.unwrap_or_default();
+    let rule = PermissionRule::new(kind, &what)
+        .map_err(|problem| format!("This cannot be asked: {problem}."))?;
+    let reason = optional_text(arguments, "reason")?.unwrap_or_default();
+    if reason.is_empty() {
+        return Err("Say in \"reason\" why you need it.".to_owned());
+    }
+    let length = reason.chars().count();
+    if length > PermissionRequest::MAX_REASON_LENGTH {
+        return Err(format!(
+            "The reason has {length} characters. Keep it under {}.",
+            PermissionRequest::MAX_REASON_LENGTH
+        ));
+    }
+    Ok(PermissionAsk { rule, reason })
+}
+
 /// Reads and checks the arguments of a call of `search_memory`: a few
 /// plain words in "query".
 ///
@@ -1164,7 +1235,10 @@ impl Bus {
                     Err(problem) => tool_result(&problem, true),
                 });
             }
-            TeamTool::AskManager | TeamTool::Interview | TeamTool::ProposePlan { .. } => {}
+            TeamTool::AskManager
+            | TeamTool::Interview
+            | TeamTool::ProposePlan { .. }
+            | TeamTool::AskPermission => {}
         }
         let (checked, taken, not_sent) = match tool {
             TeamTool::AskManager => (
@@ -1181,6 +1255,11 @@ impl Bus {
                 proposal_from(&arguments, team).map(|_| ()),
                 PROPOSAL_TAKEN,
                 "The proposal was not sent to the manager.",
+            ),
+            TeamTool::AskPermission => (
+                permission_from(&arguments).map(|_| ()),
+                PERMISSION_TAKEN,
+                "The request was not sent to the manager.",
             ),
             // Answered above; they do not end the turn.
             TeamTool::PublishHandoff { .. }
@@ -1294,7 +1373,39 @@ fn description_of(tool: &TeamTool) -> Value {
         TeamTool::SendMessage { teammates } => send_message_tool(teammates),
         TeamTool::Remember => remember_tool(),
         TeamTool::SearchMemory { .. } => search_memory_tool(),
+        TeamTool::AskPermission => ask_permission_tool(),
     }
+}
+
+/// The description of `ask_permission`.
+fn ask_permission_tool() -> Value {
+    json!({
+        "name": ASK_PERMISSION,
+        "description": ASK_PERMISSION_DESCRIPTION,
+        "inputSchema": {
+            "type": "object",
+            "required": ["kind", "what", "reason"],
+            "properties": {
+                "kind": {
+                    "type": "string",
+                    "enum": ["command", "command_prefix", "web_domain"],
+                    "description": "One exact command, the commands that start with a program \
+                                    and its subcommand, or a web domain."
+                },
+                "what": {
+                    "type": "string",
+                    "maxLength": PermissionRule::MAX_LENGTH,
+                    "description": "The command line, such as \"npm test\"; the prefix, such \
+                                    as \"cargo test\"; or the domain, such as \"docs.rs\"."
+                },
+                "reason": {
+                    "type": "string",
+                    "maxLength": PermissionRequest::MAX_REASON_LENGTH,
+                    "description": "Why you need it: what it lets you find out or finish."
+                }
+            }
+        }
+    })
 }
 
 /// The description of `remember`.
@@ -1711,6 +1822,88 @@ mod tests {
             TeamTool::Interview,
             TeamTool::ProposePlan { team: team() },
         ]
+    }
+
+    #[test]
+    fn a_request_for_a_permission_is_read_by_the_rules_of_a_permission() {
+        let asked = permission_from(&json!({
+            "kind": "command",
+            "what": " echo  hello ",
+            "reason": " To see that commands run. "
+        }))
+        .unwrap();
+        assert_eq!(asked.rule.tool_rule(), "Bash(echo hello)");
+        assert_eq!(asked.reason, "To see that commands run.");
+
+        let domain = permission_from(&json!({
+            "kind": "web_domain", "what": "Docs.rs", "reason": "The manual of serde."
+        }))
+        .unwrap();
+        assert_eq!(domain.rule.tool_rule(), "WebFetch(domain:docs.rs)");
+
+        for wrong in [
+            json!({ "kind": "anything", "what": "echo hello", "reason": "Why not." }),
+            json!({ "kind": "command", "what": "echo hello", "reason": " " }),
+            json!({ "kind": "command", "what": "npm test && rm -rf .", "reason": "Tests." }),
+            json!({ "kind": "command_prefix", "what": "bash -c", "reason": "Scripts." }),
+            json!({ "kind": "command", "what": "claude config set", "reason": "Settings." }),
+            json!({ "kind": "web_domain", "what": "localhost", "reason": "The server." }),
+            json!("echo hello"),
+        ] {
+            assert!(permission_from(&wrong).is_err(), "{wrong} was taken");
+        }
+    }
+
+    #[test]
+    fn asking_for_a_permission_ends_the_turn_and_allows_nothing() {
+        let mut bus = Bus::offering(vec![TeamTool::AskManager, TeamTool::AskPermission]);
+        let names: Vec<String> = answer_of(
+            &mut bus,
+            &json!({ "jsonrpc": "2.0", "id": 1, "method": "tools/list" }),
+        )["result"]["tools"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|tool| tool["name"].as_str().unwrap().to_owned())
+            .collect();
+        assert_eq!(names, ["ask_manager", "ask_permission"]);
+
+        let refused = answer_of(
+            &mut bus,
+            &call_of(
+                ASK_PERMISSION,
+                &json!({ "kind": "command", "what": "sudo ls", "reason": "To look." }),
+            ),
+        );
+        assert_eq!(refused["result"]["isError"], true);
+        assert!(text_of(&refused["result"]).starts_with("The request was not sent"));
+
+        let taken = answer_of(
+            &mut bus,
+            &call_of(
+                ASK_PERMISSION,
+                &json!({ "kind": "command", "what": "echo hello", "reason": "To see it run." }),
+            ),
+        );
+        assert!(taken["result"].get("isError").is_none());
+        assert_eq!(text_of(&taken["result"]), PERMISSION_TAKEN);
+        assert!(text_of(&taken["result"]).contains("Nothing is allowed yet"));
+
+        // One thing is taken in a turn: a question after it is not.
+        let after = answer_of(&mut bus, &call(&good_arguments()));
+        assert_eq!(text_of(&after["result"]), ALREADY_TAKEN);
+    }
+
+    #[test]
+    fn the_bus_is_told_to_offer_ask_permission_by_its_name() {
+        let tools = vec![TeamTool::AskManager, TeamTool::AskPermission];
+        let arguments = bus_arguments(&tools);
+        assert_eq!(arguments, ["ask_manager", "ask_permission"]);
+        assert_eq!(tools_from_arguments(&arguments).unwrap(), tools);
+        assert_eq!(
+            name_in_session(&TeamTool::AskPermission),
+            ASK_PERMISSION_IN_SESSION
+        );
     }
 
     #[test]
