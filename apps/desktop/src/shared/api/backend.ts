@@ -36,6 +36,7 @@ import type {
   ProjectChange,
   ProjectIntegrations,
   ProjectPlaces,
+  ProjectTemplate,
   ProjectUsage,
   ProposalChange,
   ReadyMadeSpecialist,
@@ -44,6 +45,7 @@ import type {
   SprintCompletion,
   SprintReport,
   SprintStart,
+  StatusLoad,
   StatusProperties,
   SyncNotice,
   SyncState,
@@ -181,6 +183,20 @@ export interface Backend {
    * must name the status they go to; they are put at its bottom.
    */
   removeStatus(projectId: Id, statusId: Id, moveTasksTo?: Id): Promise<Project>;
+  /**
+   * Gives a status a work-in-progress limit from 1 to 999, another one, or
+   * none (`null`). A status of the category done takes none. Setting a
+   * limit below the tasks already in the status is allowed.
+   */
+  setStatusLimit(projectId: Id, statusId: Id, limit: number | null): Promise<Project>;
+  /**
+   * How many tasks stand in each status of a project, against its limit,
+   * in board order. Every task of the project counts; a subtask does not
+   * count apart from its task.
+   */
+  listStatusLoads(projectId: Id): Promise<StatusLoad[]>;
+  /** Lists the templates a new project can start from, in the order the manager is shown them. */
+  listProjectTemplates(): Promise<ProjectTemplate[]>;
 
   /** Lists the tasks of a project in the order the manager arranged them. */
   listTasks(projectId: Id): Promise<Task[]>;

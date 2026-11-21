@@ -41,6 +41,7 @@ import type {
   ProjectChange,
   ProjectIntegrations,
   ProjectPlaces,
+  ProjectTemplate,
   ProjectUsage,
   ProposalChange,
   ReadyMadeSpecialist,
@@ -49,6 +50,7 @@ import type {
   SprintCompletion,
   SprintReport,
   SprintStart,
+  StatusLoad,
   StatusProperties,
   SyncNotice,
   SyncState,
@@ -114,6 +116,18 @@ export class TauriBackend implements Backend {
 
   removeStatus(projectId: Id, statusId: Id, moveTasksTo?: Id): Promise<Project> {
     return call('remove_status', { projectId, statusId, moveTasksTo: moveTasksTo ?? null });
+  }
+
+  setStatusLimit(projectId: Id, statusId: Id, limit: number | null): Promise<Project> {
+    return call('set_status_limit', { projectId, statusId, limit });
+  }
+
+  listStatusLoads(projectId: Id): Promise<StatusLoad[]> {
+    return call('list_status_loads', { projectId });
+  }
+
+  listProjectTemplates(): Promise<ProjectTemplate[]> {
+    return call('list_project_templates');
   }
 
   listTasks(projectId: Id): Promise<Task[]> {

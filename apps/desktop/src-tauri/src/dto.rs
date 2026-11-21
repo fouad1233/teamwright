@@ -20,11 +20,11 @@ use teamwright_application::{
 };
 use teamwright_domain::{
     Area, Assignee, CalendarDate, Color, ComputerId, ContextUse, Conversation, DecisionOption,
-    DecisionRequest, DomainError, Effort, EventKind, EventKinds, Interview, InterviewAnswer,
-    Member, MemberKind, Priority, Project, Proposal, ProposedOwner, Schedule, Sprint,
-    SprintSummary, Status, StatusCategory, Step, StepContent, StoryPoints, Tag, Task, TaskChange,
-    TaskChangeKind, Timestamp, TokenCounts, Turn, View, ViewAssignee, ViewFilter, ViewKind,
-    context_of,
+    DecisionRequest, DomainError, Effort, EventKind, EventKinds, Fill, Interview, InterviewAnswer,
+    Member, MemberKind, Priority, Project, ProjectTemplate, Proposal, ProposedOwner, Schedule,
+    Sprint, SprintSummary, Status, StatusCategory, StatusLoad, Step, StepContent, StoryPoints, Tag,
+    Task, TaskChange, TaskChangeKind, Timestamp, TokenCounts, Turn, View, ViewAssignee, ViewFilter,
+    ViewKind, WorkInProgressLimit, context_of,
 };
 
 use crate::error::CommandError;
@@ -72,6 +72,8 @@ pub struct StatusDto {
     name: String,
     category: &'static str,
     color: &'static str,
+    /// The work-in-progress limit, or `null` when the status has none.
+    limit: Option<u16>,
 }
 
 impl From<&Status> for StatusDto {
@@ -81,6 +83,77 @@ impl From<&Status> for StatusDto {
             name: status.name().to_string(),
             category: status.category().as_str(),
             color: status.color().as_str(),
+            limit: status.limit().map(WorkInProgressLimit::value),
+        }
+    }
+}
+
+/// How many tasks stand in a status, against its limit, as the interface
+/// sees it.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StatusLoadDto {
+    status_id: String,
+    count: usize,
+    limit: Option<u16>,
+    /// `under`, `at` or `over`; `null` when the status has no limit.
+    fill: Option<&'static str>,
+}
+
+impl From<&StatusLoad> for StatusLoadDto {
+    fn from(load: &StatusLoad) -> Self {
+        Self {
+            status_id: load.status_id().to_string(),
+            count: load.count(),
+            limit: load.limit().map(WorkInProgressLimit::value),
+            fill: load.fill().map(Fill::as_str),
+        }
+    }
+}
+
+/// A status a template gives a workflow, as the interface sees it.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TemplateStatusDto {
+    name: &'static str,
+    category: &'static str,
+    color: &'static str,
+    limit: Option<u16>,
+}
+
+/// A template a new project can start from, as the interface sees it. Its
+/// key is what `NewProjectInput` names as its workflow.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectTemplateDto {
+    key: &'static str,
+    name: &'static str,
+    description: &'static str,
+    statuses: Vec<TemplateStatusDto>,
+    views: Vec<&'static str>,
+    areas: Vec<&'static str>,
+    plans_first_sprint: bool,
+}
+
+impl From<&ProjectTemplate> for ProjectTemplateDto {
+    fn from(template: &ProjectTemplate) -> Self {
+        Self {
+            key: template.key,
+            name: template.name,
+            description: template.description,
+            statuses: template
+                .statuses
+                .iter()
+                .map(|status| TemplateStatusDto {
+                    name: status.name,
+                    category: status.category.as_str(),
+                    color: status.color.as_str(),
+                    limit: status.limit,
+                })
+                .collect(),
+            views: template.views.iter().map(|kind| kind.as_str()).collect(),
+            areas: template.areas.to_vec(),
+            plans_first_sprint: template.plans_first_sprint,
         }
     }
 }
@@ -1625,14 +1698,21 @@ impl TryFrom<StatusPropertiesInput> for StatusProperties {
     }
 }
 
-/// The workflow a new project starts with.
-#[derive(Debug, Clone, Copy, Deserialize)]
+/// The template a new project starts from. Each name is the key of a
+/// template in `ProjectTemplate::ALL`; a test keeps the two in step.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum WorkflowTemplateDto {
     /// To do, in progress, in review, done.
     Standard,
     /// To do, in progress, in revision, in test, done.
     Engineering,
+    /// A flow with work-in-progress limits and no sprints.
+    Kanban,
+    /// Sprints from a backlog, the backlog first.
+    Scrum,
+    /// Design, review, order, build and test, in areas for each part.
+    Hardware,
 }
 
 impl From<WorkflowTemplateDto> for WorkflowTemplate {
@@ -1640,6 +1720,9 @@ impl From<WorkflowTemplateDto> for WorkflowTemplate {
         match template {
             WorkflowTemplateDto::Standard => Self::Standard,
             WorkflowTemplateDto::Engineering => Self::Engineering,
+            WorkflowTemplateDto::Kanban => Self::Kanban,
+            WorkflowTemplateDto::Scrum => Self::Scrum,
+            WorkflowTemplateDto::Hardware => Self::HardwareProduct,
         }
     }
 }

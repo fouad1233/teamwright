@@ -217,6 +217,7 @@ describe('the statuses of a project in the DemoBackend', () => {
         name: 'On the bench',
         category: 'review',
         color: 'teal',
+        limit: null,
       });
     });
 

@@ -26,13 +26,64 @@ export type Color = 'gray' | 'blue' | 'purple' | 'amber' | 'green' | 'red' | 'pi
 export type Priority = 'low' | 'normal' | 'high' | 'urgent';
 
 /** The workflows a new project can start with. */
-export type WorkflowTemplate = 'standard' | 'engineering';
+/**
+ * The template a new project starts from, by its key (decision 0033). The
+ * name is older than templates: a template decides more than the workflow.
+ */
+export type WorkflowTemplate = 'standard' | 'engineering' | 'kanban' | 'scrum' | 'hardware';
 
 export interface Status {
   id: Id;
   name: string;
   category: StatusCategory;
   color: Color;
+  /**
+   * The work-in-progress limit: the largest number of tasks that should
+   * stand in the status at once. Left out or `null`, the status has none. A
+   * limit is a signal, never a wall (decision 0033).
+   */
+  limit?: number | null;
+}
+
+/** How full a status with a limit is. */
+export type Fill = 'under' | 'at' | 'over';
+
+/** How many tasks stand in a status, against its limit. */
+export interface StatusLoad {
+  statusId: Id;
+  /**
+   * The tasks in the status, in the whole project: every area and sprint,
+   * whatever a view shows. Subtasks are not counted apart from their task.
+   */
+  count: number;
+  limit: number | null;
+  /** `null` when the status has no limit. */
+  fill: Fill | null;
+}
+
+/** A status a template gives the workflow of a new project. */
+export interface TemplateStatus {
+  name: string;
+  category: StatusCategory;
+  color: Color;
+  limit: number | null;
+}
+
+/** A template a new project can start from (decision 0033). */
+export interface ProjectTemplate {
+  /** What `NewProject.workflow` names to start from it. */
+  key: WorkflowTemplate;
+  name: string;
+  /** What it is for, in two sentences for the manager. */
+  description: string;
+  /** The statuses of its workflow, in board order. */
+  statuses: TemplateStatus[];
+  /** The views the project starts with, in their order. */
+  views: ViewKind[];
+  /** The areas the project starts with, in their order. */
+  areas: string[];
+  /** Whether a first sprint is planned, empty and without dates. */
+  plansFirstSprint: boolean;
 }
 
 /** What a manager chooses about a status: its name, what it means, and its color. */

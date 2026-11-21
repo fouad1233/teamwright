@@ -79,6 +79,21 @@ export function startingViews(projectId: Id, newId: () => Id): View[] {
   }));
 }
 
+/**
+ * The views a project made from a template starts with: one of each kind,
+ * in the order given, each named after its kind and showing every task.
+ */
+export function viewsOfKinds(projectId: Id, kinds: readonly ViewKind[], newId: () => Id): View[] {
+  return kinds.map((kind) => ({
+    id: newId(),
+    projectId,
+    kind,
+    name: NAME_OF_KIND[kind],
+    filter: structuredClone(EVERY_TASK),
+    content: null,
+  }));
+}
+
 /** The most bytes the content of a view may have, counted in UTF-8: 2 MiB. */
 const VIEW_CONTENT_MAX_BYTES = 2 * 1024 * 1024;
 

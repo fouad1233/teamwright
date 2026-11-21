@@ -6,3 +6,7 @@ src-tauri/gen
 # The documents of this repository are written by hand in one style, with
 # compact tables. The formatter would pad the tables of this folder only.
 *.md
+
+# Written by a test of the desktop shell from what the program knows, in
+# the form serde_json gives it (decision 0033).
+src/shared/api/projectTemplates.json

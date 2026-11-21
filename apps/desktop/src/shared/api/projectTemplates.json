@@ -1,0 +1,250 @@
+{
+  "limitRange": {
+    "max": 999,
+    "min": 1
+  },
+  "templates": [
+    {
+      "areas": [
+        "General"
+      ],
+      "description": "Four plain steps from to do to done, and every view a project starts with. Choose it when the project does not yet say how it wants to be run.",
+      "key": "standard",
+      "name": "Standard",
+      "plansFirstSprint": false,
+      "statuses": [
+        {
+          "category": "todo",
+          "color": "gray",
+          "limit": null,
+          "name": "To do"
+        },
+        {
+          "category": "active",
+          "color": "blue",
+          "limit": null,
+          "name": "In progress"
+        },
+        {
+          "category": "review",
+          "color": "amber",
+          "limit": null,
+          "name": "In review"
+        },
+        {
+          "category": "done",
+          "color": "green",
+          "limit": null,
+          "name": "Done"
+        }
+      ],
+      "views": [
+        "board",
+        "backlog",
+        "list",
+        "gantt",
+        "calendar",
+        "dashboard"
+      ]
+    },
+    {
+      "areas": [
+        "General"
+      ],
+      "description": "A continuous flow of work without sprints, with a limit on how much stands in each step at once. Choose it when work arrives all the time and should be finished before more is started.",
+      "key": "kanban",
+      "name": "Kanban",
+      "plansFirstSprint": false,
+      "statuses": [
+        {
+          "category": "todo",
+          "color": "gray",
+          "limit": null,
+          "name": "Backlog"
+        },
+        {
+          "category": "todo",
+          "color": "teal",
+          "limit": 5,
+          "name": "Ready"
+        },
+        {
+          "category": "active",
+          "color": "blue",
+          "limit": 3,
+          "name": "In progress"
+        },
+        {
+          "category": "review",
+          "color": "amber",
+          "limit": 2,
+          "name": "Review"
+        },
+        {
+          "category": "done",
+          "color": "green",
+          "limit": null,
+          "name": "Done"
+        }
+      ],
+      "views": [
+        "board",
+        "list",
+        "calendar",
+        "dashboard"
+      ]
+    },
+    {
+      "areas": [
+        "General"
+      ],
+      "description": "Work planned from a backlog into sprints of one to four weeks, with the backlog first and a first sprint ready to fill. Choose it when the work is reviewed and planned again at a steady beat.",
+      "key": "scrum",
+      "name": "Scrum",
+      "plansFirstSprint": true,
+      "statuses": [
+        {
+          "category": "todo",
+          "color": "gray",
+          "limit": null,
+          "name": "To do"
+        },
+        {
+          "category": "active",
+          "color": "blue",
+          "limit": null,
+          "name": "In progress"
+        },
+        {
+          "category": "review",
+          "color": "amber",
+          "limit": null,
+          "name": "In review"
+        },
+        {
+          "category": "done",
+          "color": "green",
+          "limit": null,
+          "name": "Done"
+        }
+      ],
+      "views": [
+        "backlog",
+        "board",
+        "list",
+        "dashboard"
+      ]
+    },
+    {
+      "areas": [
+        "Electronics",
+        "Firmware",
+        "Enclosure"
+      ],
+      "description": "A device is designed, reviewed, ordered, built and tested, in areas for its electronics, its firmware and its enclosure. Choose it when the work ends in something that can be held in the hand.",
+      "key": "hardware",
+      "name": "Hardware product",
+      "plansFirstSprint": false,
+      "statuses": [
+        {
+          "category": "todo",
+          "color": "gray",
+          "limit": null,
+          "name": "To do"
+        },
+        {
+          "category": "active",
+          "color": "blue",
+          "limit": 4,
+          "name": "Design"
+        },
+        {
+          "category": "review",
+          "color": "amber",
+          "limit": 2,
+          "name": "Design review"
+        },
+        {
+          "category": "active",
+          "color": "purple",
+          "limit": null,
+          "name": "Ordered"
+        },
+        {
+          "category": "active",
+          "color": "teal",
+          "limit": 3,
+          "name": "Build"
+        },
+        {
+          "category": "review",
+          "color": "pink",
+          "limit": 2,
+          "name": "Test"
+        },
+        {
+          "category": "done",
+          "color": "green",
+          "limit": null,
+          "name": "Done"
+        }
+      ],
+      "views": [
+        "board",
+        "gantt",
+        "list",
+        "calendar",
+        "dashboard"
+      ]
+    },
+    {
+      "areas": [
+        "General"
+      ],
+      "description": "Work that goes back for revision and is tested before it is accepted. Choose it for code or design that is checked by test rather than by eye.",
+      "key": "engineering",
+      "name": "Engineering",
+      "plansFirstSprint": false,
+      "statuses": [
+        {
+          "category": "todo",
+          "color": "gray",
+          "limit": null,
+          "name": "To do"
+        },
+        {
+          "category": "active",
+          "color": "blue",
+          "limit": null,
+          "name": "In progress"
+        },
+        {
+          "category": "active",
+          "color": "purple",
+          "limit": null,
+          "name": "In revision"
+        },
+        {
+          "category": "review",
+          "color": "amber",
+          "limit": null,
+          "name": "In test"
+        },
+        {
+          "category": "done",
+          "color": "green",
+          "limit": null,
+          "name": "Done"
+        }
+      ],
+      "views": [
+        "board",
+        "backlog",
+        "list",
+        "gantt",
+        "calendar",
+        "dashboard"
+      ]
+    }
+  ]
+}

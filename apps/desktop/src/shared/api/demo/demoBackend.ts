@@ -43,6 +43,7 @@ import type {
   ProjectChange,
   ProjectIntegrations,
   ProjectPlaces,
+  ProjectTemplate,
   ProjectUsage,
   ProposalChange,
   ProposedMember,
@@ -55,6 +56,7 @@ import type {
   SprintStart,
   Status,
   StatusCategory,
+  StatusLoad,
   StatusProperties,
   SyncNotice,
   SyncState,
@@ -69,7 +71,6 @@ import type {
   Turn,
   View,
   ViewFilter,
-  WorkflowTemplate,
 } from '../types';
 import {
   refuseAreaInUse,
@@ -99,6 +100,7 @@ import {
   proposalAfter,
   waitInCircle,
 } from './planning';
+import { PROJECT_TEMPLATES, checkedLimit, requireTemplate, statusLoads } from './templates';
 import { scriptForAnswers, scriptForBrief, scriptForChange } from './simulatedAdvisor';
 import {
   asListed,
@@ -140,6 +142,7 @@ import {
   refuseSecondOfKind,
   refuseViewNameInUse,
   startingViews,
+  viewsOfKinds,
   tidyFilter,
   tidyViewName,
 } from './views';
@@ -221,22 +224,6 @@ export interface DemoWorkspace {
 const browserEnvironment: DemoEnvironment = {
   now: () => new Date(),
   newId: () => crypto.randomUUID(),
-};
-
-const WORKFLOWS: Record<WorkflowTemplate, readonly Omit<Status, 'id'>[]> = {
-  standard: [
-    { name: 'To do', category: 'todo', color: 'gray' },
-    { name: 'In progress', category: 'active', color: 'blue' },
-    { name: 'In review', category: 'review', color: 'amber' },
-    { name: 'Done', category: 'done', color: 'green' },
-  ],
-  engineering: [
-    { name: 'To do', category: 'todo', color: 'gray' },
-    { name: 'In progress', category: 'active', color: 'blue' },
-    { name: 'In revision', category: 'active', color: 'purple' },
-    { name: 'In test', category: 'review', color: 'amber' },
-    { name: 'Done', category: 'done', color: 'green' },
-  ],
 };
 
 /**
@@ -431,12 +418,13 @@ export class DemoBackend implements Backend {
       const name = tidyName(newProject.name, 'project name', PROJECT_NAME_MAX_LENGTH);
       const requestedKey = newProject.key?.trim();
       const key = requestedKey ? this.claimKey(requestedKey) : this.unusedKeyFor(name);
+      const template = requireTemplate(newProject.workflow);
       const project: Project = {
         id: this.environment.newId(),
         key,
         name,
         description: newProject.description?.trim() ?? '',
-        statuses: WORKFLOWS[newProject.workflow].map((status) => ({
+        statuses: template.statuses.map((status) => ({
           ...status,
           id: this.environment.newId(),
         })),
@@ -444,8 +432,37 @@ export class DemoBackend implements Backend {
         archivedAt: null,
       };
       this.projects.set(project.id, project);
-      this.views.set(project.id, this.startingViewsOf(project.id));
-      this.areas.set(project.id, [startingArea(project.id, this.environment.newId())]);
+      // A template decides the views, the areas and a first sprint; it
+      // never decides a team, and the project does not remember it.
+      this.views.set(
+        project.id,
+        viewsOfKinds(project.id, template.views, () => this.environment.newId()),
+      );
+      this.areas.set(
+        project.id,
+        template.areas.map((name) => ({
+          id: this.environment.newId(),
+          projectId: project.id,
+          name,
+        })),
+      );
+      if (template.plansFirstSprint) {
+        this.sprintsCreated.set(project.id, 1);
+        const sprint: Sprint = {
+          id: this.environment.newId(),
+          projectId: project.id,
+          name: 'Sprint 1',
+          goal: '',
+          startOn: null,
+          endOn: null,
+          state: 'planned',
+          createdAt: project.createdAt,
+          startedAt: null,
+          completedAt: null,
+          summary: null,
+        };
+        this.sprints.set(sprint.id, sprint);
+      }
       return project;
     });
   }
@@ -709,6 +726,7 @@ export class DemoBackend implements Backend {
         name,
         category: properties.category,
         color: properties.color,
+        limit: null,
       };
       project.statuses.splice(placeForNewStatus(project.statuses, status.category), 0, status);
       return project;
@@ -735,6 +753,10 @@ export class DemoBackend implements Backend {
       status.name = name;
       status.category = properties.category;
       status.color = properties.color;
+      // A status of the category done carries no limit.
+      if (isDone) {
+        status.limit = null;
+      }
 
       // Whether a task is complete follows from the category of its status.
       if (wasDone !== isDone) {
@@ -790,6 +812,28 @@ export class DemoBackend implements Backend {
       project.statuses = remaining;
       return project;
     });
+  }
+
+  setStatusLimit(projectId: Id, statusId: Id, limit: number | null): Promise<Project> {
+    return this.answer(() => {
+      const project = this.requireProject(projectId);
+      const status = requireStatus(project, statusId);
+      // A limit is a signal, never a wall: nothing is moved, whatever the
+      // status holds.
+      status.limit = checkedLimit(status, limit);
+      return project;
+    });
+  }
+
+  listStatusLoads(projectId: Id): Promise<StatusLoad[]> {
+    return this.answer(() => {
+      const project = this.requireProject(projectId);
+      return statusLoads(project.statuses, this.tasksOfProject(projectId));
+    });
+  }
+
+  listProjectTemplates(): Promise<ProjectTemplate[]> {
+    return this.answer(() => structuredClone([...PROJECT_TEMPLATES]));
   }
 
   listTasks(projectId: Id): Promise<Task[]> {
