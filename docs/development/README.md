@@ -12,7 +12,8 @@ How to build, run and check Teamwright from source.
 | WebView2 | | Windows only, and part of Windows 11 |
 
 On Linux and macOS the [Tauri prerequisites](https://tauri.app/start/prerequisites/)
-apply.
+apply. On a Linux computer where you cannot use `sudo`, see
+[the setup without administrator rights](linux-without-admin.md).
 
 ## First time
 
