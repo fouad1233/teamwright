@@ -152,6 +152,12 @@ define_id!(
 );
 
 define_id!(
+    /// Identifies an entry of the record of a coordinator.
+    CoordinatorEntryId,
+    kind = "coordinator entry identifier"
+);
+
+define_id!(
     /// Identifies a computer that runs Teamwright. Each computer keeps its
     /// own database, and every change it makes carries this identity.
     ComputerId,

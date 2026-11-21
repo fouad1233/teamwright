@@ -395,6 +395,32 @@ pub enum DomainError {
     #[error("a message goes to another member of the team")]
     MessageToOneself,
 
+    /// A budget in tokens was outside its range.
+    #[error("a budget is a whole number of tokens from {min} to {max}")]
+    BudgetOutOfRange {
+        /// The smallest budget.
+        min: u64,
+        /// The largest budget.
+        max: u64,
+    },
+
+    /// A limit of specialists at work at once was outside its range.
+    #[error("the coordinator lets {min} to {max} specialists work at once")]
+    ConcurrencyOutOfRange {
+        /// The smallest limit.
+        min: u8,
+        /// The largest limit.
+        max: u8,
+    },
+
+    /// A question was to be asked about a budget that has no tokens.
+    #[error("the budget has no tokens set")]
+    NoBudget,
+
+    /// An answer was given about a budget about which no question is open.
+    #[error("nothing is asked about this budget")]
+    NoBudgetQuestion,
+
     /// A handoff named the same file twice.
     #[error("the file {path} is named twice")]
     FileNamedTwice {

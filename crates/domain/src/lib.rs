@@ -20,6 +20,7 @@ pub mod area;
 pub mod checklist;
 pub mod color;
 pub mod conversation;
+pub mod coordination;
 pub mod dependencies;
 pub mod digest;
 pub mod error;
@@ -55,14 +56,19 @@ pub use conversation::{
     DecisionRequest, DecisionSnapshot, Step, StepContent, StepKind, TokenCounts, ToolOutcome, Turn,
     TurnOrigin, TurnSnapshot, TurnState, context_of,
 };
+pub use coordination::{
+    Budget, BudgetAnswer, BudgetQuestion, BudgetScope, BudgetScopeKind, ConcurrencyLimit,
+    Coordinator, CoordinatorEntry, CoordinatorEntryKind, TokenBudget,
+};
 pub use dependencies::DependencyGraph;
 pub use digest::{
     Digest, DigestDraft, DigestSnapshot, DigestSource, DigestText, EarlierConversation,
 };
 pub use error::DomainError;
 pub use ids::{
-    AreaId, ChecklistItemId, ComputerId, ConversationId, DigestId, HandoffId, MemberId,
-    MemoryEntryId, ProjectId, SprintId, StatusId, TagId, TaskId, TeamMessageId, TurnId, ViewId,
+    AreaId, ChecklistItemId, ComputerId, ConversationId, CoordinatorEntryId, DigestId, HandoffId,
+    MemberId, MemoryEntryId, ProjectId, SprintId, StatusId, TagId, TaskId, TeamMessageId, TurnId,
+    ViewId,
 };
 pub use integration::{EventKind, EventKinds, RepositoryName, WebAddress};
 pub use member::{Effort, Member, MemberInstructions, MemberKind, MemberProfile, MemberSnapshot};
