@@ -14,6 +14,7 @@ use serde_json::{Map, Value};
 
 use crate::areas;
 use crate::conversations;
+use crate::coordinator;
 use crate::digests;
 use crate::error::DatabaseError;
 use crate::members;
@@ -52,6 +53,9 @@ pub(crate) fn write_state(
         Entity::Tag => tags::write_state(transaction, state),
         Entity::MemoryEntry => memory::write_entry_state(transaction, state),
         Entity::Digest => digests::write_state(transaction, state),
+        Entity::Coordinator => coordinator::write_coordinator_state(transaction, state),
+        Entity::Budget => coordinator::write_budget_state(transaction, state),
+        Entity::CoordinatorEntry => coordinator::write_entry_state(transaction, state),
         Entity::Conversation => conversations::write_conversation_state(transaction, state),
         Entity::Turn => conversations::write_turn_state(transaction, state),
         Entity::TurnStep => conversations::write_step_state(transaction, state),
@@ -111,6 +115,9 @@ pub(crate) fn remove(
         }
         Entity::Digest => {
             digests::remove_digest(transaction, entity_id)?;
+        }
+        Entity::Coordinator | Entity::Budget | Entity::CoordinatorEntry => {
+            coordinator::remove_row(transaction, entity, entity_id)?;
         }
         Entity::Conversation => {
             conversations::remove_conversation(transaction, operations, entity_id)?;

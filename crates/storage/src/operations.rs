@@ -88,11 +88,19 @@ pub(crate) enum Entity {
     /// A digest of an earlier conversation, kept with a project. It never
     /// changes.
     Digest,
+    /// The coordinator of a project: its limit and where it runs. Its
+    /// identifier is the project's.
+    Coordinator,
+    /// A budget in tokens of a project, a member or a task, with the
+    /// question asked about it. Its identifier is that of what it is for.
+    Budget,
+    /// One entry of the record of a coordinator. It never changes.
+    CoordinatorEntry,
 }
 
 impl Entity {
     /// Every kind of thing whose changes are logged.
-    pub(crate) const ALL: [Self; 18] = [
+    pub(crate) const ALL: [Self; 21] = [
         Self::Project,
         Self::Task,
         Self::Member,
@@ -111,6 +119,9 @@ impl Entity {
         Self::Tag,
         Self::MemoryEntry,
         Self::Digest,
+        Self::Coordinator,
+        Self::Budget,
+        Self::CoordinatorEntry,
     ];
 
     /// The entity of a name in the log, if this version knows it.
@@ -139,6 +150,9 @@ impl Entity {
             Self::Tag => "tag",
             Self::MemoryEntry => "memory_entry",
             Self::Digest => "digest",
+            Self::Coordinator => "coordinator",
+            Self::Budget => "budget",
+            Self::CoordinatorEntry => "coordinator_entry",
         }
     }
 }

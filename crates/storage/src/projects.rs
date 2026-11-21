@@ -255,6 +255,22 @@ pub(crate) fn remove_project(
         id,
     )?;
     delete_rows_of_project(transaction, operations, "digests", Entity::Digest, id)?;
+    // The coordinator, its budgets and its record go with the project.
+    delete_rows_of_project(
+        transaction,
+        operations,
+        "coordinator_entries",
+        Entity::CoordinatorEntry,
+        id,
+    )?;
+    delete_rows_of_project(transaction, operations, "budgets", Entity::Budget, id)?;
+    delete_rows_of_project(
+        transaction,
+        operations,
+        "coordinators",
+        Entity::Coordinator,
+        id,
+    )?;
     delete_rows_of_project(transaction, operations, "tasks", Entity::Task, id)?;
     delete_rows_of_project(transaction, operations, "sprints", Entity::Sprint, id)?;
     delete_rows_of_project(transaction, operations, "views", Entity::View, id)?;

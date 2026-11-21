@@ -153,6 +153,20 @@ const TAG_FIELDS: &[Field] = &[later("name", &["name"]), later("color", &["color
 // An entry of memory merges by field, so that whether a newer entry
 // replaced it, the one thing that changes, is a field of its own.
 const MEMORY_ENTRY_FIELDS: &[Field] = &[later("replaced_by", &["replaced_by"])];
+// The limit and the switch merge on their own: the manager may change the
+// limit on one computer while the coordinator is switched on on another.
+// The computer it runs on and the moment it was switched go together.
+const COORDINATOR_FIELDS: &[Field] = &[
+    later("limit", &["concurrency_limit"]),
+    later("switch", &["runs_on", "switched_at"]),
+];
+
+// The tokens and the question merge on their own. A raise in answer to the
+// question sets both in one write, and travels as one.
+const BUDGET_FIELDS: &[Field] = &[
+    later("tokens", &["tokens"]),
+    later("question", &["question"]),
+];
 
 const CONVERSATION_FIELDS: &[Field] = &[
     later("member", &["member_id"]),
@@ -179,13 +193,16 @@ pub(crate) const fn merging_of(entity: Entity) -> Merging {
         Entity::Conversation => Merging::ByField(CONVERSATION_FIELDS),
         Entity::TeamMessage => Merging::ByField(TEAM_MESSAGE_FIELDS),
         Entity::MemoryEntry => Merging::ByField(MEMORY_ENTRY_FIELDS),
+        Entity::Coordinator => Merging::ByField(COORDINATOR_FIELDS),
+        Entity::Budget => Merging::ByField(BUDGET_FIELDS),
         Entity::Turn
         | Entity::TurnStep
         | Entity::Decision
         | Entity::Interview
         | Entity::Proposal
         | Entity::Handoff
-        | Entity::Digest => Merging::Whole,
+        | Entity::Digest
+        | Entity::CoordinatorEntry => Merging::Whole,
         Entity::ProjectPlaces => Merging::NeverLeaves,
     }
 }

@@ -24,6 +24,7 @@ mod apply;
 mod areas;
 mod codec;
 mod conversations;
+mod coordinator;
 mod database;
 mod digests;
 mod error;
@@ -50,6 +51,7 @@ mod views;
 
 pub use areas::SqliteAreaRepository;
 pub use conversations::SqliteConversationRepository;
+pub use coordinator::SqliteCoordinatorRepository;
 pub use database::Database;
 pub use digests::SqliteDigestRepository;
 pub use folder::FolderOfComputers;
