@@ -522,6 +522,7 @@ mod tests {
             work: WorkService::new(WorkPorts {
                 teamwork: Arc::new(crate::in_memory::InMemoryTeamworkRepository::default()),
                 memory: Arc::new(crate::in_memory::InMemoryMemoryRepository::default()),
+                digests: Arc::new(crate::in_memory::InMemoryDigestRepository::default()),
                 planning: Arc::new(InMemoryPlanningRepository::new(
                     projects.clone(),
                     members.clone(),

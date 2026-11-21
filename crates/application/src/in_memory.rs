@@ -11,9 +11,9 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use chrono::TimeDelta;
 use teamwright_domain::{
-    Area, AreaId, Conversation, ConversationId, Handoff, HandoffId, Member, MemberId, MemoryEntry,
-    MemoryEntryId, Project, ProjectId, Sprint, SprintId, Tag, TagId, Task, TaskId, TeamMessage,
-    TeamMessageId, Timestamp, Turn, TurnId, View, ViewId,
+    Area, AreaId, Conversation, ConversationId, Digest, DigestId, EarlierConversation, Handoff,
+    HandoffId, Member, MemberId, MemoryEntry, MemoryEntryId, Project, ProjectId, Sprint, SprintId,
+    Tag, TagId, Task, TaskId, TeamMessage, TeamMessageId, Timestamp, Turn, TurnId, View, ViewId,
 };
 
 use crate::agent_runtime::{
@@ -24,10 +24,10 @@ use crate::appearance::{Theme, ThemeStore};
 use crate::notifications::{NotificationChoice, NotificationChoiceStore};
 use crate::places::ChosenPlaces;
 use crate::ports::{
-    ApprovedPlan, AreaRepository, Clock, ConversationRepository, FileSystem, MemberRepository,
-    MemoryRepository, PlacesRepository, PlanningRepository, ProjectFolders, ProjectRepository,
-    SprintRepository, StorageError, TagRepository, TaskRepository, TeamworkRepository,
-    ViewRepository, WorkListener,
+    ApprovedPlan, AreaRepository, Clock, ConversationRepository, DigestRepository,
+    EarlierConversations, FileSystem, FoundConversation, MemberRepository, MemoryRepository,
+    PlacesRepository, PlanningRepository, ProjectFolders, ProjectRepository, SprintRepository,
+    StorageError, TagRepository, TaskRepository, TeamworkRepository, ViewRepository, WorkListener,
 };
 use crate::project_events::ProjectEvent;
 
@@ -339,6 +339,66 @@ impl TagRepository for InMemoryTagRepository {
 
     fn delete(&self, id: TagId) -> Result<(), StorageError> {
         lock(&self.tags).remove(&id);
+        Ok(())
+    }
+}
+
+/// Earlier conversations that exist only in what a test says: each one as
+/// the list shows it and as it reads through.
+#[derive(Debug, Default)]
+pub struct PretendEarlierConversations {
+    conversations: Mutex<Vec<(FoundConversation, EarlierConversation)>>,
+}
+
+impl PretendEarlierConversations {
+    /// Makes a conversation exist.
+    pub fn add(&self, found: FoundConversation, read: EarlierConversation) {
+        lock(&self.conversations).push((found, read));
+    }
+}
+
+impl EarlierConversations for PretendEarlierConversations {
+    fn list(&self) -> Result<Vec<FoundConversation>, StorageError> {
+        Ok(lock(&self.conversations)
+            .iter()
+            .map(|(found, _)| found.clone())
+            .collect())
+    }
+
+    fn read(&self, source: &str) -> Result<Option<EarlierConversation>, StorageError> {
+        Ok(lock(&self.conversations)
+            .iter()
+            .find(|(found, _)| found.source == source)
+            .map(|(_, read)| read.clone()))
+    }
+}
+
+/// Keeps the digests of earlier conversations in memory.
+#[derive(Debug, Default)]
+pub struct InMemoryDigestRepository {
+    digests: Mutex<BTreeMap<DigestId, Digest>>,
+}
+
+impl DigestRepository for InMemoryDigestRepository {
+    fn save(&self, digest: &Digest) -> Result<(), StorageError> {
+        lock(&self.digests).insert(digest.id(), digest.clone());
+        Ok(())
+    }
+
+    fn find(&self, id: DigestId) -> Result<Option<Digest>, StorageError> {
+        Ok(lock(&self.digests).get(&id).cloned())
+    }
+
+    fn list_for_project(&self, project_id: ProjectId) -> Result<Vec<Digest>, StorageError> {
+        Ok(lock(&self.digests)
+            .values()
+            .filter(|digest| digest.project_id() == project_id)
+            .cloned()
+            .collect())
+    }
+
+    fn delete(&self, id: DigestId) -> Result<(), StorageError> {
+        lock(&self.digests).remove(&id);
         Ok(())
     }
 }

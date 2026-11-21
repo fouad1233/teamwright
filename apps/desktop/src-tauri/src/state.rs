@@ -11,12 +11,12 @@ use chrono::Utc;
 use tauri::{AppHandle, Emitter, Manager};
 use teamwright_application::{
     AgentRuntime, AppearanceService, ApplicationError, AreaService, ChecklistService,
-    DeliveryPorts, DeliveryService, DiskEntry, DriveSurroundings, FileSystem, FolderReader,
-    GitHubPorts, GitHubService, GoogleDriveService, IntegrationSettings, NotificationService,
-    OperatingSystem, PlacesService, ProjectEvent, ProjectFilesService, ProjectFolders,
-    ProjectService, RoundReport, SprintService, StorageError, SyncPorts, SyncService, SystemClock,
-    TagService, TaskService, TeamService, ViewService, WorkListener, WorkPorts, WorkService,
-    WorkbookPorts, WorkbookService,
+    DeliveryPorts, DeliveryService, DigestRepository, DiskEntry, DriveSurroundings, FileSystem,
+    FolderReader, GitHubPorts, GitHubService, GoogleDriveService, IntegrationSettings,
+    NotificationService, OperatingSystem, PlacesService, ProjectEvent, ProjectFilesService,
+    ProjectFolders, ProjectService, RoundReport, SprintService, StorageError, SyncPorts,
+    SyncService, SystemClock, TagService, TaskService, TeamService, ViewService, WorkListener,
+    WorkPorts, WorkService, WorkbookPorts, WorkbookService,
 };
 use teamwright_domain::{ComputerId, Conversation, Project, Turn};
 use teamwright_integrations::{GhCommandLine, GhLocator, HttpsSender};
@@ -198,6 +198,8 @@ impl AppState {
         let memory_repository = Arc::new(teamwright_storage::SqliteMemoryRepository::new(
             database.clone(),
         ));
+        let digest_repository: Arc<dyn DigestRepository> =
+            Arc::new(teamwright_application::in_memory::InMemoryDigestRepository::default());
         let runtime: Arc<dyn AgentRuntime> = Arc::new(agent_program());
         let clock = Arc::new(SystemClock);
         let folders: Arc<dyn ProjectFolders> = Arc::new(FoldersOfProjects {
@@ -251,6 +253,7 @@ impl AppState {
             planning: planning_repository,
             teamwork: teamwork_repository.clone(),
             memory: memory_repository.clone(),
+            digests: digest_repository.clone(),
             folders: folders.clone(),
             places: places_repository.clone(),
             file_system: file_system.clone(),

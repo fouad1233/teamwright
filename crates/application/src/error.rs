@@ -211,6 +211,14 @@ pub enum ApplicationError {
     )]
     IdentityInUse,
 
+    /// A digest of an earlier conversation was to be kept a second time
+    /// with the same project.
+    #[error("a digest of this conversation is kept with the project already: \"{title}\"")]
+    DigestAlreadyKept {
+        /// The title of the digest that is kept.
+        title: String,
+    },
+
     /// A folder was to be used without a name.
     #[error("the folder must be named")]
     FolderNotNamed,
@@ -497,6 +505,7 @@ impl ApplicationError {
             Self::FolderNotFound { .. } | Self::NotAGoogleDriveFolder { .. } => "folder_not_found",
             Self::NotFound { .. } | Self::NothingAtPath { .. } => "not_found",
             Self::ProjectKeyTaken { .. } => "project_key_taken",
+            Self::DigestAlreadyKept { .. } => "digest_already_kept",
             Self::DifferentProjects
             | Self::SprintOfAnotherProject
             | Self::UnfinishedToAnotherProject

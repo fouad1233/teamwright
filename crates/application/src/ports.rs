@@ -8,9 +8,9 @@ use std::error::Error;
 use std::path::{Path, PathBuf};
 
 use teamwright_domain::{
-    Area, AreaId, CalendarDate, ComputerId, Conversation, ConversationId, Handoff, Member,
-    MemberId, MemoryEntry, MemoryEntryId, Project, ProjectId, Sprint, SprintId, Tag, TagId, Task,
-    TaskId, TeamMessage, Timestamp, Turn, View, ViewId,
+    Area, AreaId, CalendarDate, ComputerId, Conversation, ConversationId, Digest, DigestId,
+    EarlierConversation, Handoff, Member, MemberId, MemoryEntry, MemoryEntryId, Project, ProjectId,
+    Sprint, SprintId, Tag, TagId, Task, TaskId, TeamMessage, Timestamp, Turn, View, ViewId,
 };
 
 use crate::places::ChosenPlaces;
@@ -492,6 +492,86 @@ pub trait PlanningRepository: Send + Sync {
     ///
     /// Returns an error if the plan could not be written.
     fn save_approved_plan(&self, plan: &ApprovedPlan) -> Result<(), StorageError>;
+}
+
+/// Stores the digests of earlier conversations that the manager kept with
+/// a project ([decision 0041](../../../docs/decisions/0041-earlier-conversations-as-digests.md)).
+pub trait DigestRepository: Send + Sync {
+    /// Stores a digest.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the digest could not be written.
+    fn save(&self, digest: &Digest) -> Result<(), StorageError>;
+
+    /// Finds a digest by its identifier.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if storage could not be read.
+    fn find(&self, id: DigestId) -> Result<Option<Digest>, StorageError>;
+
+    /// The digests of a project, in no particular order.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if storage could not be read.
+    fn list_for_project(&self, project_id: ProjectId) -> Result<Vec<Digest>, StorageError>;
+
+    /// Removes a digest. A digest that is not stored is ignored.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the digest could not be removed.
+    fn delete(&self, id: DigestId) -> Result<(), StorageError>;
+}
+
+/// An earlier conversation as a list of them shows it: enough for the
+/// manager to recognise it, read without reading the whole conversation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FoundConversation {
+    /// How the reader finds it again.
+    pub source: String,
+    /// The folder it was held in, as the program wrote it; when no line
+    /// said, the name the program gave the folder of its files.
+    pub held_in: String,
+    /// The title the program or the user gave it, if any.
+    pub title: Option<String>,
+    /// The first thing the user typed in it, if it was found near the
+    /// beginning, as it was typed.
+    pub first_request: Option<String>,
+    /// When it began, if a line said.
+    pub started_at: Option<Timestamp>,
+    /// When it last changed: the last moment a line said, or else when its
+    /// file was last written.
+    pub ended_at: Option<Timestamp>,
+    /// The size of the file it is kept in, in bytes.
+    pub size_bytes: u64,
+}
+
+/// Reads the conversations the user held with the agent program before,
+/// from where the program keeps them on this computer. It only reads; it
+/// never changes, copies or removes anything there. What the program keeps
+/// is not a published format, so a reader skips what it does not
+/// understand and never fails a whole conversation over one line.
+pub trait EarlierConversations: Send + Sync {
+    /// The conversations kept on this computer, in no particular order.
+    /// None at all when the program was never used here.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the place they are kept in exists and cannot be
+    /// read.
+    fn list(&self) -> Result<Vec<FoundConversation>, StorageError>;
+
+    /// Reads one conversation through: what the user typed, the files the
+    /// program wrote or changed, and its last answer. `None` if the source
+    /// names no conversation.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the conversation is there and cannot be read.
+    fn read(&self, source: &str) -> Result<Option<EarlierConversation>, StorageError>;
 }
 
 /// Knows the folder Teamwright gives each project. The specialists work

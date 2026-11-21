@@ -35,9 +35,9 @@ use crate::memory::{
 };
 use crate::places::{PlacesService, REFERENCES_FOLDER};
 use crate::ports::{
-    AreaRepository, Clock, ConversationRepository, FileSystem, MemberRepository, MemoryRepository,
-    PlacesRepository, PlanningRepository, ProjectFolders, ProjectRepository, TaskRepository,
-    TeamworkRepository, WorkListener,
+    AreaRepository, Clock, ConversationRepository, DigestRepository, FileSystem, MemberRepository,
+    MemoryRepository, PlacesRepository, PlanningRepository, ProjectFolders, ProjectRepository,
+    TaskRepository, TeamworkRepository, WorkListener,
 };
 use crate::project_events::{ProjectEvent, event_of_ended_turn};
 use crate::teamwork::{handoffs_in_words, messages_in_words, messages_waiting_for};
@@ -46,8 +46,8 @@ use crate::usage::{ProjectUsage, usage_of};
 mod advisor;
 
 pub use advisor::{
-    ApprovedMember, ApprovedOwner, ApprovedProposal, ApprovedTask, ProposalEdit, answers_in_words,
-    instructions_for_advisor,
+    ADVISOR_DIGESTS_LENGTH, ApprovedMember, ApprovedOwner, ApprovedProposal, ApprovedTask,
+    ProposalEdit, answers_in_words, digests_for_advisor, instructions_for_advisor,
 };
 
 /// The failure text of a turn whose program said the user is not signed in.
@@ -163,6 +163,9 @@ pub struct WorkPorts {
     /// Where the memory of the projects is kept: decisions, facts and
     /// contracts.
     pub memory: Arc<dyn MemoryRepository>,
+    /// Where the digests of earlier conversations are stored. The Advisor
+    /// starts from them.
+    pub digests: Arc<dyn DigestRepository>,
     /// The folder Teamwright gives each project.
     pub folders: Arc<dyn ProjectFolders>,
     /// Where the folders the manager chose for each project are stored.
@@ -1959,6 +1962,7 @@ mod tests {
                 )),
                 teamwork: self.teamwork.clone(),
                 memory: self.memory.clone(),
+                digests: Arc::new(crate::in_memory::InMemoryDigestRepository::default()),
                 folders: Arc::new(FixedProjectFolders::inside("projects")),
                 places: self.places.clone(),
                 file_system: self.file_system.clone(),

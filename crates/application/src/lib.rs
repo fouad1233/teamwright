@@ -21,6 +21,7 @@ pub mod appearance;
 pub mod areas;
 pub mod checklists;
 pub mod clock;
+pub mod digests;
 pub mod error;
 pub mod files;
 pub mod google_drive;
@@ -56,6 +57,10 @@ pub use appearance::{AppearanceService, Theme, ThemeStore};
 pub use areas::AreaService;
 pub use checklists::ChecklistService;
 pub use clock::SystemClock;
+pub use digests::{
+    ConversationsOfFolder, DigestService, DigestToKeep, EarlierConversationCard, group_by_folder,
+    newest_kept_first,
+};
 pub use error::ApplicationError;
 pub use files::{FolderListing, ProjectFilesService};
 pub use google_drive::{
@@ -87,10 +92,11 @@ pub use notifications::{
 };
 pub use places::{ChosenPlaces, PlacesService, ProjectPlaces, REFERENCES_FOLDER};
 pub use ports::{
-    ApprovedPlan, AreaRepository, Clock, ConversationRepository, DiskEntry, FileSystem,
-    FolderReader, MemberRepository, MemoryRepository, PlacesRepository, PlanningRepository,
-    ProjectFolders, ProjectRepository, SprintRepository, StorageError, TagRepository,
-    TaskRepository, TeamworkRepository, ViewRepository, WorkListener,
+    ApprovedPlan, AreaRepository, Clock, ConversationRepository, DigestRepository, DiskEntry,
+    EarlierConversations, FileSystem, FolderReader, FoundConversation, MemberRepository,
+    MemoryRepository, PlacesRepository, PlanningRepository, ProjectFolders, ProjectRepository,
+    SprintRepository, StorageError, TagRepository, TaskRepository, TeamworkRepository,
+    ViewRepository, WorkListener,
 };
 pub use project_events::{
     Agent, Happening, ProjectEvent, StatusOfEvent, TaskOfEvent, WaitsFor,
@@ -122,7 +128,7 @@ pub use views::{NewView, ViewService};
 pub use work::{
     AgentProgram, AgentProgramState, ApprovedMember, ApprovedOwner, ApprovedProposal, ApprovedTask,
     ConversationWithTurns, ProposalEdit, WorkPorts, WorkService, answers_in_words, brief_for,
-    brief_with_memory, instructions_for, instructions_for_advisor,
+    brief_with_memory, digests_for_advisor, instructions_for, instructions_for_advisor,
 };
 pub use workbook::{
     Cell, Column, Section, Sheet, SheetContent, Table, Workbook, WorkbookPorts, WorkbookService,
