@@ -25,8 +25,9 @@ page never promises more than has been seen working. The
    instructions, model and effort, skills and connectors.
 6. [The Advisor](the-advisor.md): the interview, the proposal, approving it,
    and importing earlier conversations.
-7. [Work](work.md): starting work, the conversation, questions in the inbox,
-   handoffs and messages, the memory of a project, and the office.
+7. [Work](work.md): starting work, the conversation, questions and requests
+   for permission in the inbox, the limit of your Claude plan, handoffs and
+   messages, the memory of a project, and the office.
 8. [The coordinator and budgets](coordinator-and-budgets.md): letting ready
    work start by itself, and limiting what it spends.
 9. [Sprints and the backlog](sprints-and-backlog.md): sprints, the burndown
@@ -39,7 +40,7 @@ page never promises more than has been seen working. The
 13. [Settings of this computer](settings.md): themes, notifications and the
     notice of a newer version.
 14. [What a specialist may and may not do](safety-and-trust.md): the page
-    about safety and trust.
+    about safety and trust, and the permissions you can give.
 15. [Troubles and answers](troubles-and-answers.md): what goes wrong, the
     keyboard, and where your data is.
 

@@ -62,6 +62,26 @@ switched it on. The others show where it runs, and switching it on there moves
 it. Two computers could both start one task in the few seconds before the move
 reaches the other.
 
+## The coordinator and the limit of your plan
+
+When the limit of your Claude plan is reached (see
+[the limit of your Claude plan](work.md#the-limit-of-your-claude-plan)), the
+coordinator starts nothing: no task, no turn to go on, no answer to a
+teammate. It says so once in *What it did*, each time the limit is reached,
+for example *Started nothing: the limit of your Claude plan is reached. It
+resets at 22:40.* If Teamwright does not know when it resets, the line says
+that work goes on once a turn you started yourself goes through. The list
+*Waiting* gives the reason *the limit of your Claude plan is reached*.
+
+A task whose turn the limit stopped is not counted as failed. After the reset
+the coordinator goes on with it by itself, in the same conversation, as
+*Try again* does, before it starts anything new. A task that failed for any
+other reason still waits for you.
+
+Note: this was tested and seen in the demo, which can pretend that the limit
+is reached and lifted. It has never run with a real Claude Code or in the
+installed program.
+
 ## Budgets
 
 A budget is a limit in tokens. You can set one for the whole project (the
