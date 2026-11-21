@@ -466,6 +466,30 @@ Rules of the interface:
 - **Two backends.** `TauriBackend` calls the shell. `DemoBackend` runs in the
   browser's memory with a sample project, so the interface can be developed
   and tested without Rust.
+- **What a browser cannot do, the demo does not offer.** Every demo is a
+  browser, so an action that needs the shell is shown as not available
+  ("In the desktop program, not in the demo") or left out, through
+  `useIsDemo`: export to Excel, opening a file with its program or showing
+  it in its folder, the test notification, the question whether to allow
+  notifications, "Show folder" and "Open in Claude Code". The demo backend
+  answers them with `not_available` all the same, so a gesture that still
+  reaches one (a double click on a file) says so in a notice.
+- **The public demo** on the website
+  ([decision 0032](../../docs/decisions/0032-a-public-demo-in-the-browser.md))
+  is this interface built in the mode `public-demo` (`npm run build:demo`,
+  into `dist-demo`, with file names relative to the page so that it works
+  under any address). `shared/lib/publicDemo.ts` says whether a build is
+  that one; Vite settles it when it builds, so the desktop program carries
+  none of what follows. Only that build has `app/PublicDemoFrame.tsx`: a
+  band above the window that says it is a demo on sample data, that nothing
+  is saved and no AI runs, with links to the website and the releases, and
+  on a screen smaller than 760 by 500 a page that says the demo is made for
+  a larger screen before it shows the whole window, laid out 1100 pixels
+  wide. It also opens with work going on: `connectToBackend` calls
+  `DemoBackend.beginSampleWork`, and the first specialist begins its task
+  and then asks the visitor to decide. The demo of `npm run dev` has none
+  of this, so that the pictures taken of it stay as they were. The website
+  publishes it; see [its README](../../website/README.md#the-demo).
 - **Logic is tested without rendering.** Pure functions live in `*Model.ts`
   and `shared/lib`, next to their tests. The Gantt chart, the calendar and
   the burndown chart only draw what `ganttModel.ts`, `calendarModel.ts` and
@@ -596,6 +620,7 @@ Run from the repository root.
 |---|---|
 | The application with live reload | `npm run app` |
 | The interface in a browser | `npm run dev` |
+| The public demo, built into `apps/desktop/dist-demo` | `npm run build:demo --workspace @teamwright/desktop` |
 | Types, lints, formatting and tests | `npm run check` |
 
 See [development](../../docs/development/README.md) for the rest.

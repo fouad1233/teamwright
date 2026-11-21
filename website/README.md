@@ -7,7 +7,9 @@ somebody who has never heard of it.
 
 It is one page of plain HTML, CSS and JavaScript. There is no framework and
 no build step: what is in this folder is what is published, apart from
-`tools/` and this file. Everything a search engine or a reader without
+`tools/` and this file. One part of the published site is not in this
+folder: the demo at `demo/`, which the workflow builds from the interface
+(see "The demo" below). Everything a search engine or a reader without
 JavaScript needs is in `index.html` as written. Why it is made this way:
 [decision 0023](../docs/decisions/0023-a-website-without-a-framework.md).
 
@@ -25,6 +27,7 @@ JavaScript needs is in `index.html` as written. Why it is made this way:
 | `media/film/` | The film's frames, stills and video. **Not in git** (see "The film") |
 | `robots.txt`, `sitemap.xml`, `site.webmanifest`, `favicon.ico` | For search engines and browsers |
 | `tools/` | The tools below. Not published |
+| `demo/` | **Not in git.** The interface built for the browser, put here by the workflow (see "The demo") |
 
 ## Run it
 
@@ -33,7 +36,10 @@ node website/tools/serve.mjs          # or: npm run website
 ```
 
 Then open <http://localhost:4321/teamwright/>. The site lives under
-`/teamwright/` as on GitHub Pages. The server needs nothing but Node.js and
+`/teamwright/` as on GitHub Pages. The demo is at
+<http://localhost:4321/teamwright/demo/> once it is built with
+`npm run build:demo --workspace @teamwright/desktop`: the server takes it
+from `apps/desktop/dist-demo`. The server needs nothing but Node.js and
 answers range requests, which the video needs. In `.claude/launch.json` it
 is the entry `teamwright-website`.
 
@@ -60,7 +66,8 @@ node website/tools/check.mjs
 The root `npm run check` runs it first, and so does continuous integration.
 It fails when a part of the page is out of date with `film.json`, when the
 chapters of the film do not fit together, when a file the pages name is
-missing, when structured data does not parse, when a page loads anything
+missing (a link into `demo/` is allowed while the workflow builds the demo
+there), when structured data does not parse, when a page loads anything
 from another site, when the headings skip a level or a picture has no
 alternative text, and when a weight budget is exceeded:
 
@@ -166,8 +173,9 @@ no such release, it publishes the page without the film:
 structured data of the video, and every chapter shows its still and its
 text.
 
-The workflow runs on a push to `main` that changes `website/` or the
-workflow, when a release is published or edited, and by hand. Before its
+The workflow runs on a push to `main` that changes `website/`, the
+workflow, or what the demo is built from (see "The demo"), when a release
+is published or edited, and by hand. Before its
 first run, GitHub Pages must be set to deploy from GitHub Actions
 (Settings, Pages, Source). That is the owner's step.
 
@@ -265,6 +273,51 @@ The published site was looked at once, on 14 November 2026, the evening it
 went up, with `look.mjs` at 1600 by 900 and at a phone's size: nothing
 reported by the browser, the first frame after about 4 s and the film
 ready to scrub after about 5 s, with 8 MB of it loaded by then.
+
+## The demo
+
+The interface of the program, on the demo backend that lives in the
+browser's memory, with a sample project: <https://fouad1233.github.io/teamwright/demo/>.
+Why and how: [decision 0032](../docs/decisions/0032-a-public-demo-in-the-browser.md).
+The page links to it from the masthead ("Try the demo", left out on a
+screen narrower than 540 pixels) and from "Get it and build it".
+
+It is built from `apps/desktop` in a mode of its own:
+
+```bash
+npm ci
+npm run build:demo --workspace @teamwright/desktop   # into apps/desktop/dist-demo
+```
+
+The workflow runs exactly that, then copies `apps/desktop/dist-demo` into
+the site as `demo/`. Its files are named relative to its page, so it works
+under any address; GitHub Pages sends `/teamwright/demo` on to
+`/teamwright/demo/`. The workflow runs when the interface changes (the
+paths under `apps/desktop` it is built from, and the package files), not
+only when `website/` does.
+
+What the demo of the website has that the demo of `npm run dev` has not: a
+band above the window that says it is a demo on sample data, that nothing is
+saved and no AI runs, with links to this site and to the releases; on a
+phone, a page that says it is made for a larger screen before it shows it;
+and a specialist that starts on a task a moment after it opens and then asks
+the visitor to decide.
+
+What a visitor downloads on a first visit, measured on 21 November 2026 from
+the build: about 520 kB compressed (1.7 MB as it lies on disk). The script is
+380 kB of it, the style 54 kB, the four fonts of the Latin alphabet 81 kB.
+The fonts of other alphabets are in the folder but only fetched for text
+that needs them. The whole folder is 1.9 MB.
+
+Looked at on 21 November 2026, in a headless Chrome, served under
+`/teamwright/` and under another, deeper path: every view and every kind of
+view that can be added, the menus and dialogs of the project, the inbox and
+the decision of the specialist, the page Computers, at 1440 by 900 in the
+light and the dark theme and at 960 by 640; on a phone's size (390 by 844
+and 844 by 390), the page for small screens and the window after "Show it
+anyway". The browser reported nothing. Not looked at: a real phone, Safari
+and Firefox, and the site as GitHub Pages serves it, which needs the first
+run of the workflow.
 
 ## Search engines
 

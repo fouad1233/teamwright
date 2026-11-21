@@ -76,7 +76,8 @@ interface, `Backend`, which has two implementations:
 - `TauriBackend` calls the real application through Tauri commands and
   listens to its events.
 - `DemoBackend` runs entirely in the browser with sample data. It is used for
-  interface development, for tests, and for a public demo.
+  interface development, for tests, and for the public demo on the website
+  (`npm run build:demo`, decision 0032).
 
 ## How a team member runs
 
