@@ -875,6 +875,12 @@ impl WorkListener for EventToInterface {
     }
 
     fn plan_reported(&self, report: &PlanReport) {
-        plan_limit::take(&self.app, &self.plan_limit, &self.notifications, report);
+        plan_limit::take(
+            &self.app,
+            &self.plan_limit,
+            &self.notifications,
+            &self.coordinator_nudge,
+            report,
+        );
     }
 }

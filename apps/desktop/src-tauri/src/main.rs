@@ -42,7 +42,12 @@ fn main() -> ExitCode {
             let state = AppState::open(app.handle())?;
             // A limit reached before the program was closed may reset
             // while it runs.
-            plan_limit::wake_at_the_reset(app.handle(), &state.plan_limit, &state.notifications);
+            plan_limit::wake_at_the_reset(
+                app.handle(),
+                &state.plan_limit,
+                &state.notifications,
+                &state.coordinator_nudge,
+            );
             app.manage(state);
             events::listen_for_presses(app.handle());
             state::start_syncing_in_the_background(app.handle().clone());

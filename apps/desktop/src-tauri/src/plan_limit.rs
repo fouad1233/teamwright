@@ -2,8 +2,10 @@
 //! Claude plan ([decision 0040](../../../../docs/decisions/0040-the-limit-of-the-plan.md)):
 //! it tells the interface, sends one notification when the limit is
 //! reached and one when it has reset, and wakes once at the moment of the
-//! reset to look. Nothing polls: a reset that is not known is not waited
-//! for, and is learned from the next turn instead.
+//! reset to look. When the limit lifts, the coordinator is nudged in every
+//! project, as after any other event, so that work goes on by itself.
+//! Nothing polls: a reset that is not known is not waited for, and is
+//! learned from the next turn instead.
 //!
 //! What the limit means is decided in the application crate
 //! (`teamwright_application::plan_limit`).
@@ -16,6 +18,7 @@ use tauri::{AppHandle, Emitter, Runtime};
 use teamwright_application::{NotificationService, PlanLimitChange, PlanLimitService, PlanReport};
 use teamwright_domain::Timestamp;
 
+use crate::coordinating::CoordinatorNudge;
 use crate::dto::PlanLimitDto;
 use crate::events;
 
@@ -33,15 +36,16 @@ pub fn take<R: Runtime>(
     app: &AppHandle<R>,
     plan_limit: &PlanLimitService,
     notifications: &NotificationService,
+    nudge: &CoordinatorNudge,
     report: &PlanReport,
 ) {
     // What cannot be kept is learned again from the next turn.
     let Ok(change) = plan_limit.take(report) else {
         return;
     };
-    tell(app, plan_limit, notifications, &change);
+    tell(app, plan_limit, notifications, nudge, &change);
     if matches!(change, PlanLimitChange::Reached(_)) {
-        wake_at_the_reset(app, plan_limit, notifications);
+        wake_at_the_reset(app, plan_limit, notifications, nudge);
     }
 }
 
@@ -52,6 +56,7 @@ pub fn wake_at_the_reset<R: Runtime>(
     app: &AppHandle<R>,
     plan_limit: &PlanLimitService,
     notifications: &NotificationService,
+    nudge: &CoordinatorNudge,
 ) {
     let Ok(Some(resets_at)) = plan_limit.next_reset() else {
         return;
@@ -59,10 +64,11 @@ pub fn wake_at_the_reset<R: Runtime>(
     let app = app.clone();
     let plan_limit = plan_limit.clone();
     let notifications = notifications.clone();
+    let nudge = nudge.clone();
     thread::spawn(move || {
         thread::sleep(time_until(resets_at) + AFTER_THE_RESET);
         if let Ok(change) = plan_limit.look_at_reset() {
-            tell(&app, &plan_limit, &notifications, &change);
+            tell(&app, &plan_limit, &notifications, &nudge, &change);
         }
         // A reset that moved later while this thread slept has its own
         // thread, started when it became known.
@@ -74,17 +80,24 @@ fn time_until(moment: Timestamp) -> Duration {
     (moment - Utc::now()).to_std().unwrap_or_default()
 }
 
-/// Tells the interface what is known now, and sends the notification of a
-/// change if the manager allows that kind and the window is not in front.
+/// Tells the interface what is known now, nudges the coordinator when the
+/// limit has lifted, and sends the notification of a change if the manager
+/// allows that kind and the window is not in front.
 fn tell<R: Runtime>(
     app: &AppHandle<R>,
     plan_limit: &PlanLimitService,
     notifications: &NotificationService,
+    nudge: &CoordinatorNudge,
     change: &PlanLimitChange,
 ) {
     if let Ok(standing) = plan_limit.standing() {
         // A window that is closing cannot be told; it asks again.
         let _ = app.emit(PLAN_LIMIT_CHANGED, PlanLimitDto::from(&standing));
+    }
+    if *change == PlanLimitChange::Lifted {
+        // The limit is this computer's, so every project whose coordinator
+        // runs here may go on.
+        nudge.nudge_everywhere();
     }
     let Some(notification) = plan_limit.notification_of(change) else {
         return;
