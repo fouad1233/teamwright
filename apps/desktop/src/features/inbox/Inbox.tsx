@@ -42,7 +42,11 @@ export function Inbox({ projects }: InboxProps) {
     <section className={styles.inbox} aria-label="Inbox">
       <header className={styles.header}>
         <h1 className={styles.title}>Inbox</h1>
-        {waiting.data && <p className={styles.count}>{waitingInWords(conversations.length)}</p>}
+        {waiting.data && (
+          <p className={styles.count}>
+            {waitingInWords(conversations.length + budgetQuestions.length)}
+          </p>
+        )}
       </header>
 
       {waiting.isError && (
