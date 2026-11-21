@@ -8,6 +8,15 @@ menus of the task panel, the calendar field, the task picker.
 - **Rows.** Every row has the same height. A subtask stands under its task,
   set in one step for every task it is part of. Without a sort the rows are
   in the order of the board: by status in the workflow, then as arranged.
+- **Custom fields.** Every field of the project is a column after Waits
+  for, headed by its name, edited with the control the panel of a task
+  uses for its kind (the calendar cell for a date), and sorted by its
+  value: a number by size, a choice in the order of its field, no before
+  yes. A table that never chose its fields shows every one, a new one too,
+  and so does content kept before there were fields. Turning a field on or
+  off writes `fieldsChosen: true` into the content with the fields shown
+  (`field:<id>` among the `columns`); from then on a field added later
+  stays hidden until it is turned on.
 - **Tags.** The cell shows as many tags as fit and "+N" for the rest; a
   press opens a sheet with the line of tags of the task panel, where tags
   are put on, taken off and made. Sorted, the column goes by the names of

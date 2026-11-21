@@ -50,6 +50,7 @@ was considered.
 | [0032](0032-a-public-demo-in-the-browser.md) | Publish the interface on the demo backend as a page of the website | Accepted |
 | [0033](0033-work-in-progress-limits-and-templates.md) | Limits on the work in a status as a signal, and templates a project starts from | Accepted |
 | [0034](0034-what-happened-is-read-from-the-log.md) | Read what happened from the log, and tell the pace of the team as a range | Accepted |
+| [0035](0035-custom-fields.md) | Custom fields of a project in six kinds that never change, one value a field on each task, each value and choice merging on its own | Accepted |
 | [0036](0036-project-memory.md) | Project memory: decisions, facts and contracts that are replaced, never changed; a plain search; the bus reads memory from a file of the turn | Accepted |
 | [0037](0037-the-coordinator.md) | The coordinator: a pure rule that starts ready work, run when something happens, with budgets in tokens and on the one computer it was switched on on | Accepted |
 | [0039](0039-skills-and-connectors-chosen-by-the-manager.md) | Give a specialist only the skills and connectors the manager chose, tool by tool | Accepted |

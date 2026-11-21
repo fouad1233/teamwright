@@ -77,6 +77,25 @@ any tag. A change of the history may be `tagged` or `untagged` (with
 `tagId`) or `ticked` or `unticked` (with the `item`). `demoTags.test.ts`
 is the specification.
 
+**Custom fields**
+([decision 0035](../../docs/decisions/0035-custom-fields.md)) are the
+commands in `commands/fields.rs` (`list_fields`, `add_field`,
+`rename_field`, `set_field_unit`, `move_field`, `remove_field`,
+`add_field_choice`, `rename_field_choice`, `recolor_field_choice`,
+`remove_field_choice`, `set_field_value`, `clear_field_value`), served
+through `FieldService`. A field on the wire has its `id`, `projectId`,
+`name`, `kind` (`text`, `number`, `date`, `yes_no`, `choice`, `link`),
+`unit`, `position` and `choices` (`id`, `name`, `color`). A task carries its
+`fieldValues`, by the identifier of the field, each a value tagged by its
+`kind` (`{kind: 'number', number}`, `{kind: 'choice', choiceId}`, and so
+on). The filter of a view gains `fieldFilter` (`{kind: 'choice', fieldId,
+choiceId}` or `{kind: 'yes_no', fieldId, yes}`), left out or null for the
+tasks whatever they hold. A change of the history may be
+`field_value_changed` (with `fieldId`, `from` and `to`). The fields live in
+`features/fields`: the dialog of the project, the section of the panel,
+the control of a value of each kind (shared with the Table view) and the
+part of the filter menu. `demoFields.test.ts` is the specification.
+
 **The project as an Excel workbook**
 ([decision 0025](../../docs/decisions/0025-the-project-as-a-workbook.md))
 is two commands in `commands/workbook.rs`. `export_workbook` takes the
@@ -478,6 +497,7 @@ src/
     advisor/          Planning a project with the Advisor: its questions, its proposal
     areas/            The areas of a project: at the side, the open area, the dialog, the field of a task
     tags/             The tags of a project: the chips, the line of tags of a task and its picker, the dialog
+    fields/           The custom fields of a project: the dialog, the values in the panel and the table, the filter
     checklists/       The checklist of a task in its panel, and its progress on cards and rows
     sprints/          The Backlog view, sprints and points, the burndown with the scope that joined or left, the pace of the team, the board of a sprint, completed sprints opened
     sync/             Computers: syncing through a folder or Google Drive, the line at the foot of the sidebar, conversations elsewhere

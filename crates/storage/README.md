@@ -24,6 +24,7 @@ involved.
 | `views` | `SqliteViewRepository`: the views of the projects |
 | `areas` | `SqliteAreaRepository`: the areas of the projects |
 | `tags` | `SqliteTagRepository`: the tags of the projects |
+| `fields` | `SqliteFieldRepository`: the custom fields of the projects with their choices, and how a value of a field is written down |
 | `members` | `SqliteMemberRepository` |
 | `conversations` | `SqliteConversationRepository`: conversations, their turns, the steps of the turns and the questions they asked the manager |
 | `planning` | The interviews and the proposals of the Advisor, as parts of their turns; `SqlitePlanningRepository`, which stores an approved plan |
@@ -238,6 +239,24 @@ involved.
   It is a field of its own in the merge, because a key that no field names
   merges on its own. Nothing is logged by the migration: a view state
   without `grouping` is read as a view grouped by status.
+- **Custom fields** (version 24,
+  [decision 0035](../../docs/decisions/0035-custom-fields.md)). A field has
+  a row in `fields` (name, kind, unit, position) and its choices rows in
+  `field_choices`; it is logged as the entity `field`, merging by name,
+  kind, unit and position, with one key a choice, `choice:<id>`, the
+  choice or null once removed, which merges on its own. The value a task
+  holds for a field is a row of `task_field_values` (the value as JSON
+  text) and, in the logged state of the task, a key `field:<id>`: the value
+  as `{"text": …}`, `{"number": …}`, `{"date": "…"}`, `{"yes": …}`,
+  `{"choice": "…"}` or `{"link": "…"}`, or null once cleared. Storing a
+  task or a field writes null for a key its merged state still has and it
+  no longer has. A task waits for the fields it holds values of, and a
+  view for the field it is filtered by (`field_id`, `field_value`, which
+  merge together). Taking in clears a value of a field removed elsewhere,
+  and the per-project repairs clear values of choices gone, forget
+  filters by them, and number fields, and choices of one field, given one
+  name on two computers. Deleting a project deletes and logs its fields
+  after its tasks and views. Nothing is logged by the migration.
 - **An approved plan is one transaction.** `SqlitePlanningRepository`
   writes the project (with its next task number), every new member, every
   new task with what it waits for, and the turn with its approved proposal,
