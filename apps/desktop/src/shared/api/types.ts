@@ -553,6 +553,39 @@ export interface View {
    * none.
    */
   content: string | null;
+  /**
+   * What the view groups its tasks by. Only a board and a list can be
+   * grouped by anything but `status`.
+   */
+  grouping: Grouping;
+}
+
+/** What a view groups its tasks by. */
+export type Grouping = 'status' | 'assignee' | 'priority' | 'area' | 'tag' | 'sprint';
+
+/** What a group of tasks stands for. */
+export type GroupKey =
+  | { kind: 'status'; id: Id }
+  | { kind: 'manager' }
+  | { kind: 'member'; id: Id }
+  | { kind: 'nobody' }
+  | { kind: 'priority'; priority: Priority }
+  | { kind: 'area'; id: Id }
+  /** The tasks of an area that is gone: there only if data was damaged. */
+  | { kind: 'noArea' }
+  | { kind: 'tag'; id: Id }
+  | { kind: 'noTag' }
+  | { kind: 'sprint'; id: Id }
+  | { kind: 'backlog' };
+
+/**
+ * One group of the tasks of a view: a lane of a board or a section of a
+ * list. The tasks are the ones that are not subtasks, in the order of their
+ * statuses and then by rank.
+ */
+export interface TaskGroup {
+  key: GroupKey;
+  taskIds: Id[];
 }
 
 export interface NewView {

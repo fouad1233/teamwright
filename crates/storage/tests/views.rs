@@ -12,7 +12,7 @@ use teamwright_application::in_memory::ManualClock;
 use teamwright_application::{
     NewMember, NewProject, NewView, ProjectService, TeamService, ViewRepository, ViewService,
 };
-use teamwright_domain::{MemberKind, Project, View, ViewAssignee, ViewFilter, ViewKind};
+use teamwright_domain::{Grouping, MemberKind, Project, View, ViewAssignee, ViewFilter, ViewKind};
 use teamwright_storage::{
     Database, SqliteConversationRepository, SqliteMemberRepository, SqlitePlacesRepository,
     SqliteProjectRepository, SqliteSprintRepository, SqliteTaskRepository, SqliteViewRepository,
@@ -229,6 +229,37 @@ fn the_content_of_a_view_is_stored_logged_and_cleared() {
 
     assert_eq!(repository.find(doc.id()).unwrap().unwrap().content(), None);
     assert_eq!(workspace.logged_since(before).len(), 2);
+}
+
+#[test]
+fn what_a_view_groups_by_is_stored_logged_and_read_back() {
+    let workspace = workspace();
+    let board = workspace
+        .stored()
+        .into_iter()
+        .find(|view| view.kind() == ViewKind::Board)
+        .unwrap();
+    assert_eq!(board.grouping(), Grouping::Status);
+    let before = workspace.database.operations().unwrap().len();
+
+    workspace
+        .views
+        .set_grouping(board.id(), Grouping::Priority)
+        .unwrap();
+
+    let found = SqliteViewRepository::new(workspace.database.clone())
+        .find(board.id())
+        .unwrap()
+        .unwrap();
+    assert_eq!(found.grouping(), Grouping::Priority);
+    let operations = workspace.database.operations().unwrap();
+    assert_eq!(
+        workspace.logged_since(before),
+        [("view".to_owned(), "upsert".to_owned())]
+    );
+    let state: serde_json::Value =
+        serde_json::from_str(operations[before].payload.as_deref().unwrap()).unwrap();
+    assert_eq!(state["grouping"], "priority");
 }
 
 #[test]

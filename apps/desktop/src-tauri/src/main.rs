@@ -108,6 +108,8 @@ fn main() -> ExitCode {
             commands::views::add_view,
             commands::views::rename_view,
             commands::views::set_view_filter,
+            commands::views::set_view_grouping,
+            commands::views::list_task_groups,
             commands::views::set_view_content,
             commands::views::move_view,
             commands::views::remove_view,

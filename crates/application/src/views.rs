@@ -9,7 +9,9 @@
 
 use std::sync::Arc;
 
-use teamwright_domain::{ProjectId, View, ViewAssignee, ViewFilter, ViewId, ViewKind, ViewName};
+use teamwright_domain::{
+    Grouping, ProjectId, View, ViewAssignee, ViewFilter, ViewId, ViewKind, ViewName,
+};
 
 use crate::error::ApplicationError;
 use crate::ports::{MemberRepository, ProjectRepository, TagRepository, ViewRepository};
@@ -152,6 +154,21 @@ impl ViewService {
                 return Err(ApplicationError::TagOfAnotherProject);
             }
         }
+        self.views.save_all(std::slice::from_ref(&view))?;
+        Ok(view)
+    }
+
+    /// Changes what a view groups its tasks by. Only a board and a list can
+    /// be grouped by something other than status
+    /// ([`ViewKind::can_be_grouped`]).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if there is no such view, if its kind cannot be
+    /// grouped by what is asked (`rule_broken`), or if storage fails.
+    pub fn set_grouping(&self, id: ViewId, grouping: Grouping) -> Result<View, ApplicationError> {
+        let mut view = self.require_view(id)?;
+        view.set_grouping(grouping)?;
         self.views.save_all(std::slice::from_ref(&view))?;
         Ok(view)
     }

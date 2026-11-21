@@ -13,10 +13,11 @@ use teamwright_application::{
     AgentRuntime, AppearanceService, ApplicationError, AreaService, ChecklistService,
     CoordinatorPorts, CoordinatorService, DeliveryPorts, DeliveryService, DigestRepository,
     DigestService, DiskEntry, DriveSurroundings, FileSystem, FolderReader, GitHubPorts,
-    GitHubService, GoogleDriveService, IntegrationSettings, NotificationService, OperatingSystem,
-    PlacesService, ProjectEvent, ProjectFilesService, ProjectFolders, ProjectService, RoundReport,
-    SprintService, StorageError, SyncPorts, SyncService, SystemClock, TagService, TaskService,
-    TeamService, ViewService, WorkListener, WorkPorts, WorkService, WorkbookPorts, WorkbookService,
+    GitHubService, GoogleDriveService, GroupingService, IntegrationSettings, NotificationService,
+    OperatingSystem, PlacesService, ProjectEvent, ProjectFilesService, ProjectFolders,
+    ProjectService, RoundReport, SprintService, StorageError, SyncPorts, SyncService, SystemClock,
+    TagService, TaskService, TeamService, ViewService, WorkListener, WorkPorts, WorkService,
+    WorkbookPorts, WorkbookService,
 };
 use teamwright_domain::{ComputerId, Conversation, Project, Turn};
 use teamwright_integrations::{GhCommandLine, GhLocator, HttpsSender};
@@ -127,6 +128,8 @@ pub struct AppState {
     pub tasks: TaskService,
     /// The use cases for sprints.
     pub sprints: SprintService,
+    /// The use case that groups the tasks of a view.
+    pub groups: GroupingService,
     /// The use cases for the views of a project.
     pub views: ViewService,
     /// The use cases for the areas of a project.
@@ -355,6 +358,15 @@ impl AppState {
                 view_repository.clone(),
                 area_repository.clone(),
                 clock.clone(),
+            ),
+            groups: GroupingService::new(
+                project_repository.clone(),
+                task_repository.clone(),
+                member_repository.clone(),
+                area_repository.clone(),
+                sprint_repository.clone(),
+                tag_repository.clone(),
+                view_repository.clone(),
             ),
             files: ProjectFilesService::new(places.clone(), Arc::new(LocalFolderReader)),
             digests: DigestService::new(

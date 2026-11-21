@@ -1,5 +1,5 @@
 import { BackendError } from '../backend';
-import type { Id, View, ViewFilter, ViewKind } from '../types';
+import type { Grouping, Id, View, ViewFilter, ViewKind } from '../types';
 
 /**
  * The rules about the views of a project that concern the views alone, for
@@ -76,6 +76,7 @@ export function startingViews(projectId: Id, newId: () => Id): View[] {
     name: NAME_OF_KIND[kind],
     filter: structuredClone(EVERY_TASK),
     content: null,
+    grouping: 'status',
   }));
 }
 
@@ -91,6 +92,7 @@ export function viewsOfKinds(projectId: Id, kinds: readonly ViewKind[], newId: (
     name: NAME_OF_KIND[kind],
     filter: structuredClone(EVERY_TASK),
     content: null,
+    grouping: 'status',
   }));
 }
 
@@ -176,6 +178,19 @@ export function refuseFilterOf(view: View): void {
     throw new BackendError(
       'rule_broken',
       `"${view.name}" is a ${view.kind}, which cannot be filtered`,
+    );
+  }
+}
+
+/** The kinds of view that can be grouped by something other than status. */
+const GROUPED_KINDS: readonly ViewKind[] = ['board', 'list'];
+
+/** Refuses to group a view of a kind that has no groups by anything but status. */
+export function refuseGroupingOf(view: View, grouping: Grouping): void {
+  if (grouping !== 'status' && !GROUPED_KINDS.includes(view.kind)) {
+    throw new BackendError(
+      'rule_broken',
+      `"${view.name}" is a ${view.kind}, which cannot group its tasks`,
     );
   }
 }

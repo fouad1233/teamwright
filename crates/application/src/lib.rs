@@ -26,6 +26,7 @@ pub mod digests;
 pub mod error;
 pub mod files;
 pub mod google_drive;
+pub mod groups;
 pub mod in_memory;
 pub mod integrations;
 pub mod kits;
@@ -76,6 +77,7 @@ pub use google_drive::{
     DriveFinding, DriveFolder, DriveSurroundings, FOLDER_IN_DRIVE, GoogleDrive, GoogleDriveService,
     OperatingSystem, find_drive_folders,
 };
+pub use groups::GroupingService;
 pub use integrations::delivery::{
     Deliveries, Delivery, DeliveryPorts, DeliveryService, Target, WebSender, targets_of,
 };

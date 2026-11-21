@@ -873,6 +873,24 @@ fn a_view_added_to_a_project_deleted_elsewhere_goes_with_it() {
 }
 
 #[test]
+fn what_a_view_groups_by_on_one_computer_reaches_the_other() {
+    let (desk, laptop, project, _) = desk_and_laptop();
+    laptop.take_in_from(&desk);
+    let board = view_named(&desk, &project, "Board");
+    desk.views
+        .set_grouping(board.id(), teamwright_domain::Grouping::Area)
+        .unwrap();
+
+    keep_in_step(&desk, &laptop);
+
+    assert_eq!(
+        view_named(&laptop, &project, "Board").grouping(),
+        teamwright_domain::Grouping::Area
+    );
+    assert_eq!(laptop.everything(), desk.everything());
+}
+
+#[test]
 fn a_view_that_showed_a_member_who_left_elsewhere_shows_everybody_again() {
     let (desk, laptop, project, _) = desk_and_laptop();
     let engineer = desk

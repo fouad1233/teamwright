@@ -2,7 +2,7 @@
 
 use tauri::State;
 
-use crate::dto::{NewViewInput, ViewDto, ViewFilterDto, parse_id};
+use crate::dto::{NewViewInput, TaskGroupDto, ViewDto, ViewFilterDto, parse_id};
 use crate::error::CommandError;
 use crate::state::AppState;
 
@@ -48,6 +48,30 @@ pub async fn set_view_filter(
         .views
         .set_filter(parse_id(&view_id)?, filter.try_into()?)?;
     Ok(ViewDto::from(&view))
+}
+
+/// Changes what a board or a list groups its tasks by.
+#[tauri::command]
+pub async fn set_view_grouping(
+    state: State<'_, AppState>,
+    view_id: String,
+    grouping: String,
+) -> Result<ViewDto, CommandError> {
+    let view = state
+        .views
+        .set_grouping(parse_id(&view_id)?, grouping.parse()?)?;
+    Ok(ViewDto::from(&view))
+}
+
+/// The groups of the tasks of a view: the lanes of a board and the sections
+/// of a list, in their order.
+#[tauri::command]
+pub async fn list_task_groups(
+    state: State<'_, AppState>,
+    view_id: String,
+) -> Result<Vec<TaskGroupDto>, CommandError> {
+    let groups = state.groups.groups_of_view(parse_id(&view_id)?)?;
+    Ok(groups.iter().map(TaskGroupDto::from).collect())
 }
 
 /// Replaces what a view keeps of its own, or clears it with `null`. The

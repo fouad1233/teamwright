@@ -7,7 +7,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use teamwright_application::{StorageError, ViewRepository};
 use teamwright_domain::{
-    DomainError, ProjectId, View, ViewAssignee, ViewFilter, ViewId, ViewName, ViewSnapshot,
+    DomainError, Grouping, ProjectId, View, ViewAssignee, ViewFilter, ViewId, ViewName,
+    ViewSnapshot,
 };
 
 use crate::codec;
@@ -18,17 +19,17 @@ use crate::operations::{Entity, OperationRecorder};
 /// The columns of the `views` table that every query reads.
 const VIEW_COLUMNS: &str =
     "id, project_id, kind, name, assignee_kind, assignee_member_id, hides_finished, position,
-     content, tag_id";
+     content, tag_id, grouping";
 
 // The row is updated in place, never replaced.
 const UPSERT_VIEW: &str = "
     INSERT INTO views (
         id, project_id, kind, name, assignee_kind, assignee_member_id, hides_finished, position,
-        content, tag_id
+        content, tag_id, grouping
     )
     VALUES (
         :id, :project_id, :kind, :name, :assignee_kind, :assignee_member_id, :hides_finished,
-        :position, :content, :tag_id
+        :position, :content, :tag_id, :grouping
     )
     ON CONFLICT (id) DO UPDATE SET
         project_id = excluded.project_id,
@@ -39,7 +40,8 @@ const UPSERT_VIEW: &str = "
         hides_finished = excluded.hides_finished,
         position = excluded.position,
         content = excluded.content,
-        tag_id = excluded.tag_id";
+        tag_id = excluded.tag_id,
+        grouping = excluded.grouping";
 
 /// A view as the database and the operation log keep it: plain text,
 /// numbers and a flag.
@@ -62,6 +64,15 @@ struct ViewRecord {
     /// read as a view that shows the tasks with any tag.
     #[serde(default)]
     tag_id: Option<String>,
+    /// What the view groups its tasks by, as text. A state logged before
+    /// views were grouped has no such key, and is read as grouped by status.
+    #[serde(default = "default_grouping")]
+    grouping: String,
+}
+
+/// The grouping of a view whose state says none: by status.
+fn default_grouping() -> String {
+    Grouping::Status.to_string()
 }
 
 impl ViewRecord {
@@ -85,6 +96,7 @@ impl ViewRecord {
             position: view.position(),
             content: view.content().map(str::to_owned),
             tag_id: filter.tag.map(|tag| tag.to_string()),
+            grouping: view.grouping().to_string(),
         }
     }
 
@@ -101,6 +113,7 @@ impl ViewRecord {
             position: row.get("position")?,
             content: row.get("content")?,
             tag_id: row.get("tag_id")?,
+            grouping: row.get("grouping")?,
         })
     }
 
@@ -132,6 +145,7 @@ impl ViewRecord {
             },
             position: self.position,
             content: self.content.clone(),
+            grouping: codec::parse(&self.grouping)?,
         };
         View::restore(snapshot).map_err(broken)
     }
@@ -307,6 +321,7 @@ fn write_rows(transaction: &Transaction<'_>, record: &ViewRecord) -> Result<(), 
             ":position": record.position,
             ":content": record.content,
             ":tag_id": record.tag_id,
+            ":grouping": record.grouping,
         },
     )?;
     Ok(())
@@ -351,6 +366,42 @@ mod tests {
         state.remove("tag_id");
 
         assert_eq!(view_from_state(&state).unwrap().filter().tag, None);
+    }
+
+    #[test]
+    fn a_state_logged_before_views_were_grouped_is_a_view_grouped_by_status() {
+        let mut view = View::add(
+            ProjectId::generate(),
+            ViewKind::Board,
+            ViewKind::Board.default_name(),
+            0,
+        );
+        view.set_grouping(Grouping::Assignee).unwrap();
+        let mut state = state_of(&view);
+        assert_eq!(
+            view_from_state(&state).unwrap().grouping(),
+            Grouping::Assignee
+        );
+        state.remove("grouping");
+
+        assert_eq!(
+            view_from_state(&state).unwrap().grouping(),
+            Grouping::Status
+        );
+    }
+
+    #[test]
+    fn a_state_with_a_grouping_nobody_knows_is_refused() {
+        let view = View::add(
+            ProjectId::generate(),
+            ViewKind::Board,
+            ViewKind::Board.default_name(),
+            0,
+        );
+        let mut state = state_of(&view);
+        state.insert("grouping".to_owned(), Value::String("owner".to_owned()));
+
+        assert!(view_from_state(&state).is_err());
     }
 
     #[test]

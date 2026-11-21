@@ -76,6 +76,8 @@ import type {
   ThemeName,
   View,
   ViewFilter,
+  Grouping,
+  TaskGroup,
 } from './types';
 
 /**
@@ -261,6 +263,14 @@ export class TauriBackend implements Backend {
 
   setViewFilter(viewId: Id, filter: ViewFilter): Promise<View> {
     return call('set_view_filter', { viewId, filter });
+  }
+
+  setViewGrouping(viewId: Id, grouping: Grouping): Promise<View> {
+    return call('set_view_grouping', { viewId, grouping });
+  }
+
+  listTaskGroups(viewId: Id): Promise<TaskGroup[]> {
+    return call('list_task_groups', { viewId });
   }
 
   setViewContent(viewId: Id, content: string | null): Promise<View> {

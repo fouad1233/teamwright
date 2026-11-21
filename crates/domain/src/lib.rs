@@ -24,6 +24,7 @@ pub mod coordination;
 pub mod dependencies;
 pub mod digest;
 pub mod error;
+pub mod grouping;
 pub mod ids;
 pub mod integration;
 pub mod kit;
@@ -66,6 +67,7 @@ pub use digest::{
     Digest, DigestDraft, DigestSnapshot, DigestSource, DigestText, EarlierConversation,
 };
 pub use error::DomainError;
+pub use grouping::{GroupKey, Grouping, GroupingContext, TaskGroup, group_tasks};
 pub use ids::{
     AreaId, ChecklistItemId, ComputerId, ConnectorId, ConversationId, CoordinatorEntryId, DigestId,
     HandoffId, MemberId, MemoryEntryId, ProjectId, SkillId, SprintId, StatusId, TagId, TaskId,

@@ -50,7 +50,7 @@ function task(id: string, more: Partial<Task> = {}): Task {
 }
 
 function view(id: string, kind: View['kind'], name = id): View {
-  return { id, projectId: 'p', kind, name, filter: EVERY_TASK, content: null };
+  return { id, projectId: 'p', kind, name, filter: EVERY_TASK, content: null, grouping: 'status' };
 }
 
 const ENGINEER = { kind: 'member', memberId: 'engineer' } as const;

@@ -21,11 +21,12 @@ use teamwright_application::{
 use teamwright_application::{DueOutcome, ProjectReport, ReportTask, UsageLine, WorkShare};
 use teamwright_domain::{
     Area, Assignee, CalendarDate, Color, ComputerId, ContextUse, Conversation, DecisionOption,
-    DecisionRequest, DomainError, Effort, EventKind, EventKinds, Fill, Interview, InterviewAnswer,
-    Member, MemberKind, Priority, Project, ProjectTemplate, Proposal, ProposedOwner, Schedule,
-    ScopeTask, Sprint, SprintSummary, Status, StatusCategory, StatusLoad, Step, StepContent,
-    StoryPoints, Tag, Task, TaskChange, TaskChangeKind, Timestamp, TokenCounts, Turn, Velocity,
-    View, ViewAssignee, ViewFilter, ViewKind, WorkInProgressLimit, context_of,
+    DecisionRequest, DomainError, Effort, EventKind, EventKinds, Fill, GroupKey, Interview,
+    InterviewAnswer, Member, MemberKind, Priority, Project, ProjectTemplate, Proposal,
+    ProposedOwner, Schedule, ScopeTask, Sprint, SprintSummary, Status, StatusCategory, StatusLoad,
+    Step, StepContent, StoryPoints, Tag, Task, TaskChange, TaskChangeKind, TaskGroup, Timestamp,
+    TokenCounts, Turn, Velocity, View, ViewAssignee, ViewFilter, ViewKind, WorkInProgressLimit,
+    context_of,
 };
 
 use crate::error::CommandError;
@@ -603,6 +604,9 @@ pub struct ViewDto {
     /// What the view keeps of its own, as the interface wrote it; `null`
     /// for a view that has none.
     content: Option<String>,
+    /// What the view groups its tasks by: `status`, `assignee`,
+    /// `priority`, `area`, `tag` or `sprint`.
+    grouping: &'static str,
 }
 
 impl From<&View> for ViewDto {
@@ -614,6 +618,96 @@ impl From<&View> for ViewDto {
             name: view.name().to_string(),
             filter: ViewFilterDto::from(view.filter()),
             content: view.content().map(str::to_owned),
+            grouping: view.grouping().as_str(),
+        }
+    }
+}
+
+/// What a group of tasks stands for, as the interface sees it:
+/// `{"kind": "status", "id": "…"}`, `{"kind": "manager"}`,
+/// `{"kind": "member", "id": "…"}`, `{"kind": "nobody"}`,
+/// `{"kind": "priority", "priority": "urgent"}`, `{"kind": "area", "id": "…"}`,
+/// `{"kind": "noArea"}`, `{"kind": "tag", "id": "…"}`, `{"kind": "noTag"}`,
+/// `{"kind": "sprint", "id": "…"}` or `{"kind": "backlog"}`.
+#[derive(Debug, Serialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum GroupKeyDto {
+    /// A status.
+    Status {
+        /// Its identifier.
+        id: String,
+    },
+    /// The manager's tasks.
+    Manager,
+    /// The tasks of a member.
+    Member {
+        /// The identifier of the member.
+        id: String,
+    },
+    /// The tasks given to nobody.
+    Nobody,
+    /// A priority.
+    Priority {
+        /// `low`, `normal`, `high` or `urgent`.
+        priority: &'static str,
+    },
+    /// An area.
+    Area {
+        /// Its identifier.
+        id: String,
+    },
+    /// The tasks of an area that is gone.
+    NoArea,
+    /// A tag.
+    Tag {
+        /// Its identifier.
+        id: String,
+    },
+    /// The tasks without a tag.
+    NoTag,
+    /// A sprint.
+    Sprint {
+        /// Its identifier.
+        id: String,
+    },
+    /// The tasks in no sprint.
+    Backlog,
+}
+
+impl From<GroupKey> for GroupKeyDto {
+    fn from(key: GroupKey) -> Self {
+        match key {
+            GroupKey::Status(id) => Self::Status { id: id.to_string() },
+            GroupKey::Manager => Self::Manager,
+            GroupKey::Member(id) => Self::Member { id: id.to_string() },
+            GroupKey::Nobody => Self::Nobody,
+            GroupKey::Priority(priority) => Self::Priority {
+                priority: priority.as_str(),
+            },
+            GroupKey::Area(id) => Self::Area { id: id.to_string() },
+            GroupKey::NoArea => Self::NoArea,
+            GroupKey::Tag(id) => Self::Tag { id: id.to_string() },
+            GroupKey::NoTag => Self::NoTag,
+            GroupKey::Sprint(id) => Self::Sprint { id: id.to_string() },
+            GroupKey::Backlog => Self::Backlog,
+        }
+    }
+}
+
+/// One group of the tasks of a view, as the interface sees it: what it
+/// stands for and the identifiers of its tasks in order.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskGroupDto {
+    key: GroupKeyDto,
+    task_ids: Vec<String>,
+}
+
+impl From<&TaskGroup> for TaskGroupDto {
+    fn from(group: &TaskGroup) -> Self {
+        Self {
+            key: GroupKeyDto::from(group.key),
+            task_ids: group.task_ids.iter().map(ToString::to_string).collect(),
         }
     }
 }

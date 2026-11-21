@@ -9,6 +9,7 @@
 use uuid::Uuid;
 
 use crate::error::DomainError;
+use crate::grouping::Grouping;
 use crate::ids::{MemberId, ProjectId, TagId, ViewId};
 use crate::macros::text_enum;
 use crate::text::ViewName;
@@ -164,6 +165,14 @@ impl ViewKind {
         }
     }
 
+    /// Whether a view of this kind can group its tasks by something other
+    /// than their status: a board, which shows the groups as lanes, and a
+    /// list, which shows them as sections.
+    #[must_use]
+    pub const fn can_be_grouped(self) -> bool {
+        matches!(self, Self::Board | Self::List)
+    }
+
     /// A digit of its own for each kind a project starts with, used in the
     /// identifiers of its starting views. Nothing for the other kinds.
     pub(crate) const fn starting_digit(self) -> Option<u8> {
@@ -233,6 +242,8 @@ pub struct ViewSnapshot {
     pub position: u32,
     /// What it keeps of its own, if anything (see [`View::content`]).
     pub content: Option<String>,
+    /// How it groups its tasks.
+    pub grouping: Grouping,
 }
 
 /// One way the manager looks at the tasks of a project: a kind with a name
@@ -247,6 +258,7 @@ pub struct View {
     filter: ViewFilter,
     position: u32,
     content: Option<String>,
+    grouping: Grouping,
 }
 
 impl View {
@@ -270,6 +282,7 @@ impl View {
                     filter: ViewFilter::EVERY_TASK,
                     position,
                     content: None,
+                    grouping: Grouping::Status,
                 })
             })
             .collect()
@@ -300,6 +313,7 @@ impl View {
                 filter: ViewFilter::EVERY_TASK,
                 position,
                 content: None,
+                grouping: Grouping::Status,
             });
         }
         views
@@ -355,6 +369,7 @@ impl View {
             filter: ViewFilter::EVERY_TASK,
             position: 0,
             content: None,
+            grouping: Grouping::Status,
         })
     }
 
@@ -369,6 +384,7 @@ impl View {
             filter: ViewFilter::EVERY_TASK,
             position,
             content: None,
+            grouping: Grouping::Status,
         }
     }
 
@@ -389,6 +405,7 @@ impl View {
             filter: snapshot.filter,
             position: snapshot.position,
             content: snapshot.content,
+            grouping: snapshot.grouping,
         })
     }
 
@@ -420,6 +437,13 @@ impl View {
     #[must_use]
     pub const fn filter(&self) -> ViewFilter {
         self.filter
+    }
+
+    /// What the view groups its tasks by. A view that cannot be grouped
+    /// (see [`ViewKind::can_be_grouped`]) is always grouped by status.
+    #[must_use]
+    pub const fn grouping(&self) -> Grouping {
+        self.grouping
     }
 
     /// The place of the view among the views of its project.
@@ -468,6 +492,24 @@ impl View {
             });
         }
         self.filter = filter;
+        Ok(())
+    }
+
+    /// Changes what the view groups its tasks by.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DomainError::ViewNotGrouped`] for a kind that cannot be
+    /// grouped by anything but status, if another grouping is asked for.
+    /// Nothing changes then.
+    pub fn set_grouping(&mut self, grouping: Grouping) -> Result<(), DomainError> {
+        if grouping != Grouping::Status && !self.kind.can_be_grouped() {
+            return Err(DomainError::ViewNotGrouped {
+                name: self.name.to_string(),
+                kind: self.kind.as_str(),
+            });
+        }
+        self.grouping = grouping;
         Ok(())
     }
 
@@ -792,6 +834,7 @@ mod tests {
             filter: doc.filter(),
             position: doc.position(),
             content: Some("z".repeat(View::MAX_CONTENT_BYTES + 1)),
+            grouping: Grouping::Status,
         };
 
         assert!(View::restore(snapshot).is_err());
@@ -852,6 +895,27 @@ mod tests {
                 assert_eq!(view.filter(), ViewFilter::EVERY_TASK);
             }
         }
+    }
+
+    #[test]
+    fn only_a_board_and_a_list_can_be_grouped_by_something_other_than_status() {
+        let project = ProjectId::generate();
+        let mut views = View::starting(project);
+
+        for view in &mut views {
+            assert_eq!(view.grouping(), Grouping::Status);
+            let result = view.set_grouping(Grouping::Assignee);
+            if view.kind().can_be_grouped() {
+                assert!(result.is_ok());
+                assert_eq!(view.grouping(), Grouping::Assignee);
+            } else {
+                assert_eq!(result.unwrap_err().code(), "rule_broken");
+                assert_eq!(view.grouping(), Grouping::Status);
+                // Grouping by status is what every view does already.
+                assert!(view.set_grouping(Grouping::Status).is_ok());
+            }
+        }
+        assert!(ViewKind::Board.can_be_grouped() && ViewKind::List.can_be_grouped());
     }
 
     #[test]

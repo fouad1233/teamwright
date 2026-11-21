@@ -71,6 +71,8 @@ import type {
   ThemeName,
   View,
   ViewFilter,
+  Grouping,
+  TaskGroup,
 } from './types';
 
 /**
@@ -348,6 +350,18 @@ export interface Backend {
    * on the team of the project.
    */
   setViewFilter(viewId: Id, filter: ViewFilter): Promise<View>;
+  /**
+   * Changes what a view groups its tasks by. Only a board and a list can be
+   * grouped by anything but status (`rule_broken` otherwise).
+   */
+  setViewGrouping(viewId: Id, grouping: Grouping): Promise<View>;
+  /**
+   * The groups of the tasks of a view, in their fixed order: the lanes of a
+   * board and the sections of a list. Every group a card can be dropped on
+   * is there even when it is empty. A task with several tags is in the
+   * group of each of its tags.
+   */
+  listTaskGroups(viewId: Id): Promise<TaskGroup[]>;
   /**
    * Replaces what a view keeps of its own, or clears it with null. Any kind
    * of view may keep content; it has at most 2 MiB, counted in UTF-8 bytes.

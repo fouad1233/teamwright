@@ -85,6 +85,8 @@ import type {
   Turn,
   View,
   ViewFilter,
+  Grouping,
+  TaskGroup,
 } from '../types';
 import {
   refuseAreaInUse,
@@ -96,6 +98,7 @@ import {
 import { isThemeName, rememberedTheme } from '@/shared/theme/themes';
 import { briefFor } from './brief';
 import { PretendedCoordinators, WAKE_REQUEST } from './coordinator';
+import { groupTasks } from './groups';
 import { PretendedTeamTalk } from './teamwork';
 import { PretendedMemory, shorten } from './memory';
 import { PretendedEarlierConversations, type PretendedConversation } from './earlierConversations';
@@ -158,6 +161,7 @@ import {
 import {
   nameForNewView,
   refuseFilterOf,
+  refuseGroupingOf,
   refuseLongViewContent,
   refuseRemovingLast,
   refuseSecondOfKind,
@@ -3132,6 +3136,7 @@ export class DemoBackend implements Backend {
         name,
         filter: { assignee: { kind: 'anyone' }, hidesFinished: false },
         content: null,
+        grouping: 'status',
       };
       views.push(view);
       return view;
@@ -3173,6 +3178,30 @@ export class DemoBackend implements Backend {
       }
       view.filter = tidyFilter(filter);
       return view;
+    });
+  }
+
+  setViewGrouping(viewId: Id, grouping: Grouping): Promise<View> {
+    return this.answer(() => {
+      const view = this.requireView(viewId);
+      refuseGroupingOf(view, grouping);
+      view.grouping = grouping;
+      return view;
+    });
+  }
+
+  listTaskGroups(viewId: Id): Promise<TaskGroup[]> {
+    return this.answer(() => {
+      const view = this.requireView(viewId);
+      const project = this.requireProject(view.projectId);
+      return groupTasks(view.grouping, {
+        statuses: project.statuses,
+        members: this.teamOf(project.id),
+        areas: this.areasOf(project.id),
+        sprints: this.sprintsOf(project.id).sort(asListed),
+        tags: byName(this.tagsOf(project.id)),
+        tasks: this.tasksOfProject(project.id),
+      });
     });
   }
 

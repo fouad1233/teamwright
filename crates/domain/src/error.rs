@@ -333,6 +333,16 @@ pub enum DomainError {
         kind: &'static str,
     },
 
+    /// A view of a kind that has no groups, such as a calendar, was to group
+    /// its tasks by something other than status.
+    #[error("\"{name}\" is a {kind}, which cannot group its tasks")]
+    ViewNotGrouped {
+        /// The name of the view.
+        name: String,
+        /// Its kind, as text.
+        kind: &'static str,
+    },
+
     /// The content of a view was longer than a view may keep.
     #[error(
         "the content of a view can have at most {max_bytes} bytes, but this one has {actual_bytes}"
