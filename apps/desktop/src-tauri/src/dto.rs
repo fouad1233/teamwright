@@ -581,6 +581,9 @@ pub struct MemberDto {
     responsibility: String,
     model: Option<String>,
     effort: Option<&'static str>,
+    /// The instructions of an AI specialist; empty if it has none, and
+    /// always empty for a person.
+    instructions: String,
     color: &'static str,
     joined_at: String,
     updated_at: String,
@@ -596,9 +599,36 @@ impl From<&Member> for MemberDto {
             responsibility: member.responsibility().to_owned(),
             model: member.model().map(ToString::to_string),
             effort: member.effort().map(|effort| effort.as_str()),
+            instructions: member.instructions().as_str().to_owned(),
             color: member.color().as_str(),
             joined_at: moment_to_text(member.joined_at()),
             updated_at: moment_to_text(member.updated_at()),
+        }
+    }
+}
+
+/// A ready-made specialist as the interface sees it: a role that ships with
+/// Teamwright and can be put on a team in one step.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReadyMadeSpecialistDto {
+    key: &'static str,
+    name: &'static str,
+    description: &'static str,
+    instructions: &'static str,
+    model: &'static str,
+    effort: &'static str,
+}
+
+impl From<&teamwright_domain::ReadyMadeSpecialist> for ReadyMadeSpecialistDto {
+    fn from(specialist: &teamwright_domain::ReadyMadeSpecialist) -> Self {
+        Self {
+            key: specialist.key,
+            name: specialist.name,
+            description: specialist.description,
+            instructions: specialist.instructions,
+            model: specialist.model,
+            effort: specialist.effort.as_str(),
         }
     }
 }

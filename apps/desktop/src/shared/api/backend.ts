@@ -36,6 +36,7 @@ import type {
   ProjectIntegrations,
   ProjectPlaces,
   ProjectUsage,
+  ReadyMadeSpecialist,
   Sprint,
   SprintChanges,
   SprintCompletion,
@@ -352,6 +353,21 @@ export interface Backend {
    * a view that showed only the member's tasks shows everybody's again.
    */
   removeMember(memberId: Id): Promise<void>;
+  /**
+   * Replaces the instructions of an AI specialist. They reach its turns from
+   * the next one on, after Teamwright's own instructions. Text that is only
+   * whitespace takes them away. A person has none (`no_specialist`); longer
+   * than the limit is refused (`rule_broken`).
+   */
+  setMemberInstructions(memberId: Id, instructions: string): Promise<Member>;
+  /** Lists the ready-made specialists that ship with Teamwright. */
+  listReadyMadeSpecialists(): Promise<ReadyMadeSpecialist[]>;
+  /**
+   * Puts a ready-made specialist on the team, with its name, description,
+   * instructions, model and effort. A name the team has already is numbered:
+   * "Firmware engineer 2". An unknown key is `not_found`.
+   */
+  addReadyMadeMember(projectId: Id, key: string): Promise<Member>;
 
   /** Says whether the program that runs the AI specialists is installed and signed in. */
   agentProgram(): Promise<AgentProgram>;

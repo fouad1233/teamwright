@@ -41,6 +41,7 @@ import type {
   ProjectIntegrations,
   ProjectPlaces,
   ProjectUsage,
+  ReadyMadeSpecialist,
   Sprint,
   SprintChanges,
   SprintCompletion,
@@ -350,6 +351,18 @@ export class TauriBackend implements Backend {
 
   removeMember(memberId: Id): Promise<void> {
     return call('remove_member', { memberId });
+  }
+
+  setMemberInstructions(memberId: Id, instructions: string): Promise<Member> {
+    return call('set_member_instructions', { memberId, instructions });
+  }
+
+  listReadyMadeSpecialists(): Promise<ReadyMadeSpecialist[]> {
+    return call('list_ready_made_specialists');
+  }
+
+  addReadyMadeMember(projectId: Id, key: string): Promise<Member> {
+    return call('add_ready_made_member', { projectId, key });
   }
 
   agentProgram(): Promise<AgentProgram> {

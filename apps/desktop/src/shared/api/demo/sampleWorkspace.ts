@@ -16,6 +16,7 @@ import type {
   Task,
 } from '../types';
 import type { DemoWorkspace } from './demoBackend';
+import { readyMadeNamed } from './readyMade';
 import { startingViews } from './views';
 
 /** The statuses of the sample project, by a short name used in this file. */
@@ -46,6 +47,12 @@ const TEAM = {
     color: 'teal',
     model: 'opus',
     effort: 'high',
+    // Instructions the manager wrote by hand.
+    instructions:
+      'The board runs from one 18650 cell through a 3.3 V buck converter. Keep the idle ' +
+      'current under 50 µA.\n\n- Use only parts that two distributors have in stock.\n- Never ' +
+      'route a signal under the antenna of the radio module.\n- Cite the page of the data ' +
+      'sheet for every value you choose.',
   },
   firmware: {
     id: 'demo-member-firmware',
@@ -53,6 +60,8 @@ const TEAM = {
     responsibility: 'Everything that runs on the device.',
     color: 'blue',
     model: 'sonnet',
+    // A ready-made specialist: it starts with the instructions of its role.
+    instructions: readyMadeNamed('Firmware engineer')?.instructions ?? '',
   },
   mechanical: {
     id: 'demo-member-mechanical',
@@ -62,7 +71,9 @@ const TEAM = {
   },
 } as const satisfies Record<
   string,
-  Pick<Member, 'id' | 'name' | 'responsibility' | 'color'> & Partial<MemberProfile>
+  Pick<Member, 'id' | 'name' | 'responsibility' | 'color'> &
+    Partial<MemberProfile> &
+    Partial<Pick<Member, 'instructions'>>
 >;
 
 type TeamMemberName = keyof typeof TEAM;
@@ -437,6 +448,7 @@ export function sampleWorkspace(today: Date = new Date()): DemoWorkspace {
     // says otherwise.
     model: null,
     effort: null,
+    instructions: '',
     ...member,
     projectId: project.id,
     kind: 'agent',

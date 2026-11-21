@@ -46,6 +46,7 @@ import type {
   ProjectUsage,
   ProposedMember,
   ProposedTask,
+  ReadyMadeSpecialist,
   Sprint,
   SprintChanges,
   SprintCompletion,
@@ -78,6 +79,13 @@ import { PretendedGitHub } from './gitHub';
 import { PretendedIntegrations } from './integrations';
 import { freeName, isInside, isSameFolder, nameOf } from './places';
 import { pretendedListing } from './projectFiles';
+import {
+  READY_MADE_SPECIALISTS,
+  freeMemberName,
+  readyMadeNamed,
+  requireReadyMade,
+  tidyInstructions,
+} from './readyMade';
 import { answersInWords, openInterviewOf, openProposalOf, waitInCircle } from './planning';
 import { scriptForAnswers, scriptForBrief, scriptForChange } from './simulatedAdvisor';
 import {
@@ -973,6 +981,7 @@ export class DemoBackend implements Backend {
         kind: newMember.kind,
         responsibility: newMember.responsibility?.trim() ?? '',
         ...profile,
+        instructions: '',
         color: colorForNewcomer(team.map((other) => other.color)),
         joinedAt: now,
         updatedAt: now,
@@ -1039,6 +1048,46 @@ export class DemoBackend implements Backend {
         }
       }
       this.members.delete(member.id);
+    });
+  }
+
+  setMemberInstructions(memberId: Id, instructions: string): Promise<Member> {
+    return this.answer(() => {
+      const member = this.requireMember(memberId);
+      member.instructions = tidyInstructions(member.kind, member.name, instructions);
+      member.updatedAt = this.nowAsText();
+      return member;
+    });
+  }
+
+  listReadyMadeSpecialists(): Promise<ReadyMadeSpecialist[]> {
+    return this.answer(() => [...READY_MADE_SPECIALISTS]);
+  }
+
+  addReadyMadeMember(projectId: Id, key: string): Promise<Member> {
+    return this.answer(() => {
+      const specialist = requireReadyMade(key);
+      const project = this.requireProject(projectId);
+      const team = this.teamOf(project.id);
+      const now = this.nowAsText();
+      const member: Member = {
+        id: this.environment.newId(),
+        projectId: project.id,
+        name: freeMemberName(
+          team.map((other) => other.name),
+          specialist.name,
+        ),
+        kind: 'agent',
+        responsibility: specialist.description,
+        model: specialist.model,
+        effort: specialist.effort,
+        instructions: specialist.instructions,
+        color: colorForNewcomer(team.map((other) => other.color)),
+        joinedAt: now,
+        updatedAt: now,
+      };
+      this.members.set(member.id, member);
+      return member;
     });
   }
 
@@ -1292,6 +1341,9 @@ export class DemoBackend implements Backend {
           responsibility: proposed.responsibility,
           model: proposed.model,
           effort: proposed.effort,
+          // A member named as a ready-made specialist starts with the
+          // instructions written for that role (decision 0031).
+          instructions: readyMadeNamed(proposed.name)?.instructions ?? '',
           color: colorForNewcomer([...byName.values()].map((other) => other.color)),
           joinedAt: now,
           updatedAt: now,

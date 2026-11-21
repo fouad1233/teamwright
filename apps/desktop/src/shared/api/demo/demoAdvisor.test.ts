@@ -372,6 +372,20 @@ describe('planning with the Advisor in the DemoBackend', () => {
       expect(await backend.listConversationsWaiting()).toHaveLength(0);
     });
 
+    it('starts a proposed member named as a ready-made specialist with its instructions', async () => {
+      const conversation = await proposed();
+
+      await backend.approveProposal(conversation.id, unchanged(proposalOf(conversation)));
+
+      const team = await backend.listMembers(project.id);
+      const role = (await backend.listReadyMadeSpecialists()).find(
+        (specialist) => specialist.name === 'Firmware engineer',
+      );
+      expect(team.map((member) => member.instructions !== '')).toEqual([false, true, false]);
+      expect(team[1]?.instructions).toBe(role?.instructions);
+      expect(team[1]).toMatchObject({ model: 'sonnet', effort: null });
+    });
+
     it('tells its listeners when a proposal is approved', async () => {
       const conversation = await proposed();
       const heard: (string | null | undefined)[] = [];

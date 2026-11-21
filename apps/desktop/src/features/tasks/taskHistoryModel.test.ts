@@ -25,6 +25,7 @@ const engineer: Member = {
   responsibility: '',
   model: null,
   effort: null,
+  instructions: '',
   color: 'teal',
   joinedAt: '2026-11-11T09:00:00.000Z',
   updatedAt: '2026-11-11T09:00:00.000Z',

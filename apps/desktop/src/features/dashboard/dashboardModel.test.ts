@@ -65,6 +65,7 @@ function member(overrides: Partial<Member> & Pick<Member, 'id' | 'name'>): Membe
     responsibility: '',
     model: null,
     effort: null,
+    instructions: '',
     color: 'teal',
     joinedAt: '2026-11-01T09:00:00.000Z',
     updatedAt: '2026-11-01T09:00:00.000Z',

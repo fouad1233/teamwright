@@ -138,10 +138,34 @@ export interface Member {
   model: string | null;
   /** How hard the model of an AI specialist thinks. Always nothing for a person. */
   effort: Effort | null;
+  /**
+   * The instructions of an AI specialist, in the manager's words: how it
+   * works, what it cares about, what it must never do. Lines are separated
+   * by `\n`. Empty if it has none; always empty for a person.
+   */
+  instructions: string;
   /** The color the member is shown in. The backend chooses it. */
   color: Color;
   joinedAt: Moment;
   updatedAt: Moment;
+}
+
+/**
+ * A role that ships with Teamwright and can be put on a team in one step.
+ * The member it becomes is an ordinary member that can be changed.
+ */
+export interface ReadyMadeSpecialist {
+  /** What names the role in the program. Never shown. */
+  key: string;
+  /** What the member is called on the team. */
+  name: string;
+  /** What it does, in one sentence. It becomes what the member is on the team for. */
+  description: string;
+  /** The instructions written for the role. */
+  instructions: string;
+  /** The model it runs on, by a short name. */
+  model: string;
+  effort: Effort;
 }
 
 /** Who is responsible for a task: the manager, or a member of the team. */
