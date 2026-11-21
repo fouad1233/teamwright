@@ -1633,6 +1633,8 @@ fn refuses_a_change_that_breaks_a_rule_and_leaves_the_proposal_as_it_was() {
 #[test]
 fn refuses_to_take_out_a_member_the_team_has_already() {
     let planning = planning();
+    let conversation = planning.proposed();
+    // The member joins after the Advisor proposed one of its name.
     planning
         .team
         .add(NewMember {
@@ -1644,7 +1646,6 @@ fn refuses_to_take_out_a_member_the_team_has_already() {
             effort: None,
         })
         .unwrap();
-    let conversation = planning.proposed();
 
     assert_eq!(
         refusal(planning.change(&conversation, ProposalEdit::RemoveMember { member: 1 })),
