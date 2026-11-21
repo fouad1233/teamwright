@@ -161,6 +161,7 @@ Anthropic, PBC.
 
 | Read this | To learn |
 |---|---|
+| [User manual](docs/user-manual/README.md) | How to use Teamwright, written for the manager |
 | [Vision](docs/product/vision.md) | What the product is for and what it will not do |
 | [Landscape](docs/product/landscape.md) | Which similar tools exist and how Teamwright differs |
 | [Roadmap](docs/product/roadmap.md) | What is built and what is next |
