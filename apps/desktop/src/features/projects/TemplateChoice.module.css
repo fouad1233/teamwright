@@ -1,0 +1,175 @@
+.choice {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.legend {
+  margin-bottom: 6px;
+  padding: 0;
+}
+
+/* The templates are the rows of a small table, ruled by hairlines and held
+   by one outline, like a list in a title block. */
+.rows {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius-card);
+  overflow: hidden;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 46px;
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--rule);
+  cursor: pointer;
+  transition: background-color 100ms ease;
+}
+
+.row:last-child {
+  border-bottom: none;
+}
+
+.row:hover {
+  background: var(--hover);
+}
+
+/* The chosen template is marked by a rule of ink at its left edge, like a
+   part that has been picked up. */
+.chosen,
+.chosen:hover {
+  background: var(--pressed);
+  box-shadow: inset 2px 0 0 var(--ink);
+}
+
+/* The radio button does the work for the keyboard and for screen readers;
+   the row around it shows the choice. */
+.radio {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.row:has(.radio:focus-visible) {
+  outline: 2px solid var(--brass);
+  outline-offset: -2px;
+}
+
+.name {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The picture of the lanes: one column for each status, a hairline box
+   with the pigment of the status at its head, and the limit in figures
+   under it. */
+.lanes {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 3px;
+}
+
+.lane {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  width: 18px;
+}
+
+.laneBody {
+  width: 100%;
+  height: 20px;
+  border-radius: 2px;
+  box-shadow:
+    inset 0 3px 0 var(--tone),
+    inset 0 0 0 1px var(--rule-strong);
+}
+
+.laneLimit {
+  height: 11px;
+  color: var(--ink-soft);
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-variant-numeric: tabular-nums;
+  line-height: 11px;
+}
+
+/* What the chosen template is for and starts with. */
+.plate {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-2) 2px 0;
+}
+
+.description {
+  color: var(--ink-soft);
+  font-size: var(--text-small);
+  line-height: 1.5;
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  align-items: baseline;
+  gap: 6px var(--space-3);
+  margin: 0;
+  font-size: var(--text-small);
+}
+
+.facts dd {
+  margin: 0;
+  color: var(--ink-soft);
+}
+
+.statuses,
+.views {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+}
+
+.status,
+.view {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 1px;
+  background: var(--tone);
+}
+
+.limitFigure {
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.limitFigure::before {
+  content: '≤';
+  margin-right: 1px;
+}
+
+.view svg {
+  width: 12px;
+  height: 12px;
+  stroke-width: 1.75;
+  color: var(--ink-faint);
+}

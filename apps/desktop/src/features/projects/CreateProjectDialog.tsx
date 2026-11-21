@@ -1,47 +1,15 @@
 import { useState, type FormEvent } from 'react';
 
 import { useNavigation } from '@/app/navigation';
-import type { Status, WorkflowTemplate } from '@/shared/api/types';
-import { classNames } from '@/shared/lib/classNames';
+import type { WorkflowTemplate } from '@/shared/api/types';
 import { Button } from '@/shared/ui/Button';
 import { Dialog } from '@/shared/ui/Dialog';
 import { Field, TextArea, TextInput } from '@/shared/ui/Field';
 import { describeFailure } from '@/shared/ui/Toast';
 
-import { StatusMark } from '../tasks/TaskBadges';
 import styles from './CreateProjectDialog.module.css';
-import { useCreateProject } from './projectQueries';
-
-interface WorkflowChoice {
-  template: WorkflowTemplate;
-  name: string;
-  /** The statuses the workflow starts with, in order, as the backend creates them. */
-  statuses: Pick<Status, 'name' | 'category' | 'color'>[];
-}
-
-const WORKFLOW_CHOICES: WorkflowChoice[] = [
-  {
-    template: 'standard',
-    name: 'Standard',
-    statuses: [
-      { name: 'To do', category: 'todo', color: 'gray' },
-      { name: 'In progress', category: 'active', color: 'blue' },
-      { name: 'In review', category: 'review', color: 'amber' },
-      { name: 'Done', category: 'done', color: 'green' },
-    ],
-  },
-  {
-    template: 'engineering',
-    name: 'Engineering',
-    statuses: [
-      { name: 'To do', category: 'todo', color: 'gray' },
-      { name: 'In progress', category: 'active', color: 'blue' },
-      { name: 'In revision', category: 'active', color: 'purple' },
-      { name: 'In test', category: 'review', color: 'amber' },
-      { name: 'Done', category: 'done', color: 'green' },
-    ],
-  },
-];
+import { useCreateProject, useProjectTemplates } from './projectQueries';
+import { TemplateChoice } from './TemplateChoice';
 
 interface CreateProjectDialogProps {
   open: boolean;
@@ -51,7 +19,7 @@ interface CreateProjectDialogProps {
 /** The dialog in which a project is started. */
 export function CreateProjectDialog({ open, onClose }: CreateProjectDialogProps) {
   return (
-    <Dialog open={open} title="New project" onClose={onClose}>
+    <Dialog open={open} title="New project" size="wide" onClose={onClose}>
       <CreateProjectForm onDone={onClose} />
     </Dialog>
   );
@@ -63,6 +31,7 @@ export function CreateProjectDialog({ open, onClose }: CreateProjectDialogProps)
  */
 function CreateProjectForm({ onDone }: { onDone: () => void }) {
   const createProject = useCreateProject();
+  const templates = useProjectTemplates();
   const navigation = useNavigation();
   const [name, setName] = useState('');
   const [key, setKey] = useState('');
@@ -138,37 +107,7 @@ function CreateProjectForm({ onDone }: { onDone: () => void }) {
         />
       </Field>
 
-      <fieldset className={styles.workflows}>
-        <legend className={classNames('label', styles.legend)}>Workflow</legend>
-        {WORKFLOW_CHOICES.map((choice) => (
-          <label
-            key={choice.template}
-            className={classNames(
-              styles.workflow,
-              workflow === choice.template && styles.chosenWorkflow,
-            )}
-          >
-            <input
-              type="radio"
-              name="workflow"
-              className={styles.radio}
-              checked={workflow === choice.template}
-              onChange={() => {
-                setWorkflow(choice.template);
-              }}
-            />
-            <span className={styles.workflowName}>{choice.name}</span>
-            <span className={styles.workflowStatuses}>
-              {choice.statuses.map((status) => (
-                <span key={status.name} className={styles.workflowStatus}>
-                  <StatusMark status={status} />
-                  {status.name}
-                </span>
-              ))}
-            </span>
-          </label>
-        ))}
-      </fieldset>
+      <TemplateChoice templates={templates.data ?? []} chosen={workflow} onChoose={setWorkflow} />
 
       {refusal !== null && (
         <p className={styles.refusal} role="alert">
