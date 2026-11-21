@@ -9,7 +9,7 @@ done with them. It does no input or output.
 
 | Module | Concepts |
 |---|---|
-| `ids` | `ProjectId`, `StatusId`, `TaskId`, `SprintId`, `ViewId`, `AreaId`, `MemberId`, `ConversationId`, `TurnId`: one identifier type per kind of thing |
+| `ids` | `ProjectId`, `StatusId`, `TaskId`, `SprintId`, `ViewId`, `AreaId`, `MemberId`, `ConversationId`, `TurnId`, `HandoffId`, `TeamMessageId`: one identifier type per kind of thing |
 | `text` | `ProjectName`, `StatusName`, `TaskTitle`, `SprintName`, `ViewName`, `AreaName`, `MemberName`: names that are never empty, never multi-line, never too long; `ModelName`: the name of a model |
 | `color` | `Color`: the named colors a status or a team member can have |
 | `workflow` | `Workflow`, `Status`, `StatusCategory` |
@@ -26,6 +26,7 @@ done with them. It does no input or output.
 | `ready_made` | `ReadyMadeSpecialist`: the twelve roles that ship with Teamwright, each with a description, instructions, a model and an effort ([decision 0031](../../docs/decisions/0031-instructions-and-ready-made-specialists.md)) |
 | `conversation` | `Conversation`, `Turn`, `Step`, `TokenCounts`, `ContextUse` (how full the context of a session was after a turn; nearly full from 80 % of the window; `context_of` a conversation is that of its last turn that reported one): the work of an AI specialist or of the Advisor, one request at a time; `DecisionRequest`, `DecisionOption`, `DecisionAnswer`: a question a specialist asks the manager to decide |
 | `planning` | `Interview`, `InterviewQuestion`, `InterviewAnswer`: the questions the Advisor asks before it proposes; `Proposal`, `ProposedMember`, `ProposedTask`, `ProposedOwner`: the team and the plan it proposes |
+| `teamwork` | `Handoff`, `HandoffContent`: the result of a task for whoever builds on it (a summary, an interface contract, the files that hold it as `PathInFolder`s); `TeamMessage`, `MessageKind`, `MessageDelivery`: a question or a note from one specialist to another and when it reached its receiver; `SaidIn`: who said it, in which conversation and turn |
 | `error` | `DomainError`: every rule that can be broken |
 | `time` | `Timestamp`, `CalendarDate` |
 
@@ -126,6 +127,14 @@ done with them. It does no input or output.
   wait for each other in a circle. Names and titles follow the rules of
   members and tasks. It is approved after its turn has ended, once, and
   then keeps what the manager approved, which the same rules check.
+- A handoff has a summary that says something (at most 4,000 characters),
+  an interface contract that may be empty (at most 20,000), and at most
+  fifty files, each a path that stays inside the folder by how it is
+  written, none of them the folder itself and none named twice. It never
+  changes once it is published.
+- A message says something (at most 4,000 characters) and goes to another
+  member than its sender. It is delivered once: delivering it again changes
+  nothing.
 
 ## How to work in it
 

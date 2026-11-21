@@ -115,6 +115,18 @@ define_id!(
 );
 
 define_id!(
+    /// Identifies a handoff: what a specialist hands over with a task.
+    HandoffId,
+    kind = "handoff identifier"
+);
+
+define_id!(
+    /// Identifies a message from one specialist to another.
+    TeamMessageId,
+    kind = "message identifier"
+);
+
+define_id!(
     /// Identifies a computer that runs Teamwright. Each computer keeps its
     /// own database, and every change it makes carries this identity.
     ComputerId,

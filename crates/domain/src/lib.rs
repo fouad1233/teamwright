@@ -30,6 +30,7 @@ pub mod ready_made;
 pub mod sprint;
 pub mod task;
 pub mod task_history;
+pub mod teamwork;
 pub mod text;
 pub mod time;
 pub mod view;
@@ -45,8 +46,8 @@ pub use conversation::{
 pub use dependencies::DependencyGraph;
 pub use error::DomainError;
 pub use ids::{
-    AreaId, ComputerId, ConversationId, MemberId, ProjectId, SprintId, StatusId, TaskId, TurnId,
-    ViewId,
+    AreaId, ComputerId, ConversationId, HandoffId, MemberId, ProjectId, SprintId, StatusId, TaskId,
+    TeamMessageId, TurnId, ViewId,
 };
 pub use integration::{EventKind, EventKinds, RepositoryName, WebAddress};
 pub use member::{Effort, Member, MemberInstructions, MemberKind, MemberProfile, MemberSnapshot};
@@ -63,6 +64,10 @@ pub use sprint::{
 };
 pub use task::{Assignee, Priority, Rank, Schedule, Task, TaskDraft, TaskSnapshot};
 pub use task_history::{TaskChange, TaskChangeKind, changes_between, history_of};
+pub use teamwork::{
+    Handoff, HandoffContent, HandoffSnapshot, MessageDelivery, MessageKind, SaidIn, TeamMessage,
+    TeamMessageSnapshot,
+};
 pub use text::{
     AreaName, ComputerName, MemberName, ModelName, ProjectName, SprintName, StatusName, TaskTitle,
     ViewName,

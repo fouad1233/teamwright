@@ -324,6 +324,26 @@ pub enum DomainError {
         /// The path, as it was given.
         path: String,
     },
+
+    /// A handoff named more files than one may.
+    #[error("a handoff names at most {max} files, but this one names {count}")]
+    TooManyFiles {
+        /// The most files a handoff may name.
+        max: usize,
+        /// How many were given.
+        count: usize,
+    },
+
+    /// A specialist sent a message to itself.
+    #[error("a message goes to another member of the team")]
+    MessageToOneself,
+
+    /// A handoff named the same file twice.
+    #[error("the file {path} is named twice")]
+    FileNamedTwice {
+        /// The path, as it was named the second time.
+        path: String,
+    },
 }
 
 impl DomainError {
