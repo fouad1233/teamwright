@@ -23,10 +23,13 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use serde_json::{Value, json};
+use std::collections::BTreeMap;
 use teamwright_application::{
     AgentEvent, AgentRuntime, AgentRuntimeError, PermissionProfile, ProgramVersion, SessionChoice,
     SessionId, SignIn, TurnFailure, TurnOutcome, TurnRequest,
 };
+
+use teamwright_runtime::connector_launcher::{Launch, SecretsFile};
 use teamwright_runtime::{ClaudeCode, Environment};
 
 /// Set to the part the stand-in plays.
@@ -35,9 +38,24 @@ const ROLE: &str = "TEAMWRIGHT_STAND_IN";
 const VERSION: &str = "TEAMWRIGHT_STAND_IN_VERSION";
 /// A variable the tests give the stand-in, to see that it arrives.
 const PROBE: &str = "TEAMWRIGHT_PROBE";
+/// The argument with which this program plays a connector that tells its
+/// surroundings.
+const PRINT_SURROUNDINGS: &str = "--print-surroundings";
+/// The code the program of a connector ends with, to see it passed back.
+const SURROUNDINGS_EXIT_CODE: i32 = 3;
 
 fn main() {
+    // A program a connector would be: it says where it was started and
+    // with what environment, and ends with a code of its own. It reads no
+    // variable to know it is this, because the launcher clears them all.
+    if std::env::args().nth(1).as_deref() == Some(PRINT_SURROUNDINGS) {
+        print_surroundings();
+        std::process::exit(SURROUNDINGS_EXIT_CODE);
+    }
     if let Ok(role) = std::env::var(ROLE) {
+        if role == "launcher" {
+            std::process::exit(play_launcher());
+        }
         std::process::exit(play_stand_in(&role));
     }
 
@@ -82,6 +100,14 @@ fn main() {
         (
             "a_session_is_opened_in_the_desktop_app",
             a_session_is_opened_in_the_desktop_app,
+        ),
+        (
+            "a_connector_starts_in_its_empty_folder_with_only_the_variables_given",
+            a_connector_starts_in_its_empty_folder_with_only_the_variables_given,
+        ),
+        (
+            "a_connector_named_by_a_relative_path_is_not_started",
+            a_connector_named_by_a_relative_path_is_not_started,
         ),
         (
             "an_old_version_cannot_open_the_desktop_app",
@@ -227,6 +253,30 @@ fn play_turn(role: &str, arguments: &[String]) -> i32 {
                 }},
             }));
             0
+        }
+    }
+}
+
+fn print_surroundings() {
+    let environment: serde_json::Map<String, Value> = std::env::vars()
+        .map(|(name, value)| (name, Value::String(value)))
+        .collect();
+    println!(
+        "{}",
+        json!({
+            "folder": std::env::current_dir().unwrap(),
+            "environment": environment,
+        })
+    );
+}
+
+fn play_launcher() -> i32 {
+    let arguments: Vec<_> = std::env::args_os().skip(1).collect();
+    match teamwright_runtime::connector_launcher::launch(&arguments) {
+        Ok(code) => code,
+        Err(problem) => {
+            eprintln!("The connector cannot start: {problem}");
+            1
         }
     }
 }
@@ -503,4 +553,88 @@ fn a_failure_to_open_the_desktop_app_is_reported() {
         .open_in_desktop_app(&id, folder.path())
         .unwrap_err();
     assert!(error.to_string().contains("not installed"), "{error}");
+}
+
+/// Starts this program as the launcher, the way Claude Code starts
+/// Teamwright for a connector, and returns its exit code, its output and
+/// its errors.
+fn run_launcher(launch: &Launch) -> (Option<i32>, String, String) {
+    let output = std::process::Command::new(std::env::current_exe().unwrap())
+        .args(launch.to_arguments())
+        .env(ROLE, "launcher")
+        .env(PROBE, "never-handed-on")
+        .env("PARTS_TOKEN", "not-from-here")
+        .stdin(std::process::Stdio::null())
+        .output()
+        .unwrap();
+    (
+        output.status.code(),
+        String::from_utf8(output.stdout).unwrap(),
+        String::from_utf8(output.stderr).unwrap(),
+    )
+}
+
+fn a_connector_starts_in_its_empty_folder_with_only_the_variables_given() {
+    let ground = tempfile::tempdir().unwrap();
+    let ground = teamwright_runtime::full_form(ground.path()).unwrap();
+    let start = ground.join("start-here");
+    std::fs::create_dir(&start).unwrap();
+    let secrets = SecretsFile::write_in(
+        &ground.join("secrets"),
+        &BTreeMap::from([("PARTS_TOKEN".to_owned(), "from-the-file".to_owned())]),
+    )
+    .unwrap();
+    let launch = Launch {
+        folder: start.clone(),
+        secrets: Some(secrets.path().to_owned()),
+        variables: vec!["PARTS_TOKEN".to_owned()],
+        program: std::env::current_exe()
+            .unwrap()
+            .to_string_lossy()
+            .into_owned(),
+        arguments: vec![PRINT_SURROUNDINGS.to_owned()],
+    };
+
+    let (code, output, errors) = run_launcher(&launch);
+
+    assert_eq!(code, Some(SURROUNDINGS_EXIT_CODE), "{errors}");
+    // Standard output is the program's alone: one line, its own.
+    let told: Value = serde_json::from_str(output.trim_end()).unwrap();
+    assert_eq!(output.lines().count(), 1, "{output}");
+    assert_eq!(
+        told["folder"],
+        json!(start.to_string_lossy()),
+        "it started elsewhere"
+    );
+    let environment = told["environment"].as_object().unwrap();
+    assert_eq!(environment["PARTS_TOKEN"], "from-the-file");
+    for never in [PROBE, ROLE] {
+        assert!(!environment.contains_key(never), "{never} was handed on");
+    }
+    for (name, _) in environment {
+        assert!(
+            name == "PARTS_TOKEN" || teamwright_runtime::connector_launcher::is_base_variable(name),
+            "{name} was handed on"
+        );
+    }
+    // The empty folder stays empty.
+    assert_eq!(std::fs::read_dir(&start).unwrap().count(), 0);
+}
+
+fn a_connector_named_by_a_relative_path_is_not_started() {
+    let ground = tempfile::tempdir().unwrap();
+    let ground = teamwright_runtime::full_form(ground.path()).unwrap();
+    let launch = Launch {
+        folder: ground.clone(),
+        secrets: None,
+        variables: Vec::new(),
+        program: "./parts_server".to_owned(),
+        arguments: Vec::new(),
+    };
+
+    let (code, output, errors) = run_launcher(&launch);
+
+    assert_ne!(code, Some(0));
+    assert_eq!(output, "");
+    assert!(errors.contains("relative path"), "{errors}");
 }

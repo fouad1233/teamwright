@@ -24,11 +24,16 @@ use std::{env, io};
 
 use tauri::{Manager, RunEvent};
 
+use teamwright_runtime::connector_launcher::LAUNCHER_ARGUMENT;
+
 use crate::state::{AppState, TEAM_BUS_ARGUMENT};
 
 fn main() -> ExitCode {
     if env::args_os().nth(1).as_deref() == Some(OsStr::new(TEAM_BUS_ARGUMENT)) {
         return serve_the_team_bus();
+    }
+    if env::args_os().nth(1).as_deref() == Some(OsStr::new(LAUNCHER_ARGUMENT)) {
+        return launch_a_connector();
     }
 
     let application = tauri::Builder::default()
@@ -283,6 +288,22 @@ fn serve_the_team_bus() -> ExitCode {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
             eprintln!("The team bus stopped: {error}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+/// Starts the program of a connector for Claude Code, in an empty folder of
+/// Teamwright's own and with only the variables it names (decision 0039,
+/// note of 21 November 2026). Nothing is written to standard output, which
+/// is the channel of the tool server. On Unix this process becomes the
+/// program; on Windows it waits for it and ends with its exit code.
+fn launch_a_connector() -> ExitCode {
+    let arguments: Vec<_> = env::args_os().skip(2).collect();
+    match teamwright_runtime::connector_launcher::launch(&arguments) {
+        Ok(code) => std::process::exit(code),
+        Err(problem) => {
+            eprintln!("The connector cannot start: {problem}");
             ExitCode::FAILURE
         }
     }

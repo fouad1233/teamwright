@@ -21,12 +21,17 @@
 //! the manager to decide, ask the questions of the Advisor, and propose a
 //! team and a plan.
 //!
+//! The program of a connector is started through Teamwright's own program,
+//! in the mode of the [`connector_launcher`]: in an empty folder of its
+//! own, with only the variables the connector names.
+//!
 //! Teamwright never reads, keeps or passes on a credential. It asks the
 //! program whether the user is signed in, and the program uses its own
 //! sign-in.
 
 mod arguments;
 mod claude_code;
+pub mod connector_launcher;
 mod decode;
 mod earlier;
 mod environment;
