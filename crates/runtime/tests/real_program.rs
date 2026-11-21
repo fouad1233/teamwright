@@ -25,7 +25,11 @@ use std::time::{Duration, Instant};
 
 use teamwright_application::{
     AgentEvent, AgentRuntime, PermissionProfile, SessionChoice, SessionId, SignIn, TurnFailure,
-    TurnOutcome, TurnRequest,
+    TurnOutcome, TurnRequest, instructions_for,
+};
+use teamwright_domain::{
+    Color, Member, MemberInstructions, MemberKind, MemberName, Project, ProjectKey, ProjectName,
+    Workflow,
 };
 use teamwright_runtime::{ClaudeCode, Environment};
 
@@ -254,4 +258,54 @@ fn a_real_turn_can_be_stopped() {
     println!("stopped after {:?}: {outcome:?}", stopping.elapsed());
     assert_eq!(outcome.failure, Some(TurnFailure::Stopped));
     assert!(stopping.elapsed() < Duration::from_secs(10));
+}
+
+#[test]
+#[ignore = "needs the real Claude Code, signed in, and spends one turn"]
+fn the_own_instructions_of_a_specialist_reach_a_real_session() {
+    // A specialist with instructions of its own, given to the session the
+    // way the application gives them: after Teamwright's own instructions,
+    // in the system prompt that is appended, and not in the prompt.
+    let project = Project::create(
+        ProjectName::parse("Smart sensor node").unwrap(),
+        ProjectKey::parse("SSN").unwrap(),
+        String::new(),
+        Workflow::standard(),
+        chrono::Utc::now(),
+    );
+    let mut member = Member::create(
+        project.id(),
+        MemberName::parse("Technical writer").unwrap(),
+        MemberKind::Agent,
+        String::new(),
+        Color::Teal,
+        chrono::Utc::now(),
+    );
+    member
+        .set_instructions(
+            MemberInstructions::parse(
+                "End every reply with the word PERSIMMON, in capital letters, alone on the \
+                 last line.",
+            )
+            .unwrap(),
+            chrono::Utc::now(),
+        )
+        .unwrap();
+    let folder = tempfile::tempdir().unwrap();
+    let mut request = request(
+        folder.path(),
+        "In one sentence: what is a pull-up resistor for?",
+        SessionChoice::New,
+    );
+    request.extra_instructions = Some(instructions_for(&member, &project, &[]));
+    assert!(!request.prompt.contains("PERSIMMON"));
+
+    let turn = runtime().start_turn(request, Box::new(|_| {})).unwrap();
+    let outcome = turn.wait().unwrap();
+    println!("{}", outcome.final_text);
+    print_usage(&outcome);
+
+    assert_eq!(outcome.failure, None);
+    let last_line = outcome.final_text.trim().lines().last().unwrap_or_default();
+    assert_eq!(last_line.trim(), "PERSIMMON");
 }
