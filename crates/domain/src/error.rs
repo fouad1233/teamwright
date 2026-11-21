@@ -454,6 +454,22 @@ pub enum DomainError {
         /// How many were given.
         count: usize,
     },
+
+    /// A folder cannot be given to a specialist as a skill.
+    #[error("this cannot be a skill: {reason}")]
+    NotASkill {
+        /// Why, for the manager, as the end of a sentence.
+        reason: String,
+    },
+
+    /// A connector, or what a specialist is given of one, breaks a rule.
+    /// The reason never repeats a value that may be a secret.
+    #[error("{reason}")]
+    InvalidConnector {
+        /// What is wrong, for the manager, as a sentence without its full
+        /// stop.
+        reason: String,
+    },
 }
 
 impl DomainError {

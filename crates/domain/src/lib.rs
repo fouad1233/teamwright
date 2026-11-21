@@ -26,6 +26,7 @@ pub mod digest;
 pub mod error;
 pub mod ids;
 pub mod integration;
+pub mod kit;
 pub mod member;
 pub mod memory;
 pub mod planning;
@@ -66,11 +67,15 @@ pub use digest::{
 };
 pub use error::DomainError;
 pub use ids::{
-    AreaId, ChecklistItemId, ComputerId, ConversationId, CoordinatorEntryId, DigestId, HandoffId,
-    MemberId, MemoryEntryId, ProjectId, SprintId, StatusId, TagId, TaskId, TeamMessageId, TurnId,
-    ViewId,
+    AreaId, ChecklistItemId, ComputerId, ConnectorId, ConversationId, CoordinatorEntryId, DigestId,
+    HandoffId, MemberId, MemoryEntryId, ProjectId, SkillId, SprintId, StatusId, TagId, TaskId,
+    TeamMessageId, TurnId, ViewId,
 };
 pub use integration::{EventKind, EventKinds, RepositoryName, WebAddress};
+pub use kit::{
+    Connector, ConnectorName, ConnectorSnapshot, ConnectorStart, GivenConnector, MemberKit,
+    SecretHeader, Skill, SkillFile, SkillName, SkillSnapshot, ToolName, VariableName,
+};
 pub use member::{Effort, Member, MemberInstructions, MemberKind, MemberProfile, MemberSnapshot};
 pub use memory::{
     MemoryContent, MemoryEntry, MemoryEntrySnapshot, MemoryKind, MemoryOrigin, MemorySource,

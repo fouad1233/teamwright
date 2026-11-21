@@ -158,6 +158,18 @@ define_id!(
 );
 
 define_id!(
+    /// Identifies a skill in the library of a project.
+    SkillId,
+    kind = "skill identifier"
+);
+
+define_id!(
+    /// Identifies a connector in the library of a project.
+    ConnectorId,
+    kind = "connector identifier"
+);
+
+define_id!(
     /// Identifies a computer that runs Teamwright. Each computer keeps its
     /// own database, and every change it makes carries this identity.
     ComputerId,
