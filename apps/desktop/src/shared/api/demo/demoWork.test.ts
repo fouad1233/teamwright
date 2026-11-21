@@ -140,7 +140,18 @@ describe('the work of specialists in the DemoBackend', () => {
       environment.passAll();
 
       const kinds = seen.map((conversation) => conversation.turns[0]?.steps.at(-1)?.kind);
-      expect(kinds).toEqual(['notice', 'text', 'tool', 'tool', 'text', 'tool', 'tool', 'tool']);
+      // The handoff before the report is told as well; it adds no step.
+      expect(kinds).toEqual([
+        'notice',
+        'text',
+        'tool',
+        'tool',
+        'text',
+        'tool',
+        'tool',
+        'tool',
+        'tool',
+      ]);
       expect(seen.at(-1)?.turns[0]?.state).toBe('finished');
     });
 

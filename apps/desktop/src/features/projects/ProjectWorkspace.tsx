@@ -30,6 +30,7 @@ import {
 import { useViewCommands, useViews } from '../views/viewQueries';
 import { ViewTabs } from '../views/ViewTabs';
 import { MemberChat } from '../work/MemberChat';
+import { useTeamTalk } from '../teamwork/teamworkQueries';
 import { WorkProvider } from '../work/WorkContext';
 import { useAgentProgram, useConversations, useProjectUsage } from '../work/workQueries';
 import { NewTaskDialog } from './NewTaskDialog';
@@ -66,6 +67,7 @@ export function ProjectWorkspace({ project }: { project: Project }) {
   const viewCommands = useViewCommands(project.id);
   const conversations = useConversations(project.id);
   const usage = useProjectUsage(project.id);
+  const teamTalk = useTeamTalk(project.id);
   // Whether the program for the specialists is there takes a few seconds to
   // find out. It is asked here, when the project opens, so that the answer
   // is usually known by the time a task or the team is opened.
@@ -83,7 +85,11 @@ export function ProjectWorkspace({ project }: { project: Project }) {
 
   return (
     <TeamProvider members={team.data ?? NO_MEMBERS}>
-      <WorkProvider conversations={conversations.data ?? NO_CONVERSATIONS} usage={usage.data}>
+      <WorkProvider
+        conversations={conversations.data ?? NO_CONVERSATIONS}
+        usage={usage.data}
+        talk={teamTalk.data}
+      >
         <OpenAreaProvider area={openArea}>
           <div className={styles.workspace}>
             <header className={styles.header}>

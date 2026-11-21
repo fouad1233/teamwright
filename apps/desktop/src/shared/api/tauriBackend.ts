@@ -53,6 +53,7 @@ import type {
   Task,
   TaskChange,
   TaskOnGitHub,
+  TeamTalk,
   ThemeName,
   View,
   ViewFilter,
@@ -375,6 +376,10 @@ export class TauriBackend implements Backend {
 
   projectUsage(projectId: Id): Promise<ProjectUsage> {
     return call('project_usage', { projectId });
+  }
+
+  teamTalk(projectId: Id): Promise<TeamTalk> {
+    return call('team_talk', { projectId });
   }
 
   startWork(taskId: Id): Promise<Conversation> {

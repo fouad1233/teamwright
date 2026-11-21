@@ -12,6 +12,7 @@ import { ActionMenu } from '@/shared/ui/Menu';
 import { Portrait } from '../office/characters/Portrait';
 import { TaskTally } from '../projects/TaskTally';
 import { usageInWords } from '../office/officeModel';
+import { TeamMessages } from '../teamwork/TeamMessages';
 import { ProgramStatus } from '../work/ProgramStatus';
 import { ContextMeter } from '../work/ContextMeter';
 import { useConversationsOfProject, useUsageOfProject } from '../work/WorkContext';
@@ -270,6 +271,8 @@ export function TeamView({ project, tasks }: TeamViewProps) {
       />
 
       {hasSpecialists && <ProgramStatus />}
+
+      {hasSpecialists && <TeamMessages />}
 
       <MemberDialog
         open={form.isOpen}

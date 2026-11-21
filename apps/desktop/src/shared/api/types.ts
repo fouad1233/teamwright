@@ -624,6 +624,58 @@ export interface Turn {
 }
 
 /**
+ * The result of a task, handed over by the specialist who did it to whoever
+ * builds on it. A task may have several, one for each turn that published
+ * one; the latest counts. It never changes once published.
+ */
+export interface Handoff {
+  id: Id;
+  taskId: Id;
+  /** The specialist who published it. It may have left the team since. */
+  authorId: Id;
+  conversationId: Id;
+  /** The turn it was published in. */
+  turnId: Id;
+  summary: string;
+  /** The interface contract others may rely on. Empty if there is none. */
+  contract: string;
+  /**
+   * The registered artifacts: paths inside the work folder of the project,
+   * with `/` between their parts.
+   */
+  files: string[];
+  publishedAt: Moment;
+}
+
+/** What a message between teammates is: a question that wants an answer, or a note. */
+export type MessageKind = 'question' | 'note';
+
+/**
+ * A question or a note from one specialist to another. It waits until the
+ * receiver starts its next turn, and comes with that turn.
+ */
+export interface TeamMessage {
+  id: Id;
+  fromId: Id;
+  toId: Id;
+  conversationId: Id;
+  /** The turn it was sent in. */
+  turnId: Id;
+  kind: MessageKind;
+  text: string;
+  sentAt: Moment;
+  /** The turn of the receiver it came with; null while it waits. */
+  deliveredTurnId: Id | null;
+  deliveredAt: Moment | null;
+}
+
+/** Everything the specialists of a project handed each other, each list the oldest first. */
+export interface TeamTalk {
+  handoffs: Handoff[];
+  messages: TeamMessage[];
+}
+
+/**
  * A thread of work with one AI specialist: about a task, or a question the
  * manager asked. Or a thread with the Advisor, in which a project is
  * planned. It is one session of the program that runs them, so the earlier

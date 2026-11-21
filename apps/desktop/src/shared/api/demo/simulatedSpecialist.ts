@@ -23,7 +23,9 @@ export type Act =
   /** Begins to use a tool. */
   | { kind: 'use'; id: string; tool: string; summary: string }
   /** Finishes the use of a tool that was begun. */
-  | { kind: 'finish'; id: string };
+  | { kind: 'finish'; id: string }
+  /** Hands the result of the task over, with the tool publish_handoff. */
+  | { kind: 'handoff'; summary: string; contract: string; files: string[] };
 
 /** An act, and how long after the act before it happens, in milliseconds. */
 export interface TimedAct {
@@ -156,6 +158,17 @@ export function scriptForTask(task: Task): Script {
       },
       { after: 700, act: { kind: 'use', id: 'write', tool: 'Write', summary: file } },
       { after: 900, act: { kind: 'finish', id: 'write' } },
+      // As the instructions of a specialist ask, it hands the result over
+      // before its report, for whoever builds on the task.
+      {
+        after: 700,
+        act: {
+          kind: 'handoff',
+          summary: `${task.title}: the result is written down in ${file}. Read it before you build on it.`,
+          contract: '',
+          files: [file],
+        },
+      },
     ],
     endsAfter: 600,
     // Written the way a model writes a report: in Markdown.

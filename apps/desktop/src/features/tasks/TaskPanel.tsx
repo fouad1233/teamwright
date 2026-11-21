@@ -26,7 +26,10 @@ import { PointsEditor } from '../sprints/PointsEditor';
 import { useSprintCommands, useSprints } from '../sprints/sprintQueries';
 import { useTeamMembers } from '../team/TeamContext';
 import { TaskGitHub } from '../github/TaskGitHub';
+import { HandoffView } from '../teamwork/HandoffView';
+import { latestHandoffOf } from '../teamwork/teamworkModel';
 import { TaskWork } from '../work/TaskWork';
+import { useTeamTalkOfProject } from '../work/WorkContext';
 import { PRIORITIES, PriorityFlag, StatusLabel, StatusMark, priorityLabel } from './TaskBadges';
 import { TaskComposer } from './TaskComposer';
 import { TaskHistory } from './TaskHistory';
@@ -70,6 +73,8 @@ export function TaskPanel({ project, task, tasks, onClose }: TaskPanelProps) {
   const parent = task.parentId === null ? undefined : tasksById.get(task.parentId);
   const byNumber = (first: Task, second: Task) => first.number - second.number;
   const blockers = tasks.filter((other) => task.blockedBy.includes(other.id)).sort(byNumber);
+  // What the specialist handed over with the task, for whoever builds on it.
+  const handoff = latestHandoffOf(useTeamTalkOfProject()?.handoffs ?? [], task.id);
   const possibleBlockers = tasks
     .filter((other) => other.id !== task.id && !task.blockedBy.includes(other.id))
     .sort(byNumber);
@@ -279,6 +284,12 @@ export function TaskPanel({ project, task, tasks, onClose }: TaskPanelProps) {
         <Section title="Work">
           <TaskWork project={project} task={task} />
         </Section>
+
+        {handoff && (
+          <Section title="Handoff">
+            <HandoffView handoff={handoff.latest} earlier={handoff.earlier} />
+          </Section>
+        )}
 
         <Section
           title="Waits for"

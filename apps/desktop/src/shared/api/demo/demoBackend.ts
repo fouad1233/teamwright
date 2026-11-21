@@ -60,6 +60,8 @@ import type {
   Task,
   TaskChange,
   TaskOnGitHub,
+  TeamMessage,
+  TeamTalk,
   ThemeName,
   Turn,
   View,
@@ -75,6 +77,7 @@ import {
 } from './areas';
 import { isThemeName, rememberedTheme } from '@/shared/theme/themes';
 import { briefFor } from './brief';
+import { PretendedTeamTalk } from './teamwork';
 import { PretendedGitHub } from './gitHub';
 import { PretendedIntegrations } from './integrations';
 import { freeName, isInside, isSameFolder, nameOf } from './places';
@@ -187,6 +190,11 @@ export interface DemoWorkspace {
    * project that is not in one of its areas goes into its first area.
    */
   areas?: Area[];
+  /**
+   * What the specialists handed each other: handoffs of tasks and messages
+   * between teammates. Left out, there is nothing.
+   */
+  teamTalk?: TeamTalk;
 }
 
 const browserEnvironment: DemoEnvironment = {
@@ -272,6 +280,8 @@ export class DemoBackend implements Backend {
   private readonly sprintsCreated = new Map<Id, number>();
   private readonly places = new Map<Id, ChosenPlaces>();
   private readonly integrations = new PretendedIntegrations();
+  /** The handoffs and the messages of the specialists. */
+  private readonly teamwork: PretendedTeamTalk;
   private readonly gitHub = new PretendedGitHub();
   /** The views of each project, in the order the manager gave them. */
   private readonly views = new Map<Id, View[]>();
@@ -337,6 +347,16 @@ export class DemoBackend implements Backend {
     for (const member of workspace?.members ?? []) {
       this.members.set(member.id, structuredClone(member));
     }
+    this.teamwork = new PretendedTeamTalk(
+      (workspace?.teamTalk?.handoffs ?? []).flatMap((handoff) => {
+        const task = this.tasks.get(handoff.taskId);
+        return task ? [{ projectId: task.projectId, handoff }] : [];
+      }),
+      (workspace?.teamTalk?.messages ?? []).flatMap((message: TeamMessage) => {
+        const sender = this.members.get(message.fromId);
+        return sender ? [{ projectId: sender.projectId, message }] : [];
+      }),
+    );
     for (const sprint of workspace?.sprints ?? []) {
       this.sprints.set(sprint.id, structuredClone(sprint));
       this.sprintsCreated.set(
@@ -461,6 +481,7 @@ export class DemoBackend implements Backend {
       this.sprintsCreated.delete(project.id);
       this.views.delete(project.id);
       this.areas.delete(project.id);
+      this.teamwork.forgetProject(project.id);
       for (const conversation of this.conversationsOf(project.id)) {
         this.forget(conversation);
       }
@@ -945,6 +966,7 @@ export class DemoBackend implements Backend {
       for (const conversation of aboutRemoved) {
         this.forget(conversation);
       }
+      this.teamwork.forgetTasks(removed);
       for (const other of this.tasksOfProject(task.projectId)) {
         if (removed.has(other.id)) {
           this.tasks.delete(other.id);
@@ -1116,6 +1138,13 @@ export class DemoBackend implements Backend {
     });
   }
 
+  teamTalk(projectId: Id): Promise<TeamTalk> {
+    return this.answer(() => {
+      this.requireProject(projectId);
+      return this.teamwork.talkOf(projectId);
+    });
+  }
+
   startWork(taskId: Id): Promise<Conversation> {
     return this.answer(() => {
       const task = this.requireTask(taskId);
@@ -1148,7 +1177,12 @@ export class DemoBackend implements Backend {
       this.conversations.set(conversation.id, conversation);
       this.beginTurn(
         conversation,
-        briefFor(project, task, this.tasksOfProject(project.id)),
+        briefFor(
+          project,
+          task,
+          this.tasksOfProject(project.id),
+          this.teamwork.handoffsOf(project.id),
+        ),
         'brief',
         scriptForTask(task),
       );
@@ -2063,6 +2097,10 @@ export class DemoBackend implements Backend {
       proposal: null,
     };
     conversation.turns.push(turn);
+    // Messages that wait for the specialist come with this turn.
+    if (conversation.memberId !== null) {
+      this.teamwork.deliverTo(conversation.memberId, turn.id, turn.startedAt);
+    }
 
     const task = conversation.taskId === null ? undefined : this.tasks.get(conversation.taskId);
     if (task && ['todo', 'review'].includes(this.categoryOf(task))) {
@@ -2102,6 +2140,21 @@ export class DemoBackend implements Backend {
       turn.steps.push({ kind: 'text', at, text: act.text });
     } else if (act.kind === 'note') {
       turn.steps.push({ kind: 'notice', at, message: act.message });
+    } else if (act.kind === 'handoff') {
+      // A handoff belongs to the task of the conversation and its specialist.
+      if (conversation.taskId !== null && conversation.memberId !== null) {
+        this.teamwork.publish(conversation.projectId, {
+          id: this.environment.newId(),
+          taskId: conversation.taskId,
+          authorId: conversation.memberId,
+          conversationId: conversation.id,
+          turnId: turn.id,
+          summary: act.summary,
+          contract: act.contract,
+          files: [...act.files],
+          publishedAt: at,
+        });
+      }
     } else if (act.kind === 'use') {
       turn.steps.push({
         kind: 'tool',

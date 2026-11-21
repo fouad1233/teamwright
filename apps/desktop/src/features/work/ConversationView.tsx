@@ -9,11 +9,14 @@ import { Button } from '@/shared/ui/Button';
 import { Prose } from '@/shared/ui/Prose';
 
 import { RunsElsewhere, useComputerOf } from '../sync/RunsElsewhere';
+import { TalkOfTurnView } from '../teamwork/TalkOfTurnView';
+import { talkOfTurn } from '../teamwork/teamworkModel';
 import { MemberAvatar } from '../team/Assignee';
 import { useTeamMember } from '../team/TeamContext';
 import { ContextMeter } from './ContextMeter';
 import styles from './ConversationView.module.css';
 import { DecisionCard } from './DecisionCard';
+import { useTeamTalkOfProject } from './WorkContext';
 import {
   decisionInWords,
   durationInWords,
@@ -170,6 +173,8 @@ export function TurnView({ turn, reportTitle = 'Report', children }: TurnViewPro
   const isWrittenByProgram = turn.origin === 'brief' || turn.origin === 'interview';
   const [isRequestShown, setIsRequestShown] = useState(!isWrittenByProgram);
   const decided = turn.decision === null ? null : decisionInWords(turn.decision);
+  // What the turn handed over, sent and received through the team bus.
+  const talk = talkOfTurn(useTeamTalkOfProject(), turn.id);
 
   return (
     <article className={styles.turn}>
@@ -196,6 +201,8 @@ export function TurnView({ turn, reportTitle = 'Report', children }: TurnViewPro
         </p>
       )}
 
+      <TalkOfTurnView talk={talk} part="arrived" />
+
       {turn.steps.length > 0 && (
         <ol className={styles.steps}>
           {turn.steps.map((step, position) => (
@@ -206,6 +213,8 @@ export function TurnView({ turn, reportTitle = 'Report', children }: TurnViewPro
           ))}
         </ol>
       )}
+
+      <TalkOfTurnView talk={talk} part="said" />
 
       {/* A turn ends in a report or in a question. What a specialist says
           next to its question is no report, so it gets no such title. */}

@@ -1,6 +1,6 @@
 import { createContext, useContext, useMemo, type ReactNode } from 'react';
 
-import type { Conversation, Id, ProjectUsage } from '@/shared/api/types';
+import type { Conversation, Id, ProjectUsage, TeamTalk } from '@/shared/api/types';
 
 import { conversationOfTask, tasksBeingWorkedOn, tasksWaitingForManager } from './workModel';
 
@@ -13,6 +13,8 @@ interface Work {
   waitingTasks: ReadonlySet<Id>;
   /** What the agents of the project have spent, once it is known. */
   usage: ProjectUsage | undefined;
+  /** What the specialists handed each other, once it is known. */
+  talk: TeamTalk | undefined;
 }
 
 const NO_WORK: Work = {
@@ -20,6 +22,7 @@ const NO_WORK: Work = {
   busyTasks: new Set(),
   waitingTasks: new Set(),
   usage: undefined,
+  talk: undefined,
 };
 
 const WorkContext = createContext<Work>(NO_WORK);
@@ -29,6 +32,8 @@ interface WorkProviderProps {
   conversations: readonly Conversation[];
   /** What the agents of the open project have spent, once it is known. */
   usage?: ProjectUsage;
+  /** The handoffs and the messages of the open project, once they are known. */
+  talk?: TeamTalk;
   children: ReactNode;
 }
 
@@ -37,15 +42,16 @@ interface WorkProviderProps {
  * so that a card can show that somebody is working on its task without the
  * conversations being handed down to it.
  */
-export function WorkProvider({ conversations, usage, children }: WorkProviderProps) {
+export function WorkProvider({ conversations, usage, talk, children }: WorkProviderProps) {
   const work = useMemo(
     () => ({
       conversations,
       busyTasks: tasksBeingWorkedOn(conversations),
       waitingTasks: tasksWaitingForManager(conversations),
       usage,
+      talk,
     }),
-    [conversations, usage],
+    [conversations, usage, talk],
   );
   return <WorkContext value={work}>{children}</WorkContext>;
 }
@@ -73,4 +79,9 @@ export function useConversationsOfProject(): readonly Conversation[] {
 /** What the agents of the open project have spent, and how full their contexts are, once it is known. */
 export function useUsageOfProject(): ProjectUsage | undefined {
   return useContext(WorkContext).usage;
+}
+
+/** The handoffs and the messages of the specialists of the open project, once they are known. */
+export function useTeamTalkOfProject(): TeamTalk | undefined {
+  return useContext(WorkContext).talk;
 }

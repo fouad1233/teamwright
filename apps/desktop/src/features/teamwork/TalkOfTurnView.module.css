@@ -1,0 +1,52 @@
+/* What a turn said to the team, set like the steps of the turn: a label in
+   the column of the tool names, and the words beside it. */
+.talk {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.line {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+/* The width of the name of a tool in a step, so that the words line up. */
+.name {
+  flex: none;
+  width: 52px;
+}
+
+.body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.who {
+  color: var(--ink-faint);
+  font-size: var(--text-small);
+}
+
+.text {
+  color: var(--ink-soft);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.files {
+  overflow: hidden;
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: var(--text-small);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

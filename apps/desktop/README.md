@@ -119,6 +119,22 @@ The shell is where the work of an AI specialist meets the outside world
   member of the team), and `main.rs` then serves those tools on standard
   input and output without a window and without the database. What is asked
   or proposed arrives in the events of the turn, like every other step.
+- **Handoffs and messages.** A specialist hands the result of its task over
+  with `publish_handoff` and writes to a teammate with `send_message`
+  ([decision 0029](../../docs/decisions/0029-handoffs-and-messages-between-specialists.md)).
+  The runtime gives the bus the work folder (`--folder <path>`) and the
+  names of the teammates (`--teammate <name>`). `team_talk` in
+  `commands/teamwork.rs` answers with every handoff and message of a
+  project (`TeamTalkDto`: `HandoffDto`, `TeamMessageDto`). The interface
+  (`features/teamwork`) asks again whenever a conversation of the project
+  changes, and shows the latest handoff of a task in its panel (summary,
+  interface contract, files), what a turn handed over and sent, and the
+  messages that came with it, as steps of the turn, and the messages
+  between teammates, the latest first, in the Team place under the team.
+  The demo backend keeps them in `shared/api/demo/teamwork.ts`, starts with
+  sample handoffs and messages, delivers a waiting message with the
+  receiver's next turn, and its simulated specialist hands its result over
+  before it reports.
 - **What the agents spent.** `project_usage` answers with what every member,
   the Advisor and those who left have spent (`ProjectUsageDto`: the tokens
   by kind and in all, the turns that ended, the model of the latest turn,
@@ -354,6 +370,7 @@ src/
       characters/     The people of the office: pixel figures drawn in code, and portraits
     dashboard/        How a project is going: a summary in words, numbers, small charts
     work/             The work of AI specialists: starting it, following it, answering
+    teamwork/         What specialists hand each other: the handoff of a task, steps of a turn, messages between teammates
     inbox/            What waits for the manager in every project: questions to decide
     advisor/          Planning a project with the Advisor: its questions, its proposal
     areas/            The areas of a project: at the side, the open area, the dialog, the field of a task

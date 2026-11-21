@@ -48,6 +48,7 @@ import type {
   Task,
   TaskChange,
   TaskOnGitHub,
+  TeamTalk,
   ThemeName,
   View,
   ViewFilter,
@@ -378,6 +379,12 @@ export interface Backend {
    * approving and stopping are refused elsewhere (`runs_elsewhere`).
    */
   listConversations(projectId: Id): Promise<Conversation[]>;
+  /**
+   * Every handoff and every message the specialists of a project handed
+   * each other, the oldest first. They arrive while specialists work, so
+   * they are asked for again when a conversation changes.
+   */
+  teamTalk(projectId: Id): Promise<TeamTalk>;
   /**
    * What the specialists and the Advisor of a project have spent, in tokens
    * of every kind, and how full the context of each is. Worked out from the

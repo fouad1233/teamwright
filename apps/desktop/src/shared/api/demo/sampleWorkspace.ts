@@ -14,6 +14,7 @@ import type {
   SprintSummary,
   Status,
   Task,
+  TeamTalk,
 } from '../types';
 import type { DemoWorkspace } from './demoBackend';
 import { readyMadeNamed } from './readyMade';
@@ -507,7 +508,110 @@ export function sampleWorkspace(today: Date = new Date()): DemoWorkspace {
   // The sample project is cut into areas, so that they can be seen.
   const areas = Object.values(AREAS).map((area): Area => ({ ...area, projectId: project.id }));
 
-  return { projects: [project], tasks, members, sprints, views, areas };
+  return {
+    projects: [project],
+    tasks,
+    members,
+    sprints,
+    views,
+    areas,
+    teamTalk: sampleTeamTalk(today),
+  };
+}
+
+/**
+ * What the sample team has handed each other: the handoffs of the tasks
+ * that are done or in test, which the schematic builds on, and a few
+ * messages, one of which still waits for the firmware engineer.
+ */
+function sampleTeamTalk(today: Date): TeamTalk {
+  const hoursAgo = (hours: number) =>
+    new Date(today.getTime() - hours * 60 * 60 * 1000).toISOString();
+  const sample = (name: string) => `demo-sample-${name}`;
+  return {
+    handoffs: [
+      {
+        id: sample('handoff-microcontroller'),
+        taskId: taskId(2),
+        authorId: TEAM.hardware.id,
+        conversationId: sample('conversation-microcontroller'),
+        turnId: sample('turn-microcontroller'),
+        summary:
+          'The ESP32-C3-MINI-1 it is: Wi-Fi on the chip, enough pins, and a module that is ' +
+          'certified already, so the board needs no radio work of its own.',
+        contract:
+          '3.3 V supply, 350 mA at the peak of a Wi-Fi burst.\nI2C on GPIO 4 (SDA) and GPIO 5 ' +
+          '(SCL).\nSPI2 for the display: GPIO 6 (SCK), 7 (MOSI), 10 (CS).\nProgrammed over USB ' +
+          'on GPIO 18 and 19.',
+        files: ['hardware/microcontroller.md', 'hardware/datasheets/esp32-c3-mini-1.pdf'],
+        publishedAt: hoursAgo(50),
+      },
+      {
+        id: sample('handoff-sensors'),
+        taskId: taskId(3),
+        authorId: TEAM.hardware.id,
+        conversationId: sample('conversation-sensors'),
+        turnId: sample('turn-sensors'),
+        summary:
+          'Sensors: the SCD41 for CO2 and the BME680 for temperature, humidity and gas. Display: ' +
+          'a 1.54 inch e-paper panel, which keeps its picture without power.',
+        contract: 'SCD41 at I2C address 0x62, BME680 at 0x76. Both on the one I2C bus.',
+        files: ['hardware/sensors.md'],
+        publishedAt: hoursAgo(26),
+      },
+      {
+        id: sample('handoff-firmware-project'),
+        taskId: taskId(19),
+        authorId: TEAM.firmware.id,
+        conversationId: sample('conversation-firmware-project'),
+        turnId: sample('turn-firmware-project'),
+        summary:
+          'The firmware project builds with ESP-IDF 5.3 and flashes over USB. Each driver gets a ' +
+          'folder of its own under components.',
+        contract: '',
+        files: ['firmware/README.md', 'firmware/CMakeLists.txt', 'firmware/main/main.c'],
+        publishedAt: hoursAgo(20),
+      },
+    ],
+    messages: [
+      {
+        id: sample('message-pull-ups'),
+        fromId: TEAM.firmware.id,
+        toId: TEAM.hardware.id,
+        conversationId: sample('conversation-firmware-project'),
+        turnId: sample('turn-firmware-project'),
+        kind: 'question',
+        text: 'Are there pull-ups on the I2C lines on the board, or should the firmware turn on the internal ones?',
+        sentAt: hoursAgo(19),
+        deliveredTurnId: sample('turn-sensors-again'),
+        deliveredAt: hoursAgo(6),
+      },
+      {
+        id: sample('message-pull-ups-answer'),
+        fromId: TEAM.hardware.id,
+        toId: TEAM.firmware.id,
+        conversationId: sample('conversation-sensors'),
+        turnId: sample('turn-sensors-again'),
+        kind: 'note',
+        text: 'The board has 4.7 kΩ pull-ups on SDA and SCL. Leave the internal ones off.',
+        sentAt: hoursAgo(5),
+        deliveredTurnId: null,
+        deliveredAt: null,
+      },
+      {
+        id: sample('message-connector'),
+        fromId: TEAM.mechanical.id,
+        toId: TEAM.hardware.id,
+        conversationId: sample('conversation-enclosure'),
+        turnId: sample('turn-enclosure'),
+        kind: 'question',
+        text: 'Can the display connector move 3 mm to the left? It meets a screw boss of the enclosure.',
+        sentAt: hoursAgo(2),
+        deliveredTurnId: null,
+        deliveredAt: null,
+      },
+    ],
+  };
 }
 
 /** The area of a sample task: its own, or that of the task it is a part of. */
