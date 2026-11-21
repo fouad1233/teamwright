@@ -107,3 +107,22 @@ What this version leaves out, on purpose:
 - Features or epics above the tasks. The subtask is the only level.
 - Following changes of scope in the burndown, as above.
 - Velocity as a forecast of how much the next sprint can take.
+
+## Note of 21 November 2026: scope, moved-on tasks and the pace
+
+Three things this record left out are now built, without changing what
+it decided ([decision 0034](0034-what-happened-is-read-from-the-log.md)
+says how and why):
+
+- The burndown follows the tasks that join or leave a running sprint. What
+  the sprint held at the end of each day is read off the versions of its
+  tasks in the log; on a day tasks joined or left, the line steps up or
+  down and the day is said in words. The tasks it was started with count
+  from its first day.
+- Which tasks moved on when a sprint was completed is read from the same
+  log, and a completed sprint lists them with where each went.
+- Velocity is told as a forecast: a range from the completed sprints, too
+  early with fewer than three, compared with each planned sprint and
+  turned into a range of sprints for the work not finished.
+
+The history of a task also tells its sprint and its points now.

@@ -49,6 +49,7 @@ was considered.
 | [0031](0031-instructions-and-ready-made-specialists.md) | Instructions of a specialist's own, after Teamwright's and never instead, and twelve ready-made specialists in code | Accepted |
 | [0032](0032-a-public-demo-in-the-browser.md) | Publish the interface on the demo backend as a page of the website | Accepted |
 | [0033](0033-work-in-progress-limits-and-templates.md) | Limits on the work in a status as a signal, and templates a project starts from | Accepted |
+| [0034](0034-what-happened-is-read-from-the-log.md) | Read what happened from the log, and tell the pace of the team as a range | Accepted |
 | [0036](0036-project-memory.md) | Project memory: decisions, facts and contracts that are replaced, never changed; a plain search; the bus reads memory from a file of the turn | Accepted |
 
 ## Template
