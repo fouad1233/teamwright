@@ -5,6 +5,8 @@ import type {
   Assignee,
   CalendarDate,
   ChecklistItem,
+  CustomField,
+  FieldValue,
   Id,
   Member,
   MemberProfile,
@@ -192,6 +194,88 @@ const SAMPLE_TAGS: Record<number, TagName[]> = {
   4: ['power', 'emc', 'lab', 'cost'],
   6: ['emc', 'power'],
 };
+
+/**
+ * The custom fields of the sample project: what a small hardware team
+ * keeps on its parts and orders, one of every kind.
+ */
+const FIELDS: Omit<CustomField, 'projectId'>[] = [
+  {
+    id: 'demo-field-supplier',
+    name: 'Supplier',
+    kind: 'choice',
+    unit: null,
+    position: 0,
+    choices: [
+      { id: 'demo-choice-mouser', name: 'Mouser', color: 'blue' },
+      { id: 'demo-choice-digikey', name: 'Digi-Key', color: 'red' },
+      { id: 'demo-choice-lcsc', name: 'LCSC', color: 'teal' },
+      { id: 'demo-choice-own', name: 'Made in the workshop', color: 'gray' },
+    ],
+  },
+  { id: 'demo-field-cost', name: 'Unit cost', kind: 'number', unit: '€', position: 1, choices: [] },
+  {
+    id: 'demo-field-ordered',
+    name: 'Ordered',
+    kind: 'yes_no',
+    unit: null,
+    position: 2,
+    choices: [],
+  },
+  { id: 'demo-field-arrives', name: 'Arrives', kind: 'date', unit: null, position: 3, choices: [] },
+  {
+    id: 'demo-field-part',
+    name: 'Part number',
+    kind: 'text',
+    unit: null,
+    position: 4,
+    choices: [],
+  },
+  {
+    id: 'demo-field-datasheet',
+    name: 'Datasheet',
+    kind: 'link',
+    unit: null,
+    position: 5,
+    choices: [],
+  },
+];
+
+/** The values of the sample tasks, by the number of the task. Dates are days from today. */
+function sampleFieldValues(today: Date): Record<number, Record<Id, FieldValue>> {
+  const inDays = (days: number): FieldValue => ({
+    kind: 'date',
+    date: dateInDays(today, days) ?? '',
+  });
+  return {
+    3: {
+      'demo-field-supplier': { kind: 'choice', choiceId: 'demo-choice-mouser' },
+      'demo-field-cost': { kind: 'number', number: 18.4 },
+      'demo-field-ordered': { kind: 'yes_no', yes: true },
+      'demo-field-part': { kind: 'text', text: 'SEN55-SDN-T' },
+      'demo-field-datasheet': {
+        kind: 'link',
+        address: 'https://sensirion.com/products/catalog/SEN55',
+      },
+    },
+    2: {
+      'demo-field-supplier': { kind: 'choice', choiceId: 'demo-choice-digikey' },
+      'demo-field-cost': { kind: 'number', number: 3.95 },
+      'demo-field-ordered': { kind: 'yes_no', yes: true },
+      'demo-field-part': { kind: 'text', text: 'ESP32-S3-WROOM-1-N8' },
+    },
+    10: {
+      'demo-field-supplier': { kind: 'choice', choiceId: 'demo-choice-own' },
+      'demo-field-ordered': { kind: 'yes_no', yes: false },
+    },
+    11: {
+      'demo-field-supplier': { kind: 'choice', choiceId: 'demo-choice-lcsc' },
+      'demo-field-cost': { kind: 'number', number: 42 },
+      'demo-field-ordered': { kind: 'yes_no', yes: false },
+      'demo-field-arrives': inDays(9),
+    },
+  };
+}
 
 /** The checklists of the sample tasks, by the number of the task: each item and whether it is done. */
 const SAMPLE_CHECKLISTS: Record<number, [string, boolean][]> = {
@@ -660,6 +744,7 @@ export function sampleWorkspace(today: Date = new Date()): DemoWorkspace {
     updatedAt: createdAt,
   }));
 
+  const fieldValues = sampleFieldValues(today);
   const tasks = SAMPLE_TASKS.map((sample): Task => {
     const status = STATUSES[sample.status];
     const isDone = status.category === 'done';
@@ -682,6 +767,7 @@ export function sampleWorkspace(today: Date = new Date()): DemoWorkspace {
       dueOn: dateInDays(today, sample.dueInDays),
       rank: rankWithinStatus(sample),
       tagIds: (SAMPLE_TAGS[sample.number] ?? []).map((tag) => TAGS[tag].id),
+      fieldValues: fieldValues[sample.number] ?? {},
       checklist: (SAMPLE_CHECKLISTS[sample.number] ?? []).map(
         ([text, done], index): ChecklistItem => ({
           id: `demo-item-${sample.number.toString()}-${(index + 1).toString()}`,
@@ -739,6 +825,7 @@ export function sampleWorkspace(today: Date = new Date()): DemoWorkspace {
     views,
     areas,
     tags,
+    fields: FIELDS.map((field): CustomField => ({ ...field, projectId: project.id })),
     teamTalk: sampleTeamTalk(today),
     memory: { [project.id]: sampleMemory(today) },
     versions,

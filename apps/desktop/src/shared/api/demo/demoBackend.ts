@@ -17,6 +17,10 @@ import type {
   ConversationsOfFolder,
   Coordinator,
   CoordinatorChanged,
+  CustomField,
+  FieldChoice,
+  FieldKind,
+  FieldValue,
   DataChanged,
   DecisionRequest,
   Deliveries,
@@ -147,6 +151,19 @@ import {
   tidyTagName,
 } from './tags';
 import { actualOf } from './actualDates';
+import {
+  MOST_CHOICES,
+  MOST_FIELDS_IN_A_PROJECT,
+  checkedValue,
+  inOrder,
+  refuseChoiceNameInUse,
+  refuseFieldNameInUse,
+  requireChoices,
+  tidyChoiceName,
+  tidyFieldName,
+  tidyUnit,
+  withoutValue,
+} from './fields';
 import { historyOf, pretendedPastOf, projectHistoryOf } from './taskHistory';
 import { contextAfter, usageOfConversations } from './usage';
 import {
@@ -243,6 +260,8 @@ export interface DemoWorkspace {
    * between teammates. Left out, there is nothing.
    */
   teamTalk?: TeamTalk;
+  /** The custom fields of the projects. Left out, there are none. */
+  fields?: CustomField[];
   /** The tags of the projects. Left out, there are none. */
   tags?: Tag[];
   /**
@@ -346,6 +365,8 @@ export class DemoBackend implements Backend {
   private readonly tags = new Map<Id, Tag[]>();
   /** The libraries of skills and connectors, and the kits of the specialists. */
   private readonly library: PretendedLibrary;
+  /** The custom fields of each project. */
+  private readonly fields = new Map<Id, CustomField[]>();
   private sampleFoldersHandedOut = 0;
   private skillFoldersHandedOut = 0;
   /**
@@ -492,6 +513,9 @@ export class DemoBackend implements Backend {
         this.teamOf(firstProject.id).find((member) => member.kind === 'agent'),
       );
     }
+    for (const field of workspace?.fields ?? []) {
+      this.fieldsOf(field.projectId).push(structuredClone(field));
+    }
     // A project that was kept before it had areas gets the area "General",
     // and a task that is in none of the areas of its project goes into the
     // first one. The tasks keep their versions: the area is new to them.
@@ -629,6 +653,7 @@ export class DemoBackend implements Backend {
       this.tags.delete(project.id);
       this.memory.forgetProject(project.id);
       this.earlier.forgetProject(project.id);
+      this.fields.delete(project.id);
       for (const conversation of this.conversationsOf(project.id)) {
         this.forget(conversation);
       }
@@ -1017,6 +1042,7 @@ export class DemoBackend implements Backend {
         blockedBy: [],
         tagIds: [],
         checklist: [],
+        fieldValues: {},
         estimateMinutes: newTask.estimateMinutes ?? null,
         // A subtask goes where the task it is a part of goes.
         sprintId: parent?.sprintId ?? null,
@@ -1762,6 +1788,7 @@ export class DemoBackend implements Backend {
           blockedBy: [],
           tagIds: [],
           checklist: [],
+          fieldValues: {},
           estimateMinutes: proposed.estimateMinutes,
           sprintId: null,
           points: null,
@@ -2472,6 +2499,7 @@ export class DemoBackend implements Backend {
         blockedBy: [],
         tagIds: [],
         checklist: [],
+        fieldValues: {},
         estimateMinutes: null,
         sprintId: null,
         points: null,
@@ -3226,6 +3254,25 @@ export class DemoBackend implements Backend {
           throw new BackendError('different_projects', 'a tag can only be used in its own project');
         }
       }
+      const byField = filter.fieldFilter;
+      if (byField) {
+        const field = this.requireField(byField.fieldId);
+        if (field.projectId !== view.projectId) {
+          throw new BackendError(
+            'different_projects',
+            'a field can only be used in its own project',
+          );
+        }
+        if (byField.kind !== field.kind) {
+          throw new BackendError(
+            'rule_broken',
+            'a view can be filtered only by a field of choices or of yes or no',
+          );
+        }
+        if (byField.kind === 'choice') {
+          this.requireChoice(field, byField.choiceId);
+        }
+      }
       view.filter = tidyFilter(filter);
       return view;
     });
@@ -3446,6 +3493,195 @@ export class DemoBackend implements Backend {
     });
   }
 
+  listFields(projectId: Id): Promise<CustomField[]> {
+    return this.answer(() => inOrder(this.fieldsOf(this.requireProject(projectId).id)));
+  }
+
+  addField(
+    projectId: Id,
+    name: string,
+    kind: FieldKind,
+    unit?: string | null,
+  ): Promise<CustomField> {
+    return this.answer(() => {
+      const fields = this.fieldsOf(this.requireProject(projectId).id);
+      const tidy = tidyFieldName(name);
+      const tidyUnitText = tidyUnit(unit);
+      refuseFieldNameInUse(fields, tidy);
+      if (fields.length >= MOST_FIELDS_IN_A_PROJECT) {
+        throw new BackendError(
+          'rule_broken',
+          `a project has at most ${MOST_FIELDS_IN_A_PROJECT.toString()} fields`,
+        );
+      }
+      if (tidyUnitText !== null && kind !== 'number') {
+        throw new BackendError('rule_broken', 'only a field of numbers has a unit');
+      }
+      const field: CustomField = {
+        id: this.environment.newId(),
+        projectId,
+        name: tidy,
+        kind,
+        unit: tidyUnitText,
+        position: Math.max(-1, ...fields.map((other) => other.position)) + 1,
+        choices: [],
+      };
+      fields.push(field);
+      return field;
+    });
+  }
+
+  renameField(fieldId: Id, name: string): Promise<CustomField> {
+    return this.answer(() => {
+      const field = this.requireField(fieldId);
+      const tidy = tidyFieldName(name);
+      refuseFieldNameInUse(
+        this.fieldsOf(field.projectId).filter((other) => other.id !== field.id),
+        tidy,
+      );
+      field.name = tidy;
+      return field;
+    });
+  }
+
+  setFieldUnit(fieldId: Id, unit: string | null): Promise<CustomField> {
+    return this.answer(() => {
+      const field = this.requireField(fieldId);
+      const tidy = tidyUnit(unit);
+      if (tidy !== null && field.kind !== 'number') {
+        throw new BackendError('rule_broken', 'only a field of numbers has a unit');
+      }
+      field.unit = tidy;
+      return field;
+    });
+  }
+
+  moveField(fieldId: Id, index: number): Promise<CustomField[]> {
+    return this.answer(() => {
+      const field = this.requireField(fieldId);
+      const others = inOrder(this.fieldsOf(field.projectId)).filter(
+        (other) => other.id !== field.id,
+      );
+      others.splice(Math.min(Math.max(index, 0), others.length), 0, field);
+      others.forEach((other, position) => {
+        other.position = position;
+      });
+      return others;
+    });
+  }
+
+  removeField(fieldId: Id): Promise<void> {
+    return this.answer(() => {
+      const field = this.requireField(fieldId);
+      for (const task of this.tasksOfProject(field.projectId)) {
+        if (task.fieldValues[field.id] !== undefined) {
+          this.change(task.id, (changed) => {
+            changed.fieldValues = withoutValue(changed.fieldValues, field.id);
+          });
+        }
+      }
+      for (const view of this.viewsOf(field.projectId)) {
+        if (view.filter.fieldFilter?.fieldId === field.id) {
+          view.filter = tidyFilter({ ...view.filter, fieldFilter: null });
+        }
+      }
+      const fields = this.fieldsOf(field.projectId);
+      fields.splice(fields.indexOf(field), 1);
+    });
+  }
+
+  addFieldChoice(fieldId: Id, name: string, color?: Color): Promise<CustomField> {
+    return this.answer(() => {
+      const field = this.requireField(fieldId);
+      requireChoices(field);
+      const tidy = tidyChoiceName(name);
+      refuseChoiceNameInUse(field, tidy);
+      if (field.choices.length >= MOST_CHOICES) {
+        throw new BackendError(
+          'rule_broken',
+          `a field has at most ${MOST_CHOICES.toString()} choices`,
+        );
+      }
+      field.choices.push({
+        id: this.environment.newId(),
+        name: tidy,
+        color: color ?? tagColorInTurn(field.choices.length),
+      });
+      return field;
+    });
+  }
+
+  renameFieldChoice(fieldId: Id, choiceId: Id, name: string): Promise<CustomField> {
+    return this.answer(() => {
+      const field = this.requireField(fieldId);
+      const choice = this.requireChoice(field, choiceId);
+      const tidy = tidyChoiceName(name);
+      refuseChoiceNameInUse(field, tidy, choiceId);
+      choice.name = tidy;
+      return field;
+    });
+  }
+
+  recolorFieldChoice(fieldId: Id, choiceId: Id, color: Color): Promise<CustomField> {
+    return this.answer(() => {
+      const field = this.requireField(fieldId);
+      this.requireChoice(field, choiceId).color = color;
+      return field;
+    });
+  }
+
+  removeFieldChoice(fieldId: Id, choiceId: Id): Promise<CustomField> {
+    return this.answer(() => {
+      const field = this.requireField(fieldId);
+      this.requireChoice(field, choiceId);
+      for (const task of this.tasksOfProject(field.projectId)) {
+        const held = task.fieldValues[field.id];
+        if (held?.kind === 'choice' && held.choiceId === choiceId) {
+          this.change(task.id, (changed) => {
+            changed.fieldValues = withoutValue(changed.fieldValues, field.id);
+          });
+        }
+      }
+      for (const view of this.viewsOf(field.projectId)) {
+        const byField = view.filter.fieldFilter;
+        if (byField?.kind === 'choice' && byField.choiceId === choiceId) {
+          view.filter = tidyFilter({ ...view.filter, fieldFilter: null });
+        }
+      }
+      field.choices = field.choices.filter((choice) => choice.id !== choiceId);
+      return field;
+    });
+  }
+
+  setFieldValue(taskId: Id, fieldId: Id, value: FieldValue): Promise<Task> {
+    return this.answer(() => {
+      const task = this.requireTask(taskId);
+      const field = this.requireField(fieldId);
+      if (field.projectId !== task.projectId) {
+        throw new BackendError('different_projects', 'a field can only be used in its own project');
+      }
+      const checked = checkedValue(field, value);
+      if (JSON.stringify(task.fieldValues[field.id]) === JSON.stringify(checked)) {
+        return task;
+      }
+      return this.change(taskId, (changed) => {
+        changed.fieldValues = { ...changed.fieldValues, [field.id]: checked };
+      });
+    });
+  }
+
+  clearFieldValue(taskId: Id, fieldId: Id): Promise<Task> {
+    return this.answer(() => {
+      const task = this.requireTask(taskId);
+      if (task.fieldValues[fieldId] === undefined) {
+        return task;
+      }
+      return this.change(taskId, (changed) => {
+        changed.fieldValues = withoutValue(changed.fieldValues, fieldId);
+      });
+    });
+  }
+
   removeChecklistItem(taskId: Id, itemId: Id): Promise<Task> {
     return this.answer(() => {
       requireItem(this.requireTask(taskId).checklist, itemId);
@@ -3579,6 +3815,34 @@ export class DemoBackend implements Backend {
       this.tags.set(projectId, tags);
     }
     return tags;
+  }
+
+  private fieldsOf(projectId: Id): CustomField[] {
+    let fields = this.fields.get(projectId);
+    if (!fields) {
+      fields = [];
+      this.fields.set(projectId, fields);
+    }
+    return fields;
+  }
+
+  private requireField(fieldId: Id): CustomField {
+    for (const fields of this.fields.values()) {
+      const field = fields.find((candidate) => candidate.id === fieldId);
+      if (field) {
+        return field;
+      }
+    }
+    throw new BackendError('not_found', `there is no field with the identifier ${fieldId}`);
+  }
+
+  private requireChoice(field: CustomField, choiceId: Id): FieldChoice {
+    requireChoices(field);
+    const choice = field.choices.find((candidate) => candidate.id === choiceId);
+    if (!choice) {
+      throw new BackendError('not_found', 'the field has no such choice');
+    }
+    return choice;
   }
 
   private requireTag(tagId: Id): Tag {

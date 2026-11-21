@@ -1,5 +1,6 @@
 import type {
   Assignee,
+  CustomField,
   Id,
   Member,
   Project,
@@ -10,6 +11,7 @@ import type {
 } from '@/shared/api/types';
 import { formatDate, formatEstimate, taskReference } from '@/shared/lib/format';
 
+import { valueInWords } from '../fields/fieldModel';
 import { priorityLabel } from './TaskBadges';
 
 /** What is needed to put a change into words: the names behind the identifiers. */
@@ -23,6 +25,8 @@ export interface HistoryNames {
   tags?: readonly Tag[];
   /** The sprints of the project, to name the sprints a task went into. Left out while they load. */
   sprints?: readonly Sprint[];
+  /** The custom fields of the project, to name a field and its value. */
+  fields?: readonly CustomField[];
 }
 
 /**
@@ -146,6 +150,21 @@ function wordingOf(change: TaskChange, names: HistoryNames): Wording {
       return { joinedBy: 'had its', words: `checklist item "${change.item}" ticked` };
     case 'unticked':
       return { joinedBy: 'had its', words: `checklist item "${change.item}" unticked` };
+    case 'field_value_changed': {
+      const field = names.fields?.find((other) => other.id === change.fieldId);
+      const name = field ? `"${field.name}"` : 'a field that was removed';
+      const value = (shown: NonNullable<typeof change.to>) => `"${valueInWords(field, shown)}"`;
+      if (change.to === null) {
+        return { joinedBy: 'had its', words: `field ${name} cleared` };
+      }
+      return {
+        joinedBy: 'had its',
+        words:
+          change.from === null
+            ? `field ${name} set to ${value(change.to)}`
+            : `field ${name} changed from ${value(change.from)} to ${value(change.to)}`,
+      };
+    }
   }
 }
 

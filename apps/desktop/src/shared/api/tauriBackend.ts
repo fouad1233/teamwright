@@ -17,6 +17,9 @@ import type {
   ConversationsOfFolder,
   Coordinator,
   CoordinatorChanged,
+  CustomField,
+  FieldKind,
+  FieldValue,
   FolderListing,
   DataChanged,
   Deliveries,
@@ -356,6 +359,59 @@ export class TauriBackend implements Backend {
 
   moveChecklistItem(taskId: Id, itemId: Id, index: number): Promise<Task> {
     return call('move_checklist_item', { taskId, itemId, index });
+  }
+
+  listFields(projectId: Id): Promise<CustomField[]> {
+    return call('list_fields', { projectId });
+  }
+
+  addField(
+    projectId: Id,
+    name: string,
+    kind: FieldKind,
+    unit?: string | null,
+  ): Promise<CustomField> {
+    return call('add_field', { projectId, name, kind, unit: unit ?? null });
+  }
+
+  renameField(fieldId: Id, name: string): Promise<CustomField> {
+    return call('rename_field', { fieldId, name });
+  }
+
+  setFieldUnit(fieldId: Id, unit: string | null): Promise<CustomField> {
+    return call('set_field_unit', { fieldId, unit });
+  }
+
+  moveField(fieldId: Id, index: number): Promise<CustomField[]> {
+    return call('move_field', { fieldId, index });
+  }
+
+  removeField(fieldId: Id): Promise<void> {
+    return call('remove_field', { fieldId });
+  }
+
+  addFieldChoice(fieldId: Id, name: string, color?: Color): Promise<CustomField> {
+    return call('add_field_choice', { fieldId, name, color: color ?? null });
+  }
+
+  renameFieldChoice(fieldId: Id, choiceId: Id, name: string): Promise<CustomField> {
+    return call('rename_field_choice', { fieldId, choiceId, name });
+  }
+
+  recolorFieldChoice(fieldId: Id, choiceId: Id, color: Color): Promise<CustomField> {
+    return call('recolor_field_choice', { fieldId, choiceId, color });
+  }
+
+  removeFieldChoice(fieldId: Id, choiceId: Id): Promise<CustomField> {
+    return call('remove_field_choice', { fieldId, choiceId });
+  }
+
+  setFieldValue(taskId: Id, fieldId: Id, value: FieldValue): Promise<Task> {
+    return call('set_field_value', { taskId, fieldId, value });
+  }
+
+  clearFieldValue(taskId: Id, fieldId: Id): Promise<Task> {
+    return call('clear_field_value', { taskId, fieldId });
   }
 
   removeChecklistItem(taskId: Id, itemId: Id): Promise<Task> {

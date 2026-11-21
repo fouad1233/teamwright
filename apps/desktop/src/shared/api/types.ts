@@ -239,6 +239,54 @@ export interface Area {
  * A short colored word the manager puts on tasks of a project, such as "EMC"
  * or "Waiting for parts". Tags belong to one project.
  */
+/** What a custom field holds. It is chosen when the field is made and never changes. */
+export type FieldKind = 'text' | 'number' | 'date' | 'yes_no' | 'choice' | 'link';
+
+/** One choice of a choice field: a name and a color, like a tag. */
+export interface FieldChoice {
+  id: Id;
+  /** Unique within the field, whatever the capitals. At most 30 characters. */
+  name: string;
+  color: Color;
+}
+
+/**
+ * A property of the tasks of a project that the manager defines, such as
+ * "Supplier" or "Unit cost". A task holds at most one value for each.
+ */
+export interface CustomField {
+  id: Id;
+  projectId: Id;
+  /** Unique within the project, whatever the capitals. At most 40 characters. */
+  name: string;
+  kind: FieldKind;
+  /** The unit shown after the numbers of a number field, at most 8 characters. */
+  unit: string | null;
+  /** The place among the fields of the project. Lower comes first. */
+  position: number;
+  /** The choices of a choice field, in their order; empty for the other kinds. */
+  choices: FieldChoice[];
+}
+
+/** The value a task holds for a custom field, of the kind of the field. */
+export type FieldValue =
+  /** One line of at most 200 characters. */
+  | { kind: 'text'; text: string }
+  /** An ordinary number, at most a thousand billion either side of zero. */
+  | { kind: 'number'; number: number }
+  | { kind: 'date'; date: CalendarDate }
+  | { kind: 'yes_no'; yes: boolean }
+  | { kind: 'choice'; choiceId: Id }
+  /** A web address that starts with https:// and names a host. */
+  | { kind: 'link'; address: string };
+
+/**
+ * The value of a custom field the tasks a view shows hold: one choice of a
+ * choice field, or yes or no. A task that holds nothing counts as no.
+ */
+export type FieldFilter =
+  { kind: 'choice'; fieldId: Id; choiceId: Id } | { kind: 'yes_no'; fieldId: Id; yes: boolean };
+
 export interface Tag {
   id: Id;
   projectId: Id;
@@ -296,6 +344,8 @@ export interface Task {
   tagIds: Id[];
   /** The items of its checklist, in their order. Empty when it has none. */
   checklist: ChecklistItem[];
+  /** The values it holds for the custom fields of its project, by the identifier of the field. */
+  fieldValues: Record<Id, FieldValue>;
   createdAt: Moment;
   updatedAt: Moment;
   completedAt: Moment | null;
@@ -532,6 +582,11 @@ export interface ViewFilter {
    * Nothing, or left out, shows the tasks with any tag.
    */
   tagId?: Id | null;
+  /**
+   * The value of a custom field the tasks hold, if only those are shown.
+   * Nothing, or left out, shows the tasks whatever they hold.
+   */
+  fieldFilter?: FieldFilter | null;
 }
 
 /**
@@ -1098,6 +1153,8 @@ export type TaskChange = {
   /** An item of the checklist was ticked, or is not done any more. */
   | { kind: 'ticked'; item: string }
   | { kind: 'unticked'; item: string }
+  /** The value of a custom field was set (from nothing), changed, or cleared (to nothing). The field may have been removed since. */
+  | { kind: 'field_value_changed'; fieldId: Id; from: FieldValue | null; to: FieldValue | null }
 );
 
 /** A task with a tag put on it by name, and that tag, which may be new. */

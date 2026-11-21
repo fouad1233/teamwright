@@ -1,5 +1,5 @@
 import { BackendError } from '../backend';
-import type { Grouping, Id, View, ViewFilter, ViewKind } from '../types';
+import type { FieldFilter, Grouping, Id, View, ViewFilter, ViewKind } from '../types';
 
 /**
  * The rules about the views of a project that concern the views alone, for
@@ -219,5 +219,13 @@ export function tidyFilter(filter: ViewFilter): ViewFilter {
         : { kind: assignee.kind },
     hidesFinished: filter.hidesFinished,
     ...(filter.tagId ? { tagId: filter.tagId } : {}),
+    ...(filter.fieldFilter ? { fieldFilter: tidyFieldFilter(filter.fieldFilter) } : {}),
   };
+}
+
+/** A filter by a custom field with only the keys of its kind. */
+function tidyFieldFilter(filter: FieldFilter): FieldFilter {
+  return filter.kind === 'choice'
+    ? { kind: 'choice', fieldId: filter.fieldId, choiceId: filter.choiceId }
+    : { kind: 'yes_no', fieldId: filter.fieldId, yes: filter.yes };
 }

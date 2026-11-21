@@ -52,6 +52,7 @@ function task(overrides: Partial<Task> & Pick<Task, 'id'>): Task {
     blockedBy: [],
     tagIds: [],
     checklist: [],
+    fieldValues: {},
     estimateMinutes: null,
     sprintId: null,
     points: null,

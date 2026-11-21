@@ -281,6 +281,7 @@ describe('changesBetween and historyOf', () => {
     blockedBy: ['a'],
     tagIds: [],
     checklist: [],
+    fieldValues: {},
     estimateMinutes: null,
     sprintId: null,
     points: null,

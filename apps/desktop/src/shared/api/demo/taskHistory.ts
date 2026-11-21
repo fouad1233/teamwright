@@ -83,6 +83,18 @@ export function changesBetween(before: Task, after: Task): TaskChange[] {
       changes.push({ at, kind: item.done ? 'ticked' : 'unticked', item: item.text });
     }
   }
+  // The values of the custom fields, in the order of the identifiers of
+  // the fields, as the domain tells them.
+  const beforeValues = before.fieldValues;
+  const afterValues = after.fieldValues;
+  const fieldIds = [...new Set([...Object.keys(beforeValues), ...Object.keys(afterValues)])].sort();
+  for (const fieldId of fieldIds) {
+    const from = beforeValues[fieldId] ?? null;
+    const to = afterValues[fieldId] ?? null;
+    if (JSON.stringify(from) !== JSON.stringify(to)) {
+      changes.push({ at, kind: 'field_value_changed', fieldId, from, to });
+    }
+  }
   return changes;
 }
 

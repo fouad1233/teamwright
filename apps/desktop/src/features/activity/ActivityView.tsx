@@ -18,6 +18,7 @@ import { useOpenArea } from '../areas/AreaContext';
 import switchStyles from '../sprints/SprintBoard.module.css';
 import { useSprints } from '../sprints/sprintQueries';
 import { changeAfterTaskName, changeInWords, type HistoryNames } from '../tasks/taskHistoryModel';
+import { useFields } from '../fields/fieldQueries';
 import { useTags } from '../tags/tagQueries';
 import { useTeamMembers } from '../team/TeamContext';
 import type { KindProps } from '../views/viewKinds';
@@ -56,6 +57,7 @@ export function ActivityView({ project, tasks, everyTask }: KindProps) {
   const navigation = useNavigation();
   const members = useTeamMembers();
   const tags = useTags(project.id).data;
+  const fields = useFields(project.id).data;
   const openArea = useOpenArea();
   const log = useActivityLog(project.id);
   const [narrowing, setNarrowing] = useState<Narrowing>('everything');
@@ -72,8 +74,8 @@ export function ActivityView({ project, tasks, everyTask }: KindProps) {
 
   const sprints = useSprints(project.id);
   const names = useMemo<HistoryNames>(
-    () => ({ project, tasks: everyTask, members, tags, sprints: sprints.data }),
-    [project, everyTask, members, tags, sprints.data],
+    () => ({ project, tasks: everyTask, members, tags, sprints: sprints.data, fields }),
+    [project, everyTask, members, tags, sprints.data, fields],
   );
   // While one area is open, the log tells only what happened to its tasks.
   const taskIds = useMemo(

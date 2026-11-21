@@ -72,6 +72,7 @@ function task(number: number, assignee: Assignee | null): Task {
     blockedBy: [],
     tagIds: [],
     checklist: [],
+    fieldValues: {},
     estimateMinutes: null,
     sprintId: null,
     points: null,

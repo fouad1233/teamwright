@@ -36,6 +36,7 @@ function task(id: string, more: Partial<Task> = {}): Task {
     blockedBy: [],
     tagIds: [],
     checklist: [],
+    fieldValues: {},
     estimateMinutes: null,
     sprintId: null,
     points: null,

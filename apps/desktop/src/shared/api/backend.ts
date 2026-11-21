@@ -12,6 +12,9 @@ import type {
   ConversationsOfFolder,
   Coordinator,
   CoordinatorChanged,
+  CustomField,
+  FieldKind,
+  FieldValue,
   DataChanged,
   Deliveries,
   Delivery,
@@ -474,6 +477,54 @@ export interface Backend {
   moveChecklistItem(taskId: Id, itemId: Id, index: number): Promise<Task>;
   /** Removes an item from the checklist. */
   removeChecklistItem(taskId: Id, itemId: Id): Promise<Task>;
+
+  /** Lists the custom fields of a project in their order (`not_found` for no such project). */
+  listFields(projectId: Id): Promise<CustomField[]>;
+  /**
+   * Adds a field at the end of the fields of a project. Its name is trimmed
+   * and put on one line, not empty and at most 40 characters, and no other
+   * field of the project has it, whatever the capitals (`field_name_taken`).
+   * A project has at most 30 fields, and only a number field has a unit, of
+   * at most 8 characters (`rule_broken`). The kind never changes.
+   */
+  addField(
+    projectId: Id,
+    name: string,
+    kind: FieldKind,
+    unit?: string | null,
+  ): Promise<CustomField>;
+  /** Renames a field, by the same rules. */
+  renameField(fieldId: Id, name: string): Promise<CustomField>;
+  /** Gives a number field a unit, or takes it away with nothing or an empty text. */
+  setFieldUnit(fieldId: Id, unit: string | null): Promise<CustomField>;
+  /**
+   * Moves a field to a place among the fields of its project, and answers
+   * with the fields in their new order. Index 0 is the first place.
+   */
+  moveField(fieldId: Id, index: number): Promise<CustomField[]>;
+  /**
+   * Removes a field. Its values are cleared from the tasks first, which
+   * their history says, and a view filtered by it shows every task again.
+   */
+  removeField(fieldId: Id): Promise<void>;
+  /**
+   * Adds a choice to a choice field (`rule_broken` for another kind), with a
+   * color or the next one in turn. Its name follows the rules of a tag name,
+   * unique within the field (`choice_name_taken`); a field has at most 50.
+   */
+  addFieldChoice(fieldId: Id, name: string, color?: Color): Promise<CustomField>;
+  renameFieldChoice(fieldId: Id, choiceId: Id, name: string): Promise<CustomField>;
+  recolorFieldChoice(fieldId: Id, choiceId: Id, color: Color): Promise<CustomField>;
+  /** Removes a choice; the tasks that held it are cleared, and filters by it forgotten. */
+  removeFieldChoice(fieldId: Id, choiceId: Id): Promise<CustomField>;
+  /**
+   * Gives a task a value for a field of its project (`different_projects`
+   * otherwise), and answers with the task. The value is of the kind of the
+   * field and a choice one of its choices (`rule_broken`, `not_found`).
+   */
+  setFieldValue(taskId: Id, fieldId: Id, value: FieldValue): Promise<Task>;
+  /** Clears the value of a field from a task, and answers with the task. */
+  clearFieldValue(taskId: Id, fieldId: Id): Promise<Task>;
 
   /** Lists the team of a project. The member who joined first comes first. */
   listMembers(projectId: Id): Promise<Member[]>;

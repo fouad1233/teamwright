@@ -1,5 +1,7 @@
 import type {
   Assignee,
+  CustomField,
+  FieldFilter,
   Id,
   Member,
   Status,
@@ -9,6 +11,8 @@ import type {
   ViewFilter,
   ViewKind,
 } from '@/shared/api/types';
+
+import { holdsFiltered } from '../fields/fieldModel';
 
 /**
  * What the row of views works out without drawing anything: which tasks a
@@ -51,7 +55,12 @@ export function kindsToOffer(kinds: readonly ViewKind[], views: readonly View[])
 
 /** Whether a filter leaves any task out. */
 export function isFiltered(filter: ViewFilter): boolean {
-  return filter.assignee.kind !== 'anyone' || filter.hidesFinished || Boolean(filter.tagId);
+  return (
+    filter.assignee.kind !== 'anyone' ||
+    filter.hidesFinished ||
+    Boolean(filter.tagId) ||
+    Boolean(filter.fieldFilter)
+  );
 }
 
 /**
@@ -74,7 +83,8 @@ export function shownTaskIds(
   const passes = (task: Task) =>
     isGivenAsFiltered(task, filter) &&
     !(filter.hidesFinished && doneStatuses.has(task.statusId)) &&
-    (!filter.tagId || task.tagIds.includes(filter.tagId));
+    (!filter.tagId || task.tagIds.includes(filter.tagId)) &&
+    (!filter.fieldFilter || holdsFiltered(task, filter.fieldFilter));
 
   const byId = new Map(tasks.map((task) => [task.id, task]));
   const rootOf = (task: Task): Id => {
@@ -137,11 +147,14 @@ export function filterInWords(
   filter: ViewFilter,
   members: readonly Member[],
   tags: readonly Tag[] = [],
+  fields: readonly CustomField[] = [],
 ): string | null {
   if (!isFiltered(filter)) {
     return null;
   }
-  const tagged = filter.tagId ? ` ${taggedInWords(filter.tagId, tags)}` : '';
+  const tagged =
+    (filter.tagId ? ` ${taggedInWords(filter.tagId, tags)}` : '') +
+    (filter.fieldFilter ? ` ${holdingInWords(filter.fieldFilter, fields)}` : '');
   const tasks = `${filter.hidesFinished ? 'unfinished tasks' : 'tasks'}${tagged}`;
   const wanted = filter.assignee;
   switch (wanted.kind) {
@@ -164,6 +177,24 @@ export function filterInWords(
 function taggedInWords(tagId: Id, tags: readonly Tag[]): string {
   const name = tags.find((tag) => tag.id === tagId)?.name;
   return name === undefined ? 'with a tag that was removed' : `tagged "${name}"`;
+}
+
+/**
+ * The value of a field a filter asks for, in words: 'with "Supplier" set to
+ * "Mouser"', 'with "Ordered" ticked'. A field or a choice removed says so.
+ */
+function holdingInWords(filter: FieldFilter, fields: readonly CustomField[]): string {
+  const field = fields.find((candidate) => candidate.id === filter.fieldId);
+  if (!field) {
+    return 'with a field that was removed';
+  }
+  if (filter.kind === 'yes_no') {
+    return filter.yes ? `with "${field.name}" ticked` : `without "${field.name}" ticked`;
+  }
+  const choice = field.choices.find((candidate) => candidate.id === filter.choiceId);
+  return choice
+    ? `with "${field.name}" set to "${choice.name}"`
+    : `with a choice of "${field.name}" that was removed`;
 }
 
 /**
