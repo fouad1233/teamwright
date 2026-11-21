@@ -10,7 +10,8 @@ window or agent runtime.
 | `projects` | `ProjectService`: start, find, list, rename, describe, archive, restore and delete projects, each new one from a template (`WorkflowTemplate`); add, change, move and remove the statuses of their workflows, set their work-in-progress limits, and count how full each status is (`status_loads`) |
 | `tasks` | `TaskService`: open, change, plan into a sprint, give points, move, connect and remove tasks, and tell the history of one, or of a whole project, from the versions storage has kept; tell what really happened to each task against its plan (`TaskActual`) |
 | `sprints` | `SprintService`: list, plan, change, delete, start and complete the sprints of a project, and the report for the burndown chart of one (`SprintReport`), read off the versions of every task of the project, so that it follows the tasks that joined or left the sprint and tells which moved on at its completion; and the forecast of a project (`SprintForecast`): the pace, each planned sprint against it, and how many sprints the unfinished work would take, with the tasks without points named |
-| `views` | `ViewService`: list, add, rename, filter, give content to, move and remove the views of a project |
+| `views` | `ViewService`: list, add, rename, filter, group, give content to, move and remove the views of a project |
+| `groups` | `GroupingService`: the groups of the tasks of a view (`groups_of_view`), gathering the tasks, team, areas, sprints and tags for the rule `group_tasks` of the domain |
 | `areas` | `AreaService`: list, add, rename, move and remove the areas of a project, and move a task with its subtasks into another area |
 | `tags` | `TagService`: list, add, rename, recolor and remove the tags of a project, and put a tag on a task (by itself, or by its name, making it if need be) or take it off |
 | `checklists` | `ChecklistService`: add, rename, tick, move and remove the items of the checklist of a task, each answering with the task |
@@ -174,6 +175,14 @@ storage crate.
   (`ViewKind::can_be_filtered`; `rule_broken` for the others), and a
   filter can only name a member of the team of the project
   (`member_not_on_team`).
+- `set_grouping` changes what a view groups its tasks by. Only a board and
+  a list can be grouped by anything but status (`ViewKind::can_be_grouped`;
+  `rule_broken` for the others). `GroupingService::groups_of_view` answers
+  with the groups of the tasks of the project as the view groups them; the
+  filter of the view is not applied there, the board keeps every task. A
+  card dropped on another lane is not a use case of its own: the interface
+  calls the commands that already change the assignee, priority, area,
+  sprint or tags of a task.
 - `set_content` replaces what a view keeps of its own, or clears it with
   nothing ([decision 0024](../../docs/decisions/0024-a-view-keeps-content-of-its-own.md)).
   Any kind may keep content; more than 2 MiB is `rule_broken`.

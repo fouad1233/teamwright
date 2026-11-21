@@ -18,7 +18,8 @@ done with them. It does no input or output.
 | `project` | `Project`, `ProjectKey` |
 | `task` | `Task`, `TaskDraft`, `Priority`, `Assignee`, `Schedule`, `Rank` |
 | `sprint` | `Sprint`, `SprintState`, `SprintDates`, `SprintSummary`, `SprintUnit`: a stretch of time in which the team works on a part of the backlog; `StoryPoints`: how big a task is; `CountedTask`: a task as a sprint counts its work |
-| `view` | `View`, `ViewKind`, `ViewFilter`, `ViewAssignee`: one way of looking at the tasks of a project, with a name, a filter and a place among the views of the project |
+| `view` | `View`, `ViewKind`, `ViewFilter`, `ViewAssignee`: one way of looking at the tasks of a project, with a name, a filter, a grouping and a place among the views of the project |
+| `grouping` | `Grouping`: what a board or a list groups its tasks by; `group_tasks`: the rule that puts the tasks of a project into groups (`GroupKey`, `TaskGroup`, `GroupingContext`) |
 | `project_files` | `PathInFolder`: a path inside a folder of a project that cannot leave it by how it is written (no `..`, no root, no drive, no colon); `FolderEntry`, `EntryKind`, `listing_of`: what a folder holds as the files view shows it (noise left out by `is_noise`, folders first, at most `MOST_ENTRIES`); `runs_as_program`: the endings Teamwright does not open |
 | `actual_dates` | `actual_dates_of`, `timing_of`: when work on a task really began and ended, read off its versions by the category of its statuses, and how late that was against its plan |
 | `area` | `Area`: a part of a project with a job of its own, such as its firmware, with a name and a place among the areas of the project |
@@ -90,7 +91,17 @@ done with them. It does no input or output.
   the capitals. Only the kinds that show some of the tasks can be filtered
   (`can_be_filtered`: board, list, Gantt chart, calendar, timeline, table,
   workload, team, mind map, map and gallery), by whose tasks they show and
-  whether finished tasks are hidden. A new project starts with one view of
+  whether finished tasks are hidden. Only a board and a list can be grouped
+  by something other than status (`can_be_grouped`, `View::set_grouping`;
+  [decision 0021](../../docs/decisions/0021-views-the-manager-can-add.md),
+  note of 21 November 2026). `group_tasks` puts the tasks that are not
+  subtasks into groups in a fixed order: statuses as in the workflow; the
+  manager, the members in the order of the team, then nobody; priorities
+  from the highest; areas in their own order; tags by name, then "no tag";
+  sprints as listed, then the backlog. A task with several tags is in the
+  group of each of its tags. Every group a card can be dropped on is
+  returned even when empty, except a completed sprint and the group of a
+  removed area, which come only with tasks. A new project starts with one view of
   each of the first six kinds (`ViewKind::STARTING`), in that order, and
   the identifiers of these six follow from the project and the kind, so
   that two computers that each give a project its starting views give it

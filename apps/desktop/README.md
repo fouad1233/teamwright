@@ -33,9 +33,11 @@ the rule it breaks.
 **The views of a project**
 ([decision 0021](../../docs/decisions/0021-views-the-manager-can-add.md))
 are the commands in `commands/views.rs`: `list_views`, `add_view`,
-`rename_view`, `set_view_filter`, `set_view_content`, `move_view` and
-`remove_view`, which the shell serves through `ViewService`. A view on the
-wire has its `kind`, its `name`, its `content` (text the interface wrote,
+`rename_view`, `set_view_filter`, `set_view_grouping`, `list_task_groups`,
+`set_view_content`, `move_view` and `remove_view`, which the shell serves
+through `ViewService` and `GroupingService`. A view on the wire has its
+`kind`, its `name`, its `grouping` (`status`, `assignee`, `priority`,
+`area`, `tag` or `sprint`), its `content` (text the interface wrote,
 or null;
 [decision 0024](../../docs/decisions/0024-a-view-keeps-content-of-its-own.md))
 and its `filter`, whose `assignee` is `{"kind": "anyone"}`,
@@ -582,6 +584,20 @@ Rules of the interface:
   The board alone keeps every task and is told which ones get a card,
   because it places a dropped card among all the tasks of its status and
   counts the tasks a card waits for.
+- **Groups come from the backend.** A board or a list grouped by something
+  other than status asks `list_task_groups` for its lanes or sections
+  (`views/groupQueries.ts`) and draws them in the order given; the rule is
+  `group_tasks` in the domain and `demo/groups.ts` in the demo. `GroupedBoard`
+  draws the lanes, with the head of each from `views/GroupLabel.tsx`. A card
+  dropped on another lane goes through the command that already changes the
+  thing (`views/groupModel.ts`, `dropEffect`): assign, prioritize, move to an
+  area, plan into a sprint or the backlog; on a tag lane the tag of the lane
+  is put on the task and the tag of the lane it came from taken off. A card
+  cannot be put in place within such a lane. The work-in-progress limits show
+  only on a board grouped by status, and a card says its own status
+  otherwise. The sprint switch of the board of statuses is left out of a
+  grouped board: a sprint is a grouping of its own. The list has sections that
+  fold, grouped or not, and hides groups with no task.
 - **The open area is applied the same way.** The workspace hands a view
   only the tasks of the open area (`areas/areaModel.ts`), and the filter
   of the view on top. `OpenAreaProvider` makes the open area known to the

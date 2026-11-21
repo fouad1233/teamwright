@@ -232,6 +232,11 @@ involved.
   to, and the member, conversation and turn it came from are kept as they
   were. Deleting a project deletes and logs its entries; an entry waits
   for its project when it is taken in before it.
+- **What a view groups by** is the column `grouping` of `views` (migration
+  0030, `'status'` by default) and the key `grouping` of its logged state.
+  It is a field of its own in the merge, because a key that no field names
+  merges on its own. Nothing is logged by the migration: a view state
+  without `grouping` is read as a view grouped by status.
 - **An approved plan is one transaction.** `SqlitePlanningRepository`
   writes the project (with its next task number), every new member, every
   new task with what it waits for, and the turn with its approved proposal,

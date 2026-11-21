@@ -54,8 +54,17 @@ export function GroupLabel({ groupKey, names }: GroupLabelProps) {
     case 'noTag':
     case 'backlog':
       return <span className={styles.quiet}>{name}</span>;
+    case 'sprint': {
+      const state = names.sprints.find((candidate) => candidate.id === groupKey.id)?.state;
+      return (
+        <span className={styles.label}>
+          <span className={styles.text}>{name}</span>
+          {state === 'active' && <span className={styles.state}>Active</span>}
+          {state === 'completed' && <span className={styles.state}>Completed</span>}
+        </span>
+      );
+    }
     case 'area':
-    case 'sprint':
       return <span className={styles.text}>{name}</span>;
   }
 }

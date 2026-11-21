@@ -146,3 +146,44 @@ kind, `files` (named "Files"), shows what lies in them.
   followed.
 - The disk is not watched. The view reads again when it is shown and when
   the manager asks it to.
+
+## Note of 21 November 2026: grouping a view by more than status
+
+The consequences above said that grouping was not a setting of a view. It
+is now, for the two kinds that draw groups.
+
+- **The setting.** A board and a list keep a grouping: status (as before,
+  and the default), assignee, priority, area, tag or sprint. It is stored
+  with the view like its filter, in a column of its own (migration 0030),
+  and it merges and syncs with it. Any other kind stays grouped by status
+  and refuses another grouping (`rule_broken`).
+- **The rule is in the domain** (`group_tasks`), and a use case gathers
+  what it needs (`GroupingService`), so the interface draws groups and
+  decides nothing. The groups come in a fixed order: statuses as in the
+  workflow; the manager, then the members in the order of the team, then
+  nobody; priorities from the highest; areas in their own order; tags by
+  name, then "no tag"; sprints as listed, then the backlog. Only tasks that
+  are not subtasks are grouped, and a subtask goes with its parent.
+- **A task with several tags is shown under each of its tags.** The
+  alternative, one group for each combination of tags, is unreadable, and
+  a task under only its first tag would hide the others.
+- **Empty groups.** A group that a card can be dropped on is returned even
+  when it is empty: every status, assignee, priority, area, tag, "no tag",
+  every sprint that is not over, and the backlog. A sprint that is over, and
+  the group of an area that is gone, come only with tasks. A list leaves
+  empty sections out; a board keeps its empty lanes, because they are
+  where a card can go.
+- **Dragging a card to another lane** changes the thing grouped by through
+  the command that already changes it (assign, prioritize, move to an area,
+  plan into a sprint or the backlog), so every rule and the log apply. On a
+  tag lane the card gets the tag of the lane and loses the tag of the lane
+  it came from; to "no tag" it only loses it. The simpler alternative,
+  offering no drop between tag lanes, would make the tag board a picture;
+  this one keeps a card's other tags. A card cannot be put in place within
+  such a lane: the order there is the order of the statuses, then the ranks.
+- **Limits belong to statuses** (decision 0033), so they show only when a
+  board is grouped by status. In any other lane a card says its own status
+  with its mark and name. The sprint switch of the board of statuses is also
+  left out of a grouped board, because a sprint is a grouping of its own.
+- **The list folds.** Its sections have a head that folds them, grouped by
+  status or not. Which sections are folded is not kept.

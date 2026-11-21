@@ -18,3 +18,13 @@
 .quiet {
   color: var(--ink-soft);
 }
+
+/* The state of a sprint that is running or over, beside its name. */
+.state {
+  flex: none;
+  color: var(--ink-faint);
+  font-size: var(--text-label);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}

@@ -502,7 +502,8 @@ and Dashboard. You can change them:
   not offered while the project has them.
 - **The menu of a view** opens from the small arrow at the end of its tab,
   or with a right click on the tab. It renames the view, sets its filter,
-  moves it one place left or right, and removes it. A double click on a
+  chooses what a board or a list groups its tasks by (*Group by*), moves it
+  one place left or right, and removes it. A double click on a
   tab renames it too, and you can drag a tab to another place in the row.
   The last view of a project cannot be removed.
 - **The filter** of a board, a list, a Gantt chart or a calendar says
@@ -518,6 +519,16 @@ and Dashboard. You can change them:
   at the top says so.
   When a member leaves the team, a view that showed only their tasks shows
   everybody's again.
+- **Group by** is in the menu of a board or a list. The tasks are in lanes
+  (on a board) or in headed sections that fold (in a list) by their status,
+  as always, or by who they are given to, their priority, their area, their
+  tag or their sprint. A task with several tags stands under each of its
+  tags. On a board, drag a card to another lane to change what the lane
+  stands for: its assignee, priority, area or sprint. Dragged from the lane
+  of one tag to another, a card gets the new tag and loses the old one; to
+  *No tag* it only loses it. A sprint that is over takes no card. Limits on
+  the work in a status show only when the board is grouped by status; in the
+  other lanes each card says its own status.
 - **When the row is full**, the views that do not fit the window are
   behind *N more* at the end of the row. The view that is open always
   keeps its tab.
