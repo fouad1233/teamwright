@@ -153,6 +153,15 @@ pub enum ApplicationError {
         name: String,
     },
 
+    /// A member of a proposal whose name the team has already was to be
+    /// taken out. Approving does not add it again, so there is nothing to
+    /// take out, and its tasks stay with the member the team has.
+    #[error("{name} is on the team already: approving does not add them again")]
+    ProposedMemberOnTeam {
+        /// The name of the member.
+        name: String,
+    },
+
     /// A conversation was to be opened in the agent program before the
     /// program had started its session.
     #[error("the specialist has not started its session yet")]
@@ -460,6 +469,7 @@ impl ApplicationError {
             | Self::FileWithoutName
             | Self::NotAFolderOfProject { .. }
             | Self::OwnerNotThere { .. }
+            | Self::ProposedMemberOnTeam { .. }
             | Self::UnfinishedStayInSprint
             | Self::SubtaskInAnotherArea { .. }
             | Self::ProjectWithoutAreas => "rule_broken",

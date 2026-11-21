@@ -40,7 +40,7 @@ use crate::usage::{ProjectUsage, usage_of};
 mod advisor;
 
 pub use advisor::{
-    ApprovedMember, ApprovedOwner, ApprovedProposal, ApprovedTask, answers_in_words,
+    ApprovedMember, ApprovedOwner, ApprovedProposal, ApprovedTask, ProposalEdit, answers_in_words,
     instructions_for_advisor,
 };
 

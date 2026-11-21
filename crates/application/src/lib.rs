@@ -106,8 +106,8 @@ pub use usage::{AgentUsage, MemberUsage, ProjectUsage, usage_of};
 pub use views::{NewView, ViewService};
 pub use work::{
     AgentProgram, AgentProgramState, ApprovedMember, ApprovedOwner, ApprovedProposal, ApprovedTask,
-    ConversationWithTurns, WorkPorts, WorkService, answers_in_words, brief_for, instructions_for,
-    instructions_for_advisor,
+    ConversationWithTurns, ProposalEdit, WorkPorts, WorkService, answers_in_words, brief_for,
+    instructions_for, instructions_for_advisor,
 };
 pub use workbook::{
     Cell, Column, Section, Sheet, SheetContent, Table, Workbook, WorkbookPorts, WorkbookService,

@@ -16,8 +16,8 @@ use std::path::PathBuf;
 use teamwright_domain::{
     Assignee, Conversation, ConversationId, Effort, InterviewAnswer, InterviewQuestion, Member,
     MemberId, MemberInstructions, MemberKind, MemberName, MemberProfile, ModelName, Priority,
-    Project, ProjectId, Proposal, ProposedMember, ProposedOwner, ProposedTask, Rank,
-    ReadyMadeSpecialist, Schedule, Task, TaskDraft, TaskTitle, Turn, TurnOrigin,
+    Project, ProjectId, Proposal, ProposalChange, ProposedMember, ProposedOwner, ProposedTask,
+    Rank, ReadyMadeSpecialist, Schedule, Task, TaskDraft, TaskTitle, Turn, TurnOrigin,
 };
 
 use super::{
@@ -79,6 +79,87 @@ pub enum ApprovedOwner {
     Manager,
     /// A member by name: a member of the proposal, or of the team.
     Member(String),
+}
+
+/// One change the manager makes to an open proposal, as the interface
+/// sends it. Tasks and members are named by their places from 0. Each is
+/// checked against the rules and becomes a [`ProposalChange`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ProposalEdit {
+    /// Gives a task another title.
+    Retitle {
+        /// The task.
+        task: usize,
+        /// The new title.
+        title: String,
+    },
+    /// Gives a task another description, which may be empty.
+    Describe {
+        /// The task.
+        task: usize,
+        /// The new description.
+        description: String,
+    },
+    /// Gives a task another size in minutes, or none.
+    Estimate {
+        /// The task.
+        task: usize,
+        /// The minutes, or none.
+        estimate_minutes: Option<u32>,
+    },
+    /// Gives a task another priority.
+    Prioritize {
+        /// The task.
+        task: usize,
+        /// The new priority.
+        priority: Priority,
+    },
+    /// Gives a task to somebody else, or to nobody.
+    GiveTo {
+        /// The task.
+        task: usize,
+        /// The new owner, or nobody.
+        owner: Option<ApprovedOwner>,
+    },
+    /// Lets a task wait for another task of the proposal.
+    AddWait {
+        /// The task that is to wait.
+        task: usize,
+        /// The task it is to wait for.
+        waits_for: usize,
+    },
+    /// Lets a task stop waiting for another task of the proposal.
+    RemoveWait {
+        /// The task that waits.
+        task: usize,
+        /// The task it is to stop waiting for.
+        waits_for: usize,
+    },
+    /// Adds a task of the manager's own at the end of the plan.
+    AddTask {
+        /// What is to be done.
+        title: String,
+    },
+    /// Takes a task out of the proposal.
+    RemoveTask {
+        /// The task.
+        task: usize,
+    },
+    /// Takes a member out of the proposal.
+    RemoveMember {
+        /// The member.
+        member: usize,
+    },
+    /// Chooses the model and the effort of a member. An empty model means
+    /// the default of the program.
+    SetProfile {
+        /// The member.
+        member: usize,
+        /// The model, or none.
+        model: Option<String>,
+        /// The effort, or none.
+        effort: Option<Effort>,
+    },
 }
 
 impl WorkService {
@@ -188,6 +269,64 @@ impl WorkService {
             Worker::Advisor,
             &project,
         )
+    }
+
+    /// Makes one change of the manager's to the proposal the Advisor made
+    /// in the latest turn of a conversation, before it is approved. The
+    /// changed proposal is stored and logged with its turn, so the change
+    /// is kept over a restart and reaches the other computers as the
+    /// proposal does, and approving takes the proposal as it then reads.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if there is no such conversation, if no proposal is
+    /// open in it (`no_proposal_open`), if the conversation runs on another
+    /// computer (`runs_elsewhere`), where only that computer changes its
+    /// turns; if the change breaks a rule (`rule_broken`): a title, a model,
+    /// a task or a member that is not there, a task that would wait for
+    /// itself or in a circle, a task given to somebody who is neither on
+    /// the team nor in the proposal, a member who is on the team already,
+    /// or nothing left at all; or if storage fails. A refused change
+    /// changes nothing.
+    pub fn change_proposal(
+        &self,
+        conversation_id: ConversationId,
+        edit: ProposalEdit,
+    ) -> Result<ConversationWithTurns, ApplicationError> {
+        let _work = self.inner.hold_work();
+        let ports = &self.inner.ports;
+        let conversation = self.inner.require_conversation_here(conversation_id)?;
+        let mut turns = ports.conversations.turns_of(conversation.id())?;
+        let team = ports.members.list_for_project(conversation.project_id())?;
+        let proposing = match turns.last_mut() {
+            Some(turn) if open_proposal_of(std::slice::from_ref(turn)).is_some() => turn,
+            _ => return Err(ApplicationError::NoProposalOpen),
+        };
+        let proposal = proposing
+            .proposal()
+            .ok_or(ApplicationError::NoProposalOpen)?;
+        if let ProposalEdit::RemoveMember { member } = &edit
+            && let Some(proposed) = proposal.members().get(*member)
+            && team.iter().any(|known| {
+                known.name().as_str().to_lowercase() == proposed.name.as_str().to_lowercase()
+            })
+        {
+            return Err(ApplicationError::ProposedMemberOnTeam {
+                name: proposed.name.to_string(),
+            });
+        }
+
+        proposing.change_proposal(proposal_change_from(edit)?)?;
+        let changed = proposing
+            .proposal()
+            .ok_or(ApplicationError::NoProposalOpen)?;
+        refuse_owners_who_are_not_there(&team, changed.members(), changed.tasks())?;
+        ports.conversations.save_turn(proposing)?;
+        ports.listener.conversation_changed(&conversation, &turns);
+        Ok(ConversationWithTurns {
+            conversation,
+            turns,
+        })
     }
 
     /// Approves the proposal the Advisor made in the latest turn of a
@@ -380,11 +519,11 @@ impl WorkService {
         // The session of the Advisor does not see an approval happen. If it
         // is not told, it takes its proposal for open and proposes all of
         // it again.
-        let approved_before = earlier_turns
+        let prompt = earlier_turns
             .last()
             .and_then(Turn::proposal)
-            .is_some_and(|proposal| !proposal.is_open());
-        let prompt = approved_before.then(|| message_after_approval(turn.request()));
+            .filter(|proposal| !proposal.is_open())
+            .map(|approved| message_after_approval(turn.request(), approved));
         self.begin_turn(
             NewTurn {
                 conversation,
@@ -432,6 +571,63 @@ fn proposed_task_from(task: ApprovedTask) -> Result<ProposedTask, ApplicationErr
         estimate_minutes: task.estimate_minutes,
         priority: task.priority,
         waits_for: task.waits_for,
+    })
+}
+
+/// A change the manager sent, checked against the rules of titles, names
+/// and models.
+fn proposal_change_from(edit: ProposalEdit) -> Result<ProposalChange, ApplicationError> {
+    Ok(match edit {
+        ProposalEdit::Retitle { task, title } => ProposalChange::Retitle {
+            task,
+            title: TaskTitle::parse(&title)?,
+        },
+        ProposalEdit::Describe { task, description } => {
+            ProposalChange::Describe { task, description }
+        }
+        ProposalEdit::Estimate {
+            task,
+            estimate_minutes,
+        } => ProposalChange::Estimate {
+            task,
+            estimate_minutes,
+        },
+        ProposalEdit::Prioritize { task, priority } => {
+            ProposalChange::Prioritize { task, priority }
+        }
+        ProposalEdit::GiveTo { task, owner } => ProposalChange::GiveTo {
+            task,
+            owner: match owner {
+                None => None,
+                Some(ApprovedOwner::Manager) => Some(ProposedOwner::Manager),
+                Some(ApprovedOwner::Member(name)) => {
+                    Some(ProposedOwner::Member(MemberName::parse(&name)?))
+                }
+            },
+        },
+        ProposalEdit::AddWait { task, waits_for } => ProposalChange::AddWait { task, waits_for },
+        ProposalEdit::RemoveWait { task, waits_for } => {
+            ProposalChange::RemoveWait { task, waits_for }
+        }
+        ProposalEdit::AddTask { title } => ProposalChange::AddTask {
+            title: TaskTitle::parse(&title)?,
+        },
+        ProposalEdit::RemoveTask { task } => ProposalChange::RemoveTask { task },
+        ProposalEdit::RemoveMember { member } => ProposalChange::RemoveMember { member },
+        ProposalEdit::SetProfile {
+            member,
+            model,
+            effort,
+        } => ProposalChange::SetProfile {
+            member,
+            model: model
+                .as_deref()
+                .map(str::trim)
+                .filter(|model| !model.is_empty())
+                .map(ModelName::parse)
+                .transpose()?,
+            effort,
+        },
     })
 }
 
@@ -494,14 +690,77 @@ pub fn answers_in_words(questions: &[InterviewQuestion], answers: &[InterviewAns
 /// A message of the manager's as the Advisor reads it when the manager
 /// approved its proposal before writing: with the news of the approval, and
 /// with what a proposal may hold from then on.
+///
+/// The session of the Advisor remembers its proposal as it made it. The
+/// manager may have changed it before approving, so the message says what
+/// was approved, as it was approved: otherwise the Advisor would take a
+/// task the manager renamed or took out for one that is still missing, and
+/// propose it again.
 #[must_use]
-pub fn message_after_approval(message: &str) -> String {
-    format!(
+pub fn message_after_approval(message: &str, approved: &Proposal) -> String {
+    let mut lines = vec![
         "The manager approved your proposal, as it was or with changes. What the project has \
-         now is in your instructions: its members are on the team and its tasks exist. If what \
-         the manager writes calls for more, propose only what is to be added: no member who is \
-         on the team, no task that exists.\n\nThe manager writes:\n{message}"
-    )
+         now is in your instructions: its members are on the team and its tasks exist."
+            .to_owned(),
+        String::new(),
+        "This is what the manager approved. Before approving, the manager may have changed \
+         titles, sizes, owners and what waits for what, taken members or tasks out, and added \
+         tasks. What you proposed and do not find here was left out on purpose: do not propose \
+         it again unless the manager asks for it."
+            .to_owned(),
+    ];
+    if !approved.members().is_empty() {
+        lines.push("Members:".to_owned());
+        lines.extend(approved.members().iter().map(|member| {
+            if member.responsibility.is_empty() {
+                format!("- {}", member.name)
+            } else {
+                format!("- {}: {}", member.name, member.responsibility)
+            }
+        }));
+    }
+    if !approved.tasks().is_empty() {
+        lines.push("Tasks:".to_owned());
+        lines.extend(
+            approved
+                .tasks()
+                .iter()
+                .enumerate()
+                .map(|(place, task)| format!("{}. {}", place + 1, approved_task_in_words(task))),
+        );
+    }
+    lines.push(String::new());
+    lines.push(
+        "If what the manager writes calls for more, propose only what is to be added: no member \
+         who is on the team, no task that exists."
+            .to_owned(),
+    );
+    lines.push(String::new());
+    lines.push(format!("The manager writes:\n{message}"));
+    lines.join("\n")
+}
+
+/// A task of an approved proposal in one line: its title, who does it, its
+/// size and the tasks it waits for, by their numbers in the list.
+fn approved_task_in_words(task: &ProposedTask) -> String {
+    let owner = match &task.owner {
+        None => "nobody".to_owned(),
+        Some(ProposedOwner::Manager) => "the manager".to_owned(),
+        Some(ProposedOwner::Member(name)) => name.to_string(),
+    };
+    let mut details = vec![format!("given to {owner}")];
+    if let Some(minutes) = task.estimate_minutes {
+        details.push(format!("size {minutes} minutes"));
+    }
+    if !task.waits_for.is_empty() {
+        let numbers: Vec<String> = task
+            .waits_for
+            .iter()
+            .map(|place| (place + 1).to_string())
+            .collect();
+        details.push(format!("waits for {}", numbers.join(", ")));
+    }
+    format!("{} ({})", task.title, details.join(", "))
 }
 
 /// Writes the instructions that are added to the agent program's own for

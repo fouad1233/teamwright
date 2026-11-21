@@ -1330,6 +1330,369 @@ fn refuses_to_approve_twice_and_where_nothing_was_proposed() {
     assert_eq!(planning.tasks().len(), 12);
 }
 
+// Changing a proposal before approving it
+
+impl Planning {
+    fn change(
+        &self,
+        conversation: &ConversationWithTurns,
+        edit: ProposalEdit,
+    ) -> Result<ConversationWithTurns, ApplicationError> {
+        self.work
+            .change_proposal(conversation.conversation.id(), edit)
+    }
+}
+
+/// The titles of the tasks of a proposal, in their order.
+fn titles_of(proposal: &Proposal) -> Vec<String> {
+    proposal
+        .tasks()
+        .iter()
+        .map(|task| task.title.to_string())
+        .collect()
+}
+
+#[test]
+fn changes_the_title_the_size_and_what_a_task_waits_for_and_keeps_the_changes() {
+    let planning = planning();
+    let conversation = planning.proposed();
+
+    planning
+        .change(
+            &conversation,
+            ProposalEdit::Retitle {
+                task: 4,
+                title: "  Route the board in four layers  ".to_owned(),
+            },
+        )
+        .unwrap();
+    planning
+        .change(
+            &conversation,
+            ProposalEdit::Estimate {
+                task: 4,
+                estimate_minutes: Some(900),
+            },
+        )
+        .unwrap();
+    planning
+        .change(
+            &conversation,
+            ProposalEdit::AddWait {
+                task: 4,
+                waits_for: 0,
+            },
+        )
+        .unwrap();
+    let changed = planning
+        .change(
+            &conversation,
+            ProposalEdit::RemoveWait {
+                task: 4,
+                waits_for: 3,
+            },
+        )
+        .unwrap();
+
+    // What the use case returns is what is stored.
+    let stored = planning.now(conversation.conversation.id());
+    assert_eq!(proposal_of(&stored), proposal_of(&changed));
+    let task = &proposal_of(&stored).tasks()[4];
+    assert_eq!(task.title.as_str(), "Route the board in four layers");
+    assert_eq!(task.estimate_minutes, Some(900));
+    assert_eq!(task.waits_for, [0]);
+    assert!(proposal_of(&stored).is_open());
+    // Nothing exists before the manager approves.
+    assert!(planning.tasks().is_empty());
+}
+
+#[test]
+fn changes_the_rest_of_a_task_and_of_a_member_and_adds_and_takes_out_tasks() {
+    let planning = planning();
+    let conversation = planning.proposed();
+    let edits = [
+        ProposalEdit::Describe {
+            task: 0,
+            description: "A list of five lines.".to_owned(),
+        },
+        ProposalEdit::Prioritize {
+            task: 0,
+            priority: Priority::Urgent,
+        },
+        ProposalEdit::GiveTo {
+            task: 0,
+            owner: Some(ApprovedOwner::Member("firmware ENGINEER".to_owned())),
+        },
+        ProposalEdit::SetProfile {
+            member: 0,
+            model: Some("haiku".to_owned()),
+            effort: None,
+        },
+        ProposalEdit::AddTask {
+            title: "Write the manual".to_owned(),
+        },
+        // "Design the enclosure", which nothing but the last task waits for.
+        ProposalEdit::RemoveTask { task: 9 },
+        ProposalEdit::RemoveMember { member: 2 },
+    ];
+    for edit in edits {
+        planning.change(&conversation, edit).unwrap();
+    }
+
+    let proposal = planning.now(conversation.conversation.id());
+    let proposal = proposal_of(&proposal);
+    let first = &proposal.tasks()[0];
+    assert_eq!(first.description, "A list of five lines.");
+    assert_eq!(first.priority, Priority::Urgent);
+    assert_eq!(
+        first.owner,
+        Some(ProposedOwner::Member(
+            MemberName::parse("firmware ENGINEER").unwrap()
+        ))
+    );
+    assert_eq!(
+        proposal.members()[0].model,
+        Some(ModelName::parse("haiku").unwrap())
+    );
+    assert_eq!(proposal.members()[0].effort, None);
+    assert_eq!(proposal.members().len(), 2);
+    let titles = titles_of(proposal);
+    assert_eq!(titles.len(), 12);
+    assert!(!titles.contains(&"Design the enclosure".to_owned()));
+    assert_eq!(titles[11], "Write the manual");
+    // The last task waited for 7, 8, 9 and 10; 9 is gone and 10 moved up.
+    assert_eq!(proposal.tasks()[10].waits_for, [7, 8, 9]);
+}
+
+#[test]
+fn approves_a_changed_proposal_in_one_step_as_it_then_reads() {
+    let planning = planning();
+    let conversation = planning.proposed();
+    for edit in [
+        ProposalEdit::Retitle {
+            task: 3,
+            title: "Draw the schematic in KiCad".to_owned(),
+        },
+        ProposalEdit::Estimate {
+            task: 3,
+            estimate_minutes: None,
+        },
+        ProposalEdit::AddWait {
+            task: 9,
+            waits_for: 0,
+        },
+        ProposalEdit::RemoveTask { task: 11 },
+    ] {
+        planning.change(&conversation, edit).unwrap();
+    }
+    let changed = planning.now(conversation.conversation.id());
+
+    let approved = planning
+        .approve(&changed, unchanged(proposal_of(&changed)))
+        .unwrap();
+
+    let mut tasks = planning.tasks();
+    tasks.sort_by_key(Task::number);
+    let titles: Vec<_> = tasks.iter().map(|task| task.title().to_string()).collect();
+    assert_eq!(titles, titles_of(proposal_of(&changed)));
+    assert_eq!(tasks[3].title().as_str(), "Draw the schematic in KiCad");
+    assert_eq!(tasks[3].estimate_minutes(), None);
+    let enclosure_waits: Vec<_> = tasks[9].blocked_by().iter().copied().collect();
+    let mut expected = vec![tasks[0].id(), tasks[5].id()];
+    expected.sort();
+    let mut enclosure_waits = enclosure_waits;
+    enclosure_waits.sort();
+    assert_eq!(enclosure_waits, expected);
+    // The record keeps what was approved.
+    assert_eq!(
+        titles_of(proposal_of(&approved)),
+        titles_of(proposal_of(&changed))
+    );
+}
+
+#[test]
+fn tells_the_advisor_what_was_approved_as_it_was_approved() {
+    let planning = planning();
+    let conversation = planning.proposed();
+    planning
+        .change(
+            &conversation,
+            ProposalEdit::Retitle {
+                task: 2,
+                title: "Agree on the pin map with the manager".to_owned(),
+            },
+        )
+        .unwrap();
+    planning
+        .change(&conversation, ProposalEdit::RemoveTask { task: 11 })
+        .unwrap();
+    let changed = planning.now(conversation.conversation.id());
+    planning
+        .approve(&changed, unchanged(proposal_of(&changed)))
+        .unwrap();
+
+    planning
+        .work
+        .reply(conversation.conversation.id(), "Add a battery.")
+        .unwrap();
+
+    let requests = planning.runtime.requests();
+    let prompt = &requests.last().unwrap().prompt;
+    assert!(
+        prompt.contains("3. Agree on the pin map with the manager (given to Hardware engineer")
+    );
+    assert!(!prompt.contains("Define the pin map"));
+    assert!(!prompt.contains("Assemble and test the prototype"));
+    assert!(prompt.contains("left out on purpose"));
+    assert!(prompt.contains("- Mechanical engineer: The enclosure."));
+    // The instructions of the next turn list the tasks as they were created.
+    assert!(
+        requests
+            .last()
+            .unwrap()
+            .extra_instructions
+            .as_deref()
+            .unwrap_or_default()
+            .contains("Agree on the pin map with the manager")
+    );
+}
+
+#[test]
+fn refuses_a_change_that_breaks_a_rule_and_leaves_the_proposal_as_it_was() {
+    let planning = planning();
+    let conversation = planning.proposed();
+    let before = proposal_of(&conversation).clone();
+    let refused = |edit| refusal(planning.change(&conversation, edit));
+
+    assert_eq!(
+        refused(ProposalEdit::Retitle {
+            task: 0,
+            title: "   ".to_owned()
+        }),
+        (
+            "rule_broken".to_owned(),
+            "the task title must not be empty".to_owned()
+        )
+    );
+    assert_eq!(
+        refused(ProposalEdit::AddWait {
+            task: 2,
+            waits_for: 4
+        }),
+        (
+            "rule_broken".to_owned(),
+            "\"Define the pin map\" cannot wait for \"Route the board\", which waits for it already"
+                .to_owned()
+        )
+    );
+    assert_eq!(
+        refused(ProposalEdit::AddWait {
+            task: 2,
+            waits_for: 2
+        }),
+        (
+            "rule_broken".to_owned(),
+            "\"Define the pin map\" waits for a task that is not another task of the proposal"
+                .to_owned()
+        )
+    );
+    assert_eq!(
+        refused(ProposalEdit::RemoveTask { task: 12 }),
+        (
+            "rule_broken".to_owned(),
+            "the proposal has no task 13".to_owned()
+        )
+    );
+    assert_eq!(
+        refused(ProposalEdit::GiveTo {
+            task: 0,
+            owner: Some(ApprovedOwner::Member("Electrician".to_owned()))
+        }),
+        (
+            "rule_broken".to_owned(),
+            "\"Agree on what the device must do\" is given to \"Electrician\", who is neither on \
+             the team nor in the proposal"
+                .to_owned()
+        )
+    );
+    assert_eq!(
+        refused(ProposalEdit::SetProfile {
+            member: 0,
+            model: Some("two words".to_owned()),
+            effort: None
+        })
+        .0,
+        "rule_broken"
+    );
+    assert_eq!(
+        proposal_of(&planning.now(conversation.conversation.id())),
+        &before
+    );
+}
+
+#[test]
+fn refuses_to_take_out_a_member_the_team_has_already() {
+    let planning = planning();
+    planning
+        .team
+        .add(NewMember {
+            project_id: planning.project.id(),
+            name: FIRMWARE.to_owned(),
+            kind: MemberKind::Agent,
+            responsibility: String::new(),
+            model: None,
+            effort: None,
+        })
+        .unwrap();
+    let conversation = planning.proposed();
+
+    assert_eq!(
+        refusal(planning.change(&conversation, ProposalEdit::RemoveMember { member: 1 })),
+        (
+            "rule_broken".to_owned(),
+            "Firmware engineer is on the team already: approving does not add them again"
+                .to_owned()
+        )
+    );
+}
+
+#[test]
+fn refuses_a_change_where_no_proposal_is_open() {
+    let planning = planning();
+    let asked = planning.interviewed();
+    let edit = || ProposalEdit::RemoveTask { task: 0 };
+    assert_eq!(
+        refusal(planning.change(&asked, edit())).0,
+        "no_proposal_open"
+    );
+
+    let conversation = planning.proposed();
+    planning
+        .approve(&conversation, unchanged(proposal_of(&conversation)))
+        .unwrap();
+    assert_eq!(
+        refusal(planning.change(&conversation, edit())),
+        (
+            "no_proposal_open".to_owned(),
+            "no proposal is open in this conversation".to_owned()
+        )
+    );
+}
+
+#[test]
+fn tells_its_listeners_when_a_proposal_is_changed() {
+    let planning = planning();
+    let conversation = planning.proposed();
+    let heard_before = planning.listener.changes().len();
+
+    planning
+        .change(&conversation, ProposalEdit::RemoveTask { task: 11 })
+        .unwrap();
+
+    let changes = planning.listener.changes();
+    assert_eq!(changes.len(), heard_before + 1);
+}
+
 #[test]
 fn takes_a_message_of_the_manager_as_a_wish_for_a_change_and_proposes_again() {
     let planning = planning();
