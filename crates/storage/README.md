@@ -40,6 +40,7 @@ involved.
 | `folder` | `FolderOfComputers`: the files in the sync folder, which implements the port `SyncFolder` |
 | `ledger` | `SqliteSyncLedger`: the bookkeeping of syncing, which implements the port `SyncLedger` |
 | `notification_choice` | `SqliteNotificationChoice`: whether this computer shows notifications, and which, in the keys `notifications`, `notify_waiting`, `notify_finished` and `notify_stopped` of `meta`; not logged, so never synced |
+| `plan_limit` | `SqlitePlanLimitStore`: what this computer knows about the limits of its Claude plan, as one JSON value in the key `plan_limit` of `meta`; what cannot be read back is forgotten; not logged, so never synced (decision 0040) |
 | `update_choice` | `SqliteUpdateChoice`: whether this computer looks for a newer version, when it last looked, whether that look failed and which release it offered, in the keys `update_look`, `update_last_look`, `update_look_failed` and `update_offered_*` of `meta`; not logged, so never synced ([decision 0043](../../docs/decisions/0043-a-notice-of-newer-versions.md)) |
 | `theme` | `SqliteThemeStore`: the theme of this computer, by its name in the key `theme` of `meta`; a name it does not know reads as Lamplight; not logged, so never synced |
 | `integrations` | `SqliteIntegrationStore`: the GitHub repository, the Slack channel and the web addresses of each project (`project_integrations`, `project_web_addresses`, version 17) and the GitHub program the manager named (`github_program` in `meta`); written without the recorder, so never logged and never synced |
@@ -189,6 +190,11 @@ involved.
   a turn. A window without what was held is damaged. Nothing is logged by
   the migration: a turn state logged before version 16 has neither and is
   read as a turn without a context.
+- **A turn at the limit of the plan** (migration `0032_plan_limit_turns.sql`,
+  [decision 0040](../../docs/decisions/0040-the-limit-of-the-plan.md)) is
+  marked by the column `plan_limit_reached` of `turns` (1 or 0). The logged
+  state of a turn carries the key only when it is true, so every other turn
+  is logged as before, and a state without it is read as 0.
 - **Handoffs and messages** (version 18,
   [decision 0029](../../docs/decisions/0029-handoffs-and-messages-between-specialists.md)).
   A handoff has a row in `handoffs` and its files a row each in

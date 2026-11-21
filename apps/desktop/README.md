@@ -273,6 +273,23 @@ The shell is where the work of an AI specialist meets the outside world
   (`NotificationSettings`). The demo backend keeps the choice in memory and
   refuses the test notification with `not_available`, as it does other
   things only the desktop has.
+- **The limit of the Claude plan**
+  ([decision 0040](../../docs/decisions/0040-the-limit-of-the-plan.md)).
+  `EventToInterface::plan_reported` hands what a turn told about the plan
+  to `plan_limit::take` in `src-tauri/src/plan_limit.rs`, which keeps it
+  with `PlanLimitService`, sends `plan-limit-changed` (`PlanLimitDto`) to
+  the interface, and one notification when the limit is reached and one
+  when it has reset, under the choice of the kind "stopped". It wakes once
+  at the known reset, also at start for a limit reached before; it never
+  polls. The command `plan_limit` in `commands/plan_limit.rs` answers with
+  what is known. A turn carries `planLimitReached`. The interface says it
+  in `features/work`: `PlanLimitLine` at the foot of the navigation, a
+  quiet ending and "Try again" in `ConversationView`, a warning in the hint
+  of `TaskWork`, and `PlanLimitPart` under the Usage of the Dashboard; the
+  words are in `planLimitModel.ts`. The demo backend reports pretended
+  windows after a turn; `window.teamwrightDemo.pretendPlanLimitReached(ms)`
+  ends the running turns at the limit and every new one at once until the
+  reset after `ms` (or, with `null`, until `liftPlanLimit()`).
 - **The theme of this computer.** The commands `theme` and `choose_theme`
   in `commands/appearance.rs` read and keep the name of the theme of the
   window (`AppearanceService`, decision 0028); `choose_theme` refuses a

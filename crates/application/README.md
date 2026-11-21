@@ -631,6 +631,34 @@ look that gets no answer is not an error: `UpdateStatus` says
 choice is a fact about one computer, not logged and never synced. Nothing
 here installs anything.
 
+## The limit of the Claude plan
+
+`plan_limit.rs` ([decision 0040](../../docs/decisions/0040-the-limit-of-the-plan.md))
+keeps what this computer knows about the limits of its Claude plan
+(`PlanLimitState`: the limit if reached, with when, which window and when
+it resets; the windows as last reported), behind `PlanLimitStore`, never
+logged and never synced. A turn that ends with
+`TurnFailure::PlanLimitReached` ends with `Turn::end_at_plan_limit`: failed,
+with the words "The limit of the Claude plan was reached.", and no
+`AgentStopped` event. The work hands what it learns to its listener as a
+`PlanReport` (`WorkListener::plan_reported`): the windows a turn reported,
+a limit reached, or a turn that went through. `take_report` is the rule:
+a limit already reached is not reached again (eight turns are told once),
+and it lifts at its reset, when the plan says it allows work and no reset
+is known to be still to come, or when a turn started after it went
+through. `reset_moment` turns the reset the program said in words into the
+next such time after now, with `Clock::offset_in` and `Clock::local_time`
+(the system clock knows this computer's zone and Coordinated Universal
+Time, nothing else; an unknown zone leaves the reset unknown).
+`PlanLimitService` keeps it, words the notifications of a limit reached and
+lifted (`notification_of_plan_limit`, of the kind `Stopped`), and says when
+to wake (`next_reset`, `look_at_reset`).
+
+For the coordinator: `may_start_work(state, now)` and
+`PlanLimitService::may_start_work` answer `WorkPermit::Allowed`,
+`NotUntil(moment)` or `NotUntilUnknown`. Work started by hand is not
+refused; the interface warns.
+
 ## Integrations
 
 `integrations.rs` keeps what the manager set for the integrations of a

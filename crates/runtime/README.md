@@ -18,6 +18,7 @@ format of its output.
 | `arguments` | The command lines: version, sign-in, a turn, the desktop app |
 | `process` | Starting the program, feeding it the prompt, reading it, stopping it |
 | `decode` | Turns the JSON lines of headless mode into `AgentEvent`s and a `TurnOutcome` |
+| `plan_limit` | Reads from the program's sentence that the limit of the plan was reached, and the reset time it gives (`limit_in_words`, `reset_in_words`) |
 | `sign_in` | Reads the answer of `claude auth status --json` |
 | `team_bus` | The tool server through which a specialist asks the manager to decide, hands its result over, writes to a teammate, and remembers and searches in the memory of the project, and the Advisor interviews and proposes |
 | `memory_file` | `MemoryFile`: the current entries of the memory of a project in a file of their own for one turn, which the team bus reads (`entries_from`) and which is removed when the turn is dropped |
@@ -240,7 +241,21 @@ and the tests rely on.
   Without a sign-in, the turn ends with the text "Not logged in" and an
   assistant event with `"error": "authentication_failed"`.
 - Plan limits are reported: a `rate_limit_event` with the use of the
-  five-hour and seven-day windows. They become `AgentEvent::PlanUsage`.
+  five-hour and seven-day windows. They become `AgentEvent::PlanUsage`,
+  with the `status` of the plan (`allowed`, `allowed_warning` or
+  `rejected`).
+- A turn that meets the limit of the plan ends as
+  `TurnFailure::PlanLimitReached`
+  ([decision 0040](../../docs/decisions/0040-the-limit-of-the-plan.md)):
+  from a `rate_limit_event` whose status is `rejected` (its
+  `rateLimitType` and `resetsAt`), or else from the program's sentence,
+  "You've hit your 5-hour limit · resets 10:40pm (Europe/Istanbul)" and
+  its other wordings, which `plan_limit` reads. The reset in words is
+  passed on as it was said (`PlanReset::Said`); the application makes it a
+  moment. No such turn was recorded: the tests build its stream from the
+  schema inside the program (2.1.289) and from the words seen on
+  21 November 2026. An `error` of `rate_limit` alone, such as an API
+  key's "Rate limit reached", stays an ordinary failure.
 - A tool named in `--disallowedTools` is removed from the session. When the
   model calls it anyway, the result is the failure "No such tool", not a
   denied permission.

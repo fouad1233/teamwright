@@ -54,6 +54,7 @@ was considered.
 | [0036](0036-project-memory.md) | Project memory: decisions, facts and contracts that are replaced, never changed; a plain search; the bus reads memory from a file of the turn | Accepted |
 | [0037](0037-the-coordinator.md) | The coordinator: a pure rule that starts ready work, run when something happens, with budgets in tokens and on the one computer it was switched on on | Accepted |
 | [0039](0039-skills-and-connectors-chosen-by-the-manager.md) | Give a specialist only the skills and connectors the manager chose, tool by tool | Accepted |
+| [0040](0040-the-limit-of-the-plan.md) | The limit of the Claude plan is its own ending of a turn, known per computer, said once, and never guessed | Accepted |
 | [0041](0041-earlier-conversations-as-digests.md) | Import earlier Claude Code conversations as digests made by rules, kept by the manager, read by the Advisor only | Accepted |
 | [0042](0042-the-report-of-a-whole-project.md) | The report of a whole project, offered at any time and called complete when every task is done, and the latest activity from the log | Accepted |
 | [0043](0043-a-notice-of-newer-versions.md) | Tell the manager when a newer version is out, looking only when allowed; installing from inside the program is not built | Accepted |
