@@ -22,9 +22,23 @@ or *Create a project* on the first screen.
 - **Key.** A short code of two to six letters and digits that prefixes the
   numbers of the project's tasks, as in `IOT-12`. Leave it empty and
   Teamwright derives one from the name: "Smart sensor node" becomes `SSN`.
-- **Workflow.** The statuses the project starts with.
-  - *Standard:* To do, In progress, In review, Done.
+- **Start from.** What the project starts with: its statuses, their
+  limits, its views, its areas and, for Scrum, a first sprint. Each choice
+  shows a small picture of its lanes and says what it is for.
+  - *Standard:* To do, In progress, In review, Done, and the six usual
+    views.
+  - *Kanban:* Backlog, Ready, In progress, Review, Done, with
+    [limits](#limits) on Ready, In progress and Review, and no sprints.
+  - *Scrum:* the steps of Standard, the Backlog view first, and *Sprint 1*
+    planned and empty, ready to be filled.
+  - *Hardware product:* To do, Design, Design review, Ordered, Build, Test,
+    Done, with limits on design, review, build and test, and the areas
+    Electronics, Firmware and Enclosure.
   - *Engineering:* To do, In progress, In revision, In test, Done.
+
+  A template only starts the project. It never puts anybody on the team:
+  the Advisor proposes a team. The project does not remember it, and you
+  can change everything it made.
 
 A new project is empty. It opens on the page of the
 [Advisor](#planning-with-the-advisor), where it can be planned. The board is
@@ -84,6 +98,24 @@ which it is done. The last one of each kind cannot be removed or given
 another meaning.
 
 Changes are saved as you make them.
+
+#### Limits
+
+A status can have a limit: the most tasks that should stand in it at once.
+Type it in the column *Limit*, or empty the field to have none. A status in
+which tasks are done has no limit, because finished work only piles up
+there.
+
+On the board, the head of a lane with a limit shows its tasks against the
+limit, as in `2/3`, and a small gauge with one mark for each task the limit
+allows. A lane at its limit is full; a lane over it shows its figure and
+gauge in red, with the word *over*. The dashboard says which lanes are over.
+
+A limit never stops a task. You can still move a task into a full lane, and
+a specialist can always hand its finished work on. The limit only shows
+that too much is under way, so that the team finishes work before it starts
+more. It counts every task of the project in the status, in every area and
+sprint, whatever the view shows, and a task with subtasks counts once.
 
 ### Areas
 

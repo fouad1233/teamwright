@@ -79,7 +79,7 @@ involved.
 - **Statuses are part of their project.** They have rows of their own in
   `statuses`, but the log keeps them inside the state of the project. Saving
   a project updates the rows of its statuses in place (name, category, color,
-  position), adds new ones and deletes the ones the workflow no longer has;
+  work-in-progress limit, position), adds new ones and deletes the ones the workflow no longer has;
   the logged project then lists the statuses it has now. A status that a
   task is still in cannot be deleted: the database refuses, and nothing is
   written.
@@ -239,7 +239,12 @@ person with either is damaged data. Its instructions are the column
 `instructions` (migration 0020), empty when it has none, with lines
 separated by a line feed; they merge as a field of their own, and a state
 logged before they existed reads as having none. A person with
-instructions is damaged data.
+instructions is damaged data. The work-in-progress limit of a status is the
+column `task_limit` of `statuses` (migration 0022), NULL when it has none,
+and the key `limit` of the status in the logged state of its project, left
+out when it has none; a state logged before limits reads as statuses
+without one. A limit out of range, or on a status of the category done, is
+damaged data.
 
 ## Field stamps and merged states
 

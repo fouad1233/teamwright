@@ -48,6 +48,7 @@ was considered.
 | [0030](0030-tags-and-checklists.md) | Tags that belong to a project, one checklist inside each task, each tag and item merging on its own | Accepted |
 | [0031](0031-instructions-and-ready-made-specialists.md) | Instructions of a specialist's own, after Teamwright's and never instead, and twelve ready-made specialists in code | Accepted |
 | [0032](0032-a-public-demo-in-the-browser.md) | Publish the interface on the demo backend as a page of the website | Accepted |
+| [0033](0033-work-in-progress-limits-and-templates.md) | Limits on the work in a status as a signal, and templates a project starts from | Accepted |
 
 ## Template
 

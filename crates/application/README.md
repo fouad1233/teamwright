@@ -7,7 +7,7 @@ window or agent runtime.
 
 | Module | Contents |
 |---|---|
-| `projects` | `ProjectService`: start, find, list, rename, describe, archive, restore and delete projects; add, change, move and remove the statuses of their workflows |
+| `projects` | `ProjectService`: start, find, list, rename, describe, archive, restore and delete projects, each new one from a template (`WorkflowTemplate`); add, change, move and remove the statuses of their workflows, set their work-in-progress limits, and count how full each status is (`status_loads`) |
 | `tasks` | `TaskService`: open, change, plan into a sprint, give points, move, connect and remove tasks, and tell the history of one, or of a whole project, from the versions storage has kept |
 | `sprints` | `SprintService`: list, plan, change, delete, start and complete the sprints of a project, and the report for the burndown chart of one (`SprintReport`) |
 | `views` | `ViewService`: list, add, rename, filter, give content to, move and remove the views of a project |
@@ -152,9 +152,11 @@ same codes and messages. The one about a project kept before it had views
 is a migration of the database, and is tested with the migrations of the
 storage crate.
 
-- `ProjectService::create` gives a new project six views, in the order
-  board, backlog, list, Gantt chart, calendar, dashboard, each named after
-  its kind and showing every task. `ProjectService::delete` removes them.
+- `ProjectService::create` gives a new project the views of its template,
+  in the template's order, each named after its kind and showing every
+  task. The standard template gives six, in the order board, backlog,
+  list, Gantt chart, calendar, dashboard. `ProjectService::delete` removes
+  them.
 - A project has at most one backlog and one dashboard (`view_kind_taken`).
 - A name is tidied and has at most 40 characters (`rule_broken`). Two views
   of a project do not share a name, whatever the capitals
@@ -206,6 +208,25 @@ the same codes and messages.
 - `WorkbookService` names the tags of each task, by name, in the column
   "Tags" of the Tasks sheet; its ports gain `tags`.
 
+## Templates and work-in-progress limits
+
+[Decision 0033](../../docs/decisions/0033-work-in-progress-limits-and-templates.md).
+The tests are in `projects.rs`; the demo backend (`demoTemplates.test.ts`)
+follows them case by case.
+
+- `ProjectService::create` builds the project from `NewProject::workflow`,
+  a `WorkflowTemplate` that names a `ProjectTemplate` of the domain: its
+  workflow with its limits, its views, its areas, and for Scrum a planned,
+  empty "Sprint 1", which counts as the first sprint of the project. No
+  template gives a team. The project does not remember its template.
+- `set_status_limit` gives a status a limit from 1 to 999, another one, or
+  none. Out of range, or on a status of the category done, is
+  `rule_broken`. A limit below the tasks already in the status is allowed,
+  and nothing moves. `change_status` to the category done drops the limit.
+- `status_loads` counts, for every status in board order, the tasks of the
+  whole project in it (no subtask apart from its task) against its limit.
+  Nothing anywhere refuses a task a full status: a limit is a signal.
+
 ## The areas of a project
 
 `AreaService` carries out
@@ -218,8 +239,10 @@ and a task whose area the project does not have can only come from another
 computer, so that case is tested where storage takes in what another
 computer did.
 
-- `ProjectService::create` gives a new project one area, "General".
-  `ProjectService::delete` removes the areas after the tasks.
+- `ProjectService::create` gives a new project the areas of its template:
+  one, "General", for most, and Electronics, Firmware and Enclosure for a
+  hardware product. `ProjectService::delete` removes the areas after the
+  tasks.
 - A name is tidied and has at most 40 characters (`rule_broken`). Two areas
   of a project do not share a name, whatever the capitals
   (`area_name_taken`); an area may change the capitals of its own.

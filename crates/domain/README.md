@@ -13,6 +13,8 @@ done with them. It does no input or output.
 | `text` | `ProjectName`, `StatusName`, `TaskTitle`, `SprintName`, `ViewName`, `AreaName`, `TagName`, `ChecklistText`, `MemberName`: names that are never empty, never multi-line, never too long; `ModelName`: the name of a model |
 | `color` | `Color`: the named colors a status or a team member can have |
 | `workflow` | `Workflow`, `Status`, `StatusCategory` |
+| `work_in_progress` | `WorkInProgressLimit`: the most tasks that should stand in a status at once; `StatusLoad`, `Fill`: how many tasks stand in each status against its limit ([decision 0033](../../docs/decisions/0033-work-in-progress-limits-and-templates.md)) |
+| `template` | `ProjectTemplate`, `TemplateStatus`: what a new project starts from (Standard, Kanban, Scrum, Hardware product, Engineering): statuses with limits, views, areas, a first sprint ([decision 0033](../../docs/decisions/0033-work-in-progress-limits-and-templates.md)) |
 | `project` | `Project`, `ProjectKey` |
 | `task` | `Task`, `TaskDraft`, `Priority`, `Assignee`, `Schedule`, `Rank` |
 | `sprint` | `Sprint`, `SprintState`, `SprintDates`, `SprintSummary`, `SprintUnit`: a stretch of time in which the team works on a part of the backlog; `StoryPoints`: how big a task is; `CountedTask`: a task as a sprint counts its work |
@@ -43,6 +45,14 @@ done with them. It does no input or output.
 - Categories are ordered by how far along the work is: todo, active, review,
   done. A new status goes behind the last status that is as far along, or
   less far, so a new "active" status lands in front of review and done.
+- A status may carry a work-in-progress limit, a whole number from 1 to
+  999. A status of the category done carries none, and loses its limit when
+  it becomes one. A limit refuses nothing: `StatusLoad::of_workflow` only
+  counts, every task of the project and no subtask apart from its task.
+- A template makes a workflow, views and areas that follow these rules; a
+  test passes every template through them. The first area of a template
+  takes the identifier of the starting area, and a view of the six first
+  kinds the identifier of its kind.
 - A task number is handed out once and never reused.
 - A task that reaches a "done" status gets a completion time, and loses it
   when it leaves.

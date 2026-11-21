@@ -255,6 +255,20 @@ The shell is where the work of an AI specialist meets the outside world
   to write it anew. In the Team place, `ReadyMadeDialog` is the chooser and
   `InstructionsField` the growing field with its count in the dialog that
   changes a specialist.
+- **Limits and templates**
+  ([decision 0033](../../docs/decisions/0033-work-in-progress-limits-and-templates.md)).
+  A status on the wire carries its `limit`, or `null`. The commands
+  `set_status_limit`, `list_status_loads` and `list_project_templates` in
+  `commands/projects.rs` answer with a `ProjectDto`, a list of
+  `StatusLoadDto` (`count`, `limit` and `fill`: `under`, `at`, `over` or
+  `null`), and a list of `ProjectTemplateDto`. `NewProjectInput.workflow`
+  names a template: `standard`, `kanban`, `scrum`, `hardware` or
+  `engineering`. `src/shared/api/projectTemplates.json` is the interface's
+  copy of the templates and of the range of a limit: the demo makes
+  projects from it. A test in `commands/projects.rs` fails when the copy
+  differs from the domain; run the tests of this crate with
+  `TEAMWRIGHT_WRITE_TEMPLATES=1` to write it anew. The formatter passes
+  over it, so that it keeps the layout of `serde_json`.
 - **Slow commands.** Asking the program whether it is there, and starting a
   turn (also `advise` and `answer_interview`), take seconds. Those commands are declared `async`, so they run on a
   thread of their own and the window stays alive.
@@ -414,6 +428,14 @@ Rules of the interface:
 - **No business rules.** The interface asks the backend and shows the answer.
   Where it shows a change before the backend has answered (moving a card), it
   repeats the backend's arithmetic and corrects itself if the answer differs.
+- **Limits are counted by the backend.** The head of a lane with a limit
+  shows the count of the whole project against it, from
+  `useStatusLoads`, which asks again whenever the tasks or the limits
+  change; `board/boardModel.ts` only turns that answer into a figure, a
+  gauge and words. A lane over its limit takes the red of trouble and the
+  word "over", and is never lit. The limit is set in a column of the
+  dialog of the statuses. The dialog of a new project draws its chooser
+  (`projects/TemplateChoice.tsx`) from `useProjectTemplates`.
 - **News and failures come in the corner.** `useNotifier()` shows a short
   message at the bottom right that goes by itself: `showError` with a rule
   in the colour of danger, `showNotice` with a plain rule and at most one
