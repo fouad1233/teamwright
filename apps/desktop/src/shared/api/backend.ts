@@ -1,3 +1,4 @@
+import type { KitChoice, Library, NewConnector } from './types';
 import type {
   AgentProgram,
   ApprovedProposal,
@@ -490,6 +491,28 @@ export interface Backend {
    * "Firmware engineer 2". An unknown key is `not_found`.
    */
   addReadyMadeMember(projectId: Id, key: string): Promise<Member>;
+
+  /**
+   * The library of skills and connectors of a project, with what this
+   * computer has of it, and what each specialist was given (decision 0039).
+   */
+  projectLibrary(projectId: Id): Promise<Library>;
+  /** Lets the manager pick the folder of a skill. Resolves to nothing if they changed their mind. */
+  chooseSkillFolder(): Promise<string | null>;
+  /**
+   * Adds the skill in a folder to the library and keeps a copy of it on this
+   * computer. A folder that is not a skill, or would let a specialist run
+   * commands, is refused (`rule_broken`).
+   */
+  addSkill(projectId: Id, folder: string): Promise<Library>;
+  /** Removes a skill from the library and from every specialist. */
+  removeSkill(projectId: Id, skillId: Id): Promise<Library>;
+  /** Adds a connector to the library. A secret is named by a variable, never given. */
+  addConnector(projectId: Id, connector: NewConnector): Promise<Library>;
+  /** Removes a connector from the library and from every specialist. */
+  removeConnector(projectId: Id, connectorId: Id): Promise<Library>;
+  /** Gives a specialist these skills and connectors, tool by tool, and nothing else. */
+  setMemberKit(projectId: Id, memberId: Id, kit: KitChoice): Promise<Library>;
 
   /** Says whether the program that runs the AI specialists is installed and signed in. */
   agentProgram(): Promise<AgentProgram>;

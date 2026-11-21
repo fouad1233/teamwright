@@ -1,0 +1,100 @@
+.library {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.section + .section {
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--rule);
+}
+
+.note {
+  max-width: 560px;
+  color: var(--ink-soft);
+  line-height: 1.5;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+}
+
+.item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.item:first-child {
+  border-top: 1px solid var(--rule);
+}
+
+.words {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.name {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.detail {
+  color: var(--ink-soft);
+  font-size: var(--text-small);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+/* How a connector starts is a command or an address: set in the monospace. */
+.start {
+  font-family: var(--font-mono);
+}
+
+.missing {
+  color: var(--ink-faint);
+  font-size: var(--text-small);
+  line-height: 1.5;
+}
+
+.actions,
+.kinds {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius-card);
+}
+
+.header {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2);
+}
+
+.formActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}

@@ -1,4 +1,4 @@
-import { Ellipsis, LibraryBig, MessageSquare, Pencil, Plus, UserMinus } from 'lucide-react';
+import { Ellipsis, LibraryBig, MessageSquare, Pencil, Plus, Puzzle, UserMinus } from 'lucide-react';
 import { useState } from 'react';
 
 import { useNavigation } from '@/app/navigation';
@@ -19,6 +19,9 @@ import { ContextMeter } from '../work/ContextMeter';
 import { useConversationsOfProject, useUsageOfProject } from '../work/WorkContext';
 import { whatMemberIsWorkingOn, whatMemberWaitsFor } from '../work/workModel';
 import { MANAGER_NAME } from './Assignee';
+import { kitInWords } from './kitModel';
+import { useLibrary } from './kitQueries';
+import { LibraryDialog } from './LibraryDialog';
 import { MemberDialog } from './MemberDialog';
 import { ReadyMadeDialog } from './ReadyMadeDialog';
 import { useTeamMembers } from './TeamContext';
@@ -104,6 +107,8 @@ export function TeamView({ project, tasks }: TeamViewProps) {
   const [form, setForm] = useState(CLOSED);
   const [removal, setRemoval] = useState(CLOSED);
   const [isChoosingReadyMade, setIsChoosingReadyMade] = useState(false);
+  const [isShowingLibrary, setIsShowingLibrary] = useState(false);
+  const library = useLibrary(project.id);
   const hasSpecialists = members.some((member) => member.kind === 'agent');
   const leaving = removal.member;
   const tasksOfLeaving = leaving ? tasksOfMember(tasks, leaving.id).length : 0;
@@ -171,6 +176,11 @@ export function TeamView({ project, tasks }: TeamViewProps) {
                     </span>
                     {member.responsibility !== '' && (
                       <span className={styles.responsibility}>{member.responsibility}</span>
+                    )}
+                    {member.kind === 'agent' && kitInWords(library.data, member.id) !== null && (
+                      <span className={styles.responsibility}>
+                        Has {kitInWords(library.data, member.id)}
+                      </span>
                     )}
                   </div>
                 </div>
@@ -261,7 +271,25 @@ export function TeamView({ project, tasks }: TeamViewProps) {
           <LibraryBig />
           Add a ready-made specialist
         </button>
+        <button
+          type="button"
+          className={styles.add}
+          onClick={() => {
+            setIsShowingLibrary(true);
+          }}
+        >
+          <Puzzle />
+          Skills and connectors
+        </button>
       </div>
+
+      <LibraryDialog
+        open={isShowingLibrary}
+        project={project}
+        onClose={() => {
+          setIsShowingLibrary(false);
+        }}
+      />
 
       <ReadyMadeDialog
         open={isChoosingReadyMade}

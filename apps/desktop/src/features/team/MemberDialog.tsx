@@ -10,6 +10,9 @@ import { describeFailure } from '@/shared/ui/Toast';
 
 import { MemberAvatar } from './Assignee';
 import { InstructionsField } from './InstructionsField';
+import { KitField } from './KitField';
+import { choiceOf, kitOf, sameChoice } from './kitModel';
+import { useLibrary, useLibraryCommands } from './kitQueries';
 import styles from './MemberDialog.module.css';
 import { EFFORT_CHOICES, LEFT_TO_THE_PROGRAM, modelChoices } from './profileChoices';
 import {
@@ -79,6 +82,11 @@ interface MemberFormProps {
  */
 function MemberForm({ project, member, onDone }: MemberFormProps) {
   const commands = useTeamCommands(project.id);
+  const library = useLibrary(project.id);
+  const libraryCommands = useLibraryCommands(project.id);
+  const givenBefore = choiceOf(member ? kitOf(library.data, member.id) : undefined);
+  const [kit, setKit] = useState<typeof givenBefore | null>(null);
+  const kitChoice = kit ?? givenBefore;
   const [kind, setKind] = useState<MemberKind>(member?.kind ?? 'agent');
   const [name, setName] = useState(member?.name ?? '');
   const [responsibility, setResponsibility] = useState(member?.responsibility ?? '');
@@ -103,6 +111,9 @@ function MemberForm({ project, member, onDone }: MemberFormProps) {
           ...profile,
           instructions: kind === 'agent' ? instructions : '',
         });
+        if (kind === 'agent' && !sameChoice(kitChoice, givenBefore)) {
+          await libraryCommands.setKit(member.id, kitChoice);
+        }
       } else {
         await commands.add({ name, kind, responsibility, ...profile });
       }
@@ -177,6 +188,10 @@ function MemberForm({ project, member, onDone }: MemberFormProps) {
           written here once it is on the team. */}
       {member && kind === 'agent' && (
         <InstructionsField value={instructions} onChange={setInstructions} />
+      )}
+
+      {member && kind === 'agent' && library.data && (
+        <KitField library={library.data} choice={kitChoice} onChange={setKit} />
       )}
 
       {kind === 'agent' && (

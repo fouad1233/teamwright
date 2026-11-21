@@ -3,6 +3,7 @@ import { listen } from '@tauri-apps/api/event';
 import { open, save } from '@tauri-apps/plugin-dialog';
 
 import { BackendError, type Backend } from './backend';
+import type { KitChoice, Library, NewConnector } from './types';
 import type {
   AgentProgram,
   ApprovedProposal,
@@ -473,6 +474,34 @@ export class TauriBackend implements Backend {
 
   addReadyMadeMember(projectId: Id, key: string): Promise<Member> {
     return call('add_ready_made_member', { projectId, key });
+  }
+
+  projectLibrary(projectId: Id): Promise<Library> {
+    return call('project_library', { projectId });
+  }
+
+  async chooseSkillFolder(): Promise<string | null> {
+    return open({ directory: true, multiple: false, title: 'Choose the folder of a skill' });
+  }
+
+  addSkill(projectId: Id, folder: string): Promise<Library> {
+    return call('add_skill', { projectId, folder });
+  }
+
+  removeSkill(projectId: Id, skillId: Id): Promise<Library> {
+    return call('remove_skill', { projectId, skillId });
+  }
+
+  addConnector(projectId: Id, connector: NewConnector): Promise<Library> {
+    return call('add_connector', { projectId, input: connector });
+  }
+
+  removeConnector(projectId: Id, connectorId: Id): Promise<Library> {
+    return call('remove_connector', { projectId, connectorId });
+  }
+
+  setMemberKit(projectId: Id, memberId: Id, kit: KitChoice): Promise<Library> {
+    return call('set_member_kit', { projectId, memberId, kit });
   }
 
   agentProgram(): Promise<AgentProgram> {

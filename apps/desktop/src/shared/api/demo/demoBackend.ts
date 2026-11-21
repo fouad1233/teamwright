@@ -1,3 +1,5 @@
+import { PretendedLibrary, SAMPLE_SKILL_FOLDERS } from './kits';
+import type { KitChoice, Library, NewConnector } from '../types';
 import { evenlySpacedRanks, rankBetween, rankFitsBetween } from '@/shared/lib/rank';
 
 import { BackendError, type Backend } from '../backend';
@@ -337,7 +339,10 @@ export class DemoBackend implements Backend {
   private readonly areas = new Map<Id, Area[]>();
   /** The tags of each project, in the order they were made. */
   private readonly tags = new Map<Id, Tag[]>();
+  /** The libraries of skills and connectors, and the kits of the specialists. */
+  private readonly library: PretendedLibrary;
   private sampleFoldersHandedOut = 0;
+  private skillFoldersHandedOut = 0;
   /**
    * The theme of this computer. The browser is the computer of the demo, so
    * it starts from the theme the window last remembered there.
@@ -457,6 +462,19 @@ export class DemoBackend implements Backend {
     }
     for (const tag of workspace?.tags ?? []) {
       this.tagsOf(tag.projectId).push(structuredClone(tag));
+    }
+    // The sample workspace's first project has a small library, and its
+    // first specialist a part of it, so that the feature shows.
+    this.library = new PretendedLibrary(
+      () => environment.newId(),
+      () => environment.now().toISOString(),
+    );
+    const firstProject = workspace?.projects?.[0];
+    if (firstProject) {
+      this.library.seed(
+        firstProject.id,
+        this.teamOf(firstProject.id).find((member) => member.kind === 'agent'),
+      );
     }
     // A project that was kept before it had areas gets the area "General",
     // and a task that is in none of the areas of its project goes into the
@@ -1270,6 +1288,56 @@ export class DemoBackend implements Backend {
 
   listReadyMadeSpecialists(): Promise<ReadyMadeSpecialist[]> {
     return this.answer(() => [...READY_MADE_SPECIALISTS]);
+  }
+
+  projectLibrary(projectId: Id): Promise<Library> {
+    return this.answer(() =>
+      this.library.library(this.requireProject(projectId).id, this.teamOf(projectId)),
+    );
+  }
+
+  chooseSkillFolder(): Promise<string | null> {
+    return this.answer(() => {
+      const folders = Object.keys(SAMPLE_SKILL_FOLDERS);
+      const folder = folders[this.skillFoldersHandedOut % folders.length];
+      this.skillFoldersHandedOut += 1;
+      return folder ?? null;
+    });
+  }
+
+  addSkill(projectId: Id, folder: string): Promise<Library> {
+    return this.answer(() => {
+      this.library.addSkill(this.requireProject(projectId).id, folder);
+      return this.library.library(projectId, this.teamOf(projectId));
+    });
+  }
+
+  removeSkill(projectId: Id, skillId: Id): Promise<Library> {
+    return this.answer(() => {
+      this.library.removeSkill(this.requireProject(projectId).id, skillId);
+      return this.library.library(projectId, this.teamOf(projectId));
+    });
+  }
+
+  addConnector(projectId: Id, connector: NewConnector): Promise<Library> {
+    return this.answer(() => {
+      this.library.addConnector(this.requireProject(projectId).id, connector);
+      return this.library.library(projectId, this.teamOf(projectId));
+    });
+  }
+
+  removeConnector(projectId: Id, connectorId: Id): Promise<Library> {
+    return this.answer(() => {
+      this.library.removeConnector(this.requireProject(projectId).id, connectorId);
+      return this.library.library(projectId, this.teamOf(projectId));
+    });
+  }
+
+  setMemberKit(projectId: Id, memberId: Id, kit: KitChoice): Promise<Library> {
+    return this.answer(() => {
+      this.library.setKit(this.requireMember(memberId), kit);
+      return this.library.library(this.requireProject(projectId).id, this.teamOf(projectId));
+    });
   }
 
   addReadyMadeMember(projectId: Id, key: string): Promise<Member> {

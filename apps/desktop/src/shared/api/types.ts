@@ -1785,3 +1785,91 @@ export interface BudgetQuestion extends BudgetScope {
 export interface CoordinatorChanged {
   projectId: Id;
 }
+
+/**
+ * How a connector is started: a program of the computer that runs the turn,
+ * or a tool server at a web address. A secret is named by the environment
+ * variable that holds it, never given (decision 0039).
+ */
+export type ConnectorStart =
+  | {
+      kind: 'program';
+      program: string;
+      arguments: string[];
+      /** The environment variables the program is handed, by name. */
+      variables: string[];
+    }
+  | {
+      kind: 'address';
+      url: string;
+      headers: ConnectorHeader[];
+    };
+
+/** A header of a connector at a web address, whose value is the secret in a variable. */
+export interface ConnectorHeader {
+  name: string;
+  variable: string;
+  /** Whether the value is `Bearer ` and the secret. */
+  bearer: boolean;
+}
+
+/** A skill of the library of a project. */
+export interface LibrarySkill {
+  id: Id;
+  /** Lower-case letters, digits and hyphens. */
+  name: string;
+  /** What it is for and when it is used, from its SKILL.md. */
+  description: string;
+  addedAt: Moment;
+  /** Whether this computer keeps its folder. Without it, no turn here is given the skill. */
+  here: boolean;
+}
+
+/** A connector of the library of a project. */
+export interface LibraryConnector {
+  id: Id;
+  /** Lower-case letters, digits and hyphens. */
+  name: string;
+  start: ConnectorStart;
+  /** The names of its tools that the manager may give. */
+  tools: string[];
+  addedAt: Moment;
+  /** The variables it needs that are not set on this computer. */
+  missingVariables: string[];
+}
+
+/** A connector as a specialist is given it: only the tools named. */
+export interface GivenConnector {
+  connectorId: Id;
+  tools: string[];
+}
+
+/** What a specialist was given of the library of its project. */
+export interface MemberKit {
+  memberId: Id;
+  skills: Id[];
+  connectors: GivenConnector[];
+}
+
+/** What the manager gives a specialist. */
+export interface KitChoice {
+  skills: Id[];
+  connectors: GivenConnector[];
+}
+
+/** The library of a project, and what each specialist was given of it. */
+export interface Library {
+  /** By name. */
+  skills: LibrarySkill[];
+  /** By name. */
+  connectors: LibraryConnector[];
+  /** A specialist that was given nothing may have none. */
+  kits: MemberKit[];
+}
+
+/** A connector the manager describes, to add to a library. */
+export interface NewConnector {
+  name: string;
+  start: ConnectorStart;
+  tools: string[];
+}
