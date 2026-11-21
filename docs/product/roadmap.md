@@ -71,7 +71,17 @@ A single specialist that really works through Claude Code.
   and a turn on it is refused with the reason
 - ⬜ The limits of the plan that the program reports
 - ✅ The model and the effort of a specialist
-- ⬜ Instructions of a specialist's own, and a set of ready-made specialists
+- ✅ Instructions of a specialist's own, and a set of ready-made specialists
+  ([decision 0031](../decisions/0031-instructions-and-ready-made-specialists.md)).
+  A specialist's instructions reach every turn after Teamwright's own
+  rules and never replace them. Twelve ready-made specialists, hardware as
+  well as software, are added from a chooser in the Team place, and a
+  member the Advisor proposes under one of their names starts with its
+  instructions. Seen in a browser on demo data and tested at every layer.
+  Not yet seen in the built program, and no real specialist has run with
+  instructions: the test against the real Claude Code was written but
+  could not run, because Claude Code on that night's computer was not
+  signed in
 - ⬜ Skills and connectors for a specialist, chosen by the manager. A
   session sees nothing of what the user set up in Claude Code for their own
   use
@@ -90,8 +100,13 @@ From a conversation to an approved team and plan.
   Advisor is told when its proposal was approved, and proposes nobody a
   second time. That it repeats no task rests on what it is told: the
   program cannot tell a task that says the same in other words
-- ⬜ Change the title, the size or the dependencies of a proposed task
-  before approving
+- ✅ Change a proposed task before approving: its title, size,
+  description, priority, owner and what it waits for; add or remove
+  tasks. Each change is stored and reaches the other computers, and the
+  Advisor is told the plan as it was approved. Tested at each layer and
+  seen in a browser on the demo's simulated Advisor; not tried in the
+  built program or with a real Advisor. The Advisor's first version is
+  not kept once it was changed, so there is no "undo my changes"
 - ⬜ Import earlier Claude Code conversations as context digests
 
 ## M4 · Teamwork 🚧
@@ -99,10 +114,21 @@ From a conversation to an approved team and plan.
 Several specialists working together with the manager in the loop.
 
 - 🚧 Team bus: the tools specialists use to talk to the project. It has
-  three: a specialist asks the manager to decide, and the Advisor asks its
-  questions and proposes a team and a plan
+  five: a specialist asks the manager to decide, hands the result of its
+  task over and writes to a teammate, and the Advisor asks its questions
+  and proposes a team and a plan
 - ✅ Decision requests and the manager's inbox
-- ⬜ Teammate messages, handoffs and registered artifacts
+- 🚧 Teammate messages, handoffs and registered artifacts
+  ([decision 0029](../decisions/0029-handoffs-and-messages-between-specialists.md)):
+  a specialist hands the result of a task over (a summary, an interface
+  contract, files that must exist in the folder of the project) and
+  writes a question or a note to a teammate. The latest handoff of every
+  task a task builds on goes into its brief, and a message comes with the
+  receiver's next turn. The manager reads all of it: the handoff in the
+  panel of the task, the messages in the Team place. Tested with recorded
+  tool calls and seen in a browser on demo data. Not yet seen with a real
+  specialist (the test against the real Claude Code could not run: it
+  was not signed in) or in the built program
 - ⬜ Project memory: decisions, facts and interface contracts
 - ⬜ Coordinator: dependency-driven start, concurrency limit, token budgets
 - ⬜ Permission requests for risky actions routed to the manager
@@ -236,7 +262,16 @@ Several specialists working together with the manager in the loop.
   built program. Which tasks moved on when a sprint was completed is not
   recorded, and on the board the tasks of a previous sprint all stand in
   the last lanes, after empty ones
-- ⬜ Work-in-progress limits, custom fields, tags, checklists
+- ✅ Tags and checklists
+  ([decision 0030](../decisions/0030-tags-and-checklists.md)): the tags
+  of a project on tasks, cards, the list, the table, the filter of a view
+  and the workbook; one checklist for a task, with its progress on cards
+  and rows. Both are stored and synced key by key, so two computers that
+  change different tags or items of one task both keep their change.
+  Tested in every layer, the taking in with two databases, and seen in a
+  browser on demo data; not yet run in the built program. A task made in
+  a view that is filtered by a tag does not get that tag yet
+- ⬜ Work-in-progress limits, custom fields
 - ⬜ Templates: Scrum, Kanban, hardware product
 
 ## M7 · Many computers 🚧
@@ -279,7 +314,16 @@ Several specialists working together with the manager in the loop.
   builds were never run at all. Updates from inside the program are not
   built
 - ⬜ User manual
-- ⬜ Public demo in the browser
+- 🚧 Public demo in the browser
+  ([decision 0032](../decisions/0032-a-public-demo-in-the-browser.md)):
+  the interface, built for the browser (`npm run build:demo`), is
+  published by the website's workflow under `demo/`, with a band that
+  says it is a demo, a page for phones and a specialist at work when it
+  opens. The commands of the workflow were run on a clean copy and the
+  result clicked through in a headless Chrome at desktop and phone
+  sizes. It is not published yet: the workflow runs when this reaches
+  the main branch, and that first run, a real phone and browsers other
+  than Chrome were not tried
 - ✅ A website on GitHub Pages that explains the project, with the film
   run by scrolling ([decision 0023](../decisions/0023-a-website-without-a-framework.md)):
   <https://fouad1233.github.io/teamwright/>, published on 14 November
