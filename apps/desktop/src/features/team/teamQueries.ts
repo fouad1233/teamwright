@@ -19,6 +19,16 @@ export function useTeam(projectId: Id) {
   return useQuery({ queryKey: teamKey(projectId), queryFn: () => backend.listMembers(projectId) });
 }
 
+/** The ready-made specialists that ship with the program. They never change while it runs. */
+export function useReadyMadeSpecialists() {
+  const backend = useBackend();
+  return useQuery({
+    queryKey: ['readyMadeSpecialists'] as const,
+    queryFn: () => backend.listReadyMadeSpecialists(),
+    staleTime: Infinity,
+  });
+}
+
 /** What can be changed about a member after it joined. */
 export interface MemberChanges {
   name: string;
@@ -26,6 +36,8 @@ export interface MemberChanges {
   /** The model and the effort of an AI specialist. A person has neither. */
   model: string | null;
   effort: Effort | null;
+  /** The instructions of an AI specialist. A person has none. */
+  instructions: string;
 }
 
 /**
@@ -37,6 +49,8 @@ export interface MemberChanges {
 export interface TeamCommands {
   /** Puts someone on the team. */
   add(member: Omit<NewMember, 'projectId'>): Promise<Member>;
+  /** Puts a ready-made specialist on the team, by the key of its role. */
+  addReadyMade(key: string): Promise<Member>;
   /** Changes what differs: the name, the responsibility, the way a specialist runs. */
   change(member: Member, changes: MemberChanges): Promise<void>;
   /**
@@ -70,6 +84,11 @@ export function useTeamCommands(projectId: Id): TeamCommands {
         show(added);
         return added;
       },
+      addReadyMade: async (key) => {
+        const added = await backend.addReadyMadeMember(projectId, key);
+        show(added);
+        return added;
+      },
       change: async (member, changes) => {
         if (changes.name.trim() !== member.name) {
           show(await backend.renameMember(member.id, changes.name));
@@ -84,6 +103,9 @@ export function useTeamCommands(projectId: Id): TeamCommands {
               effort: changes.effort,
             }),
           );
+        }
+        if (changes.instructions.trim() !== member.instructions) {
+          show(await backend.setMemberInstructions(member.id, changes.instructions));
         }
       },
       remove: async (memberId) => {

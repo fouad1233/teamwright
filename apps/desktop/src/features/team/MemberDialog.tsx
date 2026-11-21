@@ -9,9 +9,16 @@ import { ChoiceMenu } from '@/shared/ui/Menu';
 import { describeFailure } from '@/shared/ui/Toast';
 
 import { MemberAvatar } from './Assignee';
+import { InstructionsField } from './InstructionsField';
 import styles from './MemberDialog.module.css';
 import { EFFORT_CHOICES, LEFT_TO_THE_PROGRAM, modelChoices } from './profileChoices';
-import { effortLabel, kindLabel, modelLabel } from './teamModel';
+import {
+  effortLabel,
+  INSTRUCTIONS_LIMIT,
+  kindLabel,
+  lengthOfInstructions,
+  modelLabel,
+} from './teamModel';
 import { useTeamCommands } from './teamQueries';
 
 interface KindChoice {
@@ -47,8 +54,14 @@ interface MemberDialogProps {
 
 /** The dialog in which a member is put on the team, or changed. */
 export function MemberDialog({ open, project, member, onClose }: MemberDialogProps) {
+  // A specialist's instructions are a page of text: they get the wide dialog.
   return (
-    <Dialog open={open} title={member ? 'Change member' : 'Add to the team'} onClose={onClose}>
+    <Dialog
+      open={open}
+      title={member ? 'Change member' : 'Add to the team'}
+      size={member?.kind === 'agent' ? 'wide' : 'regular'}
+      onClose={onClose}
+    >
       <MemberForm project={project} member={member} onDone={onClose} />
     </Dialog>
   );
@@ -71,7 +84,9 @@ function MemberForm({ project, member, onDone }: MemberFormProps) {
   const [responsibility, setResponsibility] = useState(member?.responsibility ?? '');
   const [model, setModel] = useState(member?.model ?? null);
   const [effort, setEffort] = useState(member?.effort ?? null);
+  const [instructions, setInstructions] = useState(member?.instructions ?? '');
   const [refusal, setRefusal] = useState<string | null>(null);
+  const instructionsTooLong = lengthOfInstructions(instructions) > INSTRUCTIONS_LIMIT;
   const [isSubmitting, setIsSubmitting] = useState(false);
   const chosen = KIND_CHOICES.find((choice) => choice.kind === kind);
 
@@ -82,7 +97,12 @@ function MemberForm({ project, member, onDone }: MemberFormProps) {
       // Only an AI specialist runs on a model. A person is given neither.
       const profile = kind === 'agent' ? { model, effort } : { model: null, effort: null };
       if (member) {
-        await commands.change(member, { name, responsibility, ...profile });
+        await commands.change(member, {
+          name,
+          responsibility,
+          ...profile,
+          instructions: kind === 'agent' ? instructions : '',
+        });
       } else {
         await commands.add({ name, kind, responsibility, ...profile });
       }
@@ -153,6 +173,12 @@ function MemberForm({ project, member, onDone }: MemberFormProps) {
         />
       </Field>
 
+      {/* A specialist added by hand starts without instructions; they are
+          written here once it is on the team. */}
+      {member && kind === 'agent' && (
+        <InstructionsField value={instructions} onChange={setInstructions} />
+      )}
+
       {kind === 'agent' && (
         <div className={styles.profile}>
           <Field label="Model">
@@ -200,7 +226,11 @@ function MemberForm({ project, member, onDone }: MemberFormProps) {
         <Button variant="ghost" onClick={onDone}>
           Cancel
         </Button>
-        <Button variant="primary" type="submit" disabled={isSubmitting || name.trim() === ''}>
+        <Button
+          variant="primary"
+          type="submit"
+          disabled={isSubmitting || name.trim() === '' || instructionsTooLong}
+        >
           {member ? 'Save' : 'Add to the team'}
         </Button>
       </div>

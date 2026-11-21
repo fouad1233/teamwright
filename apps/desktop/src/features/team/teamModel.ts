@@ -1,4 +1,25 @@
+import readyMade from '@/shared/api/readyMade.json';
 import type { Effort, Id, Member, MemberKind, Task } from '@/shared/api/types';
+
+/**
+ * The most characters the instructions of a specialist can have. The
+ * backend refuses more; the interface counts against it. The number is the
+ * program's own, from a copy a test keeps equal to it.
+ */
+export const INSTRUCTIONS_LIMIT: number = readyMade.memberInstructionsLimit;
+
+/**
+ * How many characters instructions have as the backend counts them: with
+ * the space at both ends left out and every line break as one character.
+ */
+export function lengthOfInstructions(text: string): number {
+  return [...text.replace(/\r\n?/g, '\n').trim()].length;
+}
+
+/** A count of characters as people read it: "1,234". */
+export function countInWords(count: number): string {
+  return count.toLocaleString('en-US');
+}
 
 const KIND_LABELS: Record<MemberKind, string> = {
   agent: 'AI specialist',
@@ -52,6 +73,21 @@ export function profileInWords(member: Pick<Member, 'model' | 'effort'>): string
     member.effort === null ? null : `${effortLabel(member.effort).toLowerCase()} effort`,
   ].filter((part) => part !== null);
   return parts.length === 0 ? null : parts.join(', ');
+}
+
+/**
+ * How a specialist runs and whether it has instructions of its own, in a
+ * few words: "Sonnet, high effort, own instructions". Nothing, if it has
+ * neither a profile nor instructions.
+ */
+export function specialistInWords(
+  member: Pick<Member, 'model' | 'effort' | 'instructions'>,
+): string | null {
+  const profile = profileInWords(member);
+  if (member.instructions === '') {
+    return profile;
+  }
+  return profile === null ? 'Own instructions' : `${profile}, own instructions`;
 }
 
 /** The members of a team by their identifier. */

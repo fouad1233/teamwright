@@ -3,14 +3,43 @@ import { describe, expect, it } from 'vitest';
 import type { Assignee, Member, Task } from '@/shared/api/types';
 
 import {
+  countInWords,
   effortLabel,
   indexMembers,
   initialsOf,
+  INSTRUCTIONS_LIMIT,
+  lengthOfInstructions,
   modelLabel,
   profileInWords,
+  specialistInWords,
   tasksOfManager,
   tasksOfMember,
 } from './teamModel';
+
+describe('specialistInWords', () => {
+  it('adds that a specialist has instructions of its own to how it runs', () => {
+    const none = { model: null, effort: null, instructions: '' };
+    expect(specialistInWords(none)).toBeNull();
+    expect(specialistInWords({ ...none, instructions: 'Ask.' })).toBe('Own instructions');
+    expect(specialistInWords({ model: 'sonnet', effort: 'high', instructions: 'Ask.' })).toBe(
+      'Sonnet, high effort, own instructions',
+    );
+    expect(specialistInWords({ ...none, model: 'opus' })).toBe('Opus');
+  });
+});
+
+describe('lengthOfInstructions', () => {
+  it('counts as the backend does: without the space at the ends, a line break as one', () => {
+    expect(lengthOfInstructions('  Check.\r\nAsk.  \n')).toBe(11);
+    expect(lengthOfInstructions(' \n ')).toBe(0);
+    expect(lengthOfInstructions('µA')).toBe(2);
+  });
+
+  it('counts against the limit of the program', () => {
+    expect(INSTRUCTIONS_LIMIT).toBe(4000);
+    expect(countInWords(INSTRUCTIONS_LIMIT)).toBe('4,000');
+  });
+});
 
 function member(id: string, name: string): Member {
   return {

@@ -1,0 +1,165 @@
+/* The chooser keeps the height of what it holds, and the dialog scrolls
+   when that is more than the window. */
+.chooser {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* The roles at the left, the chosen one at the right, divided by a rule. */
+.panes {
+  display: grid;
+  grid-template-columns: 216px minmax(0, 1fr);
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+}
+
+.roles {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: var(--space-2) var(--space-2) var(--space-2) 0;
+  border: none;
+  border-right: 1px solid var(--rule);
+}
+
+.hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.role {
+  /* The hidden radio button is placed against its own row. */
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 40px;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  cursor: pointer;
+  transition:
+    border-color 100ms ease,
+    background-color 100ms ease;
+}
+
+.role:hover {
+  background: var(--hover);
+}
+
+/* The chosen role is outlined in ink, like a part that has been picked up. */
+.chosenRole,
+.chosenRole:hover {
+  border-color: var(--ink);
+  background: transparent;
+}
+
+/* The radio button does the work for the keyboard and for screen readers;
+   the row around it shows the choice. */
+.radio {
+  position: absolute;
+  top: 0;
+  left: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.role:has(.radio:focus-visible) {
+  outline: 2px solid var(--brass);
+  outline-offset: 1px;
+}
+
+.roleName {
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-3) 0 var(--space-3) var(--space-4);
+}
+
+.name {
+  margin: 0;
+  font-size: var(--text-strong);
+  font-weight: 600;
+}
+
+.description {
+  color: var(--ink-soft);
+}
+
+.profile {
+  margin-top: var(--space-1);
+}
+
+.instructions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: var(--space-2);
+}
+
+/* The instructions as the specialist will read them, in a sunken well that
+   scrolls when they are longer than it. */
+.text {
+  max-height: 30vh;
+  padding: var(--space-2) var(--space-3);
+  overflow-y: auto;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  background: var(--ground-sunken);
+  color: var(--ink-soft);
+  font-size: var(--text-small);
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.note {
+  color: var(--ink-faint);
+  font-size: var(--text-small);
+}
+
+.refusal {
+  padding: var(--space-2) var(--space-3);
+  border-left: 3px solid var(--danger);
+  border-radius: var(--radius-control);
+  background: var(--danger-soft);
+  color: var(--ink);
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+/* In a narrow window the roles stand above the chosen one. */
+@media (width < 600px) {
+  .panes {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .roles {
+    padding-right: 0;
+    border-right: none;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .detail {
+    padding-left: 0;
+  }
+}

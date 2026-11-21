@@ -1,0 +1,41 @@
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+/* The field grows with what is written, from a few lines to a third of the
+   window, and scrolls after that. */
+.text {
+  min-height: 108px;
+  max-height: 34vh;
+  resize: none;
+  field-sizing: content;
+}
+
+/* What the instructions are for, and the count, on one line under the
+   field: the words at the left, the number at the right. */
+.foot {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
+  font-size: var(--text-small);
+}
+
+.meaning {
+  color: var(--ink-faint);
+}
+
+/* Anything that is counted is set in the monospace. */
+.count {
+  flex: none;
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.tooLong {
+  color: var(--danger);
+}

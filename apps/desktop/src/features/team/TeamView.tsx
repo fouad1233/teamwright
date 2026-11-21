@@ -1,4 +1,4 @@
-import { Ellipsis, MessageSquare, Pencil, Plus, UserMinus } from 'lucide-react';
+import { Ellipsis, LibraryBig, MessageSquare, Pencil, Plus, UserMinus } from 'lucide-react';
 import { useState } from 'react';
 
 import { useNavigation } from '@/app/navigation';
@@ -18,9 +18,10 @@ import { useConversationsOfProject, useUsageOfProject } from '../work/WorkContex
 import { whatMemberIsWorkingOn, whatMemberWaitsFor } from '../work/workModel';
 import { MANAGER_NAME } from './Assignee';
 import { MemberDialog } from './MemberDialog';
+import { ReadyMadeDialog } from './ReadyMadeDialog';
 import { useTeamMembers } from './TeamContext';
 import styles from './TeamView.module.css';
-import { kindLabel, profileInWords, tasksOfManager, tasksOfMember } from './teamModel';
+import { kindLabel, specialistInWords, tasksOfManager, tasksOfMember } from './teamModel';
 import { useTeamCommands } from './teamQueries';
 
 interface TeamViewProps {
@@ -100,6 +101,7 @@ export function TeamView({ project, tasks }: TeamViewProps) {
   const usage = useUsageOfProject();
   const [form, setForm] = useState(CLOSED);
   const [removal, setRemoval] = useState(CLOSED);
+  const [isChoosingReadyMade, setIsChoosingReadyMade] = useState(false);
   const hasSpecialists = members.some((member) => member.kind === 'agent');
   const leaving = removal.member;
   const tasksOfLeaving = leaving ? tasksOfMember(tasks, leaving.id).length : 0;
@@ -173,8 +175,8 @@ export function TeamView({ project, tasks }: TeamViewProps) {
               </td>
               <td className={styles.kind}>
                 {kindLabel(member.kind)}
-                {profileInWords(member) !== null && (
-                  <span className={styles.profile}>{profileInWords(member)}</span>
+                {specialistInWords(member) !== null && (
+                  <span className={styles.profile}>{specialistInWords(member)}</span>
                 )}
               </td>
               <td>
@@ -236,16 +238,36 @@ export function TeamView({ project, tasks }: TeamViewProps) {
         </p>
       )}
 
-      <button
-        type="button"
-        className={styles.add}
-        onClick={() => {
-          setForm({ isOpen: true });
+      <div className={styles.adds}>
+        <button
+          type="button"
+          className={styles.add}
+          onClick={() => {
+            setForm({ isOpen: true });
+          }}
+        >
+          <Plus />
+          Add member
+        </button>
+        <button
+          type="button"
+          className={styles.add}
+          onClick={() => {
+            setIsChoosingReadyMade(true);
+          }}
+        >
+          <LibraryBig />
+          Add a ready-made specialist
+        </button>
+      </div>
+
+      <ReadyMadeDialog
+        open={isChoosingReadyMade}
+        project={project}
+        onClose={() => {
+          setIsChoosingReadyMade(false);
         }}
-      >
-        <Plus />
-        Add member
-      </button>
+      />
 
       {hasSpecialists && <ProgramStatus />}
 

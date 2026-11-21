@@ -104,6 +104,13 @@
   color: var(--ink-soft);
 }
 
+/* The two ways to add someone, side by side under the table. */
+.adds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
 .add {
   display: flex;
   align-items: center;
