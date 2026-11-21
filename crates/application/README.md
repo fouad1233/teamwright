@@ -24,6 +24,7 @@ window or agent runtime.
 | `google_drive` | `GoogleDriveService`: the folder that Google Drive for desktop keeps on this computer (`find_drive_folders`, `look`, `prepare`), behind the port `DriveSurroundings`; see "Syncing through Google Drive" |
 | `sync` | `SyncService`: keep several computers of one manager in step through a folder the manager owns (`round`, `choose_folder`, `stop`, `rename_this_computer`, `accept`, `ignore`, `notices`, `dismiss`, `new_identity`); the ports `SyncFolder` and `SyncLedger`, and the operations that travel between computers |
 | `workbook` | `WorkbookService`: gather a project into a workbook of four sheets (summary, tasks, sprints, team) as plain data: `Workbook`, `Sheet`, `SheetContent`, `Section`, `Table`, `Column` and `Cell`, whose kind says whether it is text, a whole number, hours, a date or a status. Writing the file is done outside this crate ([decision 0025](../../docs/decisions/0025-the-project-as-a-workbook.md)) |
+| `project_report` | `ProjectReportService`: gather the report of a whole project as plain data (`ProjectReport`: the brief, the work done by area and by holder, the plan against what happened, the sprints, the usage by who and by model, the decisions, the handoffs, what is open), and `report_in_markdown`, which writes it as a Markdown file ([decision 0042](../../docs/decisions/0042-the-report-of-a-whole-project.md)) |
 | `ports` | The interfaces the services need: `ProjectRepository`, `TaskRepository`, `MemberRepository`, `ConversationRepository`, `PlanningRepository`, `PlacesRepository`, `SprintRepository`, `ViewRepository`, `AreaRepository`, `TagRepository`, `TeamworkRepository`, `DigestRepository`, `EarlierConversations` (with `FoundConversation`), `MemoryRepository`, `ProjectFolders`, `FileSystem`, `FolderReader`, `WorkListener`, `Clock` (which also tells the day a moment falls on) |
 | `agent_runtime` | `AgentRuntime`: the interface to the program that runs a team member's session, and the data it speaks |
 | `error` | `ApplicationError`, with a stable `code()` for interfaces |
@@ -745,6 +746,44 @@ It reads a project and returns what its workbook holds; it writes nothing.
 - The team is the manager ("You"), the members in the order they joined,
   and the Advisor if the project has spoken with it. Tokens are counted for
   AI specialists and the Advisor, every kind together (`TokenCounts::all`).
+
+## The report of a whole project
+
+`ProjectReportService::report_of` carries out
+[decision 0042](../../docs/decisions/0042-the-report-of-a-whole-project.md).
+It reads a project and returns its report; it writes nothing.
+`project_report/tests.rs` checks every part on a project in memory, and
+`project_report/markdown.rs` tests the Markdown it is written as.
+
+- A project is complete when it has tasks and every one of them is in a
+  status of the category done. There is no state "completed" to set. The
+  report is called "Report of the project" then, and "Report of the
+  project so far" before.
+- The brief is the summary of the latest plan of the Advisor the manager
+  approved. A project planned without the Advisor has none.
+- The work is shared by area only when the project has more than one
+  area, and by holder in the order of the team, then the manager, then
+  the tasks given to nobody. A part that holds no task is left out.
+- The plan against what happened says only what is stored: the
+  estimates of the finished tasks, how long the turns of the specialists
+  on them ran (from the start to the end of every turn that ended), and
+  the due dates met and missed, where a day is the day where the program
+  runs (`Clock::day_of`). An estimate is the size of the work for a
+  skilled person, not a forecast of a specialist's time, and the report
+  says so beside the comparison. The work of people is not timed, and
+  the report says that too when people finished tasks. Nothing is
+  extrapolated: the sprint charts work out the course of the work.
+- A sprint keeps the summary it was completed with; any other is counted
+  from its main tasks now, as its report counts it.
+- What the team used is `usage_of` by who, and the turns that ended by
+  the model they ran on.
+- The decisions are the questions of the specialists and of the Advisor's
+  interviews that the manager answered, in the order they were answered.
+  A question that waits is counted under what is still open.
+- The results handed over are the latest handoff of every task, in the
+  order of the tasks (`latest_handoff_of`).
+- The summary and the plan are sentences worked out here, so that the
+  page on the screen and the Markdown file say the same.
 
 ## Adding a use case
 

@@ -6,7 +6,7 @@
 //! AI specialist work on a task. Each use case is a method of a service
 //! ([`ProjectService`], [`TaskService`], [`SprintService`], [`ViewService`],
 //! [`AreaService`], [`TagService`], [`ChecklistService`], [`TeamService`], [`PlacesService`], [`WorkService`],
-//! [`WorkbookService`])
+//! [`WorkbookService`], [`ProjectReportService`])
 //! that loads what it
 //! needs, lets the
 //! domain apply its rules, and stores the result.
@@ -32,6 +32,7 @@ pub mod notifications;
 pub mod places;
 pub mod ports;
 pub mod project_events;
+pub mod project_report;
 pub mod projects;
 pub mod sprints;
 pub mod sync;
@@ -102,6 +103,12 @@ pub use project_events::{
     Agent, Happening, ProjectEvent, StatusOfEvent, TaskOfEvent, WaitsFor,
     event_of_completed_sprint, event_of_created_task, event_of_ended_turn, event_of_moved_task,
     event_of_started_sprint,
+};
+pub use project_report::markdown::report_in_markdown;
+pub use project_report::{
+    DueOutcome, PlanAgainstActual, ProjectReport, ProjectReportPorts, ProjectReportService,
+    ReportBrief, ReportDecision, ReportHandoff, ReportTask, ReportUsage, SprintOutcome, UsageLine,
+    WorkShare,
 };
 pub use projects::{NewProject, ProjectService, StatusProperties, WorkflowTemplate};
 pub use sprints::{
