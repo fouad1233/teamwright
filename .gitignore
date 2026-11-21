@@ -10,6 +10,8 @@
 node_modules/
 dist/
 dist-ssr/
+# The interface built for the public demo on the website (npm run build:demo).
+dist-demo/
 *.tsbuildinfo
 .vite/
 

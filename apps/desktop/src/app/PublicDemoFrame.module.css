@@ -1,0 +1,120 @@
+/* The band above the window and the window under it share the height of
+   the page. */
+.frame {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.window {
+  flex: 1;
+  min-height: 0;
+}
+
+/* A title block at the head of the sheet: one line, under a hairline, on
+   the sunken ground, so that it reads as the frame and not as part of the
+   program. */
+.band {
+  display: flex;
+  flex: none;
+  gap: var(--space-3);
+  align-items: center;
+  min-height: var(--control-height);
+  padding: var(--space-1) var(--space-4);
+  border-bottom: 1px solid var(--rule);
+  background: var(--ground-sunken);
+  font-size: var(--text-small);
+}
+
+/* The one gold mark: where the frame is held to the window. */
+.mark {
+  flex: none;
+  width: var(--space-2);
+  height: var(--space-2);
+  border-radius: 1px;
+  background: var(--brass);
+}
+
+.kind {
+  flex: none;
+}
+
+.sentence {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink-soft);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ways {
+  display: flex;
+  flex: none;
+  gap: var(--space-4);
+  margin-left: auto;
+}
+
+.way {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--rule-strong);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  transition: text-decoration-color var(--duration-quick) ease;
+}
+
+.way:hover {
+  text-decoration-color: currentcolor;
+}
+
+.way:focus-visible {
+  border-radius: var(--radius-control);
+  outline: 1px solid var(--brass);
+  outline-offset: 2px;
+}
+
+/* On a phone, before the demo: a narrow column with a margin all round. */
+.notice {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  height: 100%;
+  max-width: calc(var(--panel-width) * 0.75);
+  margin: 0 auto;
+  padding: var(--space-7) var(--space-5);
+  overflow-y: auto;
+  user-select: text;
+}
+
+.brand {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  margin-bottom: var(--space-6);
+}
+
+.wordmark {
+  font-size: var(--text-strong);
+  font-weight: 650;
+  letter-spacing: -0.012em;
+}
+
+.title {
+  font-family: var(--font-serif);
+  font-size: var(--text-display);
+  font-weight: 400;
+  line-height: 1.1;
+}
+
+.text {
+  color: var(--ink-soft);
+  line-height: 1.55;
+}
+
+.choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-5);
+  align-items: center;
+  margin-top: var(--space-4);
+}

@@ -5,6 +5,7 @@ import { useNavigation } from '@/app/navigation';
 import { useIsDemo } from '@/shared/api/BackendProvider';
 import type { Id, Project } from '@/shared/api/types';
 import { classNames } from '@/shared/lib/classNames';
+import { isPublicDemo } from '@/shared/lib/publicDemo';
 import { IconButton } from '@/shared/ui/Button';
 import { Logo } from '@/shared/ui/Logo';
 
@@ -105,7 +106,8 @@ export function Sidebar({ projects, activeProjectId }: SidebarProps) {
         )}
       </nav>
 
-      {isDemo && (
+      {/* The public demo says this in the band above the window. */}
+      {isDemo && !isPublicDemo && (
         <p className={classNames('label', styles.demoNote)}>
           Demo data
           <br />

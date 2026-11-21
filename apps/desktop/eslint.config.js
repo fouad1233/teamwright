@@ -5,7 +5,7 @@ import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
 export default defineConfig(
-  globalIgnores(['dist/', 'src-tauri/']),
+  globalIgnores(['dist/', 'dist-demo/', 'src-tauri/']),
   js.configs.recommended,
   tseslint.configs.recommendedTypeChecked,
   reactHooks.configs.flat.recommended,

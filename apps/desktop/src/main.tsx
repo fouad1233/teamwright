@@ -4,6 +4,8 @@ import { createRoot } from 'react-dom/client';
 
 import { App } from '@/app/App';
 import { NavigationProvider } from '@/app/navigation';
+import { isPublicDemo } from '@/shared/lib/publicDemo';
+import { PublicDemoFrame } from '@/app/PublicDemoFrame';
 import { BackendProvider, connectToBackend } from '@/shared/api/BackendProvider';
 import { applyTheme } from '@/shared/theme/applyTheme';
 import { rememberedTheme } from '@/shared/theme/themes';
@@ -51,7 +53,13 @@ createRoot(rootElement).render(
         <TooltipProvider>
           <ToastProvider>
             <NavigationProvider>
-              <App />
+              {isPublicDemo ? (
+                <PublicDemoFrame>
+                  <App />
+                </PublicDemoFrame>
+              ) : (
+                <App />
+              )}
             </NavigationProvider>
           </ToastProvider>
         </TooltipProvider>
