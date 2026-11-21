@@ -1372,3 +1372,85 @@ fn a_subtask_made_on_one_computer_follows_its_task_into_the_area_it_was_moved_to
     assert_eq!(laptop.task(&part).unwrap().area_id(), firmware.id());
     assert_eq!(laptop.everything(), desk.everything());
 }
+
+#[test]
+fn a_proposal_changed_before_approval_reaches_the_other_computer_as_it_reads() {
+    use teamwright_domain::{
+        Conversation, MemberName, Proposal, ProposalChange, ProposedMember, ProposedTask,
+        TaskTitle, TokenCounts, Turn, TurnOrigin,
+    };
+
+    let (desk, laptop, project, _) = desk_and_laptop();
+    let conversations = SqliteConversationRepository::new(desk.database.clone());
+    let conversation = Conversation::start_with_advisor(
+        project.id(),
+        None,
+        None,
+        moment(),
+        desk.database.device_id(),
+    );
+    conversations.save_conversation(&conversation).unwrap();
+    let task = |title: &str, waits_for: Vec<usize>| ProposedTask {
+        title: TaskTitle::parse(title).unwrap(),
+        description: String::new(),
+        owner: None,
+        estimate_minutes: Some(60),
+        priority: Priority::Normal,
+        waits_for,
+    };
+    let mut turn = Turn::start(
+        conversation.id(),
+        "A small air sensor.",
+        TurnOrigin::Message,
+        moment(),
+    )
+    .unwrap();
+    turn.propose(
+        Proposal::new(
+            "A device.",
+            vec![ProposedMember {
+                name: MemberName::parse("Hardware engineer").unwrap(),
+                responsibility: String::new(),
+                reason: String::new(),
+                model: None,
+                effort: None,
+            }],
+            vec![
+                task("Draw the schematic", Vec::new()),
+                task("Route the board", vec![0]),
+                task("Order the parts", vec![1]),
+            ],
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    turn.finish("I propose.", TokenCounts::default(), moment())
+        .unwrap();
+    conversations.save_turn(&turn).unwrap();
+    laptop.take_in_from(&desk);
+
+    turn.change_proposal(ProposalChange::Retitle {
+        task: 1,
+        title: TaskTitle::parse("Route the board in four layers").unwrap(),
+    })
+    .unwrap();
+    turn.change_proposal(ProposalChange::RemoveWait {
+        task: 2,
+        waits_for: 1,
+    })
+    .unwrap();
+    conversations.save_turn(&turn).unwrap();
+    keep_in_step(&desk, &laptop);
+
+    let there = SqliteConversationRepository::new(laptop.database.clone())
+        .turns_of(conversation.id())
+        .unwrap();
+    assert_eq!(there, [turn]);
+    let proposal = there[0].proposal().unwrap();
+    assert_eq!(
+        proposal.tasks()[1].title.as_str(),
+        "Route the board in four layers"
+    );
+    assert!(proposal.tasks()[2].waits_for.is_empty());
+    assert_eq!(laptop.everything(), desk.everything());
+}

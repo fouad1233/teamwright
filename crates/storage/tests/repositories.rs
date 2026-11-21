@@ -24,10 +24,10 @@ use teamwright_domain::{
     Assignee, CalendarDate, Color, ComputerId, Conversation, ConversationId, DecisionOption,
     DecisionRequest, Effort, Interview, InterviewAnswer, InterviewQuestion, Member, MemberId,
     MemberInstructions, MemberKind, MemberName, MemberProfile, ModelName, Priority, Project,
-    ProjectKey, ProjectName, Proposal, ProposedMember, ProposedOwner, ProposedTask, Rank, Schedule,
-    Sprint, SprintDates, SprintId, SprintName, SprintSummary, SprintUnit, Status, StatusCategory,
-    StatusId, StatusName, StepContent, StoryPoints, Task, TaskDraft, TaskId, TaskTitle, Timestamp,
-    TokenCounts, ToolOutcome, Turn, TurnOrigin, TurnState, Workflow,
+    ProjectKey, ProjectName, Proposal, ProposalChange, ProposedMember, ProposedOwner, ProposedTask,
+    Rank, Schedule, Sprint, SprintDates, SprintId, SprintName, SprintSummary, SprintUnit, Status,
+    StatusCategory, StatusId, StatusName, StepContent, StoryPoints, Task, TaskDraft, TaskId,
+    TaskTitle, Timestamp, TokenCounts, ToolOutcome, Turn, TurnOrigin, TurnState, Workflow,
 };
 use teamwright_storage::{
     Database, Operation, SqliteConversationRepository, SqliteMemberRepository,
@@ -1484,6 +1484,68 @@ fn a_proposal_and_its_approval_are_found_again_unchanged_and_logged_whole() {
     let found = store.conversations.turns_of(conversation.id()).unwrap();
     assert_eq!(found, [turn]);
     assert_eq!(found[0].proposal().unwrap().tasks().len(), 2);
+}
+
+#[test]
+fn a_proposal_changed_before_approval_is_logged_whole_and_survives_reopening_the_file() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("teamwright.db");
+    let (conversation, turn, logged) = {
+        let store = Store::on(Database::open(&path).unwrap());
+        let conversation = stored_conversation_with_advisor(&store);
+        let mut turn = advisor_turn(&conversation, |turn| {
+            turn.propose(a_proposal()).unwrap();
+        });
+        store.conversations.save_turn(&turn).unwrap();
+        let start = store.database.operations().unwrap().len();
+
+        for change in [
+            ProposalChange::Retitle {
+                task: 1,
+                title: TaskTitle::parse("Draw the schematic in KiCad").unwrap(),
+            },
+            ProposalChange::Estimate {
+                task: 1,
+                estimate_minutes: None,
+            },
+            ProposalChange::RemoveTask { task: 0 },
+            ProposalChange::AddTask {
+                title: TaskTitle::parse("Write the manual").unwrap(),
+            },
+            ProposalChange::AddWait {
+                task: 2,
+                waits_for: 1,
+            },
+        ] {
+            turn.change_proposal(change).unwrap();
+            store.conversations.save_turn(&turn).unwrap();
+        }
+        (conversation, turn, logged_after(&store, start))
+    };
+
+    // Each change is one logged state of the whole proposal.
+    assert_eq!(logged, pairs(&[("proposal", "upsert"); 5]));
+    let reopened = Store::on(Database::open(&path).unwrap());
+    let found = reopened.conversations.turns_of(conversation.id()).unwrap();
+    assert_eq!(found, [turn]);
+    let proposal = found[0].proposal().unwrap();
+    assert!(proposal.is_open());
+    let titles: Vec<_> = proposal
+        .tasks()
+        .iter()
+        .map(|task| task.title.as_str())
+        .collect();
+    assert_eq!(
+        titles,
+        [
+            "Draw the schematic in KiCad",
+            "Order the parts",
+            "Write the manual"
+        ]
+    );
+    assert_eq!(proposal.tasks()[0].estimate_minutes, None);
+    assert_eq!(proposal.tasks()[1].waits_for, [0]);
+    assert_eq!(proposal.tasks()[2].waits_for, [1]);
 }
 
 #[test]
