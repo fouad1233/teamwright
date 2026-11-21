@@ -11,8 +11,8 @@ use chrono::Utc;
 use tauri::{AppHandle, Emitter, Manager};
 use teamwright_application::{
     AgentRuntime, AppearanceService, ApplicationError, AreaService, ChecklistService,
-    DeliveryPorts, DeliveryService, DigestRepository, DiskEntry, DriveSurroundings, FileSystem,
-    FolderReader, GitHubPorts, GitHubService, GoogleDriveService, IntegrationSettings,
+    DeliveryPorts, DeliveryService, DigestRepository, DigestService, DiskEntry, DriveSurroundings,
+    FileSystem, FolderReader, GitHubPorts, GitHubService, GoogleDriveService, IntegrationSettings,
     NotificationService, OperatingSystem, PlacesService, ProjectEvent, ProjectFilesService,
     ProjectFolders, ProjectService, RoundReport, SprintService, StorageError, SyncPorts,
     SyncService, SystemClock, TagService, TaskService, TeamService, ViewService, WorkListener,
@@ -20,7 +20,7 @@ use teamwright_application::{
 };
 use teamwright_domain::{ComputerId, Conversation, Project, Turn};
 use teamwright_integrations::{GhCommandLine, GhLocator, HttpsSender};
-use teamwright_runtime::ClaudeCode;
+use teamwright_runtime::{ClaudeCode, EarlierConversationsOnDisk};
 use teamwright_storage::{
     Database, FolderOfComputers, SqliteAreaRepository, SqliteConversationRepository,
     SqliteDigestRepository, SqliteIntegrationStore, SqliteMemberRepository,
@@ -135,6 +135,8 @@ pub struct AppState {
     pub places: PlacesService,
     /// The use cases for what lies in the folders of a project.
     pub files: ProjectFilesService,
+    /// The use cases for earlier conversations and their digests.
+    pub digests: DigestService,
     /// The use cases for the work of the AI specialists.
     pub work: WorkService,
     /// What the specialists hand each other: handoffs and messages.
@@ -303,6 +305,12 @@ impl AppState {
                 clock.clone(),
             ),
             files: ProjectFilesService::new(places.clone(), Arc::new(LocalFolderReader)),
+            digests: DigestService::new(
+                places.clone(),
+                digest_repository,
+                Arc::new(EarlierConversationsOnDisk::of_this_computer()),
+                clock.clone(),
+            ),
             places,
             github,
             deliveries,

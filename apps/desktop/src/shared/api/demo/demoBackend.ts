@@ -10,10 +10,13 @@ import type {
   Color,
   Computer,
   Conversation,
+  ConversationsOfFolder,
   DataChanged,
   DecisionRequest,
   Deliveries,
   Delivery,
+  Digest,
+  DigestDraft,
   Effort,
   EventKind,
   GitHubItem,
@@ -87,6 +90,7 @@ import { isThemeName, rememberedTheme } from '@/shared/theme/themes';
 import { briefFor } from './brief';
 import { PretendedTeamTalk } from './teamwork';
 import { PretendedMemory, shorten } from './memory';
+import { PretendedEarlierConversations, type PretendedConversation } from './earlierConversations';
 import { PretendedGitHub } from './gitHub';
 import { PretendedIntegrations } from './integrations';
 import { freeName, isInside, isSameFolder, nameOf } from './places';
@@ -237,6 +241,11 @@ export interface DemoWorkspace {
    * believable past made up for it.
    */
   versions?: Record<Id, Task[]>;
+  /**
+   * The conversations held with Claude Code that the demo pretends to find
+   * on the computer. Left out, Claude Code was never used there.
+   */
+  earlierConversations?: PretendedConversation[];
 }
 
 const browserEnvironment: DemoEnvironment = {
@@ -312,6 +321,7 @@ export class DemoBackend implements Backend {
   private readonly teamwork: PretendedTeamTalk;
   /** The memory of the projects: decisions, facts and contracts. */
   private readonly memory: PretendedMemory;
+  private readonly earlier: PretendedEarlierConversations;
   private readonly gitHub = new PretendedGitHub();
   /** The views of each project, in the order the manager gave them. */
   private readonly views = new Map<Id, View[]>();
@@ -397,6 +407,7 @@ export class DemoBackend implements Backend {
         entries.map((entry) => ({ projectId, entry })),
       ),
     );
+    this.earlier = new PretendedEarlierConversations(workspace?.earlierConversations ?? []);
     for (const sprint of workspace?.sprints ?? []) {
       this.sprints.set(sprint.id, structuredClone(sprint));
       this.sprintsCreated.set(
@@ -557,6 +568,7 @@ export class DemoBackend implements Backend {
       this.teamwork.forgetProject(project.id);
       this.tags.delete(project.id);
       this.memory.forgetProject(project.id);
+      this.earlier.forgetProject(project.id);
       for (const conversation of this.conversationsOf(project.id)) {
         this.forget(conversation);
       }
@@ -1470,7 +1482,12 @@ export class DemoBackend implements Backend {
         context: null,
       };
       this.conversations.set(conversation.id, conversation);
-      this.beginTurn(conversation, brief, 'message', scriptForBrief());
+      this.beginTurn(
+        conversation,
+        brief,
+        'message',
+        scriptForBrief(this.earlier.digestsOf(project.id).length),
+      );
       return conversation;
     });
   }
@@ -2016,6 +2033,40 @@ export class DemoBackend implements Backend {
     return this.answer(() =>
       this.integrations.testWebAddress(this.requireProject(projectId).id, index, this.nowAsText()),
     );
+  }
+
+  findEarlierConversations(projectId: Id): Promise<ConversationsOfFolder[]> {
+    return this.answer(() => {
+      const places = this.placesOf(this.requireProject(projectId));
+      return this.earlier.find(projectId, [places.workFolder, ...places.referenceFolders]);
+    });
+  }
+
+  draftDigest(projectId: Id, source: string): Promise<DigestDraft> {
+    return this.answer(() =>
+      this.earlier.draft(source, this.placesOf(this.requireProject(projectId)).workFolder),
+    );
+  }
+
+  keepDigest(projectId: Id, digest: DigestDraft): Promise<Digest> {
+    return this.answer(() =>
+      this.earlier.keep(
+        this.requireProject(projectId).id,
+        digest,
+        this.environment.newId(),
+        this.nowAsText(),
+      ),
+    );
+  }
+
+  listDigests(projectId: Id): Promise<Digest[]> {
+    return this.answer(() => this.earlier.digestsOf(this.requireProject(projectId).id));
+  }
+
+  removeDigest(digestId: Id): Promise<void> {
+    return this.answer(() => {
+      this.earlier.remove(digestId);
+    });
   }
 
   private repositoryOf(project: Project): string {

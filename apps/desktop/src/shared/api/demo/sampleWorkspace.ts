@@ -20,6 +20,7 @@ import type {
   TeamTalk,
 } from '../types';
 import type { DemoWorkspace } from './demoBackend';
+import { sampleEarlierConversations } from './earlierConversations';
 import { readyMadeNamed } from './readyMade';
 import { startingViews } from './views';
 
@@ -741,6 +742,7 @@ export function sampleWorkspace(today: Date = new Date()): DemoWorkspace {
     teamTalk: sampleTeamTalk(today),
     memory: { [project.id]: sampleMemory(today) },
     versions,
+    earlierConversations: sampleEarlierConversations(today),
   };
 }
 

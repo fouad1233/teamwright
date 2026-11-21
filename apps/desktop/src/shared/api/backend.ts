@@ -6,9 +6,12 @@ import type {
   CalendarDate,
   Color,
   Conversation,
+  ConversationsOfFolder,
   DataChanged,
   Deliveries,
   Delivery,
+  Digest,
+  DigestDraft,
   EventKind,
   FolderListing,
   GitHubItem,
@@ -762,6 +765,26 @@ export interface Backend {
   testChannel(projectId: Id): Promise<Delivery>;
   /** Sends the event `test` to the web address at a position. */
   testWebAddress(projectId: Id, index: number): Promise<Delivery>;
+
+  /**
+   * The conversations held with Claude Code on this computer, grouped by the
+   * folder they were held in: the folders of the project first, then the
+   * others with the newest conversation first. Empty where Claude Code was
+   * never used.
+   */
+  findEarlierConversations(projectId: Id): Promise<ConversationsOfFolder[]>;
+  /**
+   * The digest of an earlier conversation, made by rules, for the manager to
+   * read and correct. Nothing is kept (`not_found`, or `rule_broken` for a
+   * conversation without a request).
+   */
+  draftDigest(projectId: Id, source: string): Promise<DigestDraft>;
+  /** Keeps a digest as the manager corrected it (`digest_already_kept`, `rule_broken`). */
+  keepDigest(projectId: Id, digest: DigestDraft): Promise<Digest>;
+  /** The digests kept with a project, the one kept last first. */
+  listDigests(projectId: Id): Promise<Digest[]>;
+  /** Removes a digest. The conversation it was made from is not touched. */
+  removeDigest(digestId: Id): Promise<void>;
 }
 
 /**

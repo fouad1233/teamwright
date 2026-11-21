@@ -202,12 +202,32 @@ const PROPOSAL: NewProposal = {
   ],
 };
 
-/** The script of the Advisor that reads what the manager wants: it asks. */
-export function scriptForBrief(): Script {
+/**
+ * The script of the Advisor that reads what the manager wants: it asks. It
+ * says that it read the digests of earlier conversations, if `digests` were
+ * kept with the project.
+ */
+export function scriptForBrief(digests = 0): Script {
+  const imported =
+    digests === 0
+      ? []
+      : [
+          {
+            after: 600,
+            act: {
+              kind: 'say' as const,
+              text:
+                digests === 1
+                  ? 'I have read the account of the earlier conversation you imported. I will ask where it may be out of date.'
+                  : `I have read the accounts of the ${digests.toString()} earlier conversations you imported. I will ask where they may be out of date.`,
+            },
+          },
+        ];
   return {
     acts: [
       { after: 0, act: { kind: 'note', message: WHAT_THIS_IS } },
       { after: 700, act: { kind: 'say', text: 'I am reading what you wrote.' } },
+      ...imported,
       { after: 600, act: { kind: 'use', id: 'look', tool: 'Glob', summary: '*' } },
       { after: 500, act: { kind: 'finish', id: 'look' } },
       {

@@ -11,10 +11,13 @@ import type {
   CalendarDate,
   Color,
   Conversation,
+  ConversationsOfFolder,
   FolderListing,
   DataChanged,
   Deliveries,
   Delivery,
+  Digest,
+  DigestDraft,
   EventKind,
   GitHubItem,
   GitHubOverview,
@@ -703,6 +706,26 @@ export class TauriBackend implements Backend {
 
   testWebAddress(projectId: Id, index: number): Promise<Delivery> {
     return call('test_web_address', { projectId, index });
+  }
+
+  findEarlierConversations(projectId: Id): Promise<ConversationsOfFolder[]> {
+    return call('find_earlier_conversations', { projectId });
+  }
+
+  draftDigest(projectId: Id, source: string): Promise<DigestDraft> {
+    return call('draft_digest', { projectId, source });
+  }
+
+  keepDigest(projectId: Id, digest: DigestDraft): Promise<Digest> {
+    return call('keep_digest', { projectId, digest });
+  }
+
+  listDigests(projectId: Id): Promise<Digest[]> {
+    return call('list_digests', { projectId });
+  }
+
+  removeDigest(digestId: Id): Promise<void> {
+    return call('remove_digest', { digestId });
   }
 }
 

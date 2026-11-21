@@ -1464,3 +1464,62 @@ export interface Deliveries {
   /** For each web address, in their order, its last ten deliveries, newest first. */
   addresses: Delivery[][];
 }
+
+/**
+ * An earlier conversation the manager held with Claude Code on this
+ * computer, as the list of them shows it (decision 0041). It is only read:
+ * nothing of it is kept until its digest is.
+ */
+export interface EarlierConversation {
+  /** How the conversation is found again, to make its digest. */
+  source: string;
+  /** The folder it was held in. */
+  heldIn: string;
+  /** The title Claude Code or the manager gave it, if any. */
+  title: string | null;
+  /** The beginning of its first request, on one line, with what looks like a secret hidden. */
+  firstRequest: string | null;
+  startedAt: Moment | null;
+  /** When it last changed. */
+  endedAt: Moment | null;
+  /** The size of its file: how long it is. */
+  sizeBytes: number;
+  /** Whether a digest of it is kept with the project already. */
+  isKept: boolean;
+}
+
+/** The earlier conversations held in one folder, the newest first. */
+export interface ConversationsOfFolder {
+  folder: string;
+  /** Whether the folder is a folder of the project, or lies inside one. */
+  isOfProject: boolean;
+  conversations: EarlierConversation[];
+}
+
+/**
+ * A digest made by rules from an earlier conversation, for the manager to
+ * read and correct. Sent back, corrected, to keep it.
+ */
+export interface DigestDraft {
+  source: string;
+  heldIn: string;
+  /** At most 120 characters, on one line. */
+  title: string;
+  /** Plain lines, at most 8,000 characters. */
+  text: string;
+  startedAt: Moment | null;
+  endedAt: Moment | null;
+}
+
+/** A digest kept with a project. The Advisor starts from these. It never changes. */
+export interface Digest {
+  id: Id;
+  projectId: Id;
+  source: string;
+  heldIn: string;
+  title: string;
+  text: string;
+  startedAt: Moment | null;
+  endedAt: Moment | null;
+  keptAt: Moment;
+}

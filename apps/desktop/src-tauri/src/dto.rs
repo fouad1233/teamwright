@@ -29,6 +29,8 @@ use teamwright_domain::{
 
 use crate::error::CommandError;
 
+pub mod digests;
+
 /// The form calendar dates have on the wire.
 const DATE_FORMAT: &str = "%Y-%m-%d";
 

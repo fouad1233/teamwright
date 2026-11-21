@@ -186,6 +186,11 @@ fn main() -> ExitCode {
             commands::integrations::add_web_address,
             commands::integrations::remove_web_address,
             commands::integrations::set_web_address_event,
+            commands::digests::find_earlier_conversations,
+            commands::digests::draft_digest,
+            commands::digests::keep_digest,
+            commands::digests::list_digests,
+            commands::digests::remove_digest,
         ])
         .build(tauri::generate_context!());
 
