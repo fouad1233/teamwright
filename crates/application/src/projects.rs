@@ -4,8 +4,9 @@ use std::cmp::Reverse;
 use std::sync::Arc;
 
 use teamwright_domain::{
-    Area, Color, Project, ProjectId, ProjectKey, ProjectName, Rank, Status, StatusCategory,
-    StatusId, StatusName, Task, View, Workflow,
+    Area, Color, Project, ProjectId, ProjectKey, ProjectName, ProjectTemplate, Rank, Sprint,
+    SprintDates, SprintName, Status, StatusCategory, StatusId, StatusLoad, StatusName, Task, View,
+    WorkInProgressLimit, template,
 };
 
 use crate::error::ApplicationError;
@@ -15,24 +16,46 @@ use crate::ports::{
 };
 use crate::work::WorkInProgress;
 
-/// The workflows a new project can start with.
+/// The templates a new project can start from (see [`ProjectTemplate`]).
+/// The name is older than templates: a template decides more than the
+/// workflow now, also the views, the areas and a first sprint.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum WorkflowTemplate {
-    /// To do, in progress, in review, done.
+    /// To do, in progress, in review, done, and the six usual views.
     #[default]
     Standard,
     /// To do, in progress, in revision, in test, done.
     Engineering,
+    /// A flow with work-in-progress limits and no sprints.
+    Kanban,
+    /// Sprints from a backlog, the backlog first, a first sprint planned.
+    Scrum,
+    /// Design, review, order, build and test, in areas for the parts of a
+    /// device.
+    HardwareProduct,
 }
 
 impl WorkflowTemplate {
-    /// Builds a fresh workflow from the template.
-    fn build(self) -> Workflow {
+    /// What the template decides.
+    #[must_use]
+    pub const fn template(self) -> &'static ProjectTemplate {
         match self {
-            Self::Standard => Workflow::standard(),
-            Self::Engineering => Workflow::engineering(),
+            Self::Standard => &template::STANDARD,
+            Self::Engineering => &template::ENGINEERING,
+            Self::Kanban => &template::KANBAN,
+            Self::Scrum => &template::SCRUM,
+            Self::HardwareProduct => &template::HARDWARE_PRODUCT,
         }
     }
+
+    /// Every template, in the order of [`ProjectTemplate::ALL`].
+    pub const ALL: [Self; 5] = [
+        Self::Standard,
+        Self::Kanban,
+        Self::Scrum,
+        Self::HardwareProduct,
+        Self::Engineering,
+    ];
 }
 
 /// What is needed to start a project.
@@ -112,9 +135,14 @@ impl ProjectService {
         }
     }
 
-    /// Starts a project with the six views every project starts with:
-    /// board, backlog, list, Gantt chart, calendar and dashboard, and with
-    /// one area, "General".
+    /// Starts a project from its template: the statuses of its workflow
+    /// with their limits, its views in their order, its areas, and a first
+    /// sprint if the template plans one. The standard template gives the six
+    /// views every project started with before templates, and the one area
+    /// "General". No template gives a team: the Advisor proposes one.
+    ///
+    /// The project does not remember its template. Everything the template
+    /// made can be changed like anything else.
     ///
     /// # Errors
     ///
@@ -142,17 +170,37 @@ impl ProjectService {
             None => Self::unused_key_for(&name, &existing),
         };
 
-        let project = Project::create(
+        let template = new_project.workflow.template();
+        let now = self.clock.now();
+        let mut project = Project::create(
             name,
             key,
             new_project.description.trim().to_owned(),
-            new_project.workflow.build(),
-            self.clock.now(),
+            template.workflow(),
+            now,
         );
-        // The project is stored first: its views refer to it.
+        let first_sprint = if template.plans_first_sprint {
+            let number = project.allocate_sprint_number();
+            Some(Sprint::plan(
+                project.id(),
+                SprintName::numbered(number),
+                "",
+                SprintDates::new(None, None)?,
+                now,
+            ))
+        } else {
+            None
+        };
+        // The project is stored first: its views, its areas and its sprint
+        // refer to it.
         self.projects.save(&project)?;
-        self.views.save_all(&View::starting(project.id()))?;
-        self.areas.save_all(&[Area::starting(project.id())])?;
+        self.views
+            .save_all(&View::starting_with(project.id(), template.views))?;
+        self.areas
+            .save_all(&Area::starting_with(project.id(), &template.area_names()))?;
+        if let Some(sprint) = first_sprint {
+            self.sprints.save(&sprint, &[])?;
+        }
         Ok(project)
     }
 
@@ -382,6 +430,43 @@ impl ProjectService {
         })
     }
 
+    /// Gives a status a work-in-progress limit, another one, or none.
+    ///
+    /// A limit is a signal, never a wall: setting one below the number of
+    /// tasks already in the status is allowed, and nothing is moved.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if there is no such project or status, if the limit
+    /// is not a whole number from 1 to 999, if the status is of the category
+    /// done, or if storage fails.
+    pub fn set_status_limit(
+        &self,
+        id: ProjectId,
+        status_id: StatusId,
+        limit: Option<i64>,
+    ) -> Result<Project, ApplicationError> {
+        let limit = limit.map(WorkInProgressLimit::new).transpose()?;
+        self.change(id, |project| {
+            project.set_status_limit(status_id, limit)?;
+            Ok(())
+        })
+    }
+
+    /// How many tasks stand in each status of a project, against its limit,
+    /// in board order. Every task of the project counts, in every area and
+    /// sprint; a subtask does not count apart from its task (see
+    /// [`StatusLoad::of_workflow`]).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if there is no such project or if storage fails.
+    pub fn status_loads(&self, id: ProjectId) -> Result<Vec<StatusLoad>, ApplicationError> {
+        let project = self.get(id)?;
+        let tasks = self.tasks.list_for_project(project.id())?;
+        Ok(StatusLoad::of_workflow(project.workflow(), &tasks))
+    }
+
     /// Removes a status from a workflow.
     ///
     /// The tasks in it, subtasks included, go to the bottom of the status
@@ -518,6 +603,9 @@ mod tests {
         projects: ProjectService,
         tasks: TaskService,
         team: TeamService,
+        views: Arc<crate::in_memory::InMemoryViewRepository>,
+        areas: Arc<crate::in_memory::InMemoryAreaRepository>,
+        sprints: Arc<InMemorySprintRepository>,
         clock: Arc<ManualClock>,
     }
 
@@ -531,6 +619,8 @@ mod tests {
         let members = Arc::new(InMemoryMemberRepository::default());
         let conversations = Arc::new(InMemoryConversationRepository::default());
         let area_store = Arc::new(crate::in_memory::InMemoryAreaRepository::default());
+        let view_store = Arc::new(crate::in_memory::InMemoryViewRepository::default());
+        let sprint_store = Arc::new(InMemorySprintRepository::new(tasks.clone()));
         let clock = Arc::new(ManualClock::starting_at(start_of_day()));
         Workspace {
             projects: ProjectService::new(
@@ -539,8 +629,8 @@ mod tests {
                 members.clone(),
                 conversations.clone(),
                 Arc::new(InMemoryPlacesRepository::default()),
-                Arc::new(InMemorySprintRepository::new(tasks.clone())),
-                Arc::new(crate::in_memory::InMemoryViewRepository::default()),
+                sprint_store.clone(),
+                view_store.clone(),
                 area_store.clone(),
                 clock.clone(),
             ),
@@ -561,6 +651,9 @@ mod tests {
                 Arc::new(crate::in_memory::InMemoryViewRepository::default()),
                 clock.clone(),
             ),
+            views: view_store,
+            areas: area_store,
+            sprints: sprint_store,
             clock,
         }
     }
@@ -1463,5 +1556,320 @@ mod tests {
 
         assert_eq!(error.code(), "rule_broken");
         assert_eq!(workspace.stored(task.id()), task);
+    }
+
+    // Templates
+
+    fn from_template(workspace: &Workspace, template: WorkflowTemplate) -> Project {
+        workspace
+            .projects
+            .create(NewProject {
+                workflow: template,
+                ..named("Smart sensor node")
+            })
+            .unwrap()
+    }
+
+    fn view_kinds(workspace: &Workspace, project: &Project) -> Vec<teamwright_domain::ViewKind> {
+        let mut views = workspace.views.list_for_project(project.id()).unwrap();
+        views.sort_by_key(View::position);
+        views.iter().map(View::kind).collect()
+    }
+
+    fn area_names(workspace: &Workspace, project: &Project) -> Vec<String> {
+        let mut areas = workspace.areas.list_for_project(project.id()).unwrap();
+        areas.sort_by_key(Area::position);
+        areas.iter().map(|area| area.name().to_string()).collect()
+    }
+
+    fn limits(project: &Project) -> Vec<Option<u16>> {
+        project
+            .workflow()
+            .statuses()
+            .iter()
+            .map(|status| status.limit().map(WorkInProgressLimit::value))
+            .collect()
+    }
+
+    #[test]
+    fn the_standard_template_makes_a_project_as_before_templates() {
+        let workspace = workspace();
+
+        let project = from_template(&workspace, WorkflowTemplate::Standard);
+
+        assert_eq!(
+            status_names(&project),
+            ["To do", "In progress", "In review", "Done"]
+        );
+        assert_eq!(limits(&project), [None, None, None, None]);
+        let mut views = workspace.views.list_for_project(project.id()).unwrap();
+        views.sort_by_key(View::position);
+        assert_eq!(views, View::starting(project.id()));
+        assert_eq!(
+            workspace.areas.list_for_project(project.id()).unwrap(),
+            [Area::starting(project.id())]
+        );
+        assert!(
+            workspace
+                .sprints
+                .list_for_project(project.id())
+                .unwrap()
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn a_kanban_project_starts_with_limits_and_without_a_backlog_or_a_sprint() {
+        use teamwright_domain::ViewKind;
+        let workspace = workspace();
+
+        let project = from_template(&workspace, WorkflowTemplate::Kanban);
+
+        assert_eq!(
+            status_names(&project),
+            ["Backlog", "Ready", "In progress", "Review", "Done"]
+        );
+        assert_eq!(limits(&project), [None, Some(5), Some(3), Some(2), None]);
+        assert_eq!(
+            view_kinds(&workspace, &project),
+            [
+                ViewKind::Board,
+                ViewKind::List,
+                ViewKind::Calendar,
+                ViewKind::Dashboard
+            ]
+        );
+        assert!(
+            workspace
+                .sprints
+                .list_for_project(project.id())
+                .unwrap()
+                .is_empty()
+        );
+        assert_eq!(project.next_sprint_number(), 1);
+    }
+
+    #[test]
+    fn a_scrum_project_starts_with_the_backlog_first_and_a_first_sprint_planned() {
+        use teamwright_domain::{SprintState, ViewKind};
+        let workspace = workspace();
+
+        let project = from_template(&workspace, WorkflowTemplate::Scrum);
+
+        assert_eq!(
+            view_kinds(&workspace, &project)[..2],
+            [ViewKind::Backlog, ViewKind::Board]
+        );
+        let sprints = workspace.sprints.list_for_project(project.id()).unwrap();
+        assert_eq!(sprints.len(), 1);
+        assert_eq!(sprints[0].name().as_str(), "Sprint 1");
+        assert_eq!(sprints[0].state(), SprintState::Planned);
+        assert_eq!(sprints[0].dates().start_on(), None);
+        let stored = workspace.projects.get(project.id()).unwrap();
+        assert_eq!(stored.next_sprint_number(), 2);
+    }
+
+    #[test]
+    fn a_hardware_product_starts_with_the_steps_of_a_device_and_an_area_for_each_part() {
+        let workspace = workspace();
+
+        let project = from_template(&workspace, WorkflowTemplate::HardwareProduct);
+
+        assert_eq!(
+            status_names(&project),
+            [
+                "To do",
+                "Design",
+                "Design review",
+                "Ordered",
+                "Build",
+                "Test",
+                "Done"
+            ]
+        );
+        assert_eq!(
+            area_names(&workspace, &project),
+            ["Electronics", "Firmware", "Enclosure"]
+        );
+        // A task opened without an area goes into the first one.
+        let task = workspace
+            .tasks
+            .create(NewTask::titled(project.id(), "Draw the schematic"))
+            .unwrap();
+        assert_eq!(task.area_id(), Area::starting_id(project.id()));
+    }
+
+    #[test]
+    fn no_template_gives_a_team() {
+        let workspace = workspace();
+        for template in WorkflowTemplate::ALL {
+            let project = from_template(&workspace, template);
+
+            assert!(
+                workspace
+                    .team
+                    .list_for_project(project.id())
+                    .unwrap()
+                    .is_empty()
+            );
+        }
+    }
+
+    #[test]
+    fn everything_a_template_made_can_be_changed_afterwards() {
+        let workspace = workspace();
+        let project = from_template(&workspace, WorkflowTemplate::Kanban);
+        let in_progress = status_named(&project, "In progress");
+
+        workspace
+            .projects
+            .set_status_limit(project.id(), in_progress.id(), None)
+            .unwrap();
+        let changed = workspace
+            .projects
+            .remove_status(project.id(), status_named(&project, "Ready").id(), None)
+            .unwrap();
+
+        assert_eq!(limits(&changed), [None, None, Some(2), None]);
+    }
+
+    // Work-in-progress limits
+
+    #[test]
+    fn a_status_gets_a_limit_another_one_and_none() {
+        let workspace = workspace();
+        let project = workspace.engineering_project("Smart sensor node");
+        let in_test = status_named(&project, "In test");
+
+        let limited = workspace
+            .projects
+            .set_status_limit(project.id(), in_test.id(), Some(2))
+            .unwrap();
+        assert_eq!(limits(&limited)[3], Some(2));
+        assert_eq!(workspace.projects.get(project.id()).unwrap(), limited);
+
+        let cleared = workspace
+            .projects
+            .set_status_limit(project.id(), in_test.id(), None)
+            .unwrap();
+        assert_eq!(limits(&cleared)[3], None);
+    }
+
+    #[test]
+    fn a_limit_out_of_range_or_on_a_done_status_is_refused() {
+        let workspace = workspace();
+        let project = workspace.engineering_project("Smart sensor node");
+        let in_test = status_named(&project, "In test");
+        let done = status_named(&project, "Done");
+
+        let zero = workspace
+            .projects
+            .set_status_limit(project.id(), in_test.id(), Some(0))
+            .unwrap_err();
+        let on_done = workspace
+            .projects
+            .set_status_limit(project.id(), done.id(), Some(3))
+            .unwrap_err();
+
+        assert_eq!(zero.code(), "rule_broken");
+        assert_eq!(
+            zero.to_string(),
+            "a limit is a whole number of tasks from 1 to 999"
+        );
+        assert_eq!(on_done.code(), "rule_broken");
+        assert_eq!(workspace.projects.get(project.id()).unwrap(), project);
+    }
+
+    #[test]
+    fn a_limit_below_the_tasks_already_in_the_status_is_allowed_and_moves_nothing() {
+        let workspace = workspace();
+        let project = workspace.engineering_project("Smart sensor node");
+        let in_progress = status_named(&project, "In progress");
+        workspace.task_in(&project, "Draw the schematic", &in_progress);
+        workspace.task_in(&project, "Define the pin map", &in_progress);
+
+        workspace
+            .projects
+            .set_status_limit(project.id(), in_progress.id(), Some(1))
+            .unwrap();
+
+        assert_eq!(workspace.titles_in(&project, &in_progress).len(), 2);
+    }
+
+    #[test]
+    fn a_task_may_be_moved_into_a_full_status() {
+        let workspace = workspace();
+        let project = workspace.engineering_project("Smart sensor node");
+        let todo = status_named(&project, "To do");
+        let in_progress = status_named(&project, "In progress");
+        workspace
+            .projects
+            .set_status_limit(project.id(), in_progress.id(), Some(1))
+            .unwrap();
+        workspace.task_in(&project, "Draw the schematic", &in_progress);
+        let waiting = workspace.task_in(&project, "Define the pin map", &todo);
+
+        workspace
+            .tasks
+            .move_to(waiting.id(), in_progress.id(), 1)
+            .unwrap();
+
+        let loads = workspace.projects.status_loads(project.id()).unwrap();
+        let load = loads
+            .iter()
+            .find(|load| load.status_id() == in_progress.id())
+            .unwrap();
+        assert_eq!(load.count(), 2);
+        assert_eq!(load.fill(), Some(teamwright_domain::Fill::Over));
+    }
+
+    #[test]
+    fn the_loads_count_every_task_of_the_project_but_not_its_subtasks() {
+        let workspace = workspace();
+        let project = workspace.engineering_project("Smart sensor node");
+        let in_progress = status_named(&project, "In progress");
+        workspace
+            .projects
+            .set_status_limit(project.id(), in_progress.id(), Some(2))
+            .unwrap();
+        let parent = workspace.task_in(&project, "Draw the schematic", &in_progress);
+        workspace
+            .tasks
+            .create(NewTask {
+                status_id: Some(in_progress.id()),
+                parent_id: Some(parent.id()),
+                ..NewTask::titled(project.id(), "Draw the power supply")
+            })
+            .unwrap();
+        workspace.task_in(&project, "Define the pin map", &in_progress);
+
+        let loads = workspace.projects.status_loads(project.id()).unwrap();
+
+        let counts: Vec<usize> = loads.iter().map(StatusLoad::count).collect();
+        assert_eq!(counts, [0, 2, 0, 0, 0]);
+        assert_eq!(loads[1].fill(), Some(teamwright_domain::Fill::At));
+        assert_eq!(loads[0].fill(), None);
+    }
+
+    #[test]
+    fn a_limit_goes_when_its_status_becomes_a_done_status() {
+        let workspace = workspace();
+        let project = workspace.engineering_project("Smart sensor node");
+        let in_test = status_named(&project, "In test");
+        workspace
+            .projects
+            .set_status_limit(project.id(), in_test.id(), Some(2))
+            .unwrap();
+
+        let changed = workspace
+            .projects
+            .change_status(
+                project.id(),
+                in_test.id(),
+                properties("Accepted", StatusCategory::Done, Color::Green),
+            )
+            .unwrap();
+
+        assert_eq!(limits(&changed)[3], None);
     }
 }
