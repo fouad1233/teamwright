@@ -55,6 +55,7 @@ was considered.
 | [0039](0039-skills-and-connectors-chosen-by-the-manager.md) | Give a specialist only the skills and connectors the manager chose, tool by tool | Accepted |
 | [0041](0041-earlier-conversations-as-digests.md) | Import earlier Claude Code conversations as digests made by rules, kept by the manager, read by the Advisor only | Accepted |
 | [0042](0042-the-report-of-a-whole-project.md) | The report of a whole project, offered at any time and called complete when every task is done, and the latest activity from the log | Accepted |
+| [0043](0043-a-notice-of-newer-versions.md) | Tell the manager when a newer version is out, looking only when allowed; installing from inside the program is not built | Accepted |
 
 ## Template
 

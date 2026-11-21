@@ -260,6 +260,18 @@ The shell is where the work of an AI specialist meets the outside world
   name it does not know with `invalid_request`. The name is a plain string
   on the wire, `ThemeName` in `types.ts`. The demo backend keeps it in
   memory, starting from the theme the browser remembered.
+- **A notice of newer versions**
+  ([decision 0043](../../docs/decisions/0043-a-notice-of-newer-versions.md)).
+  `commands/updates.rs`: `update_status` (nothing is looked up),
+  `look_for_update_if_due` (looks only if the manager switched looking on
+  and the last look is a day old), `look_for_update_now` (the button) and
+  `switch_update_look`. Looks run on a thread of their own. They answer
+  with `UpdateStatusDto`; a look that got no answer is `lastLookFailed`,
+  not an error. `features/updates` has the part Version on the page
+  Computers (`VersionSettings`) and the small mark under the Computers line
+  of the navigation (`UpdateMark`); the release page opens through
+  `open_web_address`. Nothing is installed from inside the program. The
+  demo backend starts with looking off, and a look says that 0.2.0 is out.
 - **Opening a web address.** `open_web_address` in `commands/web.rs` opens
   an address in the manager's own browser. The pure `checked_web_address`
   refuses anything that is not `https` with a host (and an address with a

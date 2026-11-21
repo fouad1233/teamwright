@@ -619,6 +619,17 @@ Lamplight. Like the choice about notifications it is a fact about one
 computer, not logged and never synced
 ([decision 0028](../../docs/decisions/0028-themes.md)).
 
+`updates.rs` notices that a newer version of the program is out
+([decision 0043](../../docs/decisions/0043-a-notice-of-newer-versions.md)).
+`UpdateService` looks through the port `ReleaseSource` (the published
+releases) and keeps what it found through `UpdateChoiceStore`. Looking is
+off until the manager switches it on; `look_if_due` looks at most once in
+`LOOK_EVERY` (a day), `look_now` looks once whatever the switch says. A
+look that gets no answer is not an error: `UpdateStatus` says
+`last_look_failed` and keeps what was offered before. Like the theme, the
+choice is a fact about one computer, not logged and never synced. Nothing
+here installs anything.
+
 ## Integrations
 
 `integrations.rs` keeps what the manager set for the integrations of a

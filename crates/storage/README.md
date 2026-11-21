@@ -39,6 +39,7 @@ involved.
 | `folder` | `FolderOfComputers`: the files in the sync folder, which implements the port `SyncFolder` |
 | `ledger` | `SqliteSyncLedger`: the bookkeeping of syncing, which implements the port `SyncLedger` |
 | `notification_choice` | `SqliteNotificationChoice`: whether this computer shows notifications, and which, in the keys `notifications`, `notify_waiting`, `notify_finished` and `notify_stopped` of `meta`; not logged, so never synced |
+| `update_choice` | `SqliteUpdateChoice`: whether this computer looks for a newer version, when it last looked, whether that look failed and which release it offered, in the keys `update_look`, `update_last_look`, `update_look_failed` and `update_offered_*` of `meta`; not logged, so never synced ([decision 0043](../../docs/decisions/0043-a-notice-of-newer-versions.md)) |
 | `theme` | `SqliteThemeStore`: the theme of this computer, by its name in the key `theme` of `meta`; a name it does not know reads as Lamplight; not logged, so never synced |
 | `integrations` | `SqliteIntegrationStore`: the GitHub repository, the Slack channel and the web addresses of each project (`project_integrations`, `project_web_addresses`, version 17) and the GitHub program the manager named (`github_program` in `meta`); written without the recorder, so never logged and never synced |
 | `codec` | The text forms of moments, dates, identifiers and enumerations |

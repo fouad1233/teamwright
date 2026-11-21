@@ -13,6 +13,7 @@ options and the output of GitHub's command line program.
 | `command` | Runs a short command with a time limit, its arguments as arguments (never through a shell), without a console window, with prompts and colours turned off |
 | `github` | `GhCommandLine`, which implements `GitHubProgram`: `gh auth status`, `git remote get-url origin` of the work folder, `gh repo view`, `gh pr list` and `gh issue list` as JSON (state all, at most 200 each), `gh issue create` |
 | `web` | `HttpsSender`, which implements `WebSender` with `ureq` (blocking, rustls, a time limit of 10 seconds): `{"text": …}` to a Slack channel, and an event as JSON (`payload_json`) with the headers `X-Teamwright-Event`, `X-Teamwright-Version` and, with a secret, `X-Teamwright-Signature` (`event_request`). An answer that is not a success is its status; a failure is said without the address |
+| `releases` | `GitHubReleases`, which implements `ReleaseSource` with `ureq` against the public list of releases of `fouad1233/teamwright` (no token, 8 seconds, at most 2 MB; only `Accept` and `User-Agent: Teamwright/<version>` are sent). `releases_in` reads the answer: drafts and tags that are not versions are left out, and the address of a release is written from the repository and the tag, never taken from the answer. Every failure is only a short sentence ([decision 0043](../../docs/decisions/0043-a-notice-of-newer-versions.md)) |
 | `signature` | `sha256`, `hmac_sha256`, `hex`: small, and checked against the published test vectors, so that no cryptography crate is added for one signature |
 
 ## Rules
@@ -31,7 +32,10 @@ The unit tests read JSON in the shape `gh` writes it, the locator works on
 folders of its own, and the signature is checked against FIPS 180-4 and
 RFC 4231. `tests/listener.rs` starts a listener on this computer and sends
 it a signed event, as an address would get it; nothing leaves the
-computer. `tests/real_gh.rs` reads a real repository through
+computer. `tests/releases.rs` does the same for the list of releases: it
+checks the request and its headers, and that a status other than 200, an
+answer that is not a list and nobody listening are each only a failure to
+look. `tests/real_gh.rs` reads a real repository through
 the `gh` of this computer; it is ignored by default:
 
 ```bash
