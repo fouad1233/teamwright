@@ -147,6 +147,7 @@ export function AdvisorView({ project }: { project: Project }) {
             key={conversation.turns.length}
             proposal={proposal}
             team={team}
+            onChange={(change) => commands.changeProposal(conversation.id, change)}
             onApprove={(approved) => commands.approveProposal(conversation.id, approved)}
           />
         </div>

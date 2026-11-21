@@ -9,6 +9,7 @@ import type {
   InterviewAnswer,
   NewAdvice,
   NewDecisionAnswer,
+  ProposalChange,
 } from '@/shared/api/types';
 import { describeFailure, useNotifier } from '@/shared/ui/Toast';
 
@@ -137,6 +138,12 @@ export interface WorkCommands {
    * Resolves to whether it was taken.
    */
   approveProposal(conversationId: Id, proposal: ApprovedProposal): Promise<boolean>;
+  /**
+   * Makes one change to the open proposal of the Advisor. Resolves to
+   * nothing if it was taken, or to why it was refused, in words, for the
+   * proposal to show beside the field that was changed.
+   */
+  changeProposal(conversationId: Id, change: ProposalChange): Promise<string | null>;
   /** Stops the turn that is running in a conversation. */
   stop(conversationId: Id): Promise<void>;
   /** Opens a conversation in the Claude desktop app. */
@@ -194,6 +201,18 @@ export function useWorkCommands(projectId: Id): WorkCommands {
         // Approving adds members to the team. The tasks were loaded again already.
         await queryClient.invalidateQueries({ queryKey: teamKey(projectId) });
         return approved !== undefined;
+      },
+      changeProposal: async (conversationId, proposalChange) => {
+        // A refused change is said beside its field, not in a notice.
+        try {
+          const conversation = await backend.changeProposal(conversationId, proposalChange);
+          queryClient.setQueryData<Conversation[]>(queryKey, (conversations = []) =>
+            withConversation(conversations, conversation),
+          );
+          return null;
+        } catch (failure) {
+          return describeFailure(failure);
+        }
       },
       stop: async (conversationId) => {
         await change(() => backend.stopWork(conversationId));

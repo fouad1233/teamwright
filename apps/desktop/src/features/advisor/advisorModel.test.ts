@@ -25,11 +25,9 @@ import {
   planInWords,
   proposalInWords,
   valueOfOwner,
+  waitChoices,
+  waitedFor,
   waitsForInWords,
-  withOwner,
-  withoutMember,
-  withoutTask,
-  withProfile,
 } from './advisorModel';
 
 function turn(overrides: Partial<Turn> = {}): Turn {
@@ -234,51 +232,27 @@ describe('the answers to an interview', () => {
   });
 });
 
-describe('changing a proposal', () => {
-  it('takes a member out and leaves its tasks to nobody', () => {
-    const changed = withoutMember(DRAFT, 0);
-
-    expect(changed.members.map((proposed) => proposed.name)).toEqual(['Firmware engineer']);
-    expect(changed.tasks).toHaveLength(4);
-    expect(changed.tasks[1]?.owner).toBeNull();
-    expect(changed.tasks[2]?.owner).toEqual({ kind: 'member', name: 'Firmware engineer' });
-    expect(countWithoutOwner(changed.tasks)).toBe(1);
-  });
-
-  it('takes a task out and counts the places the others wait for anew', () => {
-    const changed = withoutTask(DRAFT, 1);
-
-    expect(changed.tasks.map((proposed) => proposed.title)).toEqual([
-      'Agree on the goal',
+describe('what a proposed task can wait for', () => {
+  it('offers the other tasks it does not wait for yet', () => {
+    expect(waitChoices(DRAFT.tasks, 3).map((choice) => choice.place)).toEqual([0]);
+    expect(waitChoices(DRAFT.tasks, 0).map((choice) => choice.title)).toEqual([
+      'Draw the schematic',
       'Write the drivers',
       'Test the device',
     ]);
-    // The drivers waited for the schematic, which is gone.
-    expect(changed.tasks[1]?.waitsFor).toEqual([]);
-    // The test waited for the drivers and the schematic. The drivers moved up.
-    expect(changed.tasks[2]?.waitsFor).toEqual([1]);
   });
 
-  it('gives a task to somebody else, or to nobody', () => {
-    expect(
-      withOwner(DRAFT, 3, { kind: 'member', name: 'Firmware engineer' }).tasks[3]?.owner,
-    ).toEqual({ kind: 'member', name: 'Firmware engineer' });
-    expect(withOwner(DRAFT, 0, null).tasks[0]?.owner).toBeNull();
+  it('lists what a task waits for in the order of the plan', () => {
+    expect(waitedFor(DRAFT.tasks, 3)).toEqual([
+      { place: 1, title: 'Draw the schematic' },
+      { place: 2, title: 'Write the drivers' },
+    ]);
+    expect(waitedFor(DRAFT.tasks, 0)).toEqual([]);
   });
 
-  it('changes the model or the effort of a member and nothing else', () => {
-    const changed = withProfile(DRAFT, 1, { effort: 'low' });
-
-    expect(changed.members[1]).toMatchObject({ model: 'sonnet', effort: 'low' });
-    expect(changed.members[0]).toBe(DRAFT.members[0]);
-  });
-
-  it('leaves the proposal it started from as it was', () => {
-    withoutMember(DRAFT, 0);
-    withoutTask(DRAFT, 0);
-
-    expect(DRAFT.members).toHaveLength(2);
-    expect(DRAFT.tasks[1]?.waitsFor).toEqual([0]);
+  it('counts the tasks that are given to nobody', () => {
+    expect(countWithoutOwner(DRAFT.tasks)).toBe(0);
+    expect(countWithoutOwner([...DRAFT.tasks, task('Order the parts')])).toBe(1);
   });
 });
 

@@ -80,6 +80,10 @@
   margin-left: 0;
 }
 
+.member .refusal {
+  grid-column: 2 / -1;
+}
+
 /* Said in the place of the model and the effort, for a member that is
    on the team already. */
 .there {
@@ -90,7 +94,7 @@
 
 .task {
   display: grid;
-  grid-template-columns: 22px minmax(0, 1fr) 176px 84px 128px auto;
+  grid-template-columns: 22px minmax(0, 1fr) 176px 112px 112px auto;
   align-items: center;
   column-gap: var(--space-3);
   min-height: 36px;
@@ -103,25 +107,59 @@
   letter-spacing: 0.04em;
 }
 
-/* The title of a task opens what the Advisor wrote about it. */
-.title {
+/* A value of a task that is typed in place: it reads as text until the
+   pointer is over it or it has the focus, like the fields of a task. */
+.inline {
   min-width: 0;
-  padding: var(--space-2) 0;
+  height: 28px;
+  padding: 0 var(--space-2);
+  margin-left: calc(-1 * var(--space-2));
+  border: none;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+}
+
+.inline::placeholder {
+  color: var(--ink-faint);
+}
+
+.inline:hover {
+  background: var(--hover);
+}
+
+.inline:focus-visible {
+  outline: 2px solid var(--brass-soft);
+  outline-offset: 0;
+  background: var(--ground);
+}
+
+/* A long title is cut where its column ends while it is not edited; the
+   whole of it is in the tooltip, and in the field once it has the focus. */
+.title {
+  width: 100%;
   overflow: hidden;
   font-weight: 550;
-  text-align: left;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.title:not(:disabled):hover {
-  text-decoration: underline;
-  text-decoration-color: var(--ink-faint);
-  text-underline-offset: 3px;
+.estimate {
+  width: calc(7ch + 2 * var(--space-2));
+  margin-right: calc(-1 * var(--space-2));
+  margin-left: 0;
+  color: var(--ink-soft);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  text-align: right;
 }
 
-.title[aria-expanded='true'] {
-  white-space: normal;
+.notUnderstood,
+.notUnderstood:focus-visible {
+  outline: 2px solid var(--danger);
+  outline-offset: 0;
 }
 
 .size,
@@ -135,6 +173,7 @@
 
 .size {
   display: flex;
+  align-items: center;
   gap: var(--space-2);
   justify-content: flex-end;
 }
@@ -158,20 +197,116 @@
    losing its end. */
 @container (width < 760px) {
   .task {
-    grid-template-columns: 22px minmax(0, 1fr) 148px 72px 96px auto;
+    grid-template-columns: 22px minmax(0, 1fr) 96px 88px auto;
+    padding-bottom: var(--space-1);
   }
 
+  /* The title has the whole first line of its row, so that a long one
+     keeps its words; who does it and the rest go on the line below. */
   .title {
-    white-space: normal;
+    grid-column: 2 / -1;
+  }
+
+  .owner {
+    grid-column: 2;
   }
 }
 
-.description {
+/* The two buttons at the end of a row: the details, and taking it out. */
+.actions {
+  display: flex;
+  align-items: center;
+}
+
+/* The mark of the details turns down while they are open. */
+.disclosure svg {
+  transition: transform 140ms ease-out;
+}
+
+.open svg {
+  transform: rotate(90deg);
+}
+
+/* Why a change was refused, said under the row that was changed. */
+.refusal {
   grid-column: 2 / -1;
+  padding-bottom: var(--space-2);
+  color: var(--danger);
+  font-size: var(--text-small);
+  line-height: 1.45;
+}
+
+/* What is under an opened task: what the Advisor wrote, the priority and
+   what the task waits for. */
+.details {
+  display: flex;
+  flex-direction: column;
+  grid-column: 2 / -1;
+  gap: var(--space-3);
   max-width: 620px;
   padding-bottom: var(--space-3);
-  color: var(--ink-soft);
+}
+
+.description {
+  width: 100%;
   line-height: 1.5;
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  align-items: start;
+  row-gap: var(--space-2);
+  column-gap: var(--space-3);
+}
+
+.facts dt {
+  padding-top: 7px;
+}
+
+.waits {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.waitList {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.wait {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: var(--space-2);
+  min-height: 30px;
+}
+
+.waitTitle {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nothing {
+  flex: 1;
+  padding-top: 7px;
+  color: var(--ink-faint);
+}
+
+/* The line on which the manager adds a task of their own. */
+.composer {
+  display: flex;
+  flex-direction: column;
+  padding-left: calc(22px + var(--space-3));
+}
+
+.composer .refusal {
+  padding-top: var(--space-1);
 }
 
 .footer {

@@ -5,7 +5,6 @@ import type {
   InterviewAnswer,
   InterviewQuestion,
   Member,
-  MemberProfile,
   Proposal,
   ProposedOwner,
   ProposedTask,
@@ -90,74 +89,45 @@ export function answerInWords(question: InterviewQuestion, answer: InterviewAnsw
   return answer.note === '' ? chosen : `${chosen}. ${answer.note}`;
 }
 
-/** What is left of a proposal while the manager changes it. */
+/**
+ * What approving a proposal sends: its members and its tasks as they read
+ * now, with every change the manager made. The changes are stored as they
+ * are made, so the proposal itself holds them.
+ */
 export function draftOf(proposal: Proposal): ApprovedProposal {
   return structuredClone({ members: proposal.members, tasks: proposal.tasks });
 }
 
-function isOwnedBy(task: ProposedTask, name: string): boolean {
-  return task.owner?.kind === 'member' && task.owner.name.toLowerCase() === name.toLowerCase();
+/** A task of a plan that another task of the same plan could wait for. */
+export interface WaitChoice {
+  /** Its place in the plan, from 0. */
+  place: number;
+  title: string;
 }
 
 /**
- * The proposal without one of its members. The tasks that were given to
- * that member stay, and are given to nobody: the work is still to be done.
+ * The tasks of a plan that a task could be made to wait for: the others,
+ * without those it waits for already. Whether waiting for one would close
+ * a circle is for the backend to say.
  */
-export function withoutMember(draft: ApprovedProposal, place: number): ApprovedProposal {
-  const gone = draft.members[place];
-  if (!gone) {
-    return draft;
-  }
-  return {
-    members: draft.members.filter((_, other) => other !== place),
-    tasks: draft.tasks.map((task) =>
-      isOwnedBy(task, gone.name) ? { ...task, owner: null } : task,
-    ),
-  };
+export function waitChoices(tasks: readonly ProposedTask[], place: number): WaitChoice[] {
+  const waiting = tasks[place];
+  return tasks.flatMap((task, other) =>
+    other === place || waiting?.waitsFor.includes(other) === true
+      ? []
+      : [{ place: other, title: task.title }],
+  );
 }
 
-/**
- * The proposal without one of its tasks. No task waits for it any more,
- * and the places the other tasks wait for are counted anew.
- */
-export function withoutTask(draft: ApprovedProposal, place: number): ApprovedProposal {
-  return {
-    members: draft.members,
-    tasks: draft.tasks
-      .filter((_, other) => other !== place)
-      .map((task) => ({
-        ...task,
-        waitsFor: task.waitsFor
-          .filter((earlier) => earlier !== place)
-          .map((earlier) => (earlier > place ? earlier - 1 : earlier)),
-      })),
-  };
-}
-
-/** The proposal with one of its tasks given to somebody else, or to nobody. */
-export function withOwner(
-  draft: ApprovedProposal,
-  place: number,
-  owner: ProposedOwner | null,
-): ApprovedProposal {
-  return {
-    members: draft.members,
-    tasks: draft.tasks.map((task, other) => (other === place ? { ...task, owner } : task)),
-  };
-}
-
-/** The proposal with another model or effort for one of its members. */
-export function withProfile(
-  draft: ApprovedProposal,
-  place: number,
-  profile: Partial<MemberProfile>,
-): ApprovedProposal {
-  return {
-    members: draft.members.map((member, other) =>
-      other === place ? { ...member, ...profile } : member,
-    ),
-    tasks: draft.tasks,
-  };
+/** The tasks a task of a plan waits for, by their places, in the order of the plan. */
+export function waitedFor(tasks: readonly ProposedTask[], place: number): WaitChoice[] {
+  const waiting = tasks[place];
+  return [...(waiting?.waitsFor ?? [])]
+    .sort((first, second) => first - second)
+    .flatMap((other) => {
+      const task = tasks[other];
+      return task ? [{ place: other, title: task.title }] : [];
+    });
 }
 
 /** One of the people a proposed task can be given to. */

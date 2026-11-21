@@ -1,6 +1,6 @@
 import { Plus } from 'lucide-react';
 import { Popover } from 'radix-ui';
-import { useState, type KeyboardEvent } from 'react';
+import { useState, type KeyboardEvent, type ReactNode } from 'react';
 
 import type { Id, Project, Task } from '@/shared/api/types';
 import { classNames } from '@/shared/lib/classNames';
@@ -15,31 +15,42 @@ import { statusOf } from './taskModel';
 /** The most tasks the list shows at once. Typing narrows it down. */
 const MOST_MATCHES = 40;
 
-interface TaskPickerProps {
+/** One task in the list of a picker. */
+export interface PickerEntry {
+  /** What the picker knows the task by, and gives back when it is picked. */
+  key: string;
+  /** The short reference that stands before the title: "AQN-12", or "3" in a plan. */
+  reference: string;
+  title: string;
+  /** A mark before the reference, such as the mark of the status. */
+  mark?: ReactNode;
+}
+
+interface PickerProps {
   /** What picking a task does, as the tooltip of the button: "Add a task to wait for". */
   label: string;
-  project: Project;
   /** The tasks that can be picked. */
-  candidates: Task[];
-  onPick: (taskId: Id) => void;
+  entries: readonly PickerEntry[];
+  onPick: (key: string) => void;
 }
 
 /**
  * A button that opens a list of tasks to pick one from. Typing narrows the
  * list by reference or title; the arrow keys and Enter pick with the
- * keyboard.
+ * keyboard. It works on any list of tasks: those of a project, or those of
+ * a plan that is not approved yet.
  */
-export function TaskPicker({ label, project, candidates, onPick }: TaskPickerProps) {
+export function Picker({ label, entries, onPick }: PickerProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [highlighted, setHighlighted] = useState(0);
 
   const wanted = query.trim().toLowerCase();
-  const matches = candidates
+  const matches = entries
     .filter(
-      (task) =>
-        task.title.toLowerCase().includes(wanted) ||
-        taskReference(project, task).toLowerCase().includes(wanted),
+      (entry) =>
+        entry.title.toLowerCase().includes(wanted) ||
+        entry.reference.toLowerCase().includes(wanted),
     )
     .slice(0, MOST_MATCHES);
 
@@ -49,8 +60,8 @@ export function TaskPicker({ label, project, candidates, onPick }: TaskPickerPro
     setHighlighted(0);
   }
 
-  function pick(taskId: Id) {
-    onPick(taskId);
+  function pick(key: string) {
+    onPick(key);
     changeOpen(false);
   }
 
@@ -65,7 +76,7 @@ export function TaskPicker({ label, project, candidates, onPick }: TaskPickerPro
       event.preventDefault();
       const chosen = matches[highlighted];
       if (chosen) {
-        pick(chosen.id);
+        pick(chosen.key);
       }
     }
   }
@@ -94,35 +105,55 @@ export function TaskPicker({ label, project, candidates, onPick }: TaskPickerPro
             <p className={styles.none}>No task matches.</p>
           ) : (
             <ul className={styles.matches} role="listbox" aria-label={label}>
-              {matches.map((task, position) => {
-                const status = statusOf(project, task);
-                return (
-                  <li key={task.id} role="option" aria-selected={position === highlighted}>
-                    <button
-                      type="button"
-                      className={classNames(
-                        styles.match,
-                        position === highlighted && styles.highlighted,
-                      )}
-                      tabIndex={-1}
-                      onPointerMove={() => {
-                        setHighlighted(position);
-                      }}
-                      onClick={() => {
-                        pick(task.id);
-                      }}
-                    >
-                      {status && <StatusMark status={status} />}
-                      <span className={styles.reference}>{taskReference(project, task)}</span>
-                      <span className={styles.title}>{task.title}</span>
-                    </button>
-                  </li>
-                );
-              })}
+              {matches.map((entry, position) => (
+                <li key={entry.key} role="option" aria-selected={position === highlighted}>
+                  <button
+                    type="button"
+                    className={classNames(
+                      styles.match,
+                      position === highlighted && styles.highlighted,
+                    )}
+                    tabIndex={-1}
+                    onPointerMove={() => {
+                      setHighlighted(position);
+                    }}
+                    onClick={() => {
+                      pick(entry.key);
+                    }}
+                  >
+                    {entry.mark}
+                    <span className={styles.reference}>{entry.reference}</span>
+                    <span className={styles.title}>{entry.title}</span>
+                  </button>
+                </li>
+              ))}
             </ul>
           )}
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>
   );
+}
+
+interface TaskPickerProps {
+  /** What picking a task does, as the tooltip of the button: "Add a task to wait for". */
+  label: string;
+  project: Project;
+  /** The tasks that can be picked. */
+  candidates: Task[];
+  onPick: (taskId: Id) => void;
+}
+
+/** A picker of the tasks of a project, each with the mark of its status. */
+export function TaskPicker({ label, project, candidates, onPick }: TaskPickerProps) {
+  const entries = candidates.map((task): PickerEntry => {
+    const status = statusOf(project, task);
+    return {
+      key: task.id,
+      reference: taskReference(project, task),
+      title: task.title,
+      mark: status && <StatusMark status={status} />,
+    };
+  });
+  return <Picker label={label} entries={entries} onPick={onPick} />;
 }
