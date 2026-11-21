@@ -71,11 +71,20 @@
   color: var(--ink-faint);
 }
 
-/* The rule itself, in the type of code, so that every character reads. */
 .rule {
+  color: var(--ink-soft);
+  font-size: var(--text-small);
+}
+
+.ruleKind {
+  color: var(--ink-soft);
+}
+
+/* The command or the domain itself, in the type of code, so that every
+   character reads. */
+.ruleWhat {
   color: var(--ink);
   font-family: var(--font-mono);
-  font-size: var(--text-small);
   overflow-wrap: anywhere;
 }
 

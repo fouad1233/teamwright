@@ -122,7 +122,7 @@ export function PermissionCard({ request, askedBy, onAnswer }: PermissionCardPro
               }}
             />
           </label>
-          {isCommand && prefix !== null && (
+          {isCommand && prefix !== null && prefix !== request.what && (
             <div className={styles.narrow} role="group" aria-label="How much of it">
               <Button
                 aria-pressed={kind === 'command'}

@@ -1,11 +1,11 @@
-import type { Member, Project, Task } from '@/shared/api/types';
+import type { Member, PermissionKind, Project, Task } from '@/shared/api/types';
 import { classNames } from '@/shared/lib/classNames';
 import { taskReference } from '@/shared/lib/format';
 import { Button } from '@/shared/ui/Button';
 
 import { useTeamMembers } from '../team/TeamContext';
 import { usePermissionCommands, usePermissionRequests } from './permissionQueries';
-import { permissionInWords, scopeInWords, standingPermissionsOf } from './permissionModel';
+import { kindInWords, scopeInWords, standingPermissionsOf } from './permissionModel';
 import styles from './StandingPermissions.module.css';
 
 interface StandingPermissionsProps {
@@ -52,10 +52,8 @@ export function StandingPermissions({ project, tasks }: StandingPermissionsProps
                 member={member}
                 project={project}
                 task={tasks.find((known) => known.id === request.taskId)}
-                rule={permissionInWords(
-                  request.answer?.kind ?? request.kind,
-                  request.answer?.what ?? request.what,
-                )}
+                kind={request.answer?.kind ?? request.kind}
+                what={request.answer?.what ?? request.what}
                 scope={request.answer?.scope ?? null}
                 isHere={request.answer?.onThisComputer ?? true}
                 onWithdraw={() => commands.withdraw(request.id)}
@@ -72,14 +70,15 @@ interface StandingProps {
   member: Member;
   project: Project;
   task: Task | undefined;
-  rule: string;
+  kind: PermissionKind;
+  what: string;
   scope: 'once' | 'task' | 'always' | null;
   /** Whether it was allowed on this computer, the only one where it holds. */
   isHere: boolean;
   onWithdraw: () => Promise<void>;
 }
 
-function Standing({ member, project, task, rule, scope, isHere, onWithdraw }: StandingProps) {
+function Standing({ member, project, task, kind, what, scope, isHere, onWithdraw }: StandingProps) {
   return (
     <>
       <div className={styles.words}>
@@ -89,8 +88,11 @@ function Standing({ member, project, task, rule, scope, isHere, onWithdraw }: St
             {scope === 'task' && task ? `For ${taskReference(project, task)}` : scopeInWords(scope)}
           </span>
         </p>
-        <p className={styles.rule} data-selectable>
-          {rule}
+        <p className={styles.rule}>
+          <span className={styles.ruleKind}>{kindInWords(kind)}</span>{' '}
+          <code className={styles.ruleWhat} data-selectable>
+            {what}
+          </code>
         </p>
         {!isHere && (
           <p className={styles.elsewhere}>Allowed on another computer, and holds only there.</p>
