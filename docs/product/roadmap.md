@@ -82,9 +82,18 @@ A single specialist that really works through Claude Code.
   instructions: the test against the real Claude Code was written but
   could not run, because Claude Code on that night's computer was not
   signed in
-- ⬜ Skills and connectors for a specialist, chosen by the manager. A
-  session sees nothing of what the user set up in Claude Code for their own
-  use
+- 🚧 Skills and connectors for a specialist, chosen by the manager
+  ([decision 0039](../decisions/0039-skills-and-connectors-chosen-by-the-manager.md)). A project
+  keeps a library of skills (checked, and copied on each computer) and of
+  connectors (no secret is kept, only the name of a variable; tools are
+  given one by one), and a turn gets exactly what its specialist was
+  given. Every turn of a specialist is now also started with settings
+  that shut out the user's own hooks, skills and connectors, which the
+  earlier flags did not promise. Tested on storage, on two databases
+  taking in each other's changes, on the exact command line and in the
+  demo. Never run against the real Claude Code: the test for it was
+  written and has not passed yet, and the earlier tests against the real
+  program must be run again because every turn changed
 
 ## M3 · The Advisor 🚧
 
@@ -107,7 +116,17 @@ From a conversation to an approved team and plan.
   seen in a browser on the demo's simulated Advisor; not tried in the
   built program or with a real Advisor. The Advisor's first version is
   not kept once it was changed, so there is no "undo my changes"
-- ⬜ Import earlier Claude Code conversations as context digests
+- ✅ Import earlier Claude Code conversations as context digests
+  ([decision 0041](../decisions/0041-earlier-conversations-as-digests.md)):
+  the conversations found on this computer, by folder, the folders of the
+  project first; a digest made by rules (the requests, the files
+  changed, the last answer, with what looks like a secret hidden) that
+  the manager reads, corrects and keeps with the project; the Advisor
+  gets the kept digests with its first turn. The reader rests on a format
+  Claude Code does not publish; it read the real conversations of the
+  development computer in a test, and the whole flow was seen in a
+  browser on demo data. Not tried in the built program, and no real
+  Advisor has read a digest yet
 
 ## M4 · Teamwork 🚧
 
@@ -129,8 +148,27 @@ Several specialists working together with the manager in the loop.
   tool calls and seen in a browser on demo data. Not yet seen with a real
   specialist (the test against the real Claude Code could not run: it
   was not signed in) or in the built program
-- ⬜ Project memory: decisions, facts and interface contracts
-- ⬜ Coordinator: dependency-driven start, concurrency limit, token budgets
+- 🚧 Project memory: decisions, facts and interface contracts
+  ([decision 0036](../decisions/0036-project-memory.md)). Answered
+  decisions and the contracts of handoffs become entries by themselves,
+  a specialist remembers facts (three in a turn at most) and searches
+  memory through the team bus, the brief of a task carries what belongs
+  to it, and the manager reads, searches and changes memory in the place
+  Memory. Tested at every layer and seen on demo data; the built bus
+  answered a search and a remembered fact over standard input. Never run
+  with a real session of Claude Code
+- 🚧 Coordinator: dependency-driven start, concurrency limit, token budgets
+  ([decision 0037](../decisions/0037-the-coordinator.md)). Off until the
+  manager switches it on for a project; then it starts a task when what
+  it waits for is done and its specialist is free, never more
+  specialists at once than the limit, and stops starting work against a
+  budget that is used up, asking the manager once in the inbox. A task
+  that failed waits for the manager, and work that waits to be checked
+  still needs the manager's accept. It runs on one computer, and the
+  others show where. Tested at every layer (the rule on 34 cases, a
+  small project that runs to its end, a budget that stops it) and seen
+  working in a browser on the demo. It has never started a real
+  specialist and never ran in the built program
 - ⬜ Permission requests for risky actions routed to the manager
 
 ## M5 · Seeing the work 🚧
@@ -140,7 +178,13 @@ Several specialists working together with the manager in the loop.
 - ✅ Light and motion where something happens: work under way, a decision
   that waits for the manager, a card that is new or carried
   ([decision 0015](../decisions/0015-light-where-something-happens.md))
-- ⬜ Planned against actual on the Gantt chart
+- ✅ Planned against actual on the Gantt chart
+  ([decision 0034](../decisions/0034-what-happened-is-read-from-the-log.md)):
+  a switch the view keeps shows under each bar when work really began
+  and ended, read from the log by the category of the statuses. A late
+  start, a late finish and work that runs past its due date are told
+  apart by hatching and by words, not by colour alone. Seen in a browser
+  on demo data only
 - ✅ The office: specialists as characters with activity, time left and usage.
   A workshop in plan with a bench for everybody and a lamp lit where work
   goes on; "time left" is answered with how long work has taken and the
@@ -161,16 +205,22 @@ Several specialists working together with the manager in the loop.
   this week, the sprint and the tokens used
   ([decision 0020](../decisions/0020-a-dashboard-worked-out-not-written.md)).
   Seen in the built program on stored data, with nobody at work there.
-  Plan limits are not shown, because they are not known, and there is no
-  latest activity yet
+  Plan limits are not shown, because they are not known. The latest
+  activity is the newest entries of the log of the project, as the
+  Activity view tells them, which today means changes to tasks; seen on
+  demo data only
 - ✅ Views the manager adds, names, filters, orders and removes, next to
   the fixed places Team, Office and Advisor
   ([decision 0021](../decisions/0021-views-the-manager-can-add.md)).
   In the built program a view was added with the "+", named, and filtered
   to one member through its menu; the views are there after a restart and
   travel to another computer. Dragging a tab to another place and the
-  "N more" of a narrow window were seen on demo data only. A view cannot
-  be grouped by anything but status yet
+  "N more" of a narrow window were seen on demo data only. A board or a
+  list can be grouped by status, assignee, priority, area, tag or sprint:
+  the rule is in the domain, a card dragged to another lane changes that
+  field through the existing commands, and the sections of a list fold.
+  Tested in every layer and seen in a browser on demo data; not run in
+  the built program
 - ✅ Every kind of view the tracker the owner uses has, asked for on
   15 November 2026, but for the map, which the owner said is not needed.
   A view may keep content of its own
@@ -244,23 +294,34 @@ Several specialists working together with the manager in the loop.
   only. Inside an area the sentence about the sprint and the burndown
   still count the whole sprint, and folders that group projects are not
   built
-- ⬜ Project report at completion
+- ✅ Project report at completion
+  ([decision 0042](../decisions/0042-the-report-of-a-whole-project.md)):
+  the report of a whole project, made at any time and called complete
+  when every task is in a done category. It is a second sheet of the
+  Report view, printed like it and saved as Markdown into the work
+  folder. Seen in a browser on demo data, including a finished project;
+  not tried in the built program, and the print layout was not looked at
 
 ## M6 · Agile 🚧
 
 - ✅ Backlog, sprints, story points
   ([decision 0016](../decisions/0016-sprints-and-a-backlog.md)). A sprint
   is planned, filled, started and completed in the built program, and is
-  there after a restart. The history of a task does not list its sprint or
-  its points yet, and a row of the backlog is dragged with the pointer
+  there after a restart. The history of a task tells its sprint and its
+  points, and a row of the backlog is dragged with the pointer
   only: with the keyboard its menu moves it
-- 🚧 Burndown of a sprint, and the completed sprints side by side. The
-  burndown does not yet follow tasks that join or leave a sprint while it
-  runs. Velocity as a forecast is not planned yet
+- ✅ Burndown of a sprint, and the completed sprints side by side. The
+  burndown follows tasks that join or leave a running sprint, read from
+  the log, and says each day of change in words. Velocity is told as a
+  range once three sprints are completed, compared with each planned
+  sprint, and turned into a range of sprints for the work ahead
+  ([decision 0034](../decisions/0034-what-happened-is-read-from-the-log.md)).
+  Tested in the domain, the application and on the real database; seen
+  in a browser on demo data only
 - ✅ A completed sprint opens in the Backlog view, with its burndown and
   its tasks, and the board can show a previous sprint; both seen in the
-  built program. Which tasks moved on when a sprint was completed is not
-  recorded, and on the board the tasks of a previous sprint all stand in
+  built program. A completed sprint lists the tasks that moved on and where each
+  went, read from the log (seen on demo data only), and on the board the tasks of a previous sprint all stand in
   the last lanes, after empty ones
 - ✅ Tags and checklists
   ([decision 0030](../decisions/0030-tags-and-checklists.md)): the tags
@@ -271,8 +332,18 @@ Several specialists working together with the manager in the loop.
   Tested in every layer, the taking in with two databases, and seen in a
   browser on demo data; not yet run in the built program. A task made in
   a view that is filtered by a tag does not get that tag yet
-- ⬜ Work-in-progress limits, custom fields
-- ⬜ Templates: Scrum, Kanban, hardware product
+- ✅ Work-in-progress limits
+  ([decision 0033](../decisions/0033-work-in-progress-limits-and-templates.md)):
+  a status can have a limit, set where the statuses are edited and shown
+  at the head of its lane, in the red of trouble and marked "over" when
+  it is exceeded. A limit never stops a task from moving. Tested in
+  every layer and seen in the demo, not yet in the built program
+- ⬜ Custom fields
+- ✅ Templates: a new project starts from Standard, Kanban, Scrum,
+  Hardware product or Engineering, which set its statuses and limits,
+  its views, its areas and, for Scrum, a first sprint (decision 0033).
+  Nothing remembers the template afterwards. Tested in every layer and
+  seen in the demo, not yet in the built program
 
 ## M7 · Many computers 🚧
 
@@ -311,8 +382,15 @@ Several specialists working together with the manager in the loop.
   was published on 18 November 2026 as a pre-release. The installers are
   not signed, so Windows and macOS warn before they open; none of them
   was installed and started by anybody yet, and the macOS and Linux
-  builds were never run at all. Updates from inside the program are not
-  built
+  builds were never run at all. The program tells the manager when a
+  newer version is out
+  ([decision 0043](../decisions/0043-a-notice-of-newer-versions.md)):
+  off until switched on, at most one look a day, "Look now", and a quiet
+  mark at the foot of the navigation. The rule, the reading of GitHub's
+  list against a listener on the same computer and the interface on the
+  demo were verified; a look from the built program was not. Installing
+  an update from inside the program is still not built: it needs signed
+  update files and a signing key only the founder can make
 - ⬜ User manual
 - 🚧 Public demo in the browser
   ([decision 0032](../decisions/0032-a-public-demo-in-the-browser.md)):
