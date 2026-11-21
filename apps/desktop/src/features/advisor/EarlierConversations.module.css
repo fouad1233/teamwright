@@ -1,0 +1,229 @@
+/* Earlier conversations: the digests kept with a project, under the form
+   that starts planning, and the dialog that imports more. */
+
+.kept {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: 100%;
+  max-width: var(--column);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--rule);
+}
+
+.keptHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--control-height);
+}
+
+.count {
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: var(--text-small);
+}
+
+.space {
+  flex: 1;
+}
+
+.hint {
+  color: var(--ink-faint);
+  font-size: var(--text-small);
+  line-height: 1.5;
+}
+
+.digests {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--rule);
+}
+
+.digest {
+  display: flex;
+  flex-direction: column;
+  border-bottom: 1px solid var(--rule);
+}
+
+.digestLine {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 38px;
+}
+
+.digestTitle {
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 550;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.digestTitle:hover {
+  text-decoration: underline;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 3px;
+}
+
+/* The date and the folder take what room is left and give way first. */
+.digestLine .meta {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.digestText {
+  margin-bottom: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  background: var(--ground-sunken);
+  color: var(--ink-soft);
+  font-size: var(--text-small);
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* The dialog. */
+
+.found,
+.editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.lead {
+  color: var(--ink-soft);
+  line-height: 1.5;
+}
+
+.quiet {
+  color: var(--ink-faint);
+  font-size: var(--text-small);
+  line-height: 1.5;
+}
+
+.problem {
+  color: var(--danger);
+  font-size: var(--text-small);
+  line-height: 1.5;
+}
+
+.folders {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.folder {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.folderName {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  min-width: 0;
+  padding-bottom: var(--space-1);
+  border-bottom: 1px solid var(--rule);
+  font-weight: 400;
+}
+
+/* A long folder is cut at its end; the whole of it is in its tooltip. */
+.path {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink-soft);
+  font-family: var(--font-mono);
+  font-size: var(--text-small);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ofProject {
+  flex: none;
+  color: var(--brass-text);
+}
+
+.rows {
+  display: flex;
+  flex-direction: column;
+}
+
+.row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: var(--space-2) var(--space-2);
+  border-radius: var(--radius-control);
+  text-align: left;
+}
+
+.row:hover {
+  background: var(--hover);
+}
+
+.row:focus-visible {
+  outline: 2px solid var(--ink-faint);
+  outline-offset: -2px;
+}
+
+.rowName {
+  overflow: hidden;
+  font-weight: 550;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rowRequest {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--ink-soft);
+  font-size: var(--text-small);
+  line-height: 1.45;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.meta {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: var(--text-small);
+}
+
+.keptMark {
+  color: var(--ink);
+}
+
+.text {
+  min-height: 280px;
+  font-size: var(--text-small);
+  line-height: 1.55;
+}
+
+.privacy {
+  color: var(--ink-soft);
+  font-size: var(--text-small);
+  line-height: 1.5;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}

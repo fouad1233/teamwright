@@ -303,7 +303,7 @@ export function hideSecrets(text: string): string {
   return text
     .replace(/\b(?:sk-|ghp_|github_pat_|xoxb-|AKIA|AIza|glpat-)[A-Za-z0-9_.-]{12,}/g, '[hidden]')
     .replace(
-      /\b([A-Za-z_-]*(?:password|passwd|secret|token|api[_-]?key))([=:]\s*)\S+/gi,
+      /\b([A-Za-z_-]*(?:password|passwd|secret|token|api[_-]?key))([=:]\s*)[^\s,;]+/gi,
       '$1$2[hidden]',
     );
 }

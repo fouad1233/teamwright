@@ -26,6 +26,7 @@ import {
   openProposal,
   proposalInWords,
 } from './advisorModel';
+import { ImportEarlierConversations, KeptDigests } from './EarlierConversations';
 import { InterviewCard } from './InterviewCard';
 import { ProposalCard } from './ProposalCard';
 
@@ -42,6 +43,9 @@ export function AdvisorView({ project }: { project: Project }) {
   // The manager can ask for a plan of something new while an earlier
   // conversation is on the page. Until it starts, the earlier one stays.
   const [isStartingAnew, setIsStartingAnew] = useState(false);
+  // Earlier conversations imported now reach the Advisor when something new
+  // is planned: the session that runs has begun already.
+  const [isImporting, setIsImporting] = useState(false);
 
   if (!conversation || isStartingAnew) {
     return (
@@ -63,6 +67,7 @@ export function AdvisorView({ project }: { project: Project }) {
               : undefined
           }
         />
+        <KeptDigests project={project} />
       </div>
     );
   }
@@ -95,16 +100,33 @@ export function AdvisorView({ project }: { project: Project }) {
               )}
             </>
           ) : (
-            <Button
-              variant="ghost"
-              onClick={() => {
-                setIsStartingAnew(true);
-              }}
-            >
-              Plan something new
-            </Button>
+            <>
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  setIsImporting(true);
+                }}
+              >
+                Earlier conversations
+              </Button>
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  setIsStartingAnew(true);
+                }}
+              >
+                Plan something new
+              </Button>
+            </>
           )}
         </header>
+        <ImportEarlierConversations
+          project={project}
+          open={isImporting}
+          onClose={() => {
+            setIsImporting(false);
+          }}
+        />
 
         <ol className={styles.turns}>
           {conversation.turns.map((turn, place) => (
