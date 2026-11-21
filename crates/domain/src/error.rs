@@ -526,6 +526,18 @@ pub enum DomainError {
         /// stop.
         reason: String,
     },
+
+    /// A permission was asked or allowed that can never be given, or that
+    /// would allow more than it shows (decision 0038).
+    #[error("this permission cannot be given: {reason}")]
+    PermissionNotPossible {
+        /// Why, in words.
+        reason: String,
+    },
+
+    /// A permission was to be taken back that does not stand.
+    #[error("there is no allowed permission to take back")]
+    NothingToWithdraw,
 }
 
 impl DomainError {

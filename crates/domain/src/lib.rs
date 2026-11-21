@@ -31,6 +31,7 @@ pub mod integration;
 pub mod kit;
 pub mod member;
 pub mod memory;
+pub mod permission;
 pub mod planning;
 pub mod project;
 pub mod project_files;
@@ -73,8 +74,8 @@ pub use field::{Field, FieldChoice, FieldKind, FieldNumber, FieldSnapshot, Field
 pub use grouping::{GroupKey, Grouping, GroupingContext, TaskGroup, group_tasks};
 pub use ids::{
     AreaId, ChecklistItemId, ChoiceId, ComputerId, ConnectorId, ConversationId, CoordinatorEntryId,
-    DigestId, FieldId, HandoffId, MemberId, MemoryEntryId, ProjectId, SkillId, SprintId, StatusId,
-    TagId, TaskId, TeamMessageId, TurnId, ViewId,
+    DigestId, FieldId, HandoffId, MemberId, MemoryEntryId, PermissionRequestId, ProjectId, SkillId,
+    SprintId, StatusId, TagId, TaskId, TeamMessageId, TurnId, ViewId,
 };
 pub use integration::{EventKind, EventKinds, RepositoryName, WebAddress};
 pub use kit::{
@@ -85,6 +86,10 @@ pub use member::{Effort, Member, MemberInstructions, MemberKind, MemberProfile, 
 pub use memory::{
     MemoryContent, MemoryEntry, MemoryEntrySnapshot, MemoryKind, MemoryOrigin, MemorySource,
     SearchWords,
+};
+pub use permission::{
+    Answered, PermissionAnswer, PermissionDecision, PermissionKind, PermissionRequest,
+    PermissionRequestSnapshot, PermissionRule, PermissionScope, TurnAbout, granted_rules,
 };
 pub use planning::{
     Interview, InterviewAnswer, InterviewQuestion, InterviewSnapshot, Proposal, ProposalChange,

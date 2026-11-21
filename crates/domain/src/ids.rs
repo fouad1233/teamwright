@@ -228,3 +228,10 @@ mod tests {
         );
     }
 }
+
+define_id!(
+    /// Identifies a request of a specialist for permission to do something
+    /// it may not do on its own.
+    PermissionRequestId,
+    kind = "permission request identifier"
+);
