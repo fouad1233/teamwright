@@ -148,6 +148,17 @@ Answered decisions and published contracts become **project memory**, which
 any team member can search. This is how the team avoids asking twice and how a
 new task starts with what it needs instead of a transcript.
 
+Memory holds decisions, facts and contracts
+([decision 0036](../decisions/0036-project-memory.md)). An answered decision
+request and the contract of a handoff become entries by themselves; a
+specialist records a fact with the tool `remember`, three in a turn at most;
+the manager adds, changes and removes entries in the place Memory. An entry is
+never changed in place: a newer entry replaces it. A specialist searches with
+the tool `search_memory`, a few words matched in plain code, and the brief of
+a task carries the entries that belong to it within a budget. The team bus
+does not open the database: it reads the memory from a file the runtime
+writes for the turn.
+
 ## Data and sync
 
 - Current state is a SQLite database in the application's data directory.
