@@ -52,6 +52,7 @@ was considered.
 | [0034](0034-what-happened-is-read-from-the-log.md) | Read what happened from the log, and tell the pace of the team as a range | Accepted |
 | [0036](0036-project-memory.md) | Project memory: decisions, facts and contracts that are replaced, never changed; a plain search; the bus reads memory from a file of the turn | Accepted |
 | [0041](0041-earlier-conversations-as-digests.md) | Import earlier Claude Code conversations as digests made by rules, kept by the manager, read by the Advisor only | Accepted |
+| [0042](0042-the-report-of-a-whole-project.md) | The report of a whole project, offered at any time and called complete when every task is done, and the latest activity from the log | Accepted |
 
 ## Template
 

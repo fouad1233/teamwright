@@ -28,3 +28,19 @@ view, like a printed sheet, to hand to somebody. It is a page the view keeps
   printer's margins, with no shadow or fixed size. A part and a row of a
   table are not cut across pages where that can be avoided. Nothing is sent
   anywhere and no link is made.
+- **The whole project** (decision 0042). Beside the page of now, the view
+  can show the report of the whole project, chosen with "Now" and "Whole
+  project" at its side and kept in its content (`sheet`; content written
+  before reads as `now`). The report is the backend's (`projectReport`,
+  gathered in `application`); `WholeProjectSheet` only lays it out on the
+  same paper, and `wholeReportModel.ts` only says a value in a cell. A
+  part with nothing to say is left out or says one sentence. It prints the
+  same way, and "Save as Markdown" asks where to keep it, starting in the
+  work folder of the project (`useSaveReport`); in the browser demo there
+  are no files and the button is off. `useOpenWholeReport` turns the
+  project's Report view to the whole project, adding one if there is none:
+  the dashboard uses it once every task is finished.
+- **A finished project in the demo.** The sample is under way. To see it
+  finished, move every task to Done, by hand or from the console:
+  `window.teamwrightDemo` answers `listProjects`, `listTasks` and
+  `moveTask` like the program.

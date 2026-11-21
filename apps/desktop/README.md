@@ -620,7 +620,12 @@ Rules of the interface:
   a table of what every specialist, the Advisor and those who left spent,
   by kind, in all, in turns, and the model they ran on last, with the
   project at the foot. Those figures are the backend's (`projectUsage`);
-  `usageTable` only names them and puts them in order.
+  `usageTable` only names them and puts them in order. Its latest
+  activity is the newest six entries of the log of the project, made and
+  worded by the Activity view's rule (`latestActivity`, `entryInWords`,
+  `whenInWords`), with a way to the Activity view or to add it; once every
+  task is finished it offers the report of the whole project
+  ([decision 0042](../../docs/decisions/0042-the-report-of-a-whole-project.md)).
 - **The context of an agent is drawn, not worked out.** `work/ContextMeter`
   draws how full a session is ("Context 38k of 200k" over a hairline meter,
   in the warning colour from 80 %, its title saying the session will soon

@@ -59,3 +59,9 @@ What this costs: narrowing is done here, on what is loaded, because the
 history cannot be asked for one kind of change. A narrowing with few
 entries in a long history reads many pages, and reads them again after
 every change. A history that could be asked by kind would make that cheap.
+
+**On the dashboard.** The latest activity of the dashboard is the newest
+entries of this log, made by `logEntries` and said by `entryInWords` (one
+sentence for an entry, its parts joined) and `whenInWords` ("Today,
+14:02"). `useOpenActivity` opens this view from there, or adds it first
+(decision 0042).
