@@ -1,4 +1,4 @@
-import { Check, ExternalLink, Send, Square, X } from 'lucide-react';
+import { Check, ExternalLink, RotateCcw, Send, Square, X } from 'lucide-react';
 import { useState, type KeyboardEvent, type ReactNode } from 'react';
 
 import { useIsDemo } from '@/shared/api/BackendProvider';
@@ -9,6 +9,7 @@ import { Button } from '@/shared/ui/Button';
 import { Prose } from '@/shared/ui/Prose';
 
 import { RunsElsewhere, useComputerOf } from '../sync/RunsElsewhere';
+import { useNow } from '../sync/useNow';
 import { toolStepInWords } from '../memory/memoryModel';
 import { RememberedInTurn } from '../memory/RememberedInTurn';
 import { TalkOfTurnView } from '../teamwork/TalkOfTurnView';
@@ -27,7 +28,8 @@ import {
   runningTurn,
   tokensInWords,
 } from './workModel';
-import { useWorkCommands } from './workQueries';
+import { planLimitLine, tryAgainHint } from './planLimitModel';
+import { usePlanLimit, useWorkCommands } from './workQueries';
 
 interface ConversationViewProps {
   project: Project;
@@ -117,6 +119,11 @@ export function ConversationView({
       {!working && !member && (
         <p className={styles.nothing}>The specialist has left the team, so nobody can answer.</p>
       )}
+      {/* A turn the plan's limit ended is offered again, here, where the
+          session runs. */}
+      {isHere && !working && member && !question && endedAtPlanLimit(conversation) && (
+        <TryAgain onTryAgain={() => commands.reply(conversation.id, GO_ON_AFTER_THE_LIMIT)} />
+      )}
       {/* A question of the specialist takes the place of the line to write
           in: answering it is the only way to go on. Elsewhere it can be
           read, and answered on the computer the conversation runs on. */}
@@ -139,6 +146,54 @@ export function ConversationView({
           onSend={(message) => commands.reply(conversation.id, message)}
         />
       )}
+    </div>
+  );
+}
+
+/** What "Try again" says to the specialist whose turn the plan's limit ended. */
+const GO_ON_AFTER_THE_LIMIT =
+  'The limit of the Claude plan stopped your work. Please go on where you stopped.';
+
+/** Whether the last turn of a conversation ended at the limit of the plan. */
+function endedAtPlanLimit(conversation: Conversation): boolean {
+  return conversation.turns.at(-1)?.planLimitReached ?? false;
+}
+
+/**
+ * The way on after a turn the plan's limit ended: the plain line of the
+ * limit as it stands now, and "Try again". Before the reset the button is
+ * still there, because the manager may know better, but the line next to
+ * it says that the work will most likely stop at once.
+ */
+function TryAgain({ onTryAgain }: { onTryAgain: () => Promise<boolean> }) {
+  const planLimit = usePlanLimit().data;
+  const now = useNow();
+  const [isSending, setIsSending] = useState(false);
+  // Until what is known has been read, nothing is said of the limit.
+  const line =
+    planLimit === undefined
+      ? null
+      : (planLimitLine(planLimit, now) ?? 'The limit of your Claude plan has reset.');
+  const warning = tryAgainHint(planLimit);
+  return (
+    <div className={styles.tryAgain}>
+      {line !== null && <p className={styles.limitLine}>{line}</p>}
+      <div className={styles.tryAgainActions}>
+        <Button
+          variant="secondary"
+          icon={<RotateCcw />}
+          disabled={isSending}
+          onClick={() => {
+            setIsSending(true);
+            void onTryAgain().finally(() => {
+              setIsSending(false);
+            });
+          }}
+        >
+          Try again
+        </Button>
+        {warning !== null && <p className={styles.tryAgainHint}>{warning}</p>}
+      </div>
     </div>
   );
 }
@@ -240,10 +295,15 @@ export function TurnView({ turn, reportTitle = 'Report', children }: TurnViewPro
 
       {children}
 
+      {/* A turn the plan's limit ended did not fail by the specialist's
+          fault: it says so quietly, without the mark of a failure. */}
       {turn.failure !== null && (
         <p
-          className={classNames(styles.ending, turn.state === 'failed' && styles.failed)}
-          role={turn.state === 'failed' ? 'alert' : undefined}
+          className={classNames(
+            styles.ending,
+            turn.state === 'failed' && !turn.planLimitReached && styles.failed,
+          )}
+          role={turn.state === 'failed' && !turn.planLimitReached ? 'alert' : undefined}
         >
           {turn.failure}
         </p>

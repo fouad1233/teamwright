@@ -9,6 +9,7 @@ import type {
   InterviewAnswer,
   NewAdvice,
   NewDecisionAnswer,
+  PlanLimit,
   ProposalChange,
 } from '@/shared/api/types';
 import { describeFailure, useNotifier } from '@/shared/ui/Toast';
@@ -58,6 +59,28 @@ export function useConversationsWaiting() {
   );
 
   return useQuery({ queryKey: WAITING_KEY, queryFn: () => backend.listConversationsWaiting() });
+}
+
+/** The name under which what is known about the Claude plan is cached. */
+const PLAN_LIMIT_KEY = ['plan-limit'] as const;
+
+/**
+ * What this computer knows about the limit of its Claude plan, kept up to
+ * date: the backend tells every change, also the reset.
+ */
+export function usePlanLimit() {
+  const backend = useBackend();
+  const queryClient = useQueryClient();
+
+  useEffect(
+    () =>
+      backend.onPlanLimitChanged((planLimit) => {
+        queryClient.setQueryData<PlanLimit>(PLAN_LIMIT_KEY, planLimit);
+      }),
+    [backend, queryClient],
+  );
+
+  return useQuery({ queryKey: PLAN_LIMIT_KEY, queryFn: () => backend.planLimit() });
 }
 
 /** Whether the program that runs the AI specialists is installed and signed in. */

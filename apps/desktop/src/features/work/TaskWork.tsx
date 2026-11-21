@@ -8,8 +8,10 @@ import { useTeamMember } from '../team/TeamContext';
 import { ConversationView } from './ConversationView';
 import styles from './TaskWork.module.css';
 import { useConversationOfTask } from './WorkContext';
+import { useNow } from '../sync/useNow';
+import { startWarning } from './planLimitModel';
 import { whyProgramIsNotReady } from './workModel';
-import { useAgentProgram, useWorkCommands } from './workQueries';
+import { useAgentProgram, usePlanLimit, useWorkCommands } from './workQueries';
 
 interface TaskWorkProps {
   project: Project;
@@ -26,6 +28,8 @@ export function TaskWork({ project, task }: TaskWorkProps) {
   );
   const conversation = useConversationOfTask(task.id);
   const program = useAgentProgram();
+  const planLimit = usePlanLimit().data;
+  const now = useNow();
   const commands = useWorkCommands(project.id);
   const [isStarting, setIsStarting] = useState(false);
 
@@ -44,9 +48,12 @@ export function TaskWork({ project, task }: TaskWorkProps) {
   const obstacle = program.data ? whyProgramIsNotReady(program.data) : null;
   // Asking the program whether it is there takes a few seconds. The button
   // waits for the answer, and the line next to it says what it waits for.
+  // Work may be started while the plan's limit is reached: the manager may
+  // know better. The hint says what will most likely happen.
   const hint = program.isPending
     ? 'Looking for Claude Code on this computer…'
     : (obstacle ??
+      startWarning(planLimit, now) ??
       `${member.name} gets a brief of this task and works in the folder of the project.`);
 
   async function start() {

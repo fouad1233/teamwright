@@ -1,0 +1,88 @@
+/* The Claude plan, under the table of tokens: a few measured lines in the
+   same quiet ink as the bars above, one for each window. */
+.plan {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--rule);
+}
+
+.title {
+  padding: 0 var(--space-2);
+  color: var(--ink-faint);
+}
+
+.standing {
+  padding: 0 var(--space-2);
+  color: var(--ink-soft);
+  font-size: var(--text-small);
+}
+
+/* A reached limit is said in ink: it is why no work goes on. It is not
+   lit: nothing waits for the manager. */
+.reached {
+  color: var(--ink);
+}
+
+.windows {
+  display: flex;
+  flex-direction: column;
+}
+
+.window {
+  display: grid;
+  grid-template-columns: minmax(80px, 17%) minmax(60px, 1fr) 12ch minmax(16ch, 22%);
+  align-items: center;
+  gap: var(--space-3);
+  height: 32px;
+  padding: 0 var(--space-2);
+  border-bottom: 1px solid var(--rule);
+}
+
+.name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.track {
+  position: relative;
+  height: var(--dashboard-bar-height);
+}
+
+.bar {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: calc(var(--share) * 100%);
+  border-radius: 1px;
+  background: var(--ink-faint);
+}
+
+/* A window used to its end is drawn in full ink; the words say it too. */
+.full {
+  background: var(--ink);
+}
+
+.used,
+.reset {
+  color: var(--ink-soft);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.unknown {
+  color: var(--ink-faint);
+}
+
+.reset {
+  overflow: hidden;
+  color: var(--ink-faint);
+  text-overflow: ellipsis;
+}

@@ -6,6 +6,7 @@ import { classNames } from '@/shared/lib/classNames';
 import { usageInWords } from '../office/officeModel';
 import { formatTokens } from '../work/workModel';
 import { DashboardSection } from './DashboardSection';
+import { PlanLimitPart } from './PlanLimitPart';
 import { shareOf, usageTable, type UsageRow } from './dashboardModel';
 import styles from './UsagePart.module.css';
 
@@ -63,7 +64,8 @@ function Row({ row, largest }: { row: UsageRow; largest: number }) {
  * Advisor and those who left, the one that spent the most first, with the
  * tokens of every kind, the sum, the turns and the model it ran on last;
  * and the project in all at the foot. The bars are quiet and on one scale.
- * A person spends nothing and is not listed.
+ * A person spends nothing and is not listed. Under it, what is known about
+ * the limits of the Claude plan the specialists share.
  */
 export function UsagePart({ members, usage }: UsagePartProps) {
   const table = usage ? usageTable(members, usage) : undefined;
@@ -116,6 +118,7 @@ export function UsagePart({ members, usage }: UsagePartProps) {
           </tfoot>
         </table>
       )}
+      <PlanLimitPart />
     </DashboardSection>
   );
 }
