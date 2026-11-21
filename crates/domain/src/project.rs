@@ -7,6 +7,7 @@ use crate::error::DomainError;
 use crate::ids::{ProjectId, StatusId};
 use crate::text::{ProjectName, StatusName};
 use crate::time::Timestamp;
+use crate::work_in_progress::WorkInProgressLimit;
 use crate::workflow::{Status, StatusCategory, Workflow};
 
 /// The short code that prefixes the task numbers of a project, as in
@@ -337,6 +338,21 @@ impl Project {
         color: Color,
     ) -> Result<(), DomainError> {
         self.workflow.change_status(id, name, category, color)
+    }
+
+    /// Gives a status of the workflow a work-in-progress limit, another one,
+    /// or none.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the workflow has no such status, or if a limit is
+    /// given to a status of the category done.
+    pub fn set_status_limit(
+        &mut self,
+        id: StatusId,
+        limit: Option<WorkInProgressLimit>,
+    ) -> Result<(), DomainError> {
+        self.workflow.set_limit(id, limit)
     }
 
     /// Moves a status of the workflow to another place.

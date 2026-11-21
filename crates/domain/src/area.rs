@@ -55,6 +55,31 @@ impl Area {
         }
     }
 
+    /// The areas a new project starts with when a template names them, in
+    /// that order. The first takes the identifier of the starting area (see
+    /// [`Area::starting_id`]), so that it stands where "General" stands in
+    /// any other project; the others get new identifiers. No names give the
+    /// area "General".
+    #[must_use]
+    pub fn starting_with(project_id: ProjectId, names: &[AreaName]) -> Vec<Self> {
+        if names.is_empty() {
+            return vec![Self::starting(project_id)];
+        }
+        (0_u32..)
+            .zip(names)
+            .map(|(position, name)| Self {
+                id: if position == 0 {
+                    Self::starting_id(project_id)
+                } else {
+                    AreaId::generate()
+                },
+                project_id,
+                name: name.clone(),
+                position,
+            })
+            .collect()
+    }
+
     /// The identifier of the starting area of a project: the identifier of
     /// the project with its version digit replaced by 0.
     ///
@@ -204,6 +229,25 @@ mod tests {
         assert_eq!(area.name().as_str(), "General");
         assert_eq!(area.position(), 0);
         assert_eq!(area.project_id(), project);
+    }
+
+    #[test]
+    fn the_areas_of_a_template_start_where_general_would_stand() {
+        let project = ProjectId::generate();
+        let names = [
+            AreaName::parse("Electronics").unwrap(),
+            AreaName::parse("Firmware").unwrap(),
+        ];
+
+        let areas = Area::starting_with(project, &names);
+
+        assert_eq!(areas.len(), 2);
+        assert_eq!(areas[0].id(), Area::starting_id(project));
+        assert_eq!(areas[0].name().as_str(), "Electronics");
+        assert_eq!(areas[1].name().as_str(), "Firmware");
+        assert_eq!(areas[1].position(), 1);
+        assert_ne!(areas[1].id(), areas[0].id());
+        assert_eq!(Area::starting_with(project, &[]), [Area::starting(project)]);
     }
 
     #[test]

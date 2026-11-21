@@ -166,7 +166,7 @@ impl ViewKind {
 
     /// A digit of its own for each kind a project starts with, used in the
     /// identifiers of its starting views. Nothing for the other kinds.
-    const fn starting_digit(self) -> Option<u8> {
+    pub(crate) const fn starting_digit(self) -> Option<u8> {
         match self {
             Self::Board => Some(1),
             Self::Backlog => Some(2),
@@ -273,6 +273,36 @@ impl View {
                 })
             })
             .collect()
+    }
+
+    /// The views a new project starts with when a template names their
+    /// kinds, in that order, each named after its kind and showing every
+    /// task. A kind that has a starting identifier (see
+    /// [`View::starting_id`]) gets it; any other gets a new one. A kind
+    /// named twice is given once. No kinds give the six views of
+    /// [`View::starting`].
+    #[must_use]
+    pub fn starting_with(project_id: ProjectId, kinds: &[ViewKind]) -> Vec<Self> {
+        if kinds.is_empty() {
+            return Self::starting(project_id);
+        }
+        let mut views: Vec<Self> = Vec::with_capacity(kinds.len());
+        for &kind in kinds {
+            if views.iter().any(|view| view.kind == kind) {
+                continue;
+            }
+            let position = u32::try_from(views.len()).unwrap_or(u32::MAX);
+            views.push(Self {
+                id: Self::starting_id(project_id, kind).unwrap_or_else(ViewId::generate),
+                project_id,
+                kind,
+                name: kind.default_name(),
+                filter: ViewFilter::EVERY_TASK,
+                position,
+                content: None,
+            });
+        }
+        views
     }
 
     /// The most bytes the content of a view may have: 2 MiB.
@@ -561,6 +591,34 @@ mod tests {
                 .iter()
                 .all(|view| view.filter() == ViewFilter::EVERY_TASK)
         );
+    }
+
+    #[test]
+    fn a_template_gives_its_views_in_its_order_once_each() {
+        let project = ProjectId::generate();
+
+        let views = View::starting_with(
+            project,
+            &[
+                ViewKind::Backlog,
+                ViewKind::Board,
+                ViewKind::Timeline,
+                ViewKind::Board,
+            ],
+        );
+
+        let kinds: Vec<ViewKind> = views.iter().map(View::kind).collect();
+        assert_eq!(
+            kinds,
+            [ViewKind::Backlog, ViewKind::Board, ViewKind::Timeline]
+        );
+        let positions: Vec<u32> = views.iter().map(View::position).collect();
+        assert_eq!(positions, [0, 1, 2]);
+        assert_eq!(
+            views[1].id(),
+            View::starting_id(project, ViewKind::Board).unwrap()
+        );
+        assert_eq!(View::starting_with(project, &[]), View::starting(project));
     }
 
     #[test]

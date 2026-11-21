@@ -33,9 +33,11 @@ pub mod tag;
 pub mod task;
 pub mod task_history;
 pub mod teamwork;
+pub mod template;
 pub mod text;
 pub mod time;
 pub mod view;
+pub mod work_in_progress;
 pub mod workflow;
 
 pub use area::{Area, AreaSnapshot};
@@ -72,10 +74,12 @@ pub use teamwork::{
     Handoff, HandoffContent, HandoffSnapshot, MessageDelivery, MessageKind, SaidIn, TeamMessage,
     TeamMessageSnapshot,
 };
+pub use template::{ProjectTemplate, TemplateStatus};
 pub use text::{
     AreaName, ChecklistText, ComputerName, MemberName, ModelName, ProjectName, SprintName,
     StatusName, TagName, TaskTitle, ViewName,
 };
 pub use time::{CalendarDate, Timestamp};
 pub use view::{View, ViewAssignee, ViewFilter, ViewKind, ViewSnapshot};
+pub use work_in_progress::{Fill, StatusLoad, WorkInProgressLimit};
 pub use workflow::{Status, StatusCategory, Workflow};

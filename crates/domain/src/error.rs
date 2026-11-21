@@ -265,6 +265,23 @@ pub enum DomainError {
         max: u16,
     },
 
+    /// A work-in-progress limit was not a whole number in its range.
+    #[error("a limit is a whole number of tasks from {min} to {max}")]
+    LimitOutOfRange {
+        /// The smallest limit.
+        min: u16,
+        /// The largest limit.
+        max: u16,
+    },
+
+    /// A status of the category done was to be given a work-in-progress
+    /// limit. Finished work only piles up there.
+    #[error("\"{name}\" is a status in which tasks are done, and such a status has no limit")]
+    LimitOnDoneStatus {
+        /// The name of the status.
+        name: String,
+    },
+
     /// A sprint that has started was to lose one of its dates.
     #[error("a sprint that has started has a start and an end date")]
     StartedSprintWithoutDates,

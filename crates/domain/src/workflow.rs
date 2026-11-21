@@ -7,6 +7,7 @@ use crate::error::DomainError;
 use crate::ids::StatusId;
 use crate::macros::text_enum;
 use crate::text::StatusName;
+use crate::work_in_progress::WorkInProgressLimit;
 
 /// What a status means for the progress of a task, whatever it is called.
 ///
@@ -43,6 +44,7 @@ pub struct Status {
     name: StatusName,
     category: StatusCategory,
     color: Color,
+    limit: Option<WorkInProgressLimit>,
 }
 
 impl Status {
@@ -66,7 +68,25 @@ impl Status {
             name,
             category,
             color,
+            limit: None,
         }
+    }
+
+    /// The status with a work-in-progress limit, or without one.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DomainError::LimitOnDoneStatus`] if the status is of the
+    /// category done and a limit is given: see
+    /// [`WorkInProgressLimit::fits`].
+    pub fn with_limit(mut self, limit: Option<WorkInProgressLimit>) -> Result<Self, DomainError> {
+        if limit.is_some() && !WorkInProgressLimit::fits(self.category) {
+            return Err(DomainError::LimitOnDoneStatus {
+                name: self.name.to_string(),
+            });
+        }
+        self.limit = limit;
+        Ok(self)
     }
 
     /// The identifier of this status.
@@ -91,6 +111,14 @@ impl Status {
     #[must_use]
     pub const fn color(&self) -> Color {
         self.color
+    }
+
+    /// The largest number of tasks that should stand in the status at once,
+    /// if it has a limit. A limit is a signal, never a wall: a task may be
+    /// moved into a status that is full.
+    #[must_use]
+    pub const fn limit(&self) -> Option<WorkInProgressLimit> {
+        self.limit
     }
 }
 
@@ -167,6 +195,14 @@ impl Workflow {
         Self { statuses }
     }
 
+    /// Builds a workflow of statuses written in the program itself, such as
+    /// those of a project template. The statuses are known to follow the
+    /// rules; a test of every template passes them through
+    /// [`Workflow::new`] to prove it.
+    pub(crate) const fn from_trusted(statuses: Vec<Status>) -> Self {
+        Self { statuses }
+    }
+
     /// The statuses in the order they appear on a board.
     #[must_use]
     pub fn statuses(&self) -> &[Status] {
@@ -226,7 +262,8 @@ impl Workflow {
     }
 
     /// Gives a status a new name, category and color in one step. The
-    /// status keeps its place and its identifier.
+    /// status keeps its place and its identifier, and its limit, unless it
+    /// becomes a status of the category done, which carries none.
     ///
     /// # Errors
     ///
@@ -254,6 +291,26 @@ impl Workflow {
         status.name = name;
         status.category = category;
         status.color = color;
+        if !WorkInProgressLimit::fits(category) {
+            status.limit = None;
+        }
+        Ok(())
+    }
+
+    /// Gives a status a work-in-progress limit, another one, or none.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the workflow has no such status, or if a limit is
+    /// given to a status of the category done.
+    pub fn set_limit(
+        &mut self,
+        id: StatusId,
+        limit: Option<WorkInProgressLimit>,
+    ) -> Result<(), DomainError> {
+        let position = self.position_of(id)?;
+        let status = &mut self.statuses[position];
+        *status = status.clone().with_limit(limit)?;
         Ok(())
     }
 
@@ -760,6 +817,88 @@ mod tests {
         workflow.remove_status(id_of(&workflow, "Done")).unwrap();
 
         assert_eq!(names(&workflow).last(), Some(&"Cancelled"));
+    }
+
+    fn limit(value: i64) -> WorkInProgressLimit {
+        WorkInProgressLimit::new(value).unwrap()
+    }
+
+    #[test]
+    fn a_status_gets_a_limit_another_one_and_none() {
+        let mut workflow = Workflow::engineering();
+        let in_progress = id_of(&workflow, "In progress");
+
+        workflow.set_limit(in_progress, Some(limit(3))).unwrap();
+        assert_eq!(
+            workflow.status(in_progress).unwrap().limit(),
+            Some(limit(3))
+        );
+        workflow.set_limit(in_progress, Some(limit(5))).unwrap();
+        assert_eq!(
+            workflow.status(in_progress).unwrap().limit(),
+            Some(limit(5))
+        );
+        workflow.set_limit(in_progress, None).unwrap();
+        assert_eq!(workflow.status(in_progress).unwrap().limit(), None);
+    }
+
+    #[test]
+    fn a_done_status_takes_no_limit() {
+        let mut workflow = Workflow::engineering();
+        let done = id_of(&workflow, "Done");
+
+        let error = workflow.set_limit(done, Some(limit(3))).unwrap_err();
+
+        assert_eq!(
+            error,
+            DomainError::LimitOnDoneStatus {
+                name: "Done".to_owned()
+            }
+        );
+        assert_eq!(workflow.status(done).unwrap().limit(), None);
+        workflow.set_limit(done, None).unwrap();
+    }
+
+    #[test]
+    fn a_limit_goes_when_its_status_becomes_a_done_status_and_stays_otherwise() {
+        let mut workflow = Workflow::engineering();
+        let in_test = id_of(&workflow, "In test");
+        let in_progress = id_of(&workflow, "In progress");
+        workflow.set_limit(in_test, Some(limit(2))).unwrap();
+        workflow.set_limit(in_progress, Some(limit(4))).unwrap();
+
+        workflow
+            .change_status(
+                in_progress,
+                StatusName::parse("Doing").unwrap(),
+                StatusCategory::Review,
+                Color::Blue,
+            )
+            .unwrap();
+        workflow
+            .change_status(
+                in_test,
+                StatusName::parse("Accepted").unwrap(),
+                StatusCategory::Done,
+                Color::Green,
+            )
+            .unwrap();
+
+        assert_eq!(
+            workflow.status(in_progress).unwrap().limit(),
+            Some(limit(4))
+        );
+        assert_eq!(workflow.status(in_test).unwrap().limit(), None);
+    }
+
+    #[test]
+    fn a_limit_on_a_status_the_workflow_lacks_is_an_error() {
+        let mut workflow = Workflow::standard();
+
+        assert!(matches!(
+            workflow.set_limit(StatusId::generate(), Some(limit(1))),
+            Err(DomainError::UnknownStatus { .. })
+        ));
     }
 
     #[test]
