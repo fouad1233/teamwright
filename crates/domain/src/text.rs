@@ -106,6 +106,14 @@ define_text!(
 );
 
 define_text!(
+    /// The title of a digest of an earlier conversation: the title the
+    /// conversation had, or the beginning of its first request.
+    DigestTitle,
+    field = "title of the digest",
+    max_length = 120
+);
+
+define_text!(
     /// The name of a sprint, such as "Sprint 3" or "Board bring-up".
     SprintName,
     field = "sprint name",

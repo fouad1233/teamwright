@@ -173,6 +173,11 @@ pub enum DomainError {
     #[error("the proposal has no members and no tasks")]
     EmptyProposal,
 
+    /// An earlier conversation held no request of the user, so there is
+    /// nothing to give an account of.
+    #[error("the conversation holds no request of yours, so there is nothing to digest")]
+    NothingToDigest,
+
     /// A change named a task that a proposal does not have.
     #[error("the proposal has no task {number}")]
     NoSuchProposedTask {

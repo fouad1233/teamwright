@@ -21,6 +21,7 @@ pub mod checklist;
 pub mod color;
 pub mod conversation;
 pub mod dependencies;
+pub mod digest;
 pub mod error;
 pub mod ids;
 pub mod integration;
@@ -30,6 +31,7 @@ pub mod planning;
 pub mod project;
 pub mod project_files;
 pub mod ready_made;
+pub mod secrets;
 pub mod sprint;
 pub mod sprint_course;
 pub mod tag;
@@ -54,10 +56,13 @@ pub use conversation::{
     TurnOrigin, TurnSnapshot, TurnState, context_of,
 };
 pub use dependencies::DependencyGraph;
+pub use digest::{
+    Digest, DigestDraft, DigestSnapshot, DigestSource, DigestText, EarlierConversation,
+};
 pub use error::DomainError;
 pub use ids::{
-    AreaId, ChecklistItemId, ComputerId, ConversationId, HandoffId, MemberId, MemoryEntryId,
-    ProjectId, SprintId, StatusId, TagId, TaskId, TeamMessageId, TurnId, ViewId,
+    AreaId, ChecklistItemId, ComputerId, ConversationId, DigestId, HandoffId, MemberId,
+    MemoryEntryId, ProjectId, SprintId, StatusId, TagId, TaskId, TeamMessageId, TurnId, ViewId,
 };
 pub use integration::{EventKind, EventKinds, RepositoryName, WebAddress};
 pub use member::{Effort, Member, MemberInstructions, MemberKind, MemberProfile, MemberSnapshot};
@@ -72,6 +77,7 @@ pub use planning::{
 pub use project::{Project, ProjectKey, ProjectSnapshot};
 pub use project_files::{EntryKind, FolderEntry, PathInFolder};
 pub use ready_made::ReadyMadeSpecialist;
+pub use secrets::hide_secrets;
 pub use sprint::{
     CountedTask, Sprint, SprintDates, SprintSnapshot, SprintState, SprintSummary, SprintUnit,
     StoryPoints,
@@ -88,8 +94,8 @@ pub use teamwork::{
 };
 pub use template::{ProjectTemplate, TemplateStatus};
 pub use text::{
-    AreaName, ChecklistText, ComputerName, MemberName, ModelName, ProjectName, SprintName,
-    StatusName, TagName, TaskTitle, ViewName,
+    AreaName, ChecklistText, ComputerName, DigestTitle, MemberName, ModelName, ProjectName,
+    SprintName, StatusName, TagName, TaskTitle, ViewName,
 };
 pub use time::{CalendarDate, Timestamp};
 pub use velocity::{
