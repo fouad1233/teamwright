@@ -22,6 +22,7 @@ use teamwright_application::{
 };
 use teamwright_domain::{ComputerId, Conversation, Project, Turn};
 use teamwright_integrations::{GhCommandLine, GhLocator, GitHubReleases, HttpsSender};
+use teamwright_runtime::connector_launcher::LAUNCHER_ARGUMENT;
 use teamwright_runtime::{ClaudeCode, EarlierConversationsOnDisk};
 use teamwright_storage::{
     Database, FolderOfComputers, SqliteAreaRepository, SqliteConversationRepository,
@@ -45,6 +46,19 @@ const DATABASE_FILE_NAME: &str = "teamwright.db";
 /// The folder inside the application's data directory that keeps the copies
 /// of the skills of the libraries, on this computer only (decision 0039).
 const SKILL_SHELF_FOLDER: &str = "skills";
+
+/// The folder inside the application's data directory for the connectors
+/// started as programs (decision 0039, note of 21 November 2026): the empty
+/// folder they start in, and the files that hold the values of their
+/// variables while a turn runs. No session is given it to read; it is not
+/// inside the shelf of skills, whose folders sessions read.
+const CONNECTORS_FOLDER: &str = "connectors";
+
+/// The empty folder inside [`CONNECTORS_FOLDER`] every connector starts in.
+const CONNECTOR_START_FOLDER: &str = "start-here";
+
+/// The folder inside [`CONNECTORS_FOLDER`] for the values of variables.
+const CONNECTOR_SECRETS_FOLDER: &str = "secrets";
 
 /// Names a folder to keep the data in, instead of the place the operating
 /// system assigns to the application. Tests use it to stay away from the
@@ -240,7 +254,13 @@ impl AppState {
         let permission_repository = Arc::new(teamwright_storage::SqlitePermissionRepository::new(
             database.clone(),
         ));
-        let runtime: Arc<dyn AgentRuntime> = Arc::new(agent_program());
+        // Values of variables a turn that never ended properly left behind.
+        teamwright_runtime::connector_launcher::remove_left_over_secrets(
+            &data_directory
+                .join(CONNECTORS_FOLDER)
+                .join(CONNECTOR_SECRETS_FOLDER),
+        );
+        let runtime: Arc<dyn AgentRuntime> = Arc::new(agent_program(&data_directory));
         let kit_repository = Arc::new(teamwright_storage::SqliteKitRepository::new(
             database.clone(),
         ));
@@ -613,10 +633,12 @@ fn data_directory(app: &AppHandle) -> Result<PathBuf, StartupError> {
 /// `TEAMWRIGHT_AGENT_PROGRAM` if that is set, and otherwise the Claude Code
 /// that is found on the computer.
 ///
-/// It starts the team bus as this very program with `--team-bus`. If the
-/// path of this program cannot be found, the specialists work without the
-/// tool to ask the manager.
-fn agent_program() -> ClaudeCode {
+/// It starts the team bus as this very program with `--team-bus`, and the
+/// programs of connectors through this very program with `--connector`, in
+/// an empty folder of the data directory. If the path of this program
+/// cannot be found, the specialists work without the tool to ask the
+/// manager, and a turn given a connector that is a program is refused.
+fn agent_program(data_directory: &Path) -> ClaudeCode {
     let runtime = match env::var_os(AGENT_PROGRAM_VARIABLE) {
         Some(program) if !program.is_empty() => {
             ClaudeCode::new().with_program(PathBuf::from(program))
@@ -624,7 +646,17 @@ fn agent_program() -> ClaudeCode {
         _ => ClaudeCode::new(),
     };
     match env::current_exe() {
-        Ok(this_program) => runtime.with_team_bus(this_program, vec![TEAM_BUS_ARGUMENT.to_owned()]),
+        Ok(this_program) => {
+            let connectors = data_directory.join(CONNECTORS_FOLDER);
+            runtime
+                .with_team_bus(this_program.clone(), vec![TEAM_BUS_ARGUMENT.to_owned()])
+                .with_connector_launcher(
+                    this_program,
+                    vec![LAUNCHER_ARGUMENT.to_owned()],
+                    connectors.join(CONNECTOR_START_FOLDER),
+                    connectors.join(CONNECTOR_SECRETS_FOLDER),
+                )
+        }
         Err(_) => runtime,
     }
 }

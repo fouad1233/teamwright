@@ -33,7 +33,7 @@ use crate::agent_runtime::{
     TurnFailure, TurnOutcome, TurnRequest,
 };
 use crate::error::ApplicationError;
-use crate::kits::{KitRepository, SkillShelf, turn_kit_of};
+use crate::kits::{KitRepository, SkillShelf, turn_kit_of, variables_of_the_library};
 use crate::memory::{
     MAX_FACT_LENGTH, MOST_FACTS_PER_TURN, contract_entries, decision_entry, facts_remembered_in,
     memory_in_words, remembered_entries,
@@ -922,6 +922,9 @@ impl WorkService {
                 )
             }
         };
+        // The secrets named by the library stay out of the turn, whoever
+        // runs it (decision 0039, note of 21 November 2026).
+        kit.withheld_variables = variables_of_the_library(ports.kits.as_ref(), project.id())?;
         let request = TurnRequest {
             working_folder,
             prompt: prompt.unwrap_or_else(|| turn.request().to_owned()),
@@ -2786,6 +2789,21 @@ mod tests {
                 },
             )
             .unwrap();
+        // A connector of the library given to nobody: its secret stays out
+        // of every turn all the same.
+        kits.add_connector(
+            workspace.project.id(),
+            NewConnector {
+                name: "catalog".to_owned(),
+                start: NewConnectorStart::Program {
+                    program: "catalog-server".to_owned(),
+                    arguments: Vec::new(),
+                    variables: vec!["CATALOG_TOKEN".to_owned()],
+                },
+                tools: vec!["search".to_owned()],
+            },
+        )
+        .unwrap();
         kits.set_kit(
             workspace.engineer.id(),
             KitChoice {
@@ -2802,6 +2820,15 @@ mod tests {
         assert_eq!(request.kit.skills[0].name, "pcb-review");
         assert_eq!(request.kit.connectors.len(), 1);
         assert_eq!(request.kit.connectors[0].tools, ["search"]);
+        assert_eq!(
+            request
+                .kit
+                .withheld_variables
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>(),
+            ["CATALOG_TOKEN"]
+        );
         // The profile of a specialist is unchanged by what it was given.
         assert_eq!(request.permissions, PermissionProfile::specialist());
     }

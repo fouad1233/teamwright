@@ -648,6 +648,27 @@ pub fn turn_kit_of(
     Ok(turn)
 }
 
+/// The environment variables named by any connector of the library of a
+/// project, each once, in order. They hold the manager's secrets, so a
+/// turn of the project starts without them, whatever it was given: a
+/// specialist that may run a command could otherwise read them. The
+/// runtime keeps only those Claude Code itself must have.
+///
+/// # Errors
+///
+/// Returns an error if storage fails.
+pub fn variables_of_the_library(
+    kits: &dyn KitRepository,
+    project_id: ProjectId,
+) -> Result<Vec<VariableName>, ApplicationError> {
+    let named: BTreeSet<VariableName> = kits
+        .connectors_of_project(project_id)?
+        .iter()
+        .flat_map(|connector| connector.start().variables().into_iter().cloned())
+        .collect();
+    Ok(named.into_iter().collect())
+}
+
 /// The copy of a skill this computer keeps, if it is there and still the
 /// same skill, passing the check. The copy is read again for every turn,
 /// so that a copy changed on the disk is checked again.

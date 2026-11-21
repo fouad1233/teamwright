@@ -103,6 +103,7 @@ pub use kits::{
     InMemoryKitRepository, KeptSkill, KitChoice, KitRepository, KitService, Library,
     LibraryConnector, LibrarySkill, MAX_SKILL_BYTES, MAX_SKILL_FILES, NewConnector,
     NewConnectorStart, NewHeader, PretendShelf, SKILL_FILE, SkillFolder, SkillShelf, turn_kit_of,
+    variables_of_the_library,
 };
 pub use memory::{
     MOST_FACTS_PER_TURN, MemoryService, NewFact, Searchable, contract_entries, decision_entry,

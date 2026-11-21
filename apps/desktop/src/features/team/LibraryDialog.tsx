@@ -263,7 +263,7 @@ function ConnectorForm({ onAdd, onDone }: ConnectorFormProps) {
         <>
           <Field
             label="Command"
-            hint="The program and its arguments, such as npx -y parts-server. The program is a name found on the search path or a full path,, never a relative path such as ./server."
+            hint="The program and its arguments, such as npx -y parts-server. The program is a name found on the search path or a full path,, never a relative path such as ./server. It starts in an empty folder of Teamwright's own, not the folder of the project, with only the variables named below and the few every program needs."
           >
             <TextInput
               value={command}
@@ -275,7 +275,7 @@ function ConnectorForm({ onAdd, onDone }: ConnectorFormProps) {
           </Field>
           <Field
             label="Environment variables"
-            hint="The names of the variables that hold its secrets, never their values. They are read from the environment Teamwright was started in."
+            hint="The names of the variables that hold its secrets, never their values. They are read from the environment Teamwright was started in, handed to this connector alone, and kept from the specialists' sessions."
           >
             <TextInput
               value={variables}

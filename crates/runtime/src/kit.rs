@@ -8,15 +8,53 @@
 //!   `skills/<name>/`), loaded for one session with `--plugin-dir`. The
 //!   session knows it as `<name>:<name>`.
 //! - A connector is an entry of the configuration given with
-//!   `--mcp-config`. Claude Code replaces `${NAME}` in the `env` of a
-//!   program and in the `headers` of an address with the variable of its
-//!   own environment, so the value of a secret never passes through
-//!   Teamwright's arguments, database or log.
+//!   `--mcp-config`.
+//! - A connector started as a program is started through Teamwright's own
+//!   program, as the [`connector_launcher`](crate::connector_launcher):
+//!   in an empty folder of Teamwright's own, never the folder of the
+//!   project, with only the variables it names. Their values are in a file
+//!   of Teamwright's own for the one turn, never on a command line.
+//! - A connector at an address is sent its secret in a header: Claude Code
+//!   replaces `${NAME}` in the `headers` with the variable of its own
+//!   environment, so the value never passes through Teamwright's
+//!   arguments, database or log.
 //! - Its tools are allowed one by one, as `mcp__<connector>__<tool>`.
+
+use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
 
 use serde_json::{Map, Value, json};
 use teamwright_application::{AgentRuntimeError, ConnectorStart, KitConnector};
 use teamwright_domain::{ConnectorName, ToolName};
+
+use crate::connector_launcher::Launch;
+
+/// How the programs of connectors are started on this computer: through
+/// Teamwright's own program, in the mode of the launcher.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConnectorLauncher {
+    /// Teamwright's own program.
+    pub program: PathBuf,
+    /// The arguments that start it as the launcher, before what it starts.
+    pub arguments: Vec<String>,
+    /// The empty folder of Teamwright's own every connector starts in.
+    pub folder: PathBuf,
+    /// The folder of Teamwright's own that holds the values of the
+    /// variables of the connectors of a turn while it runs.
+    pub secrets_folder: PathBuf,
+}
+
+/// How the connectors of one turn are started: the launcher, if this
+/// computer has one, and for each program connector that is handed
+/// variables, the file that holds their values for this turn.
+#[derive(Debug, Clone, Default)]
+pub struct ConnectorStarts<'a> {
+    /// The launcher. Without it, no connector started as a program can be
+    /// given to a turn.
+    pub launcher: Option<&'a ConnectorLauncher>,
+    /// The file of secrets of each connector, by its name.
+    pub secrets: BTreeMap<String, PathBuf>,
+}
 
 /// The settings every confined session is started with, through
 /// `--settings`, which restricted mode still reads.
@@ -51,9 +89,13 @@ pub fn tool_in_session(connector: &str, tool: &str) -> String {
 /// # Errors
 ///
 /// Returns [`AgentRuntimeError::InvalidRequest`] if the name or a tool
-/// breaks a rule, or if no tool is given.
+/// breaks a rule, or if no tool is given; for a program, also if there is
+/// no launcher, if the program is named by a relative path, if a variable
+/// has no file of secrets, or if a path of the launcher holds `$`, which
+/// Claude Code could replace.
 pub fn connector_entry(
     connector: &KitConnector,
+    starts: &ConnectorStarts<'_>,
 ) -> Result<(Value, Vec<String>), AgentRuntimeError> {
     let invalid = |message: String| AgentRuntimeError::InvalidRequest { message };
     let name = ConnectorName::parse(&connector.name).map_err(|error| invalid(error.to_string()))?;
@@ -77,20 +119,44 @@ pub fn connector_entry(
             arguments,
             variables,
         } => {
-            let mut entry = json!({ "command": program, "args": arguments });
-            if !variables.is_empty() {
-                let environment: Map<String, Value> = variables
-                    .iter()
-                    .map(|variable| {
-                        (
-                            variable.to_string(),
-                            Value::String(format!("${{{variable}}}")),
-                        )
-                    })
-                    .collect();
-                entry["env"] = Value::Object(environment);
+            ConnectorStart::check_program_name(program)
+                .map_err(|error| invalid(error.to_string()))?;
+            let launcher = starts.launcher.ok_or_else(|| {
+                invalid(format!(
+                    "the connector {name} is a program, and this Teamwright cannot start it in a \
+                     folder of its own"
+                ))
+            })?;
+            let secrets = if variables.is_empty() {
+                None
+            } else {
+                Some(starts.secrets.get(name.as_str()).ok_or_else(|| {
+                    invalid(format!(
+                        "the variables of the connector {name} were not written for the turn"
+                    ))
+                })?)
+            };
+            for path in [&launcher.program, &launcher.folder]
+                .into_iter()
+                .chain(secrets)
+            {
+                refuse_a_dollar(path)?;
             }
-            entry
+            let launch = Launch {
+                folder: launcher.folder.clone(),
+                secrets: secrets.cloned(),
+                variables: variables.iter().map(ToString::to_string).collect(),
+                program: program.clone(),
+                arguments: arguments.clone(),
+            };
+            let mut launched = launcher.arguments.clone();
+            launched.extend(launch.to_arguments());
+            // No `env`: the launcher hands on the variables itself, and
+            // Claude Code then has nothing of the connector to replace.
+            json!({
+                "command": launcher.program.to_string_lossy(),
+                "args": launched,
+            })
         }
         ConnectorStart::Address { url, headers } => {
             let mut entry = json!({ "type": "http", "url": url });
@@ -115,6 +181,21 @@ pub fn connector_entry(
     Ok((entry, tools))
 }
 
+/// Refuses a path with `$`, which Claude Code could replace with a variable
+/// of its environment in the configuration of tool servers.
+fn refuse_a_dollar(path: &Path) -> Result<(), AgentRuntimeError> {
+    if path.to_string_lossy().contains('$') {
+        return Err(AgentRuntimeError::InvalidRequest {
+            message: format!(
+                "the path {} holds $, which Claude Code could replace; a connector cannot be \
+                 started from it",
+                path.display()
+            ),
+        });
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use teamwright_domain::{SecretHeader, VariableName};
@@ -125,9 +206,17 @@ mod tests {
         VariableName::parse(name).unwrap()
     }
 
-    #[test]
-    fn a_program_is_handed_its_secrets_by_name_only() {
-        let connector = KitConnector {
+    fn launcher() -> ConnectorLauncher {
+        ConnectorLauncher {
+            program: PathBuf::from("/opt/teamwright/teamwright"),
+            arguments: vec!["--connector".to_owned()],
+            folder: PathBuf::from("/data/connectors/start-here"),
+            secrets_folder: PathBuf::from("/data/connectors/secrets"),
+        }
+    }
+
+    fn parts() -> KitConnector {
+        KitConnector {
             name: "parts".to_owned(),
             start: ConnectorStart::program(
                 "npx",
@@ -136,19 +225,94 @@ mod tests {
             )
             .unwrap(),
             tools: vec!["search_parts".to_owned()],
+        }
+    }
+
+    #[test]
+    fn a_program_is_started_through_the_launcher_and_handed_its_secrets_by_file() {
+        let launcher = launcher();
+        let starts = ConnectorStarts {
+            launcher: Some(&launcher),
+            secrets: BTreeMap::from([(
+                "parts".to_owned(),
+                PathBuf::from("/data/connectors/secrets/turn-1.json"),
+            )]),
         };
 
-        let (entry, tools) = connector_entry(&connector).unwrap();
+        let (entry, tools) = connector_entry(&parts(), &starts).unwrap();
 
         assert_eq!(
             entry,
             json!({
-                "command": "npx",
-                "args": ["-y", "parts-server"],
-                "env": { "PARTS_TOKEN": "${PARTS_TOKEN}" }
+                "command": "/opt/teamwright/teamwright",
+                "args": [
+                    "--connector",
+                    "--folder", "/data/connectors/start-here",
+                    "--secrets", "/data/connectors/secrets/turn-1.json",
+                    "--pass", "PARTS_TOKEN",
+                    "--", "npx", "-y", "parts-server"
+                ]
             })
         );
         assert_eq!(tools, ["mcp__parts__search_parts"]);
+        // No value and no `${…}` of a variable: nothing for Claude Code to
+        // replace from the environment of the turn.
+        assert!(!entry.to_string().contains('$'));
+        assert!(entry.get("env").is_none());
+    }
+
+    #[test]
+    fn a_program_without_variables_names_no_file() {
+        let launcher = launcher();
+        let starts = ConnectorStarts {
+            launcher: Some(&launcher),
+            secrets: BTreeMap::new(),
+        };
+        let mut plain = parts();
+        plain.start =
+            ConnectorStart::program("/usr/local/bin/parts", Vec::new(), Vec::new()).unwrap();
+
+        let (entry, _) = connector_entry(&plain, &starts).unwrap();
+
+        assert_eq!(
+            entry["args"],
+            json!([
+                "--connector",
+                "--folder",
+                "/data/connectors/start-here",
+                "--",
+                "/usr/local/bin/parts"
+            ])
+        );
+    }
+
+    #[test]
+    fn a_program_is_refused_without_a_launcher_a_file_or_a_sound_path() {
+        let launcher = launcher();
+        // No launcher: the program would start in the folder of the
+        // project, so it is not started at all.
+        assert!(connector_entry(&parts(), &ConnectorStarts::default()).is_err());
+        // Variables without their file.
+        let starts = ConnectorStarts {
+            launcher: Some(&launcher),
+            secrets: BTreeMap::new(),
+        };
+        assert!(connector_entry(&parts(), &starts).is_err());
+        // A program stored before the rule about relative paths.
+        let mut relative = parts();
+        relative.start =
+            ConnectorStart::program_as_stored("./server", Vec::new(), Vec::new()).unwrap();
+        assert!(connector_entry(&relative, &starts).is_err());
+        // A path Claude Code could fill in from its environment.
+        let mut dollar = launcher.clone();
+        dollar.folder = PathBuf::from("/data/${HOME}/start-here");
+        let starts = ConnectorStarts {
+            launcher: Some(&dollar),
+            secrets: BTreeMap::new(),
+        };
+        let mut plain = parts();
+        plain.start = ConnectorStart::program("npx", Vec::new(), Vec::new()).unwrap();
+        assert!(connector_entry(&plain, &starts).is_err());
     }
 
     #[test]
@@ -166,7 +330,7 @@ mod tests {
             tools: vec!["read_ticket".to_owned(), "list_tickets".to_owned()],
         };
 
-        let (entry, tools) = connector_entry(&connector).unwrap();
+        let (entry, tools) = connector_entry(&connector, &ConnectorStarts::default()).unwrap();
 
         assert_eq!(
             entry,
@@ -187,17 +351,22 @@ mod tests {
 
     #[test]
     fn a_connector_that_the_library_would_refuse_is_refused() {
+        let launcher = launcher();
+        let starts = ConnectorStarts {
+            launcher: Some(&launcher),
+            secrets: BTreeMap::new(),
+        };
         let start = ConnectorStart::program("server", Vec::new(), Vec::new()).unwrap();
         let mut connector = KitConnector {
             name: "teamwright".to_owned(),
             start,
             tools: vec!["search".to_owned()],
         };
-        assert!(connector_entry(&connector).is_err());
+        assert!(connector_entry(&connector, &starts).is_err());
         connector.name = "parts".to_owned();
         connector.tools = Vec::new();
-        assert!(connector_entry(&connector).is_err());
+        assert!(connector_entry(&connector, &starts).is_err());
         connector.tools = vec!["*".to_owned()];
-        assert!(connector_entry(&connector).is_err());
+        assert!(connector_entry(&connector, &starts).is_err());
     }
 }

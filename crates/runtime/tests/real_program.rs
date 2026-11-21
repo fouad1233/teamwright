@@ -362,6 +362,17 @@ fn the_own_instructions_of_a_specialist_reach_a_real_session() {
 /// The Teamwright program, which serves the team bus. It is built with
 /// `cargo build -p teamwright-desktop`, or named in
 /// `TEAMWRIGHT_BUS_PROGRAM`.
+/// The runtime with Teamwright's program as the launcher of connectors,
+/// starting them in an empty folder under `ground`.
+fn with_launcher(runtime: ClaudeCode, ground: &Path) -> ClaudeCode {
+    runtime.with_connector_launcher(
+        bus_program(),
+        vec!["--connector".to_owned()],
+        ground.join("connectors").join("start-here"),
+        ground.join("connectors").join("secrets"),
+    )
+}
+
 fn bus_program() -> std::path::PathBuf {
     let program = std::env::var_os("TEAMWRIGHT_BUS_PROGRAM").map_or_else(
         || {
@@ -572,11 +583,12 @@ fn a_real_session_gets_its_chosen_skill_and_connector_and_nothing_of_the_users_o
             .unwrap(),
             tools: vec!["ask_manager".to_owned()],
         }],
+        withheld_variables: Vec::new(),
     };
     let events = Arc::new(Mutex::new(Vec::new()));
     let collected = Arc::clone(&events);
 
-    let turn = runtime()
+    let turn = with_launcher(runtime(), &ground)
         .start_turn(
             request,
             Box::new(move |event| collected.lock().unwrap().push(event)),
@@ -734,4 +746,130 @@ fn a_real_session_asks_to_run_a_command_and_runs_it_once_allowed() {
         "the command was expected to run: {events:?}"
     );
     assert!(outcome.final_text.contains("teamwright-was-here"));
+}
+
+/// A tool server of a few lines, in Python, with one tool that tells the
+/// folder it runs in, the value of the variable it was given, and the
+/// names of all its variables.
+const PROBE_SERVER: &str = r#"import json, os, sys
+for line in sys.stdin:
+    message = json.loads(line)
+    ident = message.get("id")
+    method = message.get("method")
+    if method == "initialize":
+        result = {"protocolVersion": message["params"].get("protocolVersion", "2025-06-18"),
+                  "capabilities": {"tools": {}},
+                  "serverInfo": {"name": "probe", "version": "1"}}
+    elif method == "tools/list":
+        result = {"tools": [{"name": "tell_environment",
+                             "description": "Tells where this server runs and its environment.",
+                             "inputSchema": {"type": "object", "properties": {}}}]}
+    elif method == "tools/call":
+        text = "folder=%s; given=%s; names=%s" % (
+            os.getcwd(), os.environ.get("TEAMWRIGHT_PROBE_GIVEN", "none"),
+            ",".join(sorted(os.environ)))
+        result = {"content": [{"type": "text", "text": text}]}
+    elif ident is None:
+        continue
+    else:
+        result = None
+    if ident is not None:
+        reply = {"jsonrpc": "2.0", "id": ident}
+        if result is None:
+            reply["error"] = {"code": -32601, "message": "unknown method"}
+        else:
+            reply["result"] = result
+        sys.stdout.write(json.dumps(reply) + "\n")
+        sys.stdout.flush()
+"#;
+
+/// Decision 0039, note of 21 November 2026. A connector started as a
+/// program runs through Teamwright's launcher: in an empty folder of
+/// Teamwright's own, not the folder of the project, with the variable it
+/// names and without one it does not name.
+///
+/// This test has never passed: the program was not signed in on the night
+/// it was written. It needs `python3` on the search path, and the built
+/// desktop program as the launcher.
+#[test]
+#[ignore = "needs the real Claude Code, signed in, the built program, python3, and spends one turn"]
+fn a_real_connector_starts_through_the_launcher_and_sees_only_its_own_variable() {
+    let ground = tempfile::tempdir().unwrap();
+    let ground = teamwright_runtime::full_form(ground.path()).unwrap();
+    let work = ground.join("work");
+    std::fs::create_dir_all(&work).unwrap();
+    let server = ground.join("probe_server.py");
+    std::fs::write(&server, PROBE_SERVER).unwrap();
+    // A file of the same name in the folder of the project, which a
+    // connector started there would have found first.
+    std::fs::write(
+        work.join("probe_server.py"),
+        "raise SystemExit('planted')\n",
+    )
+    .unwrap();
+
+    let mut request = request(
+        &work,
+        "This is a test. Call the tool mcp__probe__tell_environment once, then answer with \
+         exactly the text it returned and nothing else.",
+        SessionChoice::New,
+    );
+    request.kit = teamwright_application::TurnKit {
+        skills: Vec::new(),
+        connectors: vec![teamwright_application::KitConnector {
+            name: "probe".to_owned(),
+            start: teamwright_application::ConnectorStart::program(
+                "python3",
+                vec!["-I".to_owned(), server.to_string_lossy().into_owned()],
+                vec![teamwright_domain::VariableName::parse("TEAMWRIGHT_PROBE_GIVEN").unwrap()],
+            )
+            .unwrap(),
+            tools: vec!["tell_environment".to_owned()],
+        }],
+        withheld_variables: vec![
+            teamwright_domain::VariableName::parse("TEAMWRIGHT_PROBE_GIVEN").unwrap(),
+        ],
+    };
+    let runtime = with_launcher(
+        ClaudeCode::new().with_environment(
+            Environment::inherited_without_claude_variables()
+                .with("TEAMWRIGHT_PROBE_GIVEN", "apricot-42")
+                .with("TEAMWRIGHT_PROBE_HIDDEN", "never-handed-on"),
+        ),
+        &ground,
+    );
+    let events = Arc::new(Mutex::new(Vec::new()));
+    let collected = Arc::clone(&events);
+
+    let outcome = runtime
+        .start_turn(
+            request,
+            Box::new(move |event| collected.lock().unwrap().push(event)),
+        )
+        .unwrap()
+        .wait()
+        .unwrap();
+    let events = events.lock().unwrap().clone();
+    for event in &events {
+        println!("{event:?}");
+    }
+    print_usage(&outcome);
+
+    assert_eq!(outcome.failure, None);
+    let told = &outcome.final_text;
+    let start_here = ground.join("connectors").join("start-here");
+    assert!(
+        told.contains(&format!("folder={}", start_here.display())),
+        "{told}"
+    );
+    assert!(told.contains("given=apricot-42"), "{told}");
+    assert!(!told.contains("TEAMWRIGHT_PROBE_HIDDEN"), "{told}");
+    // The value never reached a file the session could read: its file of
+    // secrets is gone with the turn.
+    assert_eq!(
+        std::fs::read_dir(ground.join("connectors").join("secrets"))
+            .unwrap()
+            .count(),
+        0
+    );
 }

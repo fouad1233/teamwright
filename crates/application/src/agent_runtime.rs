@@ -590,6 +590,13 @@ pub struct TurnKit {
     pub skills: Vec<KitSkill>,
     /// The connectors, each with the tools the session may use.
     pub connectors: Vec<KitConnector>,
+    /// The environment variables named by any connector of the library of
+    /// the project, given to this turn or not. They are secrets of the
+    /// manager's: the runtime keeps them out of the environment of the
+    /// turn, except those it cannot do without (decision 0039, note of 21
+    /// November 2026). Also filled for the Advisor, which is given no
+    /// connector.
+    pub withheld_variables: Vec<teamwright_domain::VariableName>,
 }
 
 impl TurnKit {

@@ -12,7 +12,7 @@ use teamwright_application::{
     SessionId, TurnRequest,
 };
 
-use crate::kit::{SESSION_SETTINGS, connector_entry, skill_rule};
+use crate::kit::{ConnectorStarts, SESSION_SETTINGS, connector_entry, skill_rule};
 use crate::team_bus::{SERVER_NAME, TeamBus, name_in_session};
 
 /// The settings that refuse reads outside the working folders, also for
@@ -44,7 +44,8 @@ pub fn desktop_arguments(session: &SessionId) -> Vec<OsString> {
     ]
 }
 
-/// The arguments that run one turn of a session in headless mode.
+/// The arguments that run one turn of a session in headless mode, without
+/// a launcher for connectors: what the tests of the other arguments use.
 ///
 /// `readable_folders` are the request's readable folders in their full
 /// form. `team_bus` is how the tool server is started, if the turn is to
@@ -56,10 +57,33 @@ pub fn desktop_arguments(session: &SessionId) -> Vec<OsString> {
 /// Returns [`AgentRuntimeError::InvalidRequest`] if the prompt is empty, or
 /// if a model, a folder or a tool rule is empty or starts with `-`, where
 /// Claude Code would take it for an option.
+#[cfg(test)]
 pub fn turn_arguments(
     request: &TurnRequest,
     readable_folders: &[PathBuf],
     team_bus: Option<&TeamBus>,
+) -> Result<Vec<OsString>, AgentRuntimeError> {
+    turn_arguments_with(
+        request,
+        readable_folders,
+        team_bus,
+        &ConnectorStarts::default(),
+    )
+}
+
+/// The arguments of a turn, as [`turn_arguments`], with how the connectors
+/// that are programs are started: through the launcher, in an empty folder
+/// of Teamwright's own (decision 0039, note of 21 November 2026). Without a
+/// launcher, a turn given such a connector is refused.
+///
+/// # Errors
+///
+/// As [`turn_arguments`], and if a connector cannot be started safely.
+pub fn turn_arguments_with(
+    request: &TurnRequest,
+    readable_folders: &[PathBuf],
+    team_bus: Option<&TeamBus>,
+    connector_starts: &ConnectorStarts<'_>,
 ) -> Result<Vec<OsString>, AgentRuntimeError> {
     if request.prompt.trim().is_empty() {
         return Err(invalid("the prompt is empty"));
@@ -143,7 +167,7 @@ pub fn turn_arguments(
         allowed_tools.extend(request.team_tools.iter().map(name_in_session));
     }
     for connector in &request.kit.connectors {
-        let (entry, tools) = connector_entry(connector)?;
+        let (entry, tools) = connector_entry(connector, connector_starts)?;
         if servers.insert(connector.name.clone(), entry).is_some() {
             return Err(invalid(&format!(
                 "the connector {} is given twice",
@@ -824,7 +848,34 @@ mod tests {
                     tools: vec!["read_ticket".to_owned(), "list_tickets".to_owned()],
                 },
             ],
+            withheld_variables: Vec::new(),
         }
+    }
+
+    fn launcher() -> crate::kit::ConnectorLauncher {
+        crate::kit::ConnectorLauncher {
+            program: PathBuf::from(r"C:\Program Files\Teamwright\teamwright.exe"),
+            arguments: vec!["--connector".to_owned()],
+            folder: PathBuf::from(r"C:\Users\sample\AppData\Teamwright\connectors\start-here"),
+            secrets_folder: PathBuf::from(r"C:\Users\sample\AppData\Teamwright\connectors\secrets"),
+        }
+    }
+
+    /// The arguments of a turn whose connectors are started through the
+    /// launcher, with the file of secrets of the connector `parts`.
+    fn kit_arguments(
+        request: &TurnRequest,
+        team_bus: Option<&TeamBus>,
+    ) -> Result<Vec<OsString>, AgentRuntimeError> {
+        let launcher = launcher();
+        let starts = ConnectorStarts {
+            launcher: Some(&launcher),
+            secrets: std::collections::BTreeMap::from([(
+                "parts".to_owned(),
+                PathBuf::from(r"C:\Users\sample\AppData\Teamwright\connectors\secrets\t.json"),
+            )]),
+        };
+        turn_arguments_with(request, &[], team_bus, &starts)
     }
 
     #[test]
@@ -832,7 +883,7 @@ mod tests {
         let mut given = request();
         given.kit = kit();
 
-        let arguments = text(&turn_arguments(&given, &[], Some(&bus())).unwrap());
+        let arguments = text(&kit_arguments(&given, Some(&bus())).unwrap());
 
         let configuration = serde_json::json!({
             "mcpServers": {
@@ -841,9 +892,19 @@ mod tests {
                     "args": ["--team-bus", "ask_manager"]
                 },
                 "parts": {
-                    "command": "parts-server",
-                    "args": ["--stdio"],
-                    "env": { "PARTS_TOKEN": "${PARTS_TOKEN}" }
+                    "command": r"C:\Program Files\Teamwright\teamwright.exe",
+                    "args": [
+                        "--connector",
+                        "--folder",
+                        r"C:\Users\sample\AppData\Teamwright\connectors\start-here",
+                        "--secrets",
+                        r"C:\Users\sample\AppData\Teamwright\connectors\secrets\t.json",
+                        "--pass",
+                        "PARTS_TOKEN",
+                        "--",
+                        "parts-server",
+                        "--stdio"
+                    ]
                 },
                 "tickets": {
                     "type": "http",
@@ -916,7 +977,7 @@ mod tests {
     fn no_tool_of_a_connector_is_allowed_wholesale_and_no_secret_is_an_argument() {
         let mut given = request();
         given.kit = kit();
-        let arguments = text(&turn_arguments(&given, &[], None).unwrap());
+        let arguments = text(&kit_arguments(&given, None).unwrap());
 
         // No rule that allows a whole server, nor any tool by a pattern.
         assert!(!arguments.iter().any(|argument| {
@@ -924,9 +985,13 @@ mod tests {
                 || argument == "mcp__tickets"
                 || (argument.starts_with("mcp__") && argument.contains('*'))
         }));
-        // The secrets are named, never given: Claude Code reads them from
-        // its own environment.
-        assert!(arguments.join(" ").contains("${PARTS_TOKEN}"));
+        // The secrets are named, never given. A program is handed them by
+        // the launcher, from a file; an address in a header, by Claude Code
+        // from its own environment.
+        assert!(!arguments.join(" ").contains("${PARTS_TOKEN}"));
+        assert!(arguments.join(" ").contains("${TICKETS_TOKEN}"));
+        // Without the launcher, a program connector is not started at all.
+        assert!(turn_arguments(&given, &[], None).is_err());
         // The team bus is not there without a bus; the connectors are.
         let configuration_at = arguments
             .iter()
@@ -943,18 +1008,18 @@ mod tests {
         let mut given = request();
         given.kit = kit();
         given.kit.connectors[0].name = "teamwright".to_owned();
-        assert!(turn_arguments(&given, &[], Some(&bus())).is_err());
+        assert!(kit_arguments(&given, Some(&bus())).is_err());
 
         let mut twice = request();
         twice.kit = kit();
         let first = twice.kit.connectors[0].clone();
         twice.kit.connectors.push(first);
-        assert!(turn_arguments(&twice, &[], None).is_err());
+        assert!(kit_arguments(&twice, None).is_err());
 
         let mut dashed = request();
         dashed.kit = kit();
         dashed.kit.skills[0].folder = PathBuf::from("--dangerously-skip-permissions");
-        assert!(turn_arguments(&dashed, &[], None).is_err());
+        assert!(kit_arguments(&dashed, None).is_err());
     }
 
     #[test]

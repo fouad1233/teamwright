@@ -1,24 +1,41 @@
 //! [`ClaudeCode`]: the agent runtime on the user's installed Claude Code.
 
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use teamwright_application::{
-    AgentEvent, AgentRuntime, AgentRuntimeError, Installation, ProgramVersion, RunningTurn,
-    SessionId, SignIn, TeamTool, TurnOutcome, TurnRequest,
+    AgentEvent, AgentRuntime, AgentRuntimeError, ConnectorStart, Installation, ProgramVersion,
+    RunningTurn, SessionId, SignIn, TeamTool, TurnKit, TurnOutcome, TurnRequest,
 };
 
 use crate::arguments::{
-    FIRST_VERSION_WITH_DESKTOP, desktop_arguments, sign_in_arguments, turn_arguments,
+    FIRST_VERSION_WITH_DESKTOP, desktop_arguments, sign_in_arguments, turn_arguments_with,
     version_arguments,
 };
+use crate::connector_launcher::{SecretsFile, is_base_variable, make_private_folder};
 use crate::decode::Decoder;
 use crate::environment::Environment;
+use crate::kit::{ConnectorLauncher, ConnectorStarts};
 use crate::locate::Locator;
 use crate::memory_file::MemoryFile;
 use crate::process::{command, run_briefly, start_turn};
 use crate::sign_in::parse_sign_in;
 use crate::team_bus::TeamBus;
+
+/// Variables Claude Code itself may need to reach its service, which stay
+/// in the environment of a turn even when a connector names them, besides
+/// those every program needs ([`is_base_variable`]). A connector that names
+/// one gets it from the launcher too.
+const KEPT_FOR_THE_PROGRAM: &[&str] = &[
+    "HTTP_PROXY",
+    "HTTPS_PROXY",
+    "ALL_PROXY",
+    "NO_PROXY",
+    "SSL_CERT_FILE",
+    "SSL_CERT_DIR",
+    "NODE_EXTRA_CA_CERTS",
+];
 
 /// How long a question such as the version or the sign-in state may take.
 const QUESTION_TIME_LIMIT: Duration = Duration::from_secs(30);
@@ -33,6 +50,7 @@ pub struct ClaudeCode {
     environment: Environment,
     program: Option<PathBuf>,
     team_bus: Option<TeamBus>,
+    connector_launcher: Option<ConnectorLauncher>,
 }
 
 impl Default for ClaudeCode {
@@ -51,6 +69,7 @@ impl ClaudeCode {
             environment: Environment::inherited(),
             program: None,
             team_bus: None,
+            connector_launcher: None,
         }
     }
 
@@ -80,6 +99,89 @@ impl ClaudeCode {
             arguments,
         });
         self
+    }
+
+    /// Says how the programs of connectors are started: through this
+    /// program and these arguments, in the mode of the
+    /// [`connector_launcher`](crate::connector_launcher), in `folder`, an
+    /// empty folder of Teamwright's own, with the values of their variables
+    /// in a file of `secrets_folder` while the turn runs. Neither folder may
+    /// be one a session reads. Without it, a turn given a connector that is
+    /// a program is refused.
+    #[must_use]
+    pub fn with_connector_launcher(
+        mut self,
+        program: impl Into<PathBuf>,
+        arguments: Vec<String>,
+        folder: impl Into<PathBuf>,
+        secrets_folder: impl Into<PathBuf>,
+    ) -> Self {
+        self.connector_launcher = Some(ConnectorLauncher {
+            program: program.into(),
+            arguments,
+            folder: folder.into(),
+            secrets_folder: secrets_folder.into(),
+        });
+        self
+    }
+
+    /// Writes, for each connector of the turn that is a program and is
+    /// handed variables, their values to a file of its own, and makes the
+    /// empty folder connectors start in. Nothing without a launcher: such
+    /// a connector is then refused.
+    fn prepare_connectors(
+        &self,
+        kit: &TurnKit,
+    ) -> Result<Vec<(String, SecretsFile)>, AgentRuntimeError> {
+        let Some(launcher) = &self.connector_launcher else {
+            return Ok(Vec::new());
+        };
+        let could_not = |message: String| AgentRuntimeError::CouldNotRun { message };
+        let has_programs = kit
+            .connectors
+            .iter()
+            .any(|connector| matches!(connector.start, ConnectorStart::Program { .. }));
+        if has_programs {
+            make_private_folder(&launcher.folder).map_err(|error| {
+                could_not(format!(
+                    "the folder connectors start in could not be made: {error}"
+                ))
+            })?;
+        }
+        let mut files = Vec::new();
+        for connector in &kit.connectors {
+            let ConnectorStart::Program { variables, .. } = &connector.start else {
+                continue;
+            };
+            if variables.is_empty() {
+                continue;
+            }
+            let mut values = BTreeMap::new();
+            for variable in variables {
+                let value = self
+                    .environment
+                    .get(variable.as_str())
+                    .and_then(|value| value.to_str())
+                    .filter(|value| !value.is_empty())
+                    .ok_or_else(|| {
+                        could_not(format!(
+                            "the variable {variable} of the connector {} is not set as text on \
+                             this computer",
+                            connector.name
+                        ))
+                    })?;
+                values.insert(variable.to_string(), value.to_owned());
+            }
+            let file =
+                SecretsFile::write_in(&launcher.secrets_folder, &values).map_err(|error| {
+                    could_not(format!(
+                        "the variables of the connector {} could not be written for it: {error}",
+                        connector.name
+                    ))
+                })?;
+            files.push((connector.name.clone(), file));
+        }
+        Ok(files)
     }
 
     /// The team bus a turn is given: the one this runtime knows, if the
@@ -161,7 +263,20 @@ impl AgentRuntime for ClaudeCode {
             Some(file) => bus.with_memory_file(file.path()),
             None => bus.clone(),
         });
-        let arguments = turn_arguments(&request, &readable_folders, team_bus.as_ref())?;
+        // The connectors that are programs are started through the launcher,
+        // with the values of their variables in files that live as long as
+        // the turn (decision 0039, note of 21 November 2026).
+        let secrets = self.prepare_connectors(&request.kit)?;
+        let starts = ConnectorStarts {
+            launcher: self.connector_launcher.as_ref(),
+            secrets: secrets
+                .iter()
+                .map(|(name, file)| (name.clone(), file.path().to_owned()))
+                .collect(),
+        };
+        let arguments =
+            turn_arguments_with(&request, &readable_folders, team_bus.as_ref(), &starts)?;
+        let environment = turn_environment(&self.environment, &request.kit);
         let working_folder = full_folder(&request.working_folder)?;
         let program = self.program()?;
         refuse_a_script(&program)?;
@@ -184,22 +299,19 @@ impl AgentRuntime for ClaudeCode {
             })
             .unwrap_or_default();
         let turn = start_turn(
-            command(
-                &program,
-                &arguments,
-                Some(&working_folder),
-                &self.environment,
-            ),
+            command(&program, &arguments, Some(&working_folder), &environment),
             request.prompt,
             Decoder::for_team(team).with_teammates(teammates),
             listener,
         )?;
-        Ok(match memory {
-            Some(memory) => Box::new(TurnWithMemory {
+        Ok(if memory.is_none() && secrets.is_empty() {
+            Box::new(turn)
+        } else {
+            Box::new(TurnWithFiles {
                 turn: Box::new(turn),
                 _memory: memory,
-            }),
-            None => Box::new(turn),
+                _secrets: secrets,
+            })
         })
     }
 
@@ -255,14 +367,56 @@ fn memory_file_for(request: &TurnRequest) -> Result<Option<MemoryFile>, AgentRun
         })
 }
 
-/// A turn whose team bus reads the memory of the project from a file. The
-/// file is removed when the turn is dropped, after it has ended.
-struct TurnWithMemory {
-    turn: Box<dyn RunningTurn>,
-    _memory: MemoryFile,
+/// The environment a turn is started with: Teamwright's own, without the
+/// variables of the library of the project and of the connectors of the
+/// turn. Kept are those a header of a connector of the turn needs, which
+/// Claude Code fills in itself, and those Claude Code needs to start and
+/// reach its service.
+fn turn_environment(base: &Environment, kit: &TurnKit) -> Environment {
+    let mut needed: BTreeSet<&str> = BTreeSet::new();
+    let mut named: Vec<&str> = kit
+        .withheld_variables
+        .iter()
+        .map(|variable| variable.as_str())
+        .collect();
+    for connector in &kit.connectors {
+        match &connector.start {
+            ConnectorStart::Address { .. } => needed.extend(
+                connector
+                    .start
+                    .variables()
+                    .into_iter()
+                    .map(|variable| variable.as_str()),
+            ),
+            ConnectorStart::Program { variables, .. } => {
+                named.extend(variables.iter().map(|variable| variable.as_str()));
+            }
+        }
+    }
+    let mut environment = base.clone();
+    for name in named {
+        let kept = needed.contains(name)
+            || is_base_variable(name)
+            || KEPT_FOR_THE_PROGRAM
+                .iter()
+                .any(|kept| kept.eq_ignore_ascii_case(name));
+        if !kept {
+            environment.remove(name);
+        }
+    }
+    environment
 }
 
-impl RunningTurn for TurnWithMemory {
+/// A turn with files of its own: the memory its team bus reads, and the
+/// values of the variables of its connectors. They are removed when the
+/// turn is dropped, after it has ended.
+struct TurnWithFiles {
+    turn: Box<dyn RunningTurn>,
+    _memory: Option<MemoryFile>,
+    _secrets: Vec<(String, SecretsFile)>,
+}
+
+impl RunningTurn for TurnWithFiles {
     fn stop(&self) {
         self.turn.stop();
     }
@@ -272,7 +426,11 @@ impl RunningTurn for TurnWithMemory {
     }
 
     fn wait(self: Box<Self>) -> Result<TurnOutcome, AgentRuntimeError> {
-        let Self { turn, _memory } = *self;
+        let Self {
+            turn,
+            _memory,
+            _secrets,
+        } = *self;
         turn.wait()
     }
 }
@@ -490,6 +648,123 @@ mod tests {
                 file.path().to_string_lossy().into_owned()
             ]
         );
+    }
+
+    fn connector(name: &str, start: ConnectorStart) -> teamwright_application::KitConnector {
+        teamwright_application::KitConnector {
+            name: name.to_owned(),
+            start,
+            tools: vec!["search".to_owned()],
+        }
+    }
+
+    fn variable(name: &str) -> teamwright_domain::VariableName {
+        teamwright_domain::VariableName::parse(name).unwrap()
+    }
+
+    #[test]
+    fn a_turn_starts_without_the_secrets_of_the_library_but_with_what_claude_code_needs() {
+        let base = Environment::empty()
+            .with("PATH", "/usr/bin")
+            .with("HTTPS_PROXY", "http://proxy:3128")
+            .with("PARTS_TOKEN", "parts")
+            .with("OTHER_TOKEN", "other")
+            .with("TICKETS_TOKEN", "tickets")
+            .with("UNRELATED", "kept");
+        let kit = TurnKit {
+            skills: Vec::new(),
+            connectors: vec![
+                connector(
+                    "parts",
+                    ConnectorStart::program("npx", Vec::new(), vec![variable("PARTS_TOKEN")])
+                        .unwrap(),
+                ),
+                connector(
+                    "tickets",
+                    ConnectorStart::address(
+                        "https://tickets.example/mcp",
+                        vec![
+                            teamwright_domain::SecretHeader::new(
+                                "Authorization",
+                                variable("TICKETS_TOKEN"),
+                                true,
+                            )
+                            .unwrap(),
+                        ],
+                    )
+                    .unwrap(),
+                ),
+            ],
+            withheld_variables: [
+                "PARTS_TOKEN",
+                "OTHER_TOKEN",
+                "TICKETS_TOKEN",
+                "PATH",
+                "HTTPS_PROXY",
+            ]
+            .map(variable)
+            .to_vec(),
+        };
+
+        let environment = turn_environment(&base, &kit);
+
+        // The program connector's secret reaches it through the launcher,
+        // and another connector's not at all.
+        assert_eq!(environment.get("PARTS_TOKEN"), None);
+        assert_eq!(environment.get("OTHER_TOKEN"), None);
+        // Claude Code fills in the header of an address itself.
+        assert!(environment.get("TICKETS_TOKEN").is_some());
+        // What Claude Code needs to start and reach its service stays.
+        assert!(environment.get("PATH").is_some());
+        assert!(environment.get("HTTPS_PROXY").is_some());
+        // What no connector names is not touched by this rule.
+        assert!(environment.get("UNRELATED").is_some());
+    }
+
+    #[test]
+    fn the_values_of_a_programs_variables_are_written_for_the_turn_and_gone_after_it() {
+        let ground = tempfile::tempdir().unwrap();
+        let runtime = ClaudeCode::new()
+            .with_environment(Environment::empty().with("PARTS_TOKEN", "t0ken"))
+            .with_connector_launcher(
+                "/opt/teamwright/teamwright",
+                vec!["--connector".to_owned()],
+                ground.path().join("start-here"),
+                ground.path().join("secrets"),
+            );
+        let mut kit = TurnKit::default();
+        kit.connectors.push(connector(
+            "parts",
+            ConnectorStart::program("npx", Vec::new(), vec![variable("PARTS_TOKEN")]).unwrap(),
+        ));
+        kit.connectors.push(connector(
+            "plain",
+            ConnectorStart::program("npx", Vec::new(), Vec::new()).unwrap(),
+        ));
+
+        let files = runtime.prepare_connectors(&kit).unwrap();
+
+        assert!(ground.path().join("start-here").is_dir());
+        let [(name, file)] = files.as_slice() else {
+            panic!("one file was expected");
+        };
+        assert_eq!(name, "parts");
+        let path = file.path().to_owned();
+        assert!(path.starts_with(ground.path().join("secrets")));
+        assert!(std::fs::read_to_string(&path).unwrap().contains("t0ken"));
+        drop(files);
+        assert!(!path.exists());
+
+        // A variable that is not set is not started with an empty value.
+        let unset = ClaudeCode::new()
+            .with_environment(Environment::empty())
+            .with_connector_launcher(
+                "/opt/teamwright/teamwright",
+                vec!["--connector".to_owned()],
+                ground.path().join("start-here"),
+                ground.path().join("secrets"),
+            );
+        assert!(unset.prepare_connectors(&kit).is_err());
     }
 
     #[test]
