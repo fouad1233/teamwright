@@ -45,6 +45,8 @@ struct Board {
     budgets: Vec<Budget>,
     limit: ConcurrencyLimit,
     message_turns: usize,
+    plan: WorkPermit,
+    plan_limit_told_at: Option<Timestamp>,
 }
 
 fn board() -> Board {
@@ -119,6 +121,8 @@ fn board() -> Board {
         budgets: Vec::new(),
         limit: ConcurrencyLimit::DEFAULT,
         message_turns: 0,
+        plan: WorkPermit::Allowed,
+        plan_limit_told_at: None,
     }
 }
 
@@ -129,6 +133,8 @@ enum Ending {
     Finished,
     Failed,
     Asks,
+    /// Ended because the limit of the Claude plan was reached.
+    PlanLimit,
 }
 
 fn counts(all: u64) -> TokenCounts {
@@ -206,6 +212,9 @@ impl Board {
             Ending::Failed => turn
                 .fail("It broke.".to_owned(), Some(counts(spent)), moment(2))
                 .unwrap(),
+            Ending::PlanLimit => turn
+                .end_at_plan_limit(Some(counts(spent)), moment(2))
+                .unwrap(),
             Ending::Asks => {
                 turn.ask(
                     DecisionRequest::new(
@@ -234,6 +243,33 @@ impl Board {
             conversation,
             turns: vec![turn],
         });
+    }
+
+    /// The coordinator's turn to go on, at `minute`, in the conversation
+    /// about `task`, ended at the limit of the plan.
+    fn went_on_and_stopped_again(&mut self, task: &Task, minute: i64) {
+        let conversation = self
+            .conversations
+            .iter_mut()
+            .find(|conversation| conversation.conversation.task_id() == Some(task.id()))
+            .unwrap();
+        let mut turn = Turn::start(
+            conversation.conversation.id(),
+            GO_ON_REQUEST,
+            TurnOrigin::Message,
+            moment(minute),
+        )
+        .unwrap();
+        turn.end_at_plan_limit(None, moment(minute + 1)).unwrap();
+        conversation.turns.push(turn);
+    }
+
+    fn gone_on(&self) -> Vec<TaskId> {
+        self.plan()
+            .goes_on
+            .iter()
+            .map(|going| going.task_id)
+            .collect()
     }
 
     /// A conversation with the Advisor that used `spent` tokens.
@@ -286,6 +322,8 @@ impl Board {
             budgets: &self.budgets,
             limit: self.limit,
             message_turns_in_the_last_hour: self.message_turns,
+            plan: self.plan,
+            plan_limit_told_at: self.plan_limit_told_at,
         })
     }
 
@@ -479,6 +517,163 @@ fn a_task_that_waits_for_the_managers_answer_is_not_started_again() {
     let hardware = board.hardware.clone();
     board.worked(&hardware, Some(&task), Ending::Asks, 100);
     assert!(board.started().is_empty());
+}
+
+// The limit of the Claude plan.
+
+#[test]
+fn while_the_limit_of_the_plan_is_reached_nothing_starts() {
+    let mut board = board();
+    let task = board.task("Draw the schematic", Some(&board.hardware));
+    let firmware = board.firmware.clone();
+    let hardware = board.hardware.clone();
+    board.message(&hardware, &firmware, MessageKind::Question);
+    board.plan = WorkPermit::NotUntil(moment(100));
+    let plan = board.plan();
+    assert!(plan.starts.is_empty());
+    assert!(plan.wakes.is_empty());
+    assert_eq!(
+        plan.waiting,
+        vec![
+            Waiting {
+                task_id: Some(task.id()),
+                member_id: board.hardware.id(),
+                reason: WaitReason::PlanLimit,
+            },
+            Waiting {
+                task_id: None,
+                member_id: board.firmware.id(),
+                reason: WaitReason::PlanLimit,
+            },
+        ]
+    );
+}
+
+#[test]
+fn while_the_limit_is_reached_and_its_reset_is_not_known_nothing_starts() {
+    let mut board = board();
+    let task = board.task("Draw the schematic", Some(&board.hardware));
+    board.plan = WorkPermit::NotUntilUnknown;
+    assert!(board.started().is_empty());
+    assert_eq!(board.reason_for(&task), Some(WaitReason::PlanLimit));
+}
+
+#[test]
+fn while_the_limit_is_reached_everything_that_could_start_waits_for_it_and_nothing_else() {
+    let mut board = board();
+    let first = board.task("Draw the schematic", Some(&board.hardware));
+    let second = board.task("Route the board", Some(&board.hardware));
+    let third = board.task("Write the drivers", Some(&board.firmware));
+    board.limit = ConcurrencyLimit::new(1).unwrap();
+    board.plan = WorkPermit::NotUntilUnknown;
+    for task in [&first, &second, &third] {
+        assert_eq!(
+            board.reason_for(task),
+            Some(WaitReason::PlanLimit),
+            "nobody is at work, so nothing waits for a busy specialist or the limit"
+        );
+    }
+}
+
+#[test]
+fn work_the_limit_stopped_goes_on_before_new_work_starts() {
+    let mut board = board();
+    let new = board.task("Draw the schematic", Some(&board.hardware));
+    let stopped = board.task("Route the board", Some(&board.hardware));
+    board.move_to(&stopped, StatusCategory::Active);
+    let hardware = board.hardware.clone();
+    board.worked(&hardware, Some(&stopped), Ending::PlanLimit, 1_000);
+    assert_eq!(board.gone_on(), vec![stopped.id()]);
+    assert!(board.started().is_empty());
+    assert_eq!(board.reason_for(&new), Some(WaitReason::SpecialistBusy));
+}
+
+#[test]
+fn once_the_limit_has_lifted_work_starts_again() {
+    let mut board = board();
+    let task = board.task("Draw the schematic", Some(&board.hardware));
+    board.plan = WorkPermit::NotUntil(moment(100));
+    assert!(board.started().is_empty());
+    board.plan = WorkPermit::Allowed;
+    assert_eq!(board.started(), vec![task.id()]);
+}
+
+#[test]
+fn a_task_the_limit_stopped_did_not_fail_and_goes_on_once_the_limit_lifts() {
+    let mut board = board();
+    let task = board.task("Draw the schematic", Some(&board.hardware));
+    let hardware = board.hardware.clone();
+    board.worked(&hardware, Some(&task), Ending::PlanLimit, 100);
+
+    board.plan = WorkPermit::NotUntil(moment(100));
+    assert!(board.gone_on().is_empty());
+    assert_eq!(board.reason_for(&task), Some(WaitReason::PlanLimit));
+
+    board.plan = WorkPermit::Allowed;
+    let plan = board.plan();
+    assert!(plan.starts.is_empty(), "it is not started anew");
+    assert_eq!(
+        plan.goes_on,
+        vec![GoOn {
+            task_id: task.id(),
+            member_id: board.hardware.id(),
+            conversation_id: board.conversations[0].conversation.id(),
+        }]
+    );
+    assert_eq!(board.reason_for(&task), None);
+}
+
+#[test]
+fn going_on_takes_a_place_and_keeps_to_the_budgets() {
+    let mut board = board();
+    let stopped = board.task("Draw the schematic", Some(&board.hardware));
+    let other = board.task("Route the board", Some(&board.hardware));
+    let hardware = board.hardware.clone();
+    board.worked(&hardware, Some(&stopped), Ending::PlanLimit, 1_000);
+    assert_eq!(board.gone_on(), vec![stopped.id()]);
+    assert_eq!(board.reason_for(&other), Some(WaitReason::SpecialistBusy));
+
+    board.budget(BudgetScope::Task(stopped.id()), 1_000);
+    assert!(board.gone_on().is_empty());
+    assert_eq!(
+        board.reason_for(&stopped),
+        Some(WaitReason::Budget(BudgetScope::Task(stopped.id())))
+    );
+}
+
+#[test]
+fn a_task_the_limit_stopped_again_as_it_went_on_does_not_loop() {
+    let mut board = board();
+    let task = board.task("Draw the schematic", Some(&board.hardware));
+    let hardware = board.hardware.clone();
+    board.worked(&hardware, Some(&task), Ending::PlanLimit, 100);
+    // The coordinator went on at minute 10, and the limit ended that turn
+    // too, but the limit is not known to be reached: it is not tried again.
+    board.went_on_and_stopped_again(&task, 10);
+    board.plan_limit_told_at = Some(moment(5));
+    assert!(board.gone_on().is_empty());
+    assert_eq!(board.reason_for(&task), Some(WaitReason::PlanLimitAgain));
+
+    // While the limit is reached it waits for the limit, as everything does.
+    board.plan = WorkPermit::NotUntil(moment(100));
+    assert_eq!(board.reason_for(&task), Some(WaitReason::PlanLimit));
+
+    // Once the coordinator has said that the limit held work back since,
+    // the next reset lets it go on once more.
+    board.plan_limit_told_at = Some(moment(12));
+    board.plan = WorkPermit::Allowed;
+    assert_eq!(board.gone_on(), vec![task.id()]);
+}
+
+#[test]
+fn an_ordinary_failed_task_still_waits_for_the_manager_after_the_limit_lifts() {
+    let mut board = board();
+    let task = board.task("Draw the schematic", Some(&board.hardware));
+    let hardware = board.hardware.clone();
+    board.worked(&hardware, Some(&task), Ending::Failed, 100);
+    board.plan_limit_told_at = Some(moment(5));
+    assert!(board.gone_on().is_empty());
+    assert_eq!(board.reason_for(&task), Some(WaitReason::Failed));
 }
 
 // Who is free.

@@ -435,6 +435,10 @@ export class DemoBackend implements Backend {
       wake: (memberId) => {
         this.wake(memberId);
       },
+      planLimit: () => this.planLimitNow(),
+      goOn: (conversationId, request) => {
+        this.replyNow(conversationId, request);
+      },
     });
     this.sync = new PretendedSync({
       now: () => environment.now(),
@@ -1620,30 +1624,33 @@ export class DemoBackend implements Backend {
   }
 
   reply(conversationId: Id, message: string): Promise<Conversation> {
-    return this.answer(() => {
-      const conversation = this.requireConversationHere(conversationId);
-      if (conversation.isWithAdvisor) {
-        return this.replyToAdvisor(conversation, message);
-      }
-      const member =
-        conversation.memberId === null ? undefined : this.members.get(conversation.memberId);
-      if (!member) {
-        throw new BackendError(
-          'no_specialist',
-          'the specialist of this conversation has left the team',
-        );
-      }
-      const text = tidyMessage(message);
-      this.refuseWhileBusy(member);
-      if (openDecisionOf(conversation)) {
-        throw new BackendError(
-          'decision_open',
-          `${member.name} waits for a decision: answer its question first`,
-        );
-      }
-      this.beginTurn(conversation, text, 'message', scriptForMessage(member));
-      return conversation;
-    });
+    return this.answer(() => this.replyNow(conversationId, message));
+  }
+
+  /** A reply in a conversation, at once: the manager's, or the coordinator's going on. */
+  private replyNow(conversationId: Id, message: string): Conversation {
+    const conversation = this.requireConversationHere(conversationId);
+    if (conversation.isWithAdvisor) {
+      return this.replyToAdvisor(conversation, message);
+    }
+    const member =
+      conversation.memberId === null ? undefined : this.members.get(conversation.memberId);
+    if (!member) {
+      throw new BackendError(
+        'no_specialist',
+        'the specialist of this conversation has left the team',
+      );
+    }
+    const text = tidyMessage(message);
+    this.refuseWhileBusy(member);
+    if (openDecisionOf(conversation)) {
+      throw new BackendError(
+        'decision_open',
+        `${member.name} waits for a decision: answer its question first`,
+      );
+    }
+    this.beginTurn(conversation, text, 'message', scriptForMessage(member));
+    return conversation;
   }
 
   answerDecision(conversationId: Id, answer: NewDecisionAnswer): Promise<Conversation> {
@@ -2432,6 +2439,13 @@ export class DemoBackend implements Backend {
     }
   }
 
+  /** The limit of the plan lifted: every project's coordinator looks again. */
+  private nudgeEverywhere(): void {
+    for (const projectId of [...this.projects.keys()]) {
+      this.nudge(projectId);
+    }
+  }
+
   /** A task that changed, after the coordinator of its project was nudged. */
   private nudged(task: Task): Task {
     this.nudge(task.projectId);
@@ -2945,7 +2959,7 @@ export class DemoBackend implements Backend {
     }
     const [conversation, turn] = found;
     this.playing.delete(turnId);
-    this.reportPlanUsage(script.tokens);
+    const lifted = this.reportPlanUsage(script.tokens);
     turn.state = 'finished';
     turn.endedAt = this.nowAsText();
     turn.answer = script.answer;
@@ -2990,7 +3004,12 @@ export class DemoBackend implements Backend {
     this.noteVersions();
     this.tellListeners(conversation);
     // The specialist is free again: the coordinator looks at what can start.
-    this.nudge(conversation.projectId);
+    // A turn that lifted the limit of the plan lets every project go on.
+    if (lifted) {
+      this.nudgeEverywhere();
+    } else {
+      this.nudge(conversation.projectId);
+    }
   }
 
   /**
@@ -3041,6 +3060,8 @@ export class DemoBackend implements Backend {
     }
     this.planLimitKnown = { ...this.planLimitKnown, reached: null };
     this.tellPlanLimit();
+    // As the program does when it wakes at the reset: the coordinators go on.
+    this.nudgeEverywhere();
   }
 
   planLimit(): Promise<PlanLimit> {
@@ -3083,9 +3104,10 @@ export class DemoBackend implements Backend {
    * After a turn that went through, the pretended program reports the
    * windows again: a little more of each is used. A turn that went through
    * also shows that the plan allows work, which lifts a limit whose reset
-   * was not known.
+   * was not known. Answers whether it lifted a limit.
    */
-  private reportPlanUsage(tokens: TokenCounts): void {
+  private reportPlanUsage(tokens: TokenCounts): boolean {
+    const wasReached = this.isPlanLimitReached();
     const now = this.environment.now();
     const used = this.planLimitKnown.windows.find((window) => window.kind === 'five_hour')?.used;
     const spent = (tokens.input + tokens.output) / 2_000_000;
@@ -3095,6 +3117,7 @@ export class DemoBackend implements Backend {
       reportedAt: now.toISOString(),
     };
     this.tellPlanLimit();
+    return wasReached && !this.isPlanLimitReached();
   }
 
   /** Ends a turn that is being played because the limit of the plan is reached. */
@@ -3111,6 +3134,8 @@ export class DemoBackend implements Backend {
     turn.planLimitReached = true;
     // The task stays in work: the specialist did not fail it.
     this.tellListeners(conversation);
+    // The specialist is free; the coordinator looks, and says why it starts nothing.
+    this.nudge(conversation.projectId);
   }
 
   private tellListeners(conversation: Conversation): void {

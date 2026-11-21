@@ -12,16 +12,22 @@ use teamwright_domain::{
 };
 
 use super::*;
-use crate::agent_runtime::{self, AgentEvent, ModelUsage, SignIn, TurnFailure, TurnOutcome};
+use crate::agent_runtime::{
+    self, AgentEvent, ModelUsage, PlanLimitHit, PlanReset, PlanWindowKind, SignIn, TurnFailure,
+    TurnOutcome,
+};
 use crate::error::ApplicationError;
 use crate::in_memory::{
     FixedProjectFolders, InMemoryAreaRepository, InMemoryConversationRepository,
     InMemoryCoordinatorRepository, InMemoryMemberRepository, InMemoryPlacesRepository,
-    InMemoryPlanningRepository, InMemoryProjectRepository, InMemorySprintRepository,
-    InMemoryTaskRepository, InMemoryTeamworkRepository, InMemoryViewRepository, ManualClock,
-    PretendFileSystem, RecordingWorkListener, ScriptedRuntime,
+    InMemoryPlanLimitStore, InMemoryPlanningRepository, InMemoryProjectRepository,
+    InMemorySprintRepository, InMemoryTaskRepository, InMemoryTeamworkRepository,
+    InMemoryViewRepository, ManualClock, PretendFileSystem, ScriptedRuntime,
 };
-use crate::ports::{Clock, CoordinatorRepository, ProjectRepository, TeamworkRepository};
+use crate::plan_limit::{PlanLimitService, PlanReport};
+use crate::ports::{
+    Clock, CoordinatorRepository, ProjectRepository, TeamworkRepository, WorkListener,
+};
 use crate::projects::{NewProject, ProjectService, WorkflowTemplate};
 use crate::tasks::{NewTask, TaskService};
 use crate::team::{NewMember, TeamService};
@@ -29,6 +35,25 @@ use crate::work::{WorkPorts, WorkService};
 
 /// What every finished turn of these tests spends, in all.
 const TURN_TOKENS: u64 = 10_000;
+
+/// Takes what the work learns about the plan into what is known, as the
+/// shell does.
+struct PlanLimitListener {
+    plan_limit: PlanLimitService,
+}
+
+impl WorkListener for PlanLimitListener {
+    fn conversation_changed(
+        &self,
+        _conversation: &teamwright_domain::Conversation,
+        _turns: &[teamwright_domain::Turn],
+    ) {
+    }
+
+    fn plan_reported(&self, report: &PlanReport) {
+        self.plan_limit.take(report).unwrap();
+    }
+}
 
 fn start_of_evening() -> Timestamp {
     chrono::Utc
@@ -46,6 +71,7 @@ struct Office {
     teamwork: Arc<InMemoryTeamworkRepository>,
     runtime: Arc<ScriptedRuntime>,
     clock: Arc<ManualClock>,
+    plan_limit: PlanLimitService,
     project: Project,
     hardware: Member,
     firmware: Member,
@@ -68,6 +94,8 @@ fn office_on(this_computer: ComputerId) -> Office {
     let store = Arc::new(InMemoryCoordinatorRepository::default());
     let runtime = Arc::new(ScriptedRuntime::new());
     let clock = Arc::new(ManualClock::starting_at(start_of_evening()));
+    let plan_limit =
+        PlanLimitService::new(Arc::new(InMemoryPlanLimitStore::default()), clock.clone());
     let projects = ProjectService::new(
         projects_store.clone(),
         tasks_store.clone(),
@@ -118,7 +146,9 @@ fn office_on(this_computer: ComputerId) -> Office {
         kits: Arc::new(crate::kits::InMemoryKitRepository::default()),
         shelf: Arc::new(crate::kits::PretendShelf::default()),
         runtime: runtime.clone(),
-        listener: Arc::new(RecordingWorkListener::default()),
+        listener: Arc::new(PlanLimitListener {
+            plan_limit: plan_limit.clone(),
+        }),
         clock: clock.clone(),
         this_computer,
     });
@@ -132,6 +162,7 @@ fn office_on(this_computer: ComputerId) -> Office {
         clock: clock.clone(),
         this_computer,
         work: work.clone(),
+        plan_limit: plan_limit.clone(),
     });
     let project = projects
         .create(NewProject {
@@ -163,6 +194,7 @@ fn office_on(this_computer: ComputerId) -> Office {
         teamwork,
         runtime,
         clock,
+        plan_limit,
         project,
         hardware,
         firmware,
@@ -497,6 +529,209 @@ fn a_failed_turn_is_not_tried_again() {
             reason: WaitReason::Failed,
         }]
     );
+}
+
+/// How a turn ends when the limit of the plan is reached, resetting at
+/// `resets_at`.
+fn at_the_limit(resets_at: Timestamp) -> Option<TurnFailure> {
+    Some(TurnFailure::PlanLimitReached(PlanLimitHit {
+        window: Some(PlanWindowKind::FiveHours),
+        resets: PlanReset::At(resets_at),
+    }))
+}
+
+#[test]
+fn a_team_stopped_by_the_limit_of_the_plan_goes_on_by_itself_after_the_reset() {
+    let office = office();
+    let schematic = office.task("Draw the schematic", &office.hardware);
+    let drivers = office.task("Write the drivers", &office.firmware);
+    let board = office.task("Route the board", &office.hardware);
+    office
+        .tasks
+        .add_dependency(board.id(), schematic.id())
+        .unwrap();
+    office.switch_on();
+    office.act();
+    assert_eq!(office.running(), vec![0, 1]);
+
+    // At 20:15 the limit stops both turns. It resets at 22:40.
+    let resets_at = chrono::Utc
+        .with_ymd_and_hms(2026, 11, 21, 22, 40, 0)
+        .unwrap();
+    office.clock.advance(TimeDelta::minutes(15));
+    office.end(0, at_the_limit(resets_at));
+    office.end(1, at_the_limit(resets_at));
+    assert_eq!(
+        office.plan_limit.may_start_work().unwrap(),
+        WorkPermit::NotUntil(resets_at)
+    );
+    for task in [&schematic, &drivers] {
+        assert_eq!(
+            office.category_of(task),
+            StatusCategory::Active,
+            "the work stays under way"
+        );
+    }
+
+    // Every nudge while the limit is reached starts nothing, and the
+    // record says why once.
+    assert_eq!(
+        office.act(),
+        vec!["Started nothing: the limit of your Claude plan is reached. It resets at 22:40."]
+    );
+    for _ in 0..3 {
+        assert!(office.act().is_empty());
+    }
+    assert_eq!(office.runtime.requests().len(), 2);
+    let state = office.coordinator.state(office.project.id()).unwrap();
+    assert!(
+        state
+            .waiting
+            .iter()
+            .all(|waiting| waiting.reason == WaitReason::PlanLimit)
+    );
+    assert_eq!(state.waiting.len(), 2);
+
+    // The shell wakes at the reset, looks, and nudges the coordinator.
+    office.clock.advance(TimeDelta::hours(3));
+    assert_eq!(
+        office.plan_limit.look_at_reset().unwrap(),
+        crate::plan_limit::PlanLimitChange::Lifted
+    );
+    assert_eq!(
+        office.act(),
+        vec![
+            "Hardware engineer went on with SSN-1: the limit of your Claude plan stopped its last turn, and it has reset.",
+            "Firmware engineer went on with SSN-2: the limit of your Claude plan stopped its last turn, and it has reset.",
+        ]
+    );
+    let requests = office.runtime.requests();
+    assert_eq!(requests.len(), 4);
+    assert!(requests[2].prompt.starts_with(GO_ON_REQUEST));
+    assert_eq!(
+        office.started_tasks(),
+        vec![schematic.id(), drivers.id()],
+        "it went on in the same conversations"
+    );
+
+    // The work goes on to the end, with the manager accepting it.
+    office.finish_all();
+    office.accept_finished();
+    office.act();
+    office.finish_all();
+    office.accept_finished();
+    for task in [&schematic, &drivers, &board] {
+        assert_eq!(office.category_of(task), StatusCategory::Done);
+    }
+    assert_eq!(office.runtime.requests().len(), 5);
+}
+
+#[test]
+fn a_turn_that_goes_on_and_meets_the_limit_again_waits_for_the_next_reset() {
+    let office = office();
+    let task = office.task("Draw the schematic", &office.hardware);
+    office.switch_on();
+    office.act();
+    let first_reset = start_of_evening() + TimeDelta::hours(1);
+    office.end(0, at_the_limit(first_reset));
+    office.act();
+    office.clock.advance(TimeDelta::hours(1));
+    office.plan_limit.look_at_reset().unwrap();
+    office.act();
+    assert_eq!(office.runtime.requests().len(), 2, "it went on once");
+
+    // The turn that went on meets a new limit at once.
+    let second_reset = first_reset + TimeDelta::hours(5);
+    office.end(1, at_the_limit(second_reset));
+    assert_eq!(
+        office.act(),
+        vec![
+            "Started nothing: the limit of your Claude plan is reached. It resets tomorrow at 02:00."
+        ]
+    );
+    for _ in 0..3 {
+        assert!(office.act().is_empty());
+    }
+    assert_eq!(office.runtime.requests().len(), 2, "no loop");
+
+    // After the next reset it goes on again.
+    office.clock.advance(TimeDelta::hours(5));
+    office.plan_limit.look_at_reset().unwrap();
+    office.act();
+    assert_eq!(office.runtime.requests().len(), 3);
+    assert_eq!(office.started_tasks(), vec![task.id()]);
+}
+
+#[test]
+fn a_limit_misread_as_lifted_does_not_make_a_loop() {
+    let office = office();
+    let task = office.task("Draw the schematic", &office.hardware);
+    office.switch_on();
+    office.act();
+    // The program gives a reset that has already passed: the limit is
+    // never known to be reached.
+    let passed = start_of_evening() - TimeDelta::hours(1);
+    office.end(0, at_the_limit(passed));
+    assert_eq!(
+        office.plan_limit.may_start_work().unwrap(),
+        WorkPermit::Allowed
+    );
+    office.act();
+    assert_eq!(office.runtime.requests().len(), 2, "it went on once");
+    office.end(1, at_the_limit(passed));
+    for _ in 0..3 {
+        office.act();
+    }
+    assert_eq!(office.runtime.requests().len(), 2, "and not again");
+    let state = office.coordinator.state(office.project.id()).unwrap();
+    assert_eq!(
+        state.waiting,
+        vec![Waiting {
+            task_id: Some(task.id()),
+            member_id: office.hardware.id(),
+            reason: WaitReason::PlanLimitAgain,
+        }]
+    );
+}
+
+#[test]
+fn a_limit_whose_reset_is_not_known_holds_work_until_a_turn_goes_through() {
+    let office = office();
+    office.task("Draw the schematic", &office.hardware);
+    office.switch_on();
+    office.act();
+    office.end(
+        0,
+        Some(TurnFailure::PlanLimitReached(PlanLimitHit {
+            window: None,
+            resets: PlanReset::Unknown,
+        })),
+    );
+    assert_eq!(
+        office.act(),
+        vec![
+            "Started nothing: the limit of your Claude plan is reached. When it resets is not known: work goes on once a turn you start by hand goes through."
+        ]
+    );
+    assert!(office.act().is_empty());
+    assert_eq!(office.runtime.requests().len(), 1);
+
+    // The manager starts a turn by hand, and it goes through.
+    office.coordinator.switch_off(office.project.id()).unwrap();
+    office
+        .work
+        .ask(office.firmware.id(), "Is the bus free?")
+        .unwrap();
+    office.end(1, None);
+    assert_eq!(
+        office.plan_limit.may_start_work().unwrap(),
+        WorkPermit::Allowed
+    );
+    office.switch_on();
+    office.act();
+    assert_eq!(office.runtime.requests().len(), 3);
+    let prompt = &office.runtime.requests()[2].prompt;
+    assert!(prompt.starts_with(GO_ON_REQUEST), "{prompt}");
 }
 
 #[test]

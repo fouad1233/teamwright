@@ -68,9 +68,9 @@ pub use areas::AreaService;
 pub use checklists::ChecklistService;
 pub use clock::SystemClock;
 pub use coordinator::{
-    BudgetQuestionOfProject, CoordinatorPorts, CoordinatorService, CoordinatorState,
-    MESSAGE_TURNS_PER_HOUR, Plan, Situation, Spending, Start, WAKE_REQUEST, WaitReason, Waiting,
-    Wake, next_steps, spending_of,
+    BudgetQuestionOfProject, CoordinatorPorts, CoordinatorService, CoordinatorState, GO_ON_REQUEST,
+    GoOn, MESSAGE_TURNS_PER_HOUR, Plan, Situation, Spending, Start, WAKE_REQUEST, WaitReason,
+    Waiting, Wake, next_steps, spending_of,
 };
 pub use digests::{
     ConversationsOfFolder, DigestService, DigestToKeep, EarlierConversationCard, group_by_folder,

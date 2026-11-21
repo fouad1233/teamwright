@@ -772,9 +772,11 @@ pub trait WorkListener: Send + Sync {
     fn happened(&self, _event: &ProjectEvent) {}
 
     /// A turn told something about the limits of the Claude plan: how much
-    /// is used, that a limit was reached, or that work went through. It is
-    /// called after the turn's change was stored and told. A listener that
-    /// does not care leaves it as it is.
+    /// is used, that a limit was reached, or that work went through. At the
+    /// end of a turn it is called after the change was stored and before it
+    /// is told with [`Self::conversation_changed`], so that whatever that
+    /// wakes (the coordinator) already knows whether the limit is reached.
+    /// A listener that does not care leaves it as it is.
     fn plan_reported(&self, _report: &crate::plan_limit::PlanReport) {}
 }
 

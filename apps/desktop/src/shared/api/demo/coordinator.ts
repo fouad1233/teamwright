@@ -11,13 +11,16 @@ import type {
   Id,
   Member,
   Moment,
+  PlanLimit,
   Priority,
   Project,
   StatusCategory,
   Task,
   TeamMessage,
+  Turn,
   WaitReason,
 } from '../types';
+import { resetInWords } from '@/features/work/planLimitModel';
 
 /**
  * The coordinator of the demo: the code that starts work when it is ready
@@ -44,6 +47,32 @@ export const MOST_BUDGET = 1_000_000_000_000;
 /** What a specialist is told in a turn the coordinator gives it to answer its teammates. */
 export const WAKE_REQUEST =
   'Teammates asked you something; their messages follow. Answer each question with send_message, in a few sentences, and then end your turn. Start no other work in this turn.';
+
+/**
+ * What a specialist is told in the turn the coordinator gives it to go on
+ * with a task whose last turn the limit of the Claude plan ended. It differs
+ * from the manager's "Try again", so that the rule can tell the two apart.
+ */
+export const GO_ON_REQUEST =
+  'The limit of the Claude plan stopped your work, and it has reset. Please go on where you stopped.';
+
+/** How the line begins that says the limit of the plan held work back. */
+export const HELD_BY_PLAN_LIMIT = 'Started nothing: the limit of your Claude plan is reached.';
+
+/** Whether the limit of the Claude plan lets work start (`may_start_work`). */
+export type WorkPermit =
+  { kind: 'allowed' } | { kind: 'not_until'; resetsAt: Moment } | { kind: 'not_until_unknown' };
+
+/** The permit, from what is known about the plan now. */
+export function permitOf(planLimit: PlanLimit): WorkPermit {
+  const reached = planLimit.reached;
+  if (reached === null) {
+    return { kind: 'allowed' };
+  }
+  return reached.resetsAt === null
+    ? { kind: 'not_until_unknown' }
+    : { kind: 'not_until', resetsAt: reached.resetsAt };
+}
 
 /** A budget as the demo keeps it. */
 export interface KeptBudget {
@@ -145,6 +174,10 @@ export interface Situation {
   budgets: readonly KeptBudget[];
   limit: number;
   messageTurnsInTheLastHour: number;
+  /** Whether the limit of the Claude plan lets work start now. */
+  plan: WorkPermit;
+  /** When the coordinator last wrote that the limit of the plan held work back. */
+  planLimitToldAt: Moment | null;
 }
 
 export interface Start {
@@ -152,6 +185,13 @@ export interface Start {
   memberId: Id;
   /** The tasks it waited for, by their numbers, all done now. */
   after: Id[];
+}
+
+/** A task to go on with after the limit of the plan ended its last turn. */
+export interface GoOn {
+  taskId: Id;
+  memberId: Id;
+  conversationId: Id;
 }
 
 export interface Wake {
@@ -172,6 +212,7 @@ export interface Waiting {
 
 export interface Plan {
   starts: Start[];
+  goesOn: GoOn[];
   wakes: Wake[];
   questions: BudgetScope[];
   waiting: Waiting[];
@@ -185,7 +226,11 @@ const PRIORITY_ORDER: Record<Priority, number> = { urgent: 0, high: 1, normal: 2
  * AI specialist, never worked on, everything it waits for and every part of
  * it is done, its specialist is free, no budget it counts against is used
  * up, and fewer specialists than the limit are at work. A failed task waits
- * for the manager. Then a free specialist that was asked a question gets a
+ * for the manager. A task whose last turn the limit of the Claude plan ended
+ * did not fail: its specialist goes on with it before new work starts, and
+ * if the coordinator's own turn to go on ends at the limit too, it goes on
+ * again only once the limit was seen to hold work back since. While the
+ * limit is reached nothing starts, goes on or is woken. Then a free specialist that was asked a question gets a
  * turn to answer it, a few times an hour at most. Every used-up budget is
  * asked about, once. The category of a status counts, never its name.
  */
@@ -204,11 +249,18 @@ export function nextSteps(situation: Situation): Plan {
   const waitingForManager = new Set<Id>();
   const workedOn = new Set<Id>();
   const failed = new Set<Id>();
+  // The tasks whose latest turn ended at the limit of the plan; it did not fail.
+  const stoppedByLimit = new Map<Id, { conversation: Conversation; turn: Turn }>();
   for (const conversation of situation.conversations) {
     const last = conversation.turns.at(-1);
     if (conversation.taskId !== null) {
       workedOn.add(conversation.taskId);
-      if (last?.state === 'failed') {
+      if (last?.planLimitReached) {
+        const kept = stoppedByLimit.get(conversation.taskId);
+        if (!kept || kept.turn.startedAt < last.startedAt) {
+          stoppedByLimit.set(conversation.taskId, { conversation, turn: last });
+        }
+      } else if (last?.state === 'failed') {
         failed.add(conversation.taskId);
       }
     }
@@ -230,7 +282,10 @@ export function nextSteps(situation: Situation): Plan {
     );
   let freePlaces = Math.max(situation.limit - atWork.size, 0);
   const given = new Set<Id>();
-  const plan: Plan = { starts: [], wakes: [], questions: [], waiting: [] };
+  const plan: Plan = { starts: [], goesOn: [], wakes: [], questions: [], waiting: [] };
+  // While the limit of the plan is reached, whatever could start waits for it, and takes no place.
+  const heldByPlan = situation.plan.kind !== 'allowed';
+  const planLimit = { reason: 'plan_limit' as const, budget: null, checkTaskId: null };
 
   const reasonFor = (
     memberId: Id,
@@ -249,11 +304,14 @@ export function nextSteps(situation: Situation): Plan {
     return freePlaces === 0 ? { reason: 'limit', budget: null } : undefined;
   };
 
+  // Work the limit of the plan stopped goes on before new work starts.
+  const stoppedFirst = (task: Task) => (stoppedByLimit.has(task.id) ? 0 : 1);
   const candidates = situation.tasks
     .filter((task) => ['todo', 'active'].includes(categoryOf(task) ?? 'done'))
     .filter((task) => task.assignee?.kind === 'member' && specialists.has(task.assignee.memberId))
     .sort(
       (first, second) =>
+        stoppedFirst(first) - stoppedFirst(second) ||
         PRIORITY_ORDER[first.priority] - PRIORITY_ORDER[second.priority] ||
         (statusPlace.get(first.statusId) ?? Infinity) -
           (statusPlace.get(second.statusId) ?? Infinity) ||
@@ -266,7 +324,13 @@ export function nextSteps(situation: Situation): Plan {
       continue;
     }
     const memberId = task.assignee.memberId;
+    const scopes: BudgetScope[] = [
+      { scope: 'project', targetId: project.id },
+      { scope: 'member', targetId: memberId },
+      { scope: 'task', targetId: task.id },
+    ];
     if (workedOn.has(task.id)) {
+      const stopped = stoppedByLimit.get(task.id);
       if (failed.has(task.id)) {
         plan.waiting.push({
           taskId: task.id,
@@ -275,6 +339,28 @@ export function nextSteps(situation: Situation): Plan {
           budget: null,
           checkTaskId: null,
         });
+      } else if (stopped && stopped.conversation.memberId === memberId) {
+        // The coordinator's own turn to go on ended at the limit too: it
+        // goes on again only once the limit was seen to hold work back since.
+        const toldAt = situation.planLimitToldAt;
+        const again =
+          stopped.turn.request === GO_ON_REQUEST &&
+          situation.plan.kind === 'allowed' &&
+          (toldAt === null || toldAt < stopped.turn.startedAt);
+        const held = again
+          ? { reason: 'plan_limit_again' as const, budget: null }
+          : reasonFor(memberId, scopes);
+        if (held) {
+          plan.waiting.push({ taskId: task.id, memberId, ...held, checkTaskId: null });
+          continue;
+        }
+        if (heldByPlan) {
+          plan.waiting.push({ taskId: task.id, memberId, ...planLimit });
+          continue;
+        }
+        freePlaces -= 1;
+        given.add(memberId);
+        plan.goesOn.push({ taskId: task.id, memberId, conversationId: stopped.conversation.id });
       }
       continue;
     }
@@ -299,13 +385,13 @@ export function nextSteps(situation: Situation): Plan {
       }
       continue;
     }
-    const held = reasonFor(memberId, [
-      { scope: 'project', targetId: project.id },
-      { scope: 'member', targetId: memberId },
-      { scope: 'task', targetId: task.id },
-    ]);
+    const held = reasonFor(memberId, scopes);
     if (held) {
       plan.waiting.push({ taskId: task.id, memberId, ...held, checkTaskId: null });
+      continue;
+    }
+    if (heldByPlan) {
+      plan.waiting.push({ taskId: task.id, memberId, ...planLimit });
       continue;
     }
     freePlaces -= 1;
@@ -350,6 +436,10 @@ export function nextSteps(situation: Situation): Plan {
       }
       continue;
     }
+    if (heldByPlan) {
+      plan.waiting.push({ taskId: null, memberId, ...planLimit });
+      continue;
+    }
     freePlaces -= 1;
     messageTurns += 1;
     given.add(memberId);
@@ -370,6 +460,7 @@ export function nextSteps(situation: Situation): Plan {
       (first, second) =>
         order[first.scope] - order[second.scope] || first.targetId.localeCompare(second.targetId),
     );
+
   return plan;
 }
 
@@ -428,6 +519,27 @@ export const words = {
     return `${who} started on ${what}: ${words.joined(names)} ${names.length === 1 ? 'is' : 'are'} done.`;
   },
 
+  wentOn(
+    project: Project,
+    tasks: readonly Task[],
+    members: readonly Member[],
+    going: GoOn,
+  ): string {
+    return `${words.memberName(members, going.memberId)} went on with ${words.taskName(project, tasks, going.taskId)}: the limit of your Claude plan stopped its last turn, and it has reset.`;
+  },
+
+  /** The line that says the limit of the plan held work back, or null if work may start. */
+  heldByPlanLimit(permit: WorkPermit, now: Date): string | null {
+    switch (permit.kind) {
+      case 'allowed':
+        return null;
+      case 'not_until':
+        return `${HELD_BY_PLAN_LIMIT} It resets ${resetInWords(permit.resetsAt, now)}.`;
+      case 'not_until_unknown':
+        return `${HELD_BY_PLAN_LIMIT} When it resets is not known: work goes on once a turn you start by hand goes through.`;
+    }
+  },
+
   woke(members: readonly Member[], wake: Wake): string {
     const names = wake.askedBy.map((id) => words.memberName(members, id));
     return `${words.memberName(members, wake.memberId)} was given a turn to answer ${words.joined(names)}.`;
@@ -453,6 +565,10 @@ export const words = {
         return `${words.taskName(project, tasks, waiting.checkTaskId ?? '')} is finished and waits for you to accept it`;
       case 'failed':
         return 'its last turn failed; reply to go on';
+      case 'plan_limit':
+        return 'the limit of your Claude plan is reached';
+      case 'plan_limit_again':
+        return 'it stopped at the limit of your Claude plan again as it went on; press Try again';
       case 'message_limit':
         return `the specialists had ${MESSAGE_TURNS_PER_HOUR.toString()} turns for messages in the last hour`;
     }
@@ -467,6 +583,11 @@ export const words = {
     return `${named} is used up (${words.tokens(used)} of ${words.tokens(limit)} tokens). You are asked in the inbox.`;
   },
 };
+
+/** Whether an entry of the record is the line that said the limit of the plan held work back. */
+function isPlanLimitTold(entry: CoordinatorEntry): boolean {
+  return entry.kind === 'held' && entry.text.startsWith(HELD_BY_PLAN_LIMIT);
+}
 
 /** A new entry of the record. */
 export function entryOf(
@@ -493,6 +614,10 @@ export interface CoordinatorWorld {
   startWork(taskId: Id): void;
   /** Gives a specialist a turn to answer its teammates. Throws a refusal. */
   wake(memberId: Id): void;
+  /** What is known about the limit of the Claude plan now. */
+  planLimit(): PlanLimit;
+  /** Goes on in a conversation the limit stopped, as "Try again" does. Throws a refusal. */
+  goOn(conversationId: Id, request: string): void;
 }
 
 /** The switch and the limit of the coordinator of one project. */
@@ -542,6 +667,7 @@ export class PretendedCoordinators {
   private situationOf(projectId: Id): Situation {
     const project = this.world.project(projectId);
     const anHourAgo = new Date(new Date(this.world.now()).getTime() - 60 * 60 * 1000).toISOString();
+    const told = (this.entries.get(projectId) ?? []).filter(isPlanLimitTold).at(-1);
     return {
       project,
       tasks: this.world.tasks(projectId),
@@ -553,6 +679,8 @@ export class PretendedCoordinators {
       messageTurnsInTheLastHour: (this.entries.get(projectId) ?? []).filter(
         (entry) => entry.kind === 'woke' && entry.at >= anHourAgo,
       ).length,
+      plan: permitOf(this.world.planLimit()),
+      planLimitToldAt: told?.at ?? null,
     };
   }
 
@@ -770,6 +898,18 @@ export class PretendedCoordinators {
         );
       }
     }
+    for (const going of plan.goesOn) {
+      try {
+        this.world.goOn(going.conversationId, GO_ON_REQUEST);
+        entry('started', words.wentOn(project, tasks, members, going), going);
+      } catch (failure) {
+        entry(
+          'held',
+          `Could not go on with ${words.taskName(project, tasks, going.taskId)}: ${refusalOf(failure)}.`,
+          { taskId: going.taskId },
+        );
+      }
+    }
     for (const wake of plan.wakes) {
       try {
         this.world.wake(wake.memberId);
@@ -821,6 +961,20 @@ export class PretendedCoordinators {
       if (!told.includes(text)) {
         entry('held', text, { memberId: waiting.memberId });
       }
+    }
+
+    // The limit of the plan that holds work back is told once for each time
+    // it is reached, not at every nudge.
+    const heldByPlan = words.heldByPlanLimit(situation.plan, new Date(at));
+    const reachedAt = this.world.planLimit().reached?.at ?? at;
+    if (
+      heldByPlan !== null &&
+      plan.waiting.some((waiting) => waiting.reason === 'plan_limit') &&
+      !(this.entries.get(projectId) ?? []).some(
+        (kept) => isPlanLimitTold(kept) && kept.at >= reachedAt,
+      )
+    ) {
+      entry('held', heldByPlan);
     }
     this.record(projectId, added);
     return added;

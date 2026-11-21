@@ -10,8 +10,11 @@ use teamwright_domain::{
     CoordinatorEntryKind, MemberKind, Project, ProjectId, TokenBudget,
 };
 
-use super::{Plan, Situation, Spending, WaitReason, Waiting, next_steps, spending_of, words};
+use super::{
+    GO_ON_REQUEST, Plan, Situation, Spending, WaitReason, Waiting, next_steps, spending_of, words,
+};
 use crate::error::ApplicationError;
+use crate::plan_limit::{PlanLimitService, WorkPermit};
 use crate::ports::{
     Clock, ConversationRepository, CoordinatorRepository, MemberRepository, ProjectRepository,
     TaskRepository, TeamworkRepository,
@@ -49,6 +52,9 @@ pub struct CoordinatorPorts {
     /// The work of the specialists, through which it starts turns, as the
     /// manager would.
     pub work: WorkService,
+    /// What this computer knows about the limit of its Claude plan. While
+    /// the limit is reached, the coordinator starts nothing.
+    pub plan_limit: PlanLimitService,
 }
 
 /// The coordinator of a project as the manager sees it.
@@ -365,7 +371,7 @@ impl CoordinatorService {
         };
         let mut entries = Vec::new();
 
-        if !plan.starts.is_empty() || !plan.wakes.is_empty() {
+        if !plan.starts.is_empty() || !plan.goes_on.is_empty() || !plan.wakes.is_empty() {
             let program = ports.work.program();
             let problem = match program.state {
                 AgentProgramState::Ready => None,
@@ -425,6 +431,28 @@ impl CoordinatorService {
                     .about_task(start.task_id),
                 ),
             }
+        }
+
+        for going in &plan.goes_on {
+            // As the manager's "Try again" does: a reply in the conversation
+            // whose turn the limit ended.
+            let text = match ports.work.reply(going.conversation_id, GO_ON_REQUEST) {
+                Ok(_) => words::went_on(&project, tasks, members, going.task_id, going.member_id),
+                Err(error) => format!(
+                    "Could not go on with {}: {error}.",
+                    words::task_name(&project, tasks, going.task_id)
+                ),
+            };
+            let kind = if text.starts_with("Could not") {
+                CoordinatorEntryKind::Held
+            } else {
+                CoordinatorEntryKind::Started
+            };
+            entries.push(
+                entry(kind, &text)
+                    .about_task(going.task_id)
+                    .about_member(going.member_id),
+            );
         }
 
         for wake in &plan.wakes {
@@ -504,6 +532,31 @@ impl CoordinatorService {
             if !told.contains(&text) {
                 entries
                     .push(entry(CoordinatorEntryKind::Held, &text).about_member(waiting.member_id));
+            }
+        }
+
+        // The limit of the plan that holds work back is told once for each
+        // time it is reached, not at every nudge.
+        let held_by_plan = plan
+            .waiting
+            .iter()
+            .any(|waiting| waiting.reason == WaitReason::PlanLimit);
+        if held_by_plan
+            && let Some(text) =
+                words::held_by_plan_limit(gathered.permit, now, ports.clock.as_ref())
+        {
+            let reached_at = ports
+                .plan_limit
+                .standing()?
+                .reached
+                .map_or(now, |limit| limit.at);
+            let told = ports
+                .coordinators
+                .entries_since(project_id, reached_at)?
+                .iter()
+                .any(is_plan_limit_told);
+            if !told {
+                entries.push(entry(CoordinatorEntryKind::Held, &text));
             }
         }
 
@@ -621,14 +674,35 @@ impl CoordinatorService {
             .iter()
             .filter(|entry| entry.kind == CoordinatorEntryKind::Woke)
             .count();
+        let conversations = self.conversations_of(project)?;
+        // When the coordinator last said that the limit held work back,
+        // looked for only as far back as a turn the limit ended.
+        let plan_limit_told_at = match conversations
+            .iter()
+            .filter_map(|conversation| conversation.turns.last())
+            .filter(|turn| turn.reached_plan_limit())
+            .map(teamwright_domain::Turn::started_at)
+            .min()
+        {
+            Some(since) => ports
+                .coordinators
+                .entries_since(project.id(), since)?
+                .iter()
+                .filter(|entry| is_plan_limit_told(entry))
+                .map(|entry| entry.at)
+                .max(),
+            None => None,
+        };
         Ok(Gathered {
             coordinator: self.coordinator_of(project.id())?,
             tasks: ports.tasks.list_for_project(project.id())?,
             members: ports.members.list_for_project(project.id())?,
-            conversations: self.conversations_of(project)?,
+            conversations,
             messages: ports.teamwork.messages_of_project(project.id())?,
             budgets: ports.coordinators.budgets_of_project(project.id())?,
             message_turns,
+            permit: ports.plan_limit.may_start_work()?,
+            plan_limit_told_at,
         })
     }
 }
@@ -642,6 +716,8 @@ struct Gathered {
     messages: Vec<teamwright_domain::TeamMessage>,
     budgets: Vec<Budget>,
     message_turns: usize,
+    permit: WorkPermit,
+    plan_limit_told_at: Option<teamwright_domain::Timestamp>,
 }
 
 impl Gathered {
@@ -655,6 +731,8 @@ impl Gathered {
             budgets: &self.budgets,
             limit: self.coordinator.limit(),
             message_turns_in_the_last_hour: self.message_turns,
+            plan: self.permit,
+            plan_limit_told_at: self.plan_limit_told_at,
         })
     }
 
@@ -699,6 +777,12 @@ impl Gathered {
                     .any(|member| member.id() == member_id && member.kind() == MemberKind::Agent)
             })
     }
+}
+
+/// Whether an entry of the record is the line that said the limit of the
+/// plan held work back.
+fn is_plan_limit_told(entry: &CoordinatorEntry) -> bool {
+    entry.kind == CoordinatorEntryKind::Held && entry.text.starts_with(words::HELD_BY_PLAN_LIMIT)
 }
 
 /// "specialist" or "specialists".

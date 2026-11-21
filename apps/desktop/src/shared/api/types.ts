@@ -1949,6 +1949,10 @@ export type WaitReason =
   | 'waits_for_manager'
   | 'waits_for_check'
   | 'failed'
+  /** The limit of the Claude plan is reached. */
+  | 'plan_limit'
+  /** The turn the coordinator gave to go on after the limit ended at it too. */
+  | 'plan_limit_again'
   | 'message_limit';
 
 /** Something the coordinator could start, and why it waits. */

@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import type { Member, Project, Task } from '../types';
-import { WAKE_REQUEST, raisesOf, words } from './coordinator';
+import { resetInWords } from '@/features/work/planLimitModel';
+import { GO_ON_REQUEST, WAKE_REQUEST, raisesOf, words } from './coordinator';
 import { DemoBackend } from './demoBackend';
 import { sampleWorkspace } from './sampleWorkspace';
 import { refusal, testEnvironment } from './testing';
@@ -239,6 +240,94 @@ describe('the coordinator in the DemoBackend', () => {
     expect(new Set(coordinator.waiting.map((waiting) => waiting.reason))).toEqual(
       new Set(['busy']),
     );
+  });
+
+  it('starts nothing while the limit of the plan is reached, says so once, and goes on after it', async () => {
+    const schematic = await task('Draw the schematic', hardware);
+    const drivers = await task('Write the drivers', firmware);
+    await backend.switchCoordinator(project.id, true);
+    environment.pass(100);
+
+    // The limit stops both turns; it resets in a minute.
+    const resetsAt = new Date(environment.now().getTime() + 60_000).toISOString();
+    backend.pretendPlanLimitReached(60_000);
+    environment.pass(1_000);
+    let coordinator = await backend.coordinator(project.id);
+    expect(coordinator.atWork).toBe(0);
+    expect(coordinator.waiting.map((waiting) => waiting.reason)).toEqual([
+      'plan_limit',
+      'plan_limit',
+    ]);
+    const told = `Started nothing: the limit of your Claude plan is reached. It resets ${resetInWords(resetsAt, environment.now())}.`;
+    expect(
+      coordinator.entries.filter((entry) => entry.kind === 'held').map((entry) => entry.text),
+    ).toEqual([told]);
+    expect(await categoryOf(schematic.id)).toBe('active');
+
+    // Nudges while it is reached start nothing and say nothing more.
+    await backend.setCoordinatorLimit(project.id, 3);
+    coordinator = await backend.coordinator(project.id);
+    expect(coordinator.entries.filter((entry) => entry.kind === 'held')).toHaveLength(1);
+
+    // At the reset the work goes on in the same conversations.
+    environment.pass(60_000);
+    coordinator = await backend.coordinator(project.id);
+    expect(
+      coordinator.entries
+        .slice(0, 2)
+        .map((entry) => entry.text)
+        .sort(),
+    ).toEqual([
+      'Firmware engineer went on with SSN-2: the limit of your Claude plan stopped its last turn, and it has reset.',
+      'Hardware engineer went on with SSN-1: the limit of your Claude plan stopped its last turn, and it has reset.',
+    ]);
+    const conversations = await backend.listConversations(project.id);
+    expect(conversations).toHaveLength(2);
+    for (const conversation of conversations) {
+      expect(conversation.turns.map((turn) => turn.request)).toHaveLength(2);
+      expect(conversation.turns.at(-1)?.request).toBe(GO_ON_REQUEST);
+    }
+    environment.passAll();
+    expect(await categoryOf(schematic.id)).toBe('review');
+    expect(await categoryOf(drivers.id)).toBe('review');
+  });
+
+  it('waits for a limit whose reset is not known until it is lifted, and does not loop', async () => {
+    const schematic = await task('Draw the schematic', hardware);
+    await backend.switchCoordinator(project.id, true);
+    environment.pass(100);
+    backend.pretendPlanLimitReached(null);
+    environment.pass(1_000);
+    let coordinator = await backend.coordinator(project.id);
+    expect(coordinator.entries[0]?.text).toBe(
+      'Started nothing: the limit of your Claude plan is reached. When it resets is not known: work goes on once a turn you start by hand goes through.',
+    );
+
+    backend.liftPlanLimit();
+    coordinator = await backend.coordinator(project.id);
+    expect(coordinator.atWork).toBe(1);
+
+    // The turn that went on meets the limit at once; it waits for the next reset.
+    backend.pretendPlanLimitReached(null);
+    environment.pass(1_000);
+    const [conversation] = await backend.listConversations(project.id);
+    expect(conversation?.turns).toHaveLength(2);
+    coordinator = await backend.coordinator(project.id);
+    expect(coordinator.waiting).toMatchObject([{ taskId: schematic.id, reason: 'plan_limit' }]);
+    backend.liftPlanLimit();
+    environment.pass(100);
+    expect((await backend.listConversations(project.id))[0]?.turns).toHaveLength(3);
+  });
+
+  it('goes on only with work the limit stopped, not with work the manager stopped', async () => {
+    const schematic = await task('Draw the schematic', hardware);
+    await backend.startWork(schematic.id);
+    await backend.stopWork((await backend.listConversations(project.id))[0]?.id ?? '');
+    await backend.switchCoordinator(project.id, true);
+    backend.pretendPlanLimitReached(null);
+    backend.liftPlanLimit();
+    expect(await started()).toEqual([schematic.id]);
+    expect((await backend.listConversations(project.id))[0]?.turns).toHaveLength(1);
   });
 
   it('words tokens and raises as the program does', () => {

@@ -3264,7 +3264,7 @@ pub struct WaitingDto {
     task_id: Option<String>,
     member_id: String,
     /// "budget", "limit", "busy", "waits_for_manager", "waits_for_check",
-    /// "failed" or "message_limit".
+    /// "failed", "plan_limit", "plan_limit_again" or "message_limit".
     reason: &'static str,
     /// The task that waits to be accepted, for "waits_for_check".
     check_task_id: Option<String>,
@@ -3339,6 +3339,8 @@ const fn wait_reason_name(reason: teamwright_application::WaitReason) -> &'stati
         WaitReason::SpecialistWaitsForManager => "waits_for_manager",
         WaitReason::WaitsForCheck(_) => "waits_for_check",
         WaitReason::Failed => "failed",
+        WaitReason::PlanLimit => "plan_limit",
+        WaitReason::PlanLimitAgain => "plan_limit_again",
         WaitReason::MessageLimit => "message_limit",
     }
 }

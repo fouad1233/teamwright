@@ -1212,6 +1212,13 @@ impl Inner {
         if let Some(task_id) = conversation.task_id().filter(|_| ready_to_check) {
             self.move_task(task_id, &[StatusCategory::Active], StatusCategory::Review)?;
         }
+        // What the end of the turn says about the plan is told first: the
+        // change of the conversation wakes the coordinator, which must
+        // already know that the limit is reached, or it would start more
+        // work that ends at once.
+        if let Some(report) = plan_report {
+            ports.listener.plan_reported(&report);
+        }
         ports.listener.conversation_changed(&conversation, &turns);
         // A turn ends once: events that arrive after its end are not
         // recorded, so this tells every end at most once.
@@ -1220,9 +1227,6 @@ impl Inner {
                 self.event_of_end(&conversation, &turns[index], asked_permission.as_ref())?
         {
             ports.listener.happened(&event);
-        }
-        if let Some(report) = plan_report {
-            ports.listener.plan_reported(&report);
         }
         Ok(())
     }

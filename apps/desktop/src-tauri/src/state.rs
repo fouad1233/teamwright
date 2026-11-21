@@ -339,6 +339,7 @@ impl AppState {
             clock: clock.clone(),
             this_computer,
             work: work.clone(),
+            plan_limit: plan_limit.clone(),
         });
         start_coordinating(app.clone(), coordinator_inbox);
         let teamwork = teamwright_application::TeamworkService::new(
