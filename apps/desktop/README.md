@@ -301,7 +301,9 @@ The shell is where the work of an AI specialist meets the outside world
   the interface, and one notification when the limit is reached and one
   when it has reset, under the choice of the kind "stopped". It wakes once
   at the known reset, also at start for a limit reached before; it never
-  polls. The command `plan_limit` in `commands/plan_limit.rs` answers with
+  polls. When the limit lifts (at that wake, or because a turn went through
+  or the program said the plan allows work), it nudges the coordinator of
+  every project that runs here. The command `plan_limit` in `commands/plan_limit.rs` answers with
   what is known. A turn carries `planLimitReached`. The interface says it
   in `features/work`: `PlanLimitLine` at the foot of the navigation, a
   quiet ending and "Try again" in `ConversationView`, a warning in the hint
@@ -309,7 +311,8 @@ The shell is where the work of an AI specialist meets the outside world
   words are in `planLimitModel.ts`. The demo backend reports pretended
   windows after a turn; `window.teamwrightDemo.pretendPlanLimitReached(ms)`
   ends the running turns at the limit and every new one at once until the
-  reset after `ms` (or, with `null`, until `liftPlanLimit()`).
+  reset after `ms` (or, with `null`, until `liftPlanLimit()`); the demo's
+  coordinator starts nothing meanwhile and goes on when it lifts.
 - **The theme of this computer.** The commands `theme` and `choose_theme`
   in `commands/appearance.rs` read and keep the name of the theme of the
   window (`AppearanceService`, decision 0028); `choose_theme` refuses a
@@ -855,4 +858,7 @@ project and of each specialist, what waits with a press to accept, and the
 record), the budget in the panel of a task, and the questions about used-up
 budgets at the top of the inbox. The demo copies the rule in
 `shared/api/demo/coordinator.ts` and acts at once when nudged
-([decision 0037](../../docs/decisions/0037-the-coordinator.md)).
+([decision 0037](../../docs/decisions/0037-the-coordinator.md)). While the
+limit of the Claude plan is reached it starts nothing and says so once in
+its record; when the limit lifts, `plan_limit.rs` nudges it, and it goes on
+with the tasks whose turn the limit ended, in their conversations.

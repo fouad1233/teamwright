@@ -120,3 +120,50 @@ the time ("Firmware engineer started on SSN-7: SSN-4 and SSN-5 are done").
   it twice.
 - **A timer that looks every few seconds.** Against "nobody polls", and
   every event that matters is known.
+
+## Note of 21 November 2026: the limit of the Claude plan
+
+The limit of the Claude plan ([decision 0040](0040-the-limit-of-the-plan.md))
+now reaches the rule. `next_steps` is told whether the plan lets work
+start (`may_start_work`), and:
+
+- **While the limit is reached, nothing starts**: no task, no turn to go
+  on, no turn to answer a teammate. Whatever could start waits, with the
+  reason "the limit of your Claude plan is reached", and takes no place, so
+  nothing claims to wait for a busy specialist while nobody works. The record says it once for each
+  time the limit is reached, not at every nudge: "Started nothing: the
+  limit of your Claude plan is reached. It resets at 22:40.", or, when the
+  reset is not known, that work goes on once a turn started by hand goes
+  through.
+- **A turn the limit ended is not a failed turn.** It did no work, so the
+  task is not left to the manager as a failure. Once the limit has lifted,
+  the coordinator goes on with it in the same conversation, as the
+  manager's "Try again" does: a reply, through the same use case, with its
+  own sentence ("The limit of the Claude plan stopped your work, and it has
+  reset. Please go on where you stopped."). This is the one exception to
+  "a task with a conversation is never started again", and it is no
+  start: the conversation goes on. It takes a place and keeps to the
+  budgets like any turn, and it comes before new work, whatever the order
+  of the board: the work is under way and its specialist knows it. An
+  ordinary failure still waits for the manager.
+- **No loop.** If the coordinator's own turn to go on ends at the limit
+  too, it goes on again only once the coordinator has written that the
+  limit held work back after that turn started, that is after a limit that
+  was known and has reset again. A limit that ends a turn but is not known
+  to be reached (a reset given as already past) would otherwise go on at
+  once, for ever; the task then waits for the manager with "it stopped at
+  the limit of your Claude plan again as it went on; press Try again". The
+  coordinator tells its own turns from the manager's by their sentence, so
+  a "Try again" pressed before the reset is still gone on with after it.
+- **When the limit lifts, the coordinator acts.** The shell nudges it in
+  every project when the limit lifts: at the wake at the known reset, when
+  a turn that went through lifts it, and when the program says the plan
+  allows work again. It still never polls. The end of a turn now tells
+  what it learned about the plan before it wakes the coordinator, so that
+  the coordinator never starts more work in the moment between.
+- Budgets are not charged in any new way: a turn the limit ended counts
+  the tokens it used, as before.
+
+The two new reasons travel as `plan_limit` and `plan_limit_again`. Tested on
+the rule and on the in-memory runtime, and followed by the demo; never run
+with a real specialist.

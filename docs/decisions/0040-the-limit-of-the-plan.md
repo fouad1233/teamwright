@@ -161,3 +161,18 @@ and from tonight's words); and whether a refused turn always carries a
   is nearly always this computer's.
 - **Refusing to start work by hand.** The manager may know better, and
   refusing would leave no way to learn that an unknown reset has passed.
+
+## Note of 21 November 2026: the coordinator follows it
+
+Point 7 is built. The coordinator starts nothing while `may_start_work` is
+not `Allowed`, and says so once in its record for each time the limit is
+reached. A task whose last turn ended at the limit is not counted as
+failed: when the limit lifts, the coordinator goes on with it in its
+conversation, as "Try again" does, once for each reset (decision 0037 has
+the rule and its guard against a loop). When the limit lifts, the shell
+nudges the coordinator of every project that runs on this computer; with a
+reset that is not known, that is when a turn the manager started goes
+through. To make this safe, a turn that ends now tells what it learned
+about the plan before it tells that the conversation changed, so that the
+coordinator, which that wakes, already knows the limit is reached. The
+demo follows the same rule. Never run with a real Claude Code.
