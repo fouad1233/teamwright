@@ -17,6 +17,7 @@ pub mod sprints;
 pub mod sync;
 pub mod tasks;
 pub mod team;
+pub mod teamwork;
 pub mod views;
 pub mod web;
 pub mod work;

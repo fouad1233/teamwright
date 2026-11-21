@@ -2137,6 +2137,103 @@ pub struct IssueDraftDto {
     pub body: String,
 }
 
+/// Everything the specialists of a project handed each other, as the
+/// interface sees it: the handoffs of its tasks and the messages between
+/// its members, each the oldest first.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TeamTalkDto {
+    handoffs: Vec<HandoffDto>,
+    messages: Vec<TeamMessageDto>,
+}
+
+/// The result of a task, handed over by the specialist who did it.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HandoffDto {
+    id: String,
+    task_id: String,
+    /// The specialist who published it. It may have left the team since.
+    author_id: String,
+    conversation_id: String,
+    turn_id: String,
+    summary: String,
+    /// The interface contract. Empty if there is none.
+    contract: String,
+    /// Paths inside the work folder of the project, with `/` between
+    /// their parts.
+    files: Vec<String>,
+    published_at: String,
+}
+
+/// A question or a note from one specialist to another.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TeamMessageDto {
+    id: String,
+    from_id: String,
+    to_id: String,
+    conversation_id: String,
+    turn_id: String,
+    /// "question" or "note".
+    kind: &'static str,
+    text: String,
+    sent_at: String,
+    /// The turn of the receiver it came with, and when; both null while it
+    /// waits.
+    delivered_turn_id: Option<String>,
+    delivered_at: Option<String>,
+}
+
+impl From<&teamwright_application::TeamTalk> for TeamTalkDto {
+    fn from(talk: &teamwright_application::TeamTalk) -> Self {
+        Self {
+            handoffs: talk.handoffs.iter().map(HandoffDto::from).collect(),
+            messages: talk.messages.iter().map(TeamMessageDto::from).collect(),
+        }
+    }
+}
+
+impl From<&teamwright_domain::Handoff> for HandoffDto {
+    fn from(handoff: &teamwright_domain::Handoff) -> Self {
+        let content = handoff.content();
+        Self {
+            id: handoff.id().to_string(),
+            task_id: handoff.task_id().to_string(),
+            author_id: handoff.author_id().to_string(),
+            conversation_id: handoff.conversation_id().to_string(),
+            turn_id: handoff.turn_id().to_string(),
+            summary: content.summary().to_owned(),
+            contract: content.contract().to_owned(),
+            files: content
+                .files()
+                .iter()
+                .map(teamwright_domain::PathInFolder::as_text)
+                .collect(),
+            published_at: moment_to_text(handoff.published_at()),
+        }
+    }
+}
+
+impl From<&teamwright_domain::TeamMessage> for TeamMessageDto {
+    fn from(message: &teamwright_domain::TeamMessage) -> Self {
+        let said_in = message.said_in();
+        let delivery = message.delivery();
+        Self {
+            id: message.id().to_string(),
+            from_id: said_in.member_id.to_string(),
+            to_id: message.to().to_string(),
+            conversation_id: said_in.conversation_id.to_string(),
+            turn_id: said_in.turn_id.to_string(),
+            kind: message.kind().as_str(),
+            text: message.text().to_owned(),
+            sent_at: moment_to_text(message.sent_at()),
+            delivered_turn_id: delivery.map(|delivery| delivery.turn_id.to_string()),
+            delivered_at: delivery.map(|delivery| moment_to_text(delivery.at)),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used)]

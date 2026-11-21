@@ -132,6 +132,8 @@ pub struct AppState {
     pub files: ProjectFilesService,
     /// The use cases for the work of the AI specialists.
     pub work: WorkService,
+    /// What the specialists hand each other: handoffs and messages.
+    pub teamwork: teamwright_application::TeamworkService,
     /// The use cases for keeping this computer in step with the manager's
     /// other computers.
     pub sync: SyncService,
@@ -182,6 +184,9 @@ impl AppState {
         let area_repository = Arc::new(SqliteAreaRepository::new(database.clone()));
         let conversation_repository = Arc::new(SqliteConversationRepository::new(database.clone()));
         let planning_repository = Arc::new(SqlitePlanningRepository::new(database.clone()));
+        let teamwork_repository = Arc::new(teamwright_storage::SqliteTeamworkRepository::new(
+            database.clone(),
+        ));
         let runtime: Arc<dyn AgentRuntime> = Arc::new(agent_program());
         let clock = Arc::new(SystemClock);
         let folders: Arc<dyn ProjectFolders> = Arc::new(FoldersOfProjects {
@@ -233,6 +238,7 @@ impl AppState {
             members: member_repository.clone(),
             conversations: conversation_repository.clone(),
             planning: planning_repository,
+            teamwork: teamwork_repository.clone(),
             folders: folders.clone(),
             places: places_repository.clone(),
             file_system: file_system.clone(),
@@ -247,6 +253,11 @@ impl AppState {
             this_computer,
         });
         work.recover()?;
+        let teamwork = teamwright_application::TeamworkService::new(
+            project_repository.clone(),
+            member_repository.clone(),
+            teamwork_repository,
+        );
         let workbook = WorkbookService::new(WorkbookPorts {
             projects: project_repository.clone(),
             tasks: task_repository.clone(),
@@ -307,6 +318,7 @@ impl AppState {
                 view_repository,
                 clock,
             ),
+            teamwork,
             work,
             sync,
             google_drive: GoogleDriveService::new(Arc::new(LocalDriveSurroundings)),

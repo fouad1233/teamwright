@@ -309,3 +309,75 @@ fn the_own_instructions_of_a_specialist_reach_a_real_session() {
     let last_line = outcome.final_text.trim().lines().last().unwrap_or_default();
     assert_eq!(last_line.trim(), "PERSIMMON");
 }
+
+/// The Teamwright program, which serves the team bus. It is built with
+/// `cargo build -p teamwright-desktop`, or named in
+/// `TEAMWRIGHT_BUS_PROGRAM`.
+fn bus_program() -> std::path::PathBuf {
+    let program = std::env::var_os("TEAMWRIGHT_BUS_PROGRAM").map_or_else(
+        || {
+            Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../target/debug/teamwright-desktop")
+                .with_extension(std::env::consts::EXE_EXTENSION)
+        },
+        std::path::PathBuf::from,
+    );
+    assert!(
+        program.is_file(),
+        "build the program first with cargo build -p teamwright-desktop"
+    );
+    program
+}
+
+#[test]
+#[ignore = "needs the real Claude Code, signed in, the built program, and spends one turn"]
+fn a_real_session_hands_its_result_over_through_the_team_bus() {
+    let folder = tempfile::tempdir().unwrap();
+    let folder = teamwright_runtime::full_form(folder.path()).unwrap();
+    let mut request = request(
+        &folder,
+        "This is a test of the team bus. Do these steps in order:\n\
+         1. Write the file pinmap.md in the current folder with the text: SDA on pin 4.\n\
+         2. Call the tool publish_handoff with the summary \"Pin map v1: SDA is on pin 4.\", \
+            the contract \"SDA on pin 4, SCL on pin 5.\" and the files [\"pinmap.md\"].\n\
+         3. Answer with one short sentence.",
+        SessionChoice::New,
+    );
+    request.team_tools = vec![teamwright_application::TeamTool::PublishHandoff {
+        folder: folder.clone(),
+    }];
+    let events = Arc::new(Mutex::new(Vec::new()));
+    let collected = Arc::clone(&events);
+
+    let turn = runtime()
+        .with_team_bus(bus_program(), vec!["--team-bus".to_owned()])
+        .start_turn(
+            request,
+            Box::new(move |event| collected.lock().unwrap().push(event)),
+        )
+        .unwrap();
+    let outcome = turn.wait().unwrap();
+    let events = events.lock().unwrap().clone();
+    for event in &events {
+        println!("{event:?}");
+    }
+    println!("{}", outcome.final_text);
+    print_usage(&outcome);
+
+    assert_eq!(outcome.failure, None);
+    let handoffs: Vec<_> = events
+        .iter()
+        .filter_map(|event| match event {
+            AgentEvent::HandoffPublished(handoff) => Some(handoff),
+            _ => None,
+        })
+        .collect();
+    let [handoff] = handoffs.as_slice() else {
+        panic!("one handoff was expected: {events:?}");
+    };
+    assert!(handoff.summary.contains("pin 4"));
+    assert!(handoff.contract.contains("SCL"));
+    assert_eq!(handoff.files, ["pinmap.md"]);
+    // The turn went on after the handoff and ended with an answer.
+    assert!(!outcome.final_text.trim().is_empty());
+}

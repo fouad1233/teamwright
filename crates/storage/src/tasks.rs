@@ -281,6 +281,8 @@ impl TaskRepository for SqliteTaskRepository {
         self.database.write(|transaction, operations| {
             for id in ids {
                 let id = id.to_string();
+                // The handoffs of the task go with it, each logged.
+                crate::teamwork::delete_handoffs_of_task(transaction, operations, &id)?;
                 if remove_task(transaction, &id)? {
                     operations.record_delete(Entity::Task, &id)?;
                 }

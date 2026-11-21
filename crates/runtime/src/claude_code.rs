@@ -153,13 +153,21 @@ impl AgentRuntime for ClaudeCode {
         let program = self.program()?;
         refuse_a_script(&program)?;
         // The decoder checks a proposal against the team the bus was told
-        // of, as the bus does.
+        // of, and a message against the teammates, as the bus does.
         let team = request
             .team_tools
             .iter()
             .find_map(|tool| match tool {
                 TeamTool::ProposePlan { team } => Some(team.clone()),
-                TeamTool::AskManager | TeamTool::Interview => None,
+                _ => None,
+            })
+            .unwrap_or_default();
+        let teammates = request
+            .team_tools
+            .iter()
+            .find_map(|tool| match tool {
+                TeamTool::SendMessage { teammates } => Some(teammates.clone()),
+                _ => None,
             })
             .unwrap_or_default();
         let turn = start_turn(
@@ -170,7 +178,7 @@ impl AgentRuntime for ClaudeCode {
                 &self.environment,
             ),
             request.prompt,
-            Decoder::for_team(team),
+            Decoder::for_team(team).with_teammates(teammates),
             listener,
         )?;
         Ok(Box::new(turn))

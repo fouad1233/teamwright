@@ -11,8 +11,9 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use chrono::TimeDelta;
 use teamwright_domain::{
-    Area, AreaId, Conversation, ConversationId, Member, MemberId, Project, ProjectId, Sprint,
-    SprintId, Task, TaskId, Timestamp, Turn, TurnId, View, ViewId,
+    Area, AreaId, Conversation, ConversationId, Handoff, HandoffId, Member, MemberId, Project,
+    ProjectId, Sprint, SprintId, Task, TaskId, TeamMessage, TeamMessageId, Timestamp, Turn, TurnId,
+    View, ViewId,
 };
 
 use crate::agent_runtime::{
@@ -25,7 +26,7 @@ use crate::places::ChosenPlaces;
 use crate::ports::{
     ApprovedPlan, AreaRepository, Clock, ConversationRepository, FileSystem, MemberRepository,
     PlacesRepository, PlanningRepository, ProjectFolders, ProjectRepository, SprintRepository,
-    StorageError, TaskRepository, ViewRepository, WorkListener,
+    StorageError, TaskRepository, TeamworkRepository, ViewRepository, WorkListener,
 };
 use crate::project_events::ProjectEvent;
 
@@ -369,6 +370,48 @@ impl ConversationRepository for InMemoryConversationRepository {
             stored.turns.retain(|_, turn| turn.conversation_id() != *id);
         }
         Ok(())
+    }
+}
+
+/// Keeps the handoffs and the messages of the teams in memory.
+#[derive(Debug, Default)]
+pub struct InMemoryTeamworkRepository {
+    handoffs: Mutex<BTreeMap<HandoffId, Handoff>>,
+    messages: Mutex<BTreeMap<TeamMessageId, TeamMessage>>,
+}
+
+impl TeamworkRepository for InMemoryTeamworkRepository {
+    fn save_handoff(&self, handoff: &Handoff) -> Result<(), StorageError> {
+        lock(&self.handoffs).insert(handoff.id(), handoff.clone());
+        Ok(())
+    }
+
+    fn handoffs_of_project(&self, project_id: ProjectId) -> Result<Vec<Handoff>, StorageError> {
+        let mut handoffs: Vec<Handoff> = lock(&self.handoffs)
+            .values()
+            .filter(|handoff| handoff.project_id() == project_id)
+            .cloned()
+            .collect();
+        handoffs.sort_by_key(|handoff| (handoff.published_at(), handoff.id()));
+        Ok(handoffs)
+    }
+
+    fn save_messages(&self, messages: &[TeamMessage]) -> Result<(), StorageError> {
+        let mut stored = lock(&self.messages);
+        for message in messages {
+            stored.insert(message.id(), message.clone());
+        }
+        Ok(())
+    }
+
+    fn messages_of_project(&self, project_id: ProjectId) -> Result<Vec<TeamMessage>, StorageError> {
+        let mut messages: Vec<TeamMessage> = lock(&self.messages)
+            .values()
+            .filter(|message| message.project_id() == project_id)
+            .cloned()
+            .collect();
+        messages.sort_by_key(|message| (message.sent_at(), message.id()));
+        Ok(messages)
     }
 }
 

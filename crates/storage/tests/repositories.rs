@@ -2400,6 +2400,9 @@ fn the_work_of_a_specialist_is_kept_on_the_real_database() {
             members: member_repository.clone(),
             conversations: conversation_repository.clone(),
             planning: planning_repository.clone(),
+            teamwork: Arc::new(
+                teamwright_application::in_memory::InMemoryTeamworkRepository::default(),
+            ),
             folders: Arc::new(FixedProjectFolders::inside("projects")),
             places: places_repository.clone(),
             file_system: Arc::new(PretendFileSystem::default()),
@@ -2634,6 +2637,9 @@ fn approving_a_proposal_creates_the_team_and_the_plan_in_one_logged_write() {
         members: member_repository.clone(),
         conversations: conversation_repository.clone(),
         planning: Arc::new(SqlitePlanningRepository::new(database.clone())),
+        teamwork: Arc::new(
+            teamwright_application::in_memory::InMemoryTeamworkRepository::default(),
+        ),
         folders: Arc::new(FixedProjectFolders::inside("projects")),
         places: places_repository,
         file_system: Arc::new(PretendFileSystem::default()),

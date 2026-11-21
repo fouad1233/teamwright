@@ -34,6 +34,7 @@ pub mod sprints;
 pub mod sync;
 pub mod tasks;
 pub mod team;
+pub mod teamwork;
 pub mod usage;
 pub mod views;
 pub mod work;
@@ -41,11 +42,11 @@ pub mod workbook;
 
 pub use agent_runtime::{
     AgentEvent, AgentRuntime, AgentRuntimeError, Effort, Installation, InterviewQuestionAsked,
-    ManagerInterview, ManagerQuestion, McpServer, ModelUsage, PermissionDenial, PermissionMode,
-    PermissionProfile, PlanProposal, PlanUsage, PlanWindow, PlanWindowKind, PlannedMember,
-    PlannedOwner, PlannedTask, ProgramVersion, QuestionOption, RunningTurn, SessionChoice,
-    SessionContext, SessionId, SessionStarted, SignIn, TeamTool, TokenCounts, TurnFailure,
-    TurnOutcome, TurnRequest,
+    ManagerInterview, ManagerQuestion, McpServer, MessageKind, ModelUsage, PermissionDenial,
+    PermissionMode, PermissionProfile, PlanProposal, PlanUsage, PlanWindow, PlanWindowKind,
+    PlannedMember, PlannedOwner, PlannedTask, ProgramVersion, PublishedHandoff, QuestionOption,
+    RunningTurn, SentMessage, SessionChoice, SessionContext, SessionId, SessionStarted, SignIn,
+    TeamTool, TokenCounts, TurnFailure, TurnOutcome, TurnRequest,
 };
 pub use appearance::{AppearanceService, Theme, ThemeStore};
 pub use areas::AreaService;
@@ -79,8 +80,8 @@ pub use places::{ChosenPlaces, PlacesService, ProjectPlaces, REFERENCES_FOLDER};
 pub use ports::{
     ApprovedPlan, AreaRepository, Clock, ConversationRepository, DiskEntry, FileSystem,
     FolderReader, MemberRepository, PlacesRepository, PlanningRepository, ProjectFolders,
-    ProjectRepository, SprintRepository, StorageError, TaskRepository, ViewRepository,
-    WorkListener,
+    ProjectRepository, SprintRepository, StorageError, TaskRepository, TeamworkRepository,
+    ViewRepository, WorkListener,
 };
 pub use project_events::{
     Agent, Happening, ProjectEvent, StatusOfEvent, TaskOfEvent, WaitsFor,
@@ -97,6 +98,10 @@ pub use sync::{
 };
 pub use tasks::{HistoryEntry, MOST_PROJECT_CHANGES, NewTask, ProjectChange, TaskService};
 pub use team::{NewMember, TeamService};
+pub use teamwork::{
+    TeamTalk, TeamworkService, handoffs_in_words, latest_handoff_of, messages_in_words,
+    messages_waiting_for,
+};
 pub use usage::{AgentUsage, MemberUsage, ProjectUsage, usage_of};
 pub use views::{NewView, ViewService};
 pub use work::{

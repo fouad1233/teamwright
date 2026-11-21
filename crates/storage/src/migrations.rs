@@ -28,6 +28,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("schema/0016_turn_context.sql"),
     include_str!("schema/0017_integrations.sql"),
     include_str!("schema/0020_member_instructions.sql"),
+    include_str!("schema/0018_teamwork.sql"),
 ];
 
 /// Applies the migrations a database has not seen yet. Each one runs in its

@@ -33,6 +33,7 @@ use crate::operations::{Entity, OperationRecorder, Stamp, latest_changes_seen, w
 use crate::projects;
 use crate::sprints;
 use crate::tasks;
+use crate::teamwork;
 use crate::views;
 
 /// Why an operation waits: it refers to something that has not arrived.
@@ -368,9 +369,13 @@ fn parents_of(
         | Entity::Sprint
         | Entity::View
         | Entity::Area
-        | Entity::Conversation => {
+        | Entity::Conversation
+        | Entity::TeamMessage => {
             text_of(state, "project_id").map(|id| (Entity::Project, id.to_owned()))
         }
+        // A handoff cannot exist without its task, which cannot exist
+        // without its project.
+        Entity::Handoff => text_of(state, "task_id").map(|id| (Entity::Task, id.to_owned())),
         Entity::Turn => {
             text_of(state, "conversation_id").map(|id| (Entity::Conversation, id.to_owned()))
         }
@@ -959,6 +964,7 @@ impl Round {
                         }
                     }
                 }
+                teamwork::delete_handoffs_of_task(transaction, operations, id)?;
                 for conversation_id in conversations::conversations_about_task(transaction, id)? {
                     if !going(Entity::Conversation, &conversation_id) {
                         conversations::delete_conversation(

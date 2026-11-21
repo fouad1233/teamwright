@@ -433,6 +433,22 @@ pub enum TeamTool {
         /// member.
         team: Vec<String>,
     },
+    /// `publish_handoff`: a specialist working on a task hands its result
+    /// over to whoever builds on it. It is reported as
+    /// [`AgentEvent::HandoffPublished`]. Only a turn about a task is given
+    /// it.
+    PublishHandoff {
+        /// The folder the session works in. Every file a handoff names
+        /// must be inside it, and must exist.
+        folder: PathBuf,
+    },
+    /// `send_message`: a specialist sends a question or a note to a
+    /// teammate. It is reported as [`AgentEvent::MessageSent`].
+    SendMessage {
+        /// The names of the teammates a message may go to: the other AI
+        /// specialists of the project.
+        teammates: Vec<String>,
+    },
 }
 
 /// What is needed to run one turn of a session.
@@ -505,6 +521,13 @@ pub enum AgentEvent {
     /// turn. A use of the tool is reported only this way, not as a tool
     /// use.
     PlanProposed(PlanProposal),
+    /// A specialist handed the result of its task over, and goes on with
+    /// its turn. It is reported only once the team bus has taken it, and
+    /// only this way, not as a tool use.
+    HandoffPublished(PublishedHandoff),
+    /// A specialist sent a teammate a message, and goes on with its turn.
+    /// Like a handoff, it is reported only once the team bus has taken it.
+    MessageSent(SentMessage),
     /// A request to the model failed and is tried again.
     Retrying {
         /// Which attempt this is, if reported.
@@ -624,6 +647,34 @@ pub enum PlannedOwner {
     /// A member by name: a proposed member, or one the project has.
     Member(String),
 }
+
+/// The result of a task as a specialist hands it over, checked by the
+/// rules of a handoff.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublishedHandoff {
+    /// What was done, for whoever builds on it.
+    pub summary: String,
+    /// What others may rely on. May be empty.
+    pub contract: String,
+    /// The files that hold the result, relative to the working folder,
+    /// with `/` between their parts.
+    pub files: Vec<String>,
+}
+
+/// A message a specialist sends a teammate.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SentMessage {
+    /// The name of the teammate, as the specialist wrote it.
+    pub to: String,
+    /// A question or a note.
+    pub kind: MessageKind,
+    /// What it says.
+    pub text: String,
+}
+
+/// What a message is. It belongs to the domain; it is named here too
+/// because a sent message carries it.
+pub use teamwright_domain::MessageKind;
 
 /// What a session has at its start.
 #[derive(Debug, Clone, PartialEq, Eq)]

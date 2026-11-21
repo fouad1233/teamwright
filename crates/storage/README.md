@@ -6,7 +6,8 @@ operation log.
 
 It implements the interfaces `ProjectRepository`, `TaskRepository`,
 `MemberRepository`, `ConversationRepository`, `PlanningRepository`,
-`PlacesRepository`, `SprintRepository`, `ViewRepository` and `AreaRepository` that the
+`PlacesRepository`, `SprintRepository`, `ViewRepository`, `AreaRepository` and
+`TeamworkRepository` that the
 application crate declares. Nothing outside this crate knows that SQLite is
 involved.
 
@@ -25,6 +26,7 @@ involved.
 | `members` | `SqliteMemberRepository` |
 | `conversations` | `SqliteConversationRepository`: conversations, their turns, the steps of the turns and the questions they asked the manager |
 | `planning` | The interviews and the proposals of the Advisor, as parts of their turns; `SqlitePlanningRepository`, which stores an approved plan |
+| `teamwork` | `SqliteTeamworkRepository`: the handoffs of tasks with their files, and the messages between specialists |
 | `places` | `SqlitePlacesRepository`: the work folder and the reference folders chosen for each project |
 | `operations` | The operation log, the hybrid logical clock, and the recorder that keeps the stamps of the fields |
 | `merge` | How each kind of thing merges field by field, and `MergedState`, a row of `merged_states` |
@@ -47,7 +49,7 @@ involved.
   `project_reference_folders`, `turn_interviews`, `turn_interview_questions`,
   `turn_interview_options`, `turn_proposals`, `turn_proposal_members`,
   `turn_proposal_tasks`, `turn_proposal_task_waits`, `sprints`, `views`,
-  `areas`.
+  `areas`, `handoffs`, `handoff_files`, `team_messages`.
   The schema with its conventions is in
   [`schema/0001_initial.sql`](src/schema/0001_initial.sql); later files in
   that folder add to it.
@@ -178,6 +180,22 @@ involved.
   a turn. A window without what was held is damaged. Nothing is logged by
   the migration: a turn state logged before version 16 has neither and is
   read as a turn without a context.
+- **Handoffs and messages** (version 18,
+  [decision 0029](../../docs/decisions/0029-handoffs-and-messages-between-specialists.md)).
+  A handoff has a row in `handoffs` and its files a row each in
+  `handoff_files`, by position; it is logged as the entity `handoff` with
+  its whole state, files included, and merges whole, since it never
+  changes. A message has a row in `team_messages`, logged as the entity
+  `team_message`; its delivery (`delivered_turn_id`, `delivered_at`, both
+  null while it waits) is a field of its own, so that a delivery on one
+  computer and nothing on the other merge into the delivery. Only the
+  project (and for a handoff the task) is a reference the database
+  enforces; the member, the conversation and the turn they name are kept as
+  they were. Deleting a task deletes and logs its handoffs first; deleting
+  a project deletes and logs its handoffs and messages before its tasks. A
+  handoff waits for its task when it is taken in before it, and is dropped
+  with a task deleted elsewhere; a task deleted by another computer takes
+  the handoffs of this one with it, each removal logged.
 - **An approved plan is one transaction.** `SqlitePlanningRepository`
   writes the project (with its next task number), every new member, every
   new task with what it waits for, and the turn with its approved proposal,

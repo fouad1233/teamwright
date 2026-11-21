@@ -141,6 +141,11 @@ const VIEW_FIELDS: &[Field] = &[
 
 const AREA_FIELDS: &[Field] = &[later("name", &["name"]), later("position", &["position"])];
 
+// A message merges by field, so that its delivery, the one thing that
+// changes, is a field of its own. Two computers that both delivered it keep
+// the later delivery.
+const TEAM_MESSAGE_FIELDS: &[Field] = &[later("delivery", &["delivered_turn_id", "delivered_at"])];
+
 const CONVERSATION_FIELDS: &[Field] = &[
     later("member", &["member_id"]),
     later("task", &["task_id"]),
@@ -163,11 +168,13 @@ pub(crate) const fn merging_of(entity: Entity) -> Merging {
         Entity::View => Merging::ByField(VIEW_FIELDS),
         Entity::Area => Merging::ByField(AREA_FIELDS),
         Entity::Conversation => Merging::ByField(CONVERSATION_FIELDS),
+        Entity::TeamMessage => Merging::ByField(TEAM_MESSAGE_FIELDS),
         Entity::Turn
         | Entity::TurnStep
         | Entity::Decision
         | Entity::Interview
-        | Entity::Proposal => Merging::Whole,
+        | Entity::Proposal
+        | Entity::Handoff => Merging::Whole,
         Entity::ProjectPlaces => Merging::NeverLeaves,
     }
 }

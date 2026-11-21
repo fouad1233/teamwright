@@ -19,7 +19,7 @@ format of its output.
 | `process` | Starting the program, feeding it the prompt, reading it, stopping it |
 | `decode` | Turns the JSON lines of headless mode into `AgentEvent`s and a `TurnOutcome` |
 | `sign_in` | Reads the answer of `claude auth status --json` |
-| `team_bus` | The tool server through which a specialist asks the manager to decide, and the Advisor interviews and proposes |
+| `team_bus` | The tool server through which a specialist asks the manager to decide, hands its result over and writes to a teammate, and the Advisor interviews and proposes |
 
 ## How a turn runs
 
@@ -102,6 +102,21 @@ arguments):
   refused with the names and with what to leave out, because a model that
   planned a project once tends to hand in the whole plan a second time.
 
+- `publish_handoff`: a specialist working on a task hands its result over
+  to whoever builds on it: a `summary`, a `contract` (may be left out) and
+  the `files` that hold the result, as paths inside the working folder. The
+  server is told the folder (`--folder <path>`) and refuses a path that
+  leaves it, a file named twice, more than fifty files, and a file that is
+  not there, naming it. A turn hands over once.
+- `send_message`: a specialist sends one teammate (`to`, one of the names
+  the server was told with `--teammate <name>`, whatever the capitals) a
+  `question` or a `note` (`kind`) with a `text` of at most 4,000
+  characters. A turn sends at most five.
+
+Neither of the last two ends the turn: the server answers that the
+handoff is recorded, or that the message is on its way, and the session
+goes on ([decision 0029](../../docs/decisions/0029-handoffs-and-messages-between-specialists.md)).
+
 A model counts from 1, so `recommended` and `waits_for` do; what comes out
 counts from 0. An estimate in hours becomes minutes. Texts are trimmed, and
 names and titles follow the rules of members and tasks. The names, the
@@ -109,10 +124,11 @@ descriptions and the schemas are those of the stand-in that was tried
 against Claude Code before the tools were built
 ([decision 0014](../../docs/decisions/0014-the-advisor-plans-through-two-tools.md)).
 
-The server does no more than check a call and tell the session to end its
-turn. One function for each tool, `team_bus::question_from`,
-`interview_from` and `proposal_from`, checks the arguments for the server
-and for the decoder. A refusal says in plain words what to change, because
+The server does no more than check a call and answer the session. One
+function for each tool, `team_bus::question_from`, `interview_from`,
+`proposal_from`, `handoff_from` and `message_from`, checks the arguments
+for the server and for the decoder; `missing_files` is the one check only
+the server makes, because it looks at the disk. A refusal says in plain words what to change, because
 the model reads it and tries again. A turn carries at most one question,
 interview or proposal: after one is taken, the server refuses every further
 call of the three.
@@ -130,6 +146,13 @@ result of the call is swallowed. A call that does not pass, and any after
 the first, is an ordinary tool use with a failed result. The model then
 writes one last sentence, and the turn ends with an ordinary `result`
 event.
+
+A call of `publish_handoff` or `send_message` that passes the check is held
+until the answer of the server comes back in the stream. If the server took
+it, it becomes `AgentEvent::HandoffPublished` or `MessageSent`; if the
+server refused it (a file that is not there, or a sixth message), it
+becomes an ordinary tool use with a failed result. The decoder is told the
+names of the teammates (`Decoder::with_teammates`), as the server is.
 
 ## Rules for code in this crate
 

@@ -16,14 +16,15 @@ window or agent runtime.
 | `places` | `PlacesService`: the folders of a project: choose its work folder, add and take away reference folders, copy reference files into it |
 | `files` | `ProjectFilesService`: what lies in the folders of a project, for the files view: `list` a folder at a path inside it, `locate` an entry to open or show, each path checked first |
 | `work` | `WorkService`: let AI specialists work: start on a task, ask, reply, answer a specialist's question, list what waits for the manager, stop, follow every event, open a session in the desktop app, recover after a restart; `brief_for` and `instructions_for`. Its part `advisor`: plan a project with the Advisor (`advise`, `answer_interview`, `approve_proposal`); `ApprovedProposal`, `answers_in_words` and `instructions_for_advisor` |
+| `teamwork` | `TeamworkService`: what specialists hand each other: every handoff and message of a project (`talk_of_project`, as `TeamTalk`) and the messages that wait for a member (`messages_waiting_for`, for the coordinator); the rules across stored things: `messages_waiting_for` (sent to the member, not delivered, the oldest first), `latest_handoff_of` (the handoff of a task that counts), `handoffs_in_words` (the part of a brief) and `messages_in_words` (what a turn is told) |
 | `google_drive` | `GoogleDriveService`: the folder that Google Drive for desktop keeps on this computer (`find_drive_folders`, `look`, `prepare`), behind the port `DriveSurroundings`; see "Syncing through Google Drive" |
 | `sync` | `SyncService`: keep several computers of one manager in step through a folder the manager owns (`round`, `choose_folder`, `stop`, `rename_this_computer`, `accept`, `ignore`, `notices`, `dismiss`, `new_identity`); the ports `SyncFolder` and `SyncLedger`, and the operations that travel between computers |
 | `workbook` | `WorkbookService`: gather a project into a workbook of four sheets (summary, tasks, sprints, team) as plain data: `Workbook`, `Sheet`, `SheetContent`, `Section`, `Table`, `Column` and `Cell`, whose kind says whether it is text, a whole number, hours, a date or a status. Writing the file is done outside this crate ([decision 0025](../../docs/decisions/0025-the-project-as-a-workbook.md)) |
-| `ports` | The interfaces the services need: `ProjectRepository`, `TaskRepository`, `MemberRepository`, `ConversationRepository`, `PlanningRepository`, `PlacesRepository`, `SprintRepository`, `ViewRepository`, `AreaRepository`, `ProjectFolders`, `FileSystem`, `FolderReader`, `WorkListener`, `Clock` (which also tells the day a moment falls on) |
+| `ports` | The interfaces the services need: `ProjectRepository`, `TaskRepository`, `MemberRepository`, `ConversationRepository`, `PlanningRepository`, `PlacesRepository`, `SprintRepository`, `ViewRepository`, `AreaRepository`, `TeamworkRepository`, `ProjectFolders`, `FileSystem`, `FolderReader`, `WorkListener`, `Clock` (which also tells the day a moment falls on) |
 | `agent_runtime` | `AgentRuntime`: the interface to the program that runs a team member's session, and the data it speaks |
 | `error` | `ApplicationError`, with a stable `code()` for interfaces |
 | `clock` | `SystemClock`, the real clock |
-| `in_memory` | In-memory repositories (`InMemoryPlanningRepository` stores an approved plan into the others, `InMemorySprintRepository` stores the tasks that change with a sprint into the task repository, `InMemoryViewRepository`, `InMemoryAreaRepository`), fixed project folders, a pretended file system, a listener that records, a scripted agent runtime and a settable clock, for tests and demos |
+| `in_memory` | In-memory repositories (`InMemoryPlanningRepository` stores an approved plan into the others, `InMemorySprintRepository` stores the tasks that change with a sprint into the task repository, `InMemoryViewRepository`, `InMemoryAreaRepository`, `InMemoryTeamworkRepository`), fixed project folders, a pretended file system, a listener that records, a scripted agent runtime and a settable clock, for tests and demos |
 
 ## How a use case is built
 
@@ -294,6 +295,30 @@ question; every request to the specialist is a turn of it.
   [TeamTool::AskManager]`). The
   question it asks is recorded on the turn, and a turn that finishes with a
   question leaves its task where it is: it is not ready to be checked.
+- **Handoffs and messages**
+  ([decision 0029](../../docs/decisions/0029-handoffs-and-messages-between-specialists.md)).
+  A turn about a task is also given `TeamTool::PublishHandoff` with the work
+  folder, and a turn of a specialist whose team has other AI specialists
+  `TeamTool::SendMessage` with their names, in the order they joined. A
+  handoff that arrives while its turn runs is stored (`TeamworkRepository`)
+  for the task of the conversation and its specialist; a message is stored
+  for the teammate of that name, whatever the capitals, and one to
+  somebody who is not an AI specialist of the team becomes a notice of the
+  turn instead. Neither ends the turn, and a turn that hands over still
+  moves its task on to be checked.
+- **The brief** of a task (`brief_for`) adds, for each task it waits for
+  that has a handoff, the latest one: its summary, its interface contract
+  and its files.
+- **A message is delivered** with the next turn of its receiver, whatever
+  starts it: the messages that wait (`messages_waiting_for`) are put after
+  the request in what the program is told (`messages_in_words`), the
+  stored request stays as it was written, and each is marked delivered with
+  the turn once the turn is stored. A turn the program could not start
+  delivers nothing. An arriving message does not start a turn by itself:
+  that is for the coordinator, which asks `TeamworkService::messages_waiting_for`.
+- The instructions of a specialist (`instructions_for`) say to hand the
+  result over with `publish_handoff` before the report, and to write to a
+  teammate with `send_message` without waiting for an answer.
 - A question is open while it is the question of the latest turn of its
   conversation, that turn has ended, and the manager has not answered.
   `answer_decision` answers it with an option (counted from 0), with words,
@@ -404,11 +429,14 @@ The application only knows the trait `AgentRuntime`, implemented by the
 
 A turn request names the tools of the team bus the session is given
 (`team_tools`, each a `TeamTool`): `AskManager` to ask the manager to
-decide, `Interview` and `ProposePlan { team }` for the Advisor, where `team`
-holds the names of the members the project has. What a session does with
-them arrives as `AgentEvent::ManagerAsked` (`ManagerQuestion`),
-`InterviewAsked` (`ManagerInterview`) or `PlanProposed` (`PlanProposal`),
-with every place counted from 0, and never as a tool use. A request may
+decide, `PublishHandoff { folder }` to hand the result of a task over and
+`SendMessage { teammates }` to write to a teammate, and `Interview` and
+`ProposePlan { team }` for the Advisor, where `team` holds the names of the
+members the project has. What a session does with them arrives as
+`AgentEvent::ManagerAsked` (`ManagerQuestion`), `HandoffPublished`
+(`PublishedHandoff`), `MessageSent` (`SentMessage`), `InterviewAsked`
+(`ManagerInterview`) or `PlanProposed` (`PlanProposal`), with every place
+counted from 0, and never as a tool use. A request may
 also name folders the session may read but not write (`readable_folders`).
 
 A turn request carries its permissions as data, a `PermissionProfile`.

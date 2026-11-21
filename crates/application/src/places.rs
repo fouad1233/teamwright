@@ -520,6 +520,7 @@ mod tests {
                 clock.clone(),
             ),
             work: WorkService::new(WorkPorts {
+                teamwork: Arc::new(crate::in_memory::InMemoryTeamworkRepository::default()),
                 planning: Arc::new(InMemoryPlanningRepository::new(
                     projects.clone(),
                     members.clone(),

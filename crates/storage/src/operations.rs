@@ -75,11 +75,15 @@ pub(crate) enum Entity {
     View,
     /// An area of a project.
     Area,
+    /// A handoff of a task, with its files. It never changes.
+    Handoff,
+    /// A message from one specialist to another, with its delivery.
+    TeamMessage,
 }
 
 impl Entity {
     /// Every kind of thing whose changes are logged.
-    pub(crate) const ALL: [Self; 13] = [
+    pub(crate) const ALL: [Self; 15] = [
         Self::Project,
         Self::Task,
         Self::Member,
@@ -93,6 +97,8 @@ impl Entity {
         Self::Sprint,
         Self::View,
         Self::Area,
+        Self::Handoff,
+        Self::TeamMessage,
     ];
 
     /// The entity of a name in the log, if this version knows it.
@@ -116,6 +122,8 @@ impl Entity {
             Self::Sprint => "sprint",
             Self::View => "view",
             Self::Area => "area",
+            Self::Handoff => "handoff",
+            Self::TeamMessage => "team_message",
         }
     }
 }

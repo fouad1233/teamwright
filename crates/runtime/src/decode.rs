@@ -18,8 +18,9 @@ use teamwright_application::{
 };
 
 use crate::team_bus::{
-    ASK_MANAGER_IN_SESSION, INTERVIEW_IN_SESSION, PROPOSE_PLAN_IN_SESSION, interview_from,
-    proposal_from, question_from,
+    ASK_MANAGER_IN_SESSION, INTERVIEW_IN_SESSION, PROPOSE_PLAN_IN_SESSION,
+    PUBLISH_HANDOFF_IN_SESSION, SEND_MESSAGE_IN_SESSION, handoff_from, interview_from,
+    message_from, proposal_from, question_from,
 };
 
 /// The longest summary of a tool's input, in characters.
@@ -52,6 +53,13 @@ pub struct Decoder {
     /// The names of the members the project has, to which a proposed task
     /// may be given.
     team: Vec<String>,
+    /// The names of the teammates a message may go to.
+    teammates: Vec<String>,
+    /// The handoffs and messages whose calls passed the check and wait for
+    /// the answer of the team bus, by the identifier of the use. Only the
+    /// bus knows whether the files of a handoff are there, so what it
+    /// refused is reported as an ordinary use of a tool that failed.
+    awaiting_answer: HashMap<String, Awaiting>,
     /// The use of the tool that asked the manager or proposed, once a
     /// question, an interview or a proposal was taken. A turn carries at
     /// most one. The result of the use is not reported.
@@ -71,6 +79,18 @@ struct LastRequest {
     held: u64,
     /// The model it went to, by its full name.
     model: Option<String>,
+}
+
+/// A call of `publish_handoff` or `send_message` that waits for the answer
+/// of the team bus.
+#[derive(Debug, Clone)]
+struct Awaiting {
+    /// What is reported if the bus takes it.
+    taken: AgentEvent,
+    /// The name of the tool, reported if the bus refuses it.
+    tool: String,
+    /// What the tool was used on, reported if the bus refuses it.
+    summary: String,
 }
 
 /// How Claude Code names a message it made up itself, which no model wrote
@@ -94,6 +114,13 @@ impl Decoder {
             team,
             ..Self::default()
         }
+    }
+
+    /// The same decoder, for a session that may write to teammates of
+    /// these names.
+    #[must_use]
+    pub fn with_teammates(self, teammates: Vec<String>) -> Self {
+        Self { teammates, ..self }
     }
 
     /// Reads one line of output and returns the events it holds, often none.
@@ -371,6 +398,18 @@ impl Decoder {
                     let (Some(id), Some(tool)) = (text(block, "id"), text(block, "name")) else {
                         continue;
                     };
+                    if let Some(said) = self.said_to_team(tool, block.get("input")) {
+                        // Reported when the bus has answered.
+                        self.awaiting_answer.insert(
+                            id.to_owned(),
+                            Awaiting {
+                                taken: said,
+                                tool: tool.to_owned(),
+                                summary: self.summarize(block.get("input")),
+                            },
+                        );
+                        continue;
+                    }
                     if let Some(taken) = self.taken_in(tool, block.get("input")) {
                         self.taken_use = Some(id.to_owned());
                         events.push(taken);
@@ -408,23 +447,67 @@ impl Decoder {
         }
     }
 
-    fn decode_user(&self, event: &Map<String, Value>) -> Vec<AgentEvent> {
-        content_blocks(event)
+    /// What a use of `publish_handoff` or `send_message` hands over or
+    /// says, if it passes the check. Whether the bus takes it is known only
+    /// from its answer.
+    fn said_to_team(&self, tool: &str, input: Option<&Value>) -> Option<AgentEvent> {
+        let input = input?;
+        match tool {
+            PUBLISH_HANDOFF_IN_SESSION => {
+                handoff_from(input).ok().map(AgentEvent::HandoffPublished)
+            }
+            SEND_MESSAGE_IN_SESSION => message_from(input, &self.teammates)
+                .ok()
+                .map(AgentEvent::MessageSent),
+            _ => None,
+        }
+    }
+
+    fn decode_user(&mut self, event: &Map<String, Value>) -> Vec<AgentEvent> {
+        let results: Vec<(String, bool)> = content_blocks(event)
             .filter(|block| text(block, "type") == Some("tool_result"))
             .filter_map(|block| {
-                let tool_use_id = text(block, "tool_use_id")?;
-                if self.taken_use.as_deref() == Some(tool_use_id) {
-                    // What was taken was reported; what the server answered
-                    // is only for the session.
-                    return None;
-                }
-                Some(AgentEvent::ToolResult {
-                    tool_use_id: tool_use_id.to_owned(),
-                    tool: self.tool_names.get(tool_use_id).cloned(),
-                    failed: block.get("is_error").and_then(Value::as_bool) == Some(true),
-                })
+                Some((
+                    text(block, "tool_use_id")?.to_owned(),
+                    block.get("is_error").and_then(Value::as_bool) == Some(true),
+                ))
             })
-            .collect()
+            .collect();
+        let mut events = Vec::new();
+        for (tool_use_id, failed) in results {
+            if self.taken_use.as_deref() == Some(tool_use_id.as_str()) {
+                // What was taken was reported; what the server answered
+                // is only for the session.
+                continue;
+            }
+            if let Some(awaiting) = self.awaiting_answer.remove(&tool_use_id) {
+                if failed {
+                    // The bus refused it, and the session was told why: an
+                    // ordinary use of a tool that failed.
+                    self.tool_names
+                        .insert(tool_use_id.clone(), awaiting.tool.clone());
+                    events.push(AgentEvent::ToolUse {
+                        id: tool_use_id.clone(),
+                        tool: awaiting.tool.clone(),
+                        summary: awaiting.summary,
+                    });
+                    events.push(AgentEvent::ToolResult {
+                        tool_use_id,
+                        tool: Some(awaiting.tool),
+                        failed: true,
+                    });
+                } else {
+                    events.push(awaiting.taken);
+                }
+                continue;
+            }
+            events.push(AgentEvent::ToolResult {
+                tool: self.tool_names.get(&tool_use_id).cloned(),
+                tool_use_id,
+                failed,
+            });
+        }
+        events
     }
 
     /// Says in a few words what a tool is used on: the file, the command,
@@ -566,7 +649,10 @@ fn shorten(text: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use teamwright_application::{ManagerInterview, ManagerQuestion, PlanProposal, PlannedOwner};
+    use teamwright_application::{
+        ManagerInterview, ManagerQuestion, PlanProposal, PlannedOwner, PublishedHandoff,
+        SentMessage,
+    };
 
     use super::*;
 
@@ -1185,5 +1271,103 @@ mod tests {
             decoder.summarize(Some(&serde_json::json!({ "other": 1 }))),
             ""
         );
+    }
+
+    /// The line of an assistant that calls a tool of the team bus.
+    fn call_line(id: &str, tool: &str, input: &serde_json::Value) -> String {
+        serde_json::json!({
+            "type": "assistant",
+            "message": { "content": [{ "type": "tool_use", "id": id, "name": tool, "input": input }] }
+        })
+        .to_string()
+    }
+
+    /// The line that carries the answer of the team bus to a call.
+    fn answer_line(id: &str, is_error: bool) -> String {
+        serde_json::json!({
+            "type": "user",
+            "message": { "content": [{
+                "type": "tool_result", "tool_use_id": id, "is_error": is_error,
+                "content": [{ "type": "text", "text": "answer" }]
+            }] }
+        })
+        .to_string()
+    }
+
+    #[test]
+    fn a_handoff_is_reported_once_the_bus_has_taken_it() {
+        let mut decoder = Decoder::new();
+        let input = serde_json::json!({
+            "summary": "Pin map v1.", "contract": "SPI2.", "files": ["hardware/pinmap.md"]
+        });
+
+        let at_the_call =
+            decoder.decode_line(&call_line("toolu_1", PUBLISH_HANDOFF_IN_SESSION, &input));
+        let at_the_answer = decoder.decode_line(&answer_line("toolu_1", false));
+
+        assert!(at_the_call.is_empty());
+        assert_eq!(
+            at_the_answer,
+            [AgentEvent::HandoffPublished(PublishedHandoff {
+                summary: "Pin map v1.".to_owned(),
+                contract: "SPI2.".to_owned(),
+                files: vec!["hardware/pinmap.md".to_owned()],
+            })]
+        );
+    }
+
+    #[test]
+    fn a_handoff_the_bus_refused_is_an_ordinary_failed_tool_use() {
+        let mut decoder = Decoder::new();
+        let input = serde_json::json!({ "summary": "Done.", "files": ["missing.md"] });
+
+        decoder.decode_line(&call_line("toolu_1", PUBLISH_HANDOFF_IN_SESSION, &input));
+        let at_the_answer = decoder.decode_line(&answer_line("toolu_1", true));
+        let unchecked = decoder.decode_line(&call_line(
+            "toolu_2",
+            PUBLISH_HANDOFF_IN_SESSION,
+            &serde_json::json!({ "summary": "" }),
+        ));
+
+        assert_eq!(
+            at_the_answer,
+            [
+                AgentEvent::ToolUse {
+                    id: "toolu_1".to_owned(),
+                    tool: PUBLISH_HANDOFF_IN_SESSION.to_owned(),
+                    summary: String::new(),
+                },
+                AgentEvent::ToolResult {
+                    tool_use_id: "toolu_1".to_owned(),
+                    tool: Some(PUBLISH_HANDOFF_IN_SESSION.to_owned()),
+                    failed: true,
+                }
+            ]
+        );
+        assert!(matches!(unchecked.as_slice(), [AgentEvent::ToolUse { .. }]));
+    }
+
+    #[test]
+    fn a_message_is_reported_to_a_teammate_of_the_turn_once_the_bus_has_taken_it() {
+        let mut decoder =
+            Decoder::for_team(Vec::new()).with_teammates(vec!["Firmware engineer".to_owned()]);
+        let input = serde_json::json!({
+            "to": "Firmware Engineer", "kind": "note", "text": "The pin map is ready."
+        });
+
+        decoder.decode_line(&call_line("toolu_1", SEND_MESSAGE_IN_SESSION, &input));
+        let events = decoder.decode_line(&answer_line("toolu_1", false));
+        let to_nobody =
+            Decoder::new().decode_line(&call_line("toolu_2", SEND_MESSAGE_IN_SESSION, &input));
+
+        assert_eq!(
+            events,
+            [AgentEvent::MessageSent(SentMessage {
+                to: "Firmware engineer".to_owned(),
+                kind: teamwright_application::MessageKind::Note,
+                text: "The pin map is ready.".to_owned(),
+            })]
+        );
+        assert!(matches!(to_nobody.as_slice(), [AgentEvent::ToolUse { .. }]));
     }
 }

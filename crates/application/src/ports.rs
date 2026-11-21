@@ -8,8 +8,9 @@ use std::error::Error;
 use std::path::{Path, PathBuf};
 
 use teamwright_domain::{
-    Area, AreaId, CalendarDate, ComputerId, Conversation, ConversationId, Member, MemberId,
-    Project, ProjectId, Sprint, SprintId, Task, TaskId, Timestamp, Turn, View, ViewId,
+    Area, AreaId, CalendarDate, ComputerId, Conversation, ConversationId, Handoff, Member,
+    MemberId, Project, ProjectId, Sprint, SprintId, Task, TaskId, TeamMessage, Timestamp, Turn,
+    View, ViewId,
 };
 
 use crate::places::ChosenPlaces;
@@ -353,6 +354,40 @@ pub trait ConversationRepository: Send + Sync {
     ///
     /// Returns an error if the conversations could not be removed.
     fn delete(&self, ids: &[ConversationId]) -> Result<(), StorageError>;
+}
+
+/// Stores what specialists hand each other: the handoffs of tasks and the
+/// messages between teammates.
+pub trait TeamworkRepository: Send + Sync {
+    /// Stores a handoff. A handoff never changes once it is stored.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the handoff could not be written.
+    fn save_handoff(&self, handoff: &Handoff) -> Result<(), StorageError>;
+
+    /// Lists the handoffs of the tasks of a project, the oldest first.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if stored data could not be read.
+    fn handoffs_of_project(&self, project_id: ProjectId) -> Result<Vec<Handoff>, StorageError>;
+
+    /// Stores messages, replacing stored messages with the same
+    /// identifiers. Either all of them are stored or none is.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the messages could not be written.
+    fn save_messages(&self, messages: &[TeamMessage]) -> Result<(), StorageError>;
+
+    /// Lists the messages between the members of a project, the oldest
+    /// first.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if stored data could not be read.
+    fn messages_of_project(&self, project_id: ProjectId) -> Result<Vec<TeamMessage>, StorageError>;
 }
 
 /// What approving a proposal of the Advisor creates and changes.

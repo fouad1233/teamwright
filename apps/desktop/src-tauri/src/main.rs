@@ -124,6 +124,7 @@ fn main() -> ExitCode {
             commands::work::list_conversations_waiting,
             commands::work::stop_work,
             commands::work::open_in_claude,
+            commands::teamwork::team_talk,
             commands::sync::sync_state,
             commands::sync::choose_sync_folder,
             commands::sync::stop_syncing,

@@ -15,23 +15,26 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError, Weak};
 
 use teamwright_domain::{
     Assignee, ComputerId, Conversation, ConversationId, DecisionOption, DecisionRequest,
-    DomainError, Interview, InterviewQuestion, Member, MemberId, MemberKind, MemberName, ModelName,
-    Project, ProjectId, Proposal, ProposedMember, ProposedOwner, ProposedTask, Rank,
-    StatusCategory, Task, TaskId, TaskTitle, Timestamp, Turn, TurnId, TurnOrigin, TurnState,
+    DomainError, Handoff, HandoffContent, Interview, InterviewQuestion, Member, MemberId,
+    MemberKind, MemberName, ModelName, Project, ProjectId, Proposal, ProposedMember, ProposedOwner,
+    ProposedTask, Rank, SaidIn, StatusCategory, Task, TaskId, TaskTitle, TeamMessage, Timestamp,
+    Turn, TurnId, TurnOrigin, TurnState,
 };
 
 use crate::agent_runtime::{
     self, AgentEvent, AgentRuntime, AgentRuntimeError, ManagerInterview, ManagerQuestion,
-    PermissionProfile, PlanProposal, PlannedOwner, ProgramVersion, RunningTurn, SessionChoice,
-    SessionId, SignIn, TeamTool, TurnFailure, TurnOutcome, TurnRequest,
+    PermissionProfile, PlanProposal, PlannedOwner, ProgramVersion, PublishedHandoff, RunningTurn,
+    SentMessage, SessionChoice, SessionId, SignIn, TeamTool, TurnFailure, TurnOutcome, TurnRequest,
 };
 use crate::error::ApplicationError;
 use crate::places::{PlacesService, REFERENCES_FOLDER};
 use crate::ports::{
     AreaRepository, Clock, ConversationRepository, FileSystem, MemberRepository, PlacesRepository,
-    PlanningRepository, ProjectFolders, ProjectRepository, TaskRepository, WorkListener,
+    PlanningRepository, ProjectFolders, ProjectRepository, TaskRepository, TeamworkRepository,
+    WorkListener,
 };
 use crate::project_events::{ProjectEvent, event_of_ended_turn};
+use crate::teamwork::{handoffs_in_words, messages_in_words, messages_waiting_for};
 use crate::usage::{ProjectUsage, usage_of};
 
 mod advisor;
@@ -148,6 +151,9 @@ pub struct WorkPorts {
     pub conversations: Arc<dyn ConversationRepository>,
     /// Where what an approved proposal creates is stored, in one write.
     pub planning: Arc<dyn PlanningRepository>,
+    /// Where the handoffs of tasks and the messages between specialists
+    /// are stored.
+    pub teamwork: Arc<dyn TeamworkRepository>,
     /// The folder Teamwright gives each project.
     pub folders: Arc<dyn ProjectFolders>,
     /// Where the folders the manager chose for each project are stored.
@@ -324,6 +330,7 @@ impl WorkService {
             &project,
             &task,
             &ports.tasks.list_for_project(project.id())?,
+            &ports.teamwork.handoffs_of_project(project.id())?,
         );
         let conversation = Conversation::start(
             project.id(),
@@ -711,14 +718,31 @@ impl WorkService {
         // A reference folder that is gone from the disk is left out, so
         // that the turn can still start.
         let readable_folders = self.inner.places.existing_reference_folders(project)?;
+        let working_folder = self.inner.places.work_folder_of(project)?;
+        let mut delivered = Vec::new();
+        let mut prompt = prompt;
         let (model, effort, instructions, permissions, team_tools) = match worker {
-            Worker::Specialist(member) => (
-                member.model().map(ToString::to_string),
-                member.effort(),
-                instructions_for(member, project, &readable_folders),
-                PermissionProfile::specialist(),
-                vec![TeamTool::AskManager],
-            ),
+            Worker::Specialist(member) => {
+                let team = ports.members.list_for_project(project.id())?;
+                // Messages that wait for the specialist go with this turn,
+                // after what it is asked: nobody polls for them.
+                delivered = messages_waiting_for(
+                    &ports.teamwork.messages_of_project(project.id())?,
+                    member.id(),
+                );
+                if let Some(words) = messages_in_words(&delivered, &team) {
+                    let request = prompt.unwrap_or_else(|| turn.request().to_owned());
+                    prompt = Some(format!("{request}\n\n{words}"));
+                }
+                let teammates = teammates_of(member, &team);
+                (
+                    member.model().map(ToString::to_string),
+                    member.effort(),
+                    instructions_for(member, project, &readable_folders),
+                    PermissionProfile::specialist(),
+                    specialist_tools(&conversation, &working_folder, teammates),
+                )
+            }
             Worker::Advisor => {
                 let profile = conversation.advisor_profile().cloned().unwrap_or_default();
                 let mut team = ports.members.list_for_project(project.id())?;
@@ -739,7 +763,7 @@ impl WorkService {
             }
         };
         let request = TurnRequest {
-            working_folder: self.inner.places.work_folder_of(project)?,
+            working_folder,
             prompt: prompt.unwrap_or_else(|| turn.request().to_owned()),
             session,
             model,
@@ -753,12 +777,23 @@ impl WorkService {
             .runtime
             .start_turn(request, self.listener_for(conversation.id(), turn.id()))?;
 
-        if let Err(error) = self.inner.store_new_turn(
-            &conversation,
-            is_new_conversation,
-            answered_turn.as_ref(),
-            &turn,
-        ) {
+        let stored = self
+            .inner
+            .store_new_turn(
+                &conversation,
+                is_new_conversation,
+                answered_turn.as_ref(),
+                &turn,
+            )
+            .and_then(|()| {
+                // The messages were handed to the program with the turn, so
+                // they are delivered once the turn is stored.
+                for message in &mut delivered {
+                    message.deliver(turn.id(), turn.started_at());
+                }
+                Ok(ports.teamwork.save_messages(&delivered)?)
+            });
+        if let Err(error) = stored {
             // The program must not work on something nobody can see. If the
             // turn was stored, the event of its end records it as stopped.
             handle.stop();
@@ -951,6 +986,10 @@ impl Inner {
             AgentEvent::PlanProposed(proposed) => {
                 proposal_from(proposed).and_then(|proposal| turn.propose(proposal))
             }
+            AgentEvent::HandoffPublished(published) => {
+                self.record_handoff(&conversation, turn, published, now)?
+            }
+            AgentEvent::MessageSent(sent) => self.record_message(&conversation, turn, sent, now)?,
             AgentEvent::TurnEnded(outcome) => end_turn(turn, &outcome, now),
         };
         if recorded.is_err() {
@@ -978,6 +1017,99 @@ impl Inner {
             ports.listener.happened(&event);
         }
         Ok(())
+    }
+
+    /// Records a handoff a specialist published in a running turn about a
+    /// task. A turn that has ended, or that is not about a task of a
+    /// specialist, records nothing; neither does a handoff that breaks a
+    /// rule, which the team bus refused already.
+    fn record_handoff(
+        &self,
+        conversation: &Conversation,
+        turn: &Turn,
+        published: PublishedHandoff,
+        now: Timestamp,
+    ) -> Result<Result<(), DomainError>, ApplicationError> {
+        let (Some(task_id), Some(member_id)) = (conversation.task_id(), conversation.member_id())
+        else {
+            return Ok(Err(DomainError::NothingAsked));
+        };
+        if !turn.is_running() {
+            return Ok(Err(DomainError::TurnStillRunning));
+        }
+        let content =
+            match HandoffContent::new(&published.summary, &published.contract, &published.files) {
+                Ok(content) => content,
+                Err(broken) => return Ok(Err(broken)),
+            };
+        let handoff = Handoff::publish(
+            conversation.project_id(),
+            task_id,
+            SaidIn {
+                member_id,
+                conversation_id: conversation.id(),
+                turn_id: turn.id(),
+            },
+            content,
+            now,
+        );
+        self.ports.teamwork.save_handoff(&handoff)?;
+        Ok(Ok(()))
+    }
+
+    /// Records a message a specialist sent a teammate in a running turn.
+    /// The teammate is found by name, whatever the capitals, among the AI
+    /// specialists of the project. One who has left the team since the turn
+    /// started gets nothing, and the turn says so.
+    fn record_message(
+        &self,
+        conversation: &Conversation,
+        turn: &mut Turn,
+        sent: SentMessage,
+        now: Timestamp,
+    ) -> Result<Result<(), DomainError>, ApplicationError> {
+        let Some(member_id) = conversation.member_id() else {
+            return Ok(Err(DomainError::NothingAsked));
+        };
+        if !turn.is_running() {
+            return Ok(Err(DomainError::TurnStillRunning));
+        }
+        let receiver = self
+            .ports
+            .members
+            .list_for_project(conversation.project_id())?
+            .into_iter()
+            .find(|member| {
+                member.kind() == MemberKind::Agent
+                    && member.id() != member_id
+                    && member.name().as_str().eq_ignore_ascii_case(sent.to.trim())
+            });
+        let Some(receiver) = receiver else {
+            return Ok(turn.notice(
+                format!(
+                    "A message to {} was not sent: there is no such teammate.",
+                    sent.to.trim()
+                ),
+                now,
+            ));
+        };
+        let message = match TeamMessage::send(
+            conversation.project_id(),
+            SaidIn {
+                member_id,
+                conversation_id: conversation.id(),
+                turn_id: turn.id(),
+            },
+            receiver.id(),
+            sent.kind,
+            &sent.text,
+            now,
+        ) {
+            Ok(message) => message,
+            Err(broken) => return Ok(Err(broken)),
+        };
+        self.ports.teamwork.save_messages(&[message])?;
+        Ok(Ok(()))
     }
 
     /// The event of a turn that has just ended, if its end is one.
@@ -1091,6 +1223,41 @@ impl Inner {
             })
         }
     }
+}
+
+/// The tools of the team bus a specialist is given for a turn: it may
+/// always ask the manager; it may hand over a result when the conversation
+/// is about a task; it may write to the other AI specialists of its team,
+/// if there are any.
+fn specialist_tools(
+    conversation: &Conversation,
+    working_folder: &std::path::Path,
+    teammates: Vec<String>,
+) -> Vec<TeamTool> {
+    let mut tools = vec![TeamTool::AskManager];
+    if conversation.task_id().is_some() {
+        tools.push(TeamTool::PublishHandoff {
+            folder: working_folder.to_path_buf(),
+        });
+    }
+    if !teammates.is_empty() {
+        tools.push(TeamTool::SendMessage { teammates });
+    }
+    tools
+}
+
+/// The names of the other AI specialists of a team, in the order they
+/// joined it.
+fn teammates_of(member: &Member, team: &[Member]) -> Vec<String> {
+    let mut others: Vec<&Member> = team
+        .iter()
+        .filter(|other| other.kind() == MemberKind::Agent && other.id() != member.id())
+        .collect();
+    others.sort_by_key(|other| (other.joined_at(), other.id()));
+    others
+        .iter()
+        .map(|other| other.name().to_string())
+        .collect()
 }
 
 /// The question that is open in a conversation: the one its latest turn
@@ -1397,10 +1564,11 @@ impl WorkInProgress<'_> {
 }
 
 /// Writes the brief a specialist gets when it starts on a task: what the
-/// task is, what it belongs to, what it builds on, and what the manager
-/// expects back. `tasks` are the tasks of the project.
+/// task is, what it belongs to, what it builds on and what those tasks
+/// handed over, and what the manager expects back. `tasks` are the tasks of
+/// the project, and `handoffs` the handoffs of its tasks.
 #[must_use]
-pub fn brief_for(project: &Project, task: &Task, tasks: &[Task]) -> String {
+pub fn brief_for(project: &Project, task: &Task, tasks: &[Task], handoffs: &[Handoff]) -> String {
     let status_name = |other: &Task| {
         project.workflow().status(other.status_id()).map_or_else(
             || "unknown status".to_owned(),
@@ -1460,6 +1628,11 @@ pub fn brief_for(project: &Project, task: &Task, tasks: &[Task]) -> String {
         let mut lines = vec!["It builds on these tasks:".to_owned()];
         lines.extend(listed(&blockers));
         paragraphs.push(lines.join("\n"));
+    }
+    // A task starts with what the tasks before it handed over, instead of
+    // their conversations.
+    if let Some(handed_over) = handoffs_in_words(project, &blockers, handoffs) {
+        paragraphs.push(handed_over);
     }
     if let Some(due_on) = task.schedule().due_on() {
         paragraphs.push(format!("It is due on {}.", due_on.format("%Y-%m-%d")));
@@ -1535,6 +1708,14 @@ pub fn instructions_for(
              guess, but ask with the tool ask_manager (the question, why it matters, two to \
              four options with what each leads to, and the one you recommend), then end your \
              turn. The answer comes as your next message.",
+            "- When you finish a task, hand its result over with the tool publish_handoff before \
+             your report: a short summary for whoever builds on it, the interface contract \
+             others may rely on (if there is one), and the files that hold the result, as paths \
+             inside the folder of the project. Then end with your report as usual.",
+            "- To ask a teammate something, or to tell it something it needs, use the tool \
+             send_message with its name. It reads the message when it next starts to work, so \
+             do not wait for an answer in this turn. Messages from teammates come with your \
+             request.",
             "- Write in plain words. Your manager reads your report first, and may read nothing \
              else.",
         ]
@@ -1622,6 +1803,7 @@ mod tests {
         areas: Arc<crate::in_memory::InMemoryAreaRepository>,
         members: Arc<InMemoryMemberRepository>,
         conversations: Arc<InMemoryConversationRepository>,
+        teamwork: Arc<crate::in_memory::InMemoryTeamworkRepository>,
         places: Arc<InMemoryPlacesRepository>,
         file_system: Arc<PretendFileSystem>,
         runtime: Arc<ScriptedRuntime>,
@@ -1644,6 +1826,7 @@ mod tests {
                     self.tasks.clone(),
                     self.conversations.clone(),
                 )),
+                teamwork: self.teamwork.clone(),
                 folders: Arc::new(FixedProjectFolders::inside("projects")),
                 places: self.places.clone(),
                 file_system: self.file_system.clone(),
@@ -1678,6 +1861,7 @@ mod tests {
             areas: Arc::new(crate::in_memory::InMemoryAreaRepository::default()),
             members: Arc::new(InMemoryMemberRepository::default()),
             conversations: Arc::new(InMemoryConversationRepository::default()),
+            teamwork: Arc::new(crate::in_memory::InMemoryTeamworkRepository::default()),
             places: Arc::new(InMemoryPlacesRepository::default()),
             file_system: Arc::new(PretendFileSystem::default()),
             runtime: Arc::new(ScriptedRuntime::new()),
@@ -2034,6 +2218,7 @@ mod tests {
             &workspace.project,
             &workspace.schematic,
             std::slice::from_ref(&workspace.schematic),
+            &[],
         );
         assert_eq!(turn.origin(), TurnOrigin::Brief);
         assert_eq!(turn.state(), TurnState::Running);
@@ -2057,7 +2242,17 @@ mod tests {
         );
         assert_eq!(request.session, SessionChoice::New);
         assert_eq!(request.permissions, PermissionProfile::specialist());
-        assert_eq!(request.team_tools, [TeamTool::AskManager]);
+        // A turn about a task may hand its result over. Nobody else is on
+        // the team, so there is nobody to write to.
+        assert_eq!(
+            request.team_tools,
+            [
+                TeamTool::AskManager,
+                TeamTool::PublishHandoff {
+                    folder: PathBuf::from("projects").join("SSN")
+                }
+            ]
+        );
         assert!(request.readable_folders.is_empty());
         assert_eq!(request.model, None);
         assert_eq!(request.effort, None);
@@ -3507,7 +3702,8 @@ mod tests {
             brief_for(
                 &workspace.project,
                 &workspace.schematic,
-                std::slice::from_ref(&workspace.schematic)
+                std::slice::from_ref(&workspace.schematic),
+                &[]
             ),
             [
                 "Your task is SSN-1: Draw the schematic",
@@ -3552,7 +3748,7 @@ mod tests {
         let all = tasks.list_for_project(project).unwrap();
 
         assert_eq!(
-            brief_for(&workspace.project, &waiting, &all),
+            brief_for(&workspace.project, &waiting, &all, &[]),
             [
                 "Your task is SSN-4: Draw the schematic",
                 "",
@@ -3601,17 +3797,260 @@ mod tests {
                 "How the team works:",
             ]
         );
-        assert_eq!(lines.len(), 10);
+        assert_eq!(lines.len(), 12);
         assert_eq!(
             lines[6],
             "- Single files the manager handed you are copies in the folder references inside \
              the folder of the project."
         );
-        assert!(lines[9].starts_with("- Write in plain words."));
+        assert!(lines[11].starts_with("- Write in plain words."));
         assert!(lines[8].contains("ask with the tool ask_manager"));
         assert!(lines[8].ends_with("The answer comes as your next message."));
-        assert_eq!(shorter.lines().count(), 9);
+        assert!(lines[9].contains("the tool publish_handoff before your report"));
+        assert!(lines[10].contains("the tool send_message with its name"));
+        assert_eq!(shorter.lines().count(), 11);
         assert!(!instructions.contains("Besides the folder of the project"));
         assert!(!shorter.contains("What you are on the team for"));
+    }
+
+    // Handoffs and messages
+
+    fn pin_map_handoff() -> PublishedHandoff {
+        PublishedHandoff {
+            summary: "Pin map v1: display on SPI2, sensors on I2C0.".to_owned(),
+            contract: "SPI2 runs at 8 MHz.".to_owned(),
+            files: vec!["hardware/pinmap.md".to_owned()],
+        }
+    }
+
+    fn message_to(name: &str, text: &str) -> AgentEvent {
+        AgentEvent::MessageSent(SentMessage {
+            to: name.to_owned(),
+            kind: teamwright_domain::MessageKind::Question,
+            text: text.to_owned(),
+        })
+    }
+
+    impl Workspace {
+        fn specialist(&self, name: &str) -> Member {
+            self.team
+                .add(NewMember {
+                    project_id: self.project.id(),
+                    name: name.to_owned(),
+                    kind: MemberKind::Agent,
+                    responsibility: String::new(),
+                    model: None,
+                    effort: None,
+                })
+                .unwrap()
+        }
+
+        fn handoffs(&self) -> Vec<Handoff> {
+            self.ports
+                .teamwork
+                .handoffs_of_project(self.project.id())
+                .unwrap()
+        }
+
+        fn messages(&self) -> Vec<TeamMessage> {
+            self.ports
+                .teamwork
+                .messages_of_project(self.project.id())
+                .unwrap()
+        }
+    }
+
+    #[test]
+    fn a_handoff_published_in_a_turn_belongs_to_the_task_and_its_specialist() {
+        let workspace = workspace();
+        let started = workspace.work.start_work(workspace.schematic.id()).unwrap();
+        workspace.deliver(0, session_started());
+
+        workspace.deliver(0, AgentEvent::HandoffPublished(pin_map_handoff()));
+        workspace.deliver(0, ended(None, REPORT));
+
+        let handoffs = workspace.handoffs();
+        assert_eq!(handoffs.len(), 1);
+        let handoff = &handoffs[0];
+        assert_eq!(handoff.task_id(), workspace.schematic.id());
+        assert_eq!(handoff.author_id(), workspace.engineer.id());
+        assert_eq!(handoff.conversation_id(), started.conversation.id());
+        assert_eq!(handoff.turn_id(), started.turns[0].id());
+        assert_eq!(handoff.content().contract(), "SPI2 runs at 8 MHz.");
+        // Publishing does not end the turn: it finishes with its report,
+        // and the task goes on to be checked.
+        let turn = &workspace.only_conversation().turns[0];
+        assert_eq!(turn.state(), TurnState::Finished);
+        assert_eq!(turn.answer(), REPORT);
+        assert_eq!(
+            workspace.stored_task(workspace.schematic.id()).status_id(),
+            workspace.status_of(StatusCategory::Review)
+        );
+    }
+
+    #[test]
+    fn a_handoff_outside_a_task_or_after_the_end_of_a_turn_is_not_recorded() {
+        let workspace = workspace();
+        workspace
+            .work
+            .ask(workspace.engineer.id(), "What do you need?")
+            .unwrap();
+        workspace.deliver(0, AgentEvent::HandoffPublished(pin_map_handoff()));
+        workspace.deliver(0, ended(None, "Nothing."));
+        workspace.work.start_work(workspace.schematic.id()).unwrap();
+        workspace.deliver(1, ended(None, REPORT));
+        workspace.deliver(1, AgentEvent::HandoffPublished(pin_map_handoff()));
+
+        assert!(workspace.handoffs().is_empty());
+    }
+
+    #[test]
+    fn a_task_that_builds_on_another_starts_with_its_latest_handoff() {
+        let workspace = workspace();
+        workspace.work.start_work(workspace.schematic.id()).unwrap();
+        workspace.deliver(
+            0,
+            AgentEvent::HandoffPublished(PublishedHandoff {
+                summary: "A first draft.".to_owned(),
+                contract: String::new(),
+                files: Vec::new(),
+            }),
+        );
+        workspace.deliver(0, AgentEvent::HandoffPublished(pin_map_handoff()));
+        workspace.deliver(0, ended(None, REPORT));
+        let firmware = workspace.specialist("Firmware engineer");
+        let drivers =
+            workspace.task_for("Write the drivers", Some(Assignee::Member(firmware.id())));
+        workspace
+            .tasks
+            .add_dependency(drivers.id(), workspace.schematic.id())
+            .unwrap();
+
+        let started = workspace.work.start_work(drivers.id()).unwrap();
+
+        let brief = started.turns[0].request();
+        assert!(brief.contains(
+            "What the tasks it builds on handed over:\n\n\
+             From SSN-1: Draw the schematic\n\
+             Pin map v1: display on SPI2, sensors on I2C0.\n\n\
+             Interface contract:\n\
+             SPI2 runs at 8 MHz.\n\n\
+             Files, in the folder of the project (read them before you begin):\n\
+             - hardware/pinmap.md"
+        ));
+        assert!(!brief.contains("A first draft."));
+    }
+
+    #[test]
+    fn a_specialist_may_write_to_the_other_ai_specialists_of_its_team() {
+        let workspace = workspace();
+        workspace.person("Dana");
+        workspace.specialist("Firmware engineer");
+        workspace.specialist("Tester");
+
+        workspace
+            .work
+            .ask(workspace.engineer.id(), "What do you need?")
+            .unwrap();
+
+        // Not about a task, so there is nothing to hand over.
+        assert_eq!(
+            workspace.ports.runtime.requests()[0].team_tools,
+            [
+                TeamTool::AskManager,
+                TeamTool::SendMessage {
+                    teammates: vec!["Firmware engineer".to_owned(), "Tester".to_owned()]
+                }
+            ]
+        );
+    }
+
+    #[test]
+    fn a_message_waits_for_its_teammate_and_comes_with_its_next_turn() {
+        let workspace = workspace();
+        let firmware = workspace.specialist("Firmware engineer");
+        workspace.work.start_work(workspace.schematic.id()).unwrap();
+        workspace.deliver(0, session_started());
+        workspace.deliver(0, message_to("firmware ENGINEER", "Which pins are free?"));
+        workspace.deliver(0, ended(None, REPORT));
+
+        let sent = workspace.messages();
+        assert_eq!(sent.len(), 1);
+        assert_eq!(sent[0].from(), workspace.engineer.id());
+        assert_eq!(sent[0].to(), firmware.id());
+        assert!(sent[0].is_waiting());
+        assert_eq!(
+            messages_waiting_for(&sent, firmware.id()),
+            sent,
+            "the coordinator can tell that a message waits"
+        );
+
+        let asked = workspace
+            .work
+            .ask(firmware.id(), "Start on the drivers.")
+            .unwrap();
+
+        let request = &workspace.ports.runtime.requests()[1];
+        assert!(request.prompt.starts_with("Start on the drivers.\n\n"));
+        assert!(
+            request
+                .prompt
+                .contains("Hardware engineer asks:\nWhich pins are free?")
+        );
+        // The manager's words stay as they were written.
+        assert_eq!(asked.turns[0].request(), "Start on the drivers.");
+        let delivered = workspace.messages();
+        assert_eq!(
+            delivered[0].delivery().map(|delivery| delivery.turn_id),
+            Some(asked.turns[0].id())
+        );
+        assert!(messages_waiting_for(&delivered, firmware.id()).is_empty());
+    }
+
+    #[test]
+    fn a_message_is_not_delivered_with_a_turn_that_could_not_start() {
+        let workspace = workspace();
+        let firmware = workspace.specialist("Firmware engineer");
+        workspace.work.start_work(workspace.schematic.id()).unwrap();
+        workspace.deliver(0, message_to("Firmware engineer", "Which pins are free?"));
+        workspace.deliver(0, ended(None, REPORT));
+        workspace
+            .ports
+            .runtime
+            .refuse_next_turn(AgentRuntimeError::NotInstalled);
+
+        assert!(workspace.work.ask(firmware.id(), "Start.").is_err());
+
+        assert!(workspace.messages()[0].is_waiting());
+    }
+
+    #[test]
+    fn a_message_to_somebody_who_is_not_a_teammate_is_not_sent_and_the_turn_says_so() {
+        let workspace = workspace();
+        workspace.person("Dana");
+        workspace.work.start_work(workspace.schematic.id()).unwrap();
+
+        workspace.deliver(0, message_to("Dana", "Hello"));
+        workspace.deliver(0, message_to("Hardware engineer", "Hello, me"));
+
+        assert!(workspace.messages().is_empty());
+        let turn = &workspace.only_conversation().turns[0];
+        assert_eq!(
+            turn.steps()
+                .iter()
+                .map(|step| step.content.clone())
+                .collect::<Vec<_>>(),
+            [
+                StepContent::Notice {
+                    message: "A message to Dana was not sent: there is no such teammate."
+                        .to_owned()
+                },
+                StepContent::Notice {
+                    message: "A message to Hardware engineer was not sent: there is no such \
+                              teammate."
+                        .to_owned()
+                },
+            ]
+        );
     }
 }

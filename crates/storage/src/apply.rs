@@ -21,6 +21,7 @@ use crate::planning;
 use crate::projects;
 use crate::sprints;
 use crate::tasks;
+use crate::teamwork;
 use crate::views;
 
 /// Writes the rows of a thing from its state, without logging anything.
@@ -43,6 +44,8 @@ pub(crate) fn write_state(
         Entity::Sprint => sprints::write_state(transaction, state),
         Entity::View => views::write_state(transaction, state),
         Entity::Area => areas::write_state(transaction, state),
+        Entity::Handoff => teamwork::write_handoff_state(transaction, state),
+        Entity::TeamMessage => teamwork::write_message_state(transaction, state),
         Entity::Conversation => conversations::write_conversation_state(transaction, state),
         Entity::Turn => conversations::write_turn_state(transaction, state),
         Entity::TurnStep => conversations::write_step_state(transaction, state),
@@ -87,6 +90,12 @@ pub(crate) fn remove(
         }
         Entity::Area => {
             areas::remove_area(transaction, entity_id)?;
+        }
+        Entity::Handoff => {
+            teamwork::remove_handoff(transaction, entity_id)?;
+        }
+        Entity::TeamMessage => {
+            teamwork::remove_message(transaction, entity_id)?;
         }
         Entity::Conversation => {
             conversations::remove_conversation(transaction, operations, entity_id)?;

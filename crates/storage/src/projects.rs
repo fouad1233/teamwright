@@ -223,6 +223,16 @@ pub(crate) fn remove_project(
     // way; the folders on disk are never touched.
     conversations::delete_conversations_of_project(transaction, operations, id)?;
     places::delete_places_of_project(transaction, operations, id)?;
+    // What specialists handed each other goes before the tasks it is
+    // about.
+    delete_rows_of_project(transaction, operations, "handoffs", Entity::Handoff, id)?;
+    delete_rows_of_project(
+        transaction,
+        operations,
+        "team_messages",
+        Entity::TeamMessage,
+        id,
+    )?;
     delete_rows_of_project(transaction, operations, "tasks", Entity::Task, id)?;
     delete_rows_of_project(transaction, operations, "sprints", Entity::Sprint, id)?;
     delete_rows_of_project(transaction, operations, "views", Entity::View, id)?;

@@ -8,12 +8,19 @@
 //! - `ask_manager`, which a specialist calls when a choice is the
 //!   manager's to make;
 //! - `interview`, with which the Advisor asks what it needs to know;
-//! - `propose_plan`, with which the Advisor proposes a team and a plan.
+//! - `propose_plan`, with which the Advisor proposes a team and a plan;
+//! - `publish_handoff`, with which a specialist hands the result of its
+//!   task over to whoever builds on it;
+//! - `send_message`, with which a specialist writes to a teammate.
 //!
-//! The server only checks a call and tells the session to end its turn.
-//! What was asked or proposed reaches Teamwright through the output of the
-//! turn, where the decoder finds the call and checks it with the same
-//! functions: [`question_from`], [`interview_from`] and [`proposal_from`].
+//! The server only checks a call and answers the session: a question,
+//! interview or proposal ends the turn, a handoff or a message does not.
+//! What was said reaches Teamwright through the output of the turn, where
+//! the decoder finds the call and checks it with the same functions:
+//! [`question_from`], [`interview_from`], [`proposal_from`],
+//! [`handoff_from`] and [`message_from`]. A handoff is also checked against
+//! the disk, which only the server does: the decoder reports a handoff or a
+//! message only once the server has taken it.
 //!
 //! The tools are named to the server as arguments after the ones it is
 //! configured with ([`bus_arguments`], [`tools_from_arguments`]). The
@@ -22,15 +29,17 @@
 
 use std::collections::HashSet;
 use std::io::{self, BufRead, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use serde_json::{Map, Value, json};
 use teamwright_application::agent_runtime::Priority;
 use teamwright_application::{
     Effort, InterviewQuestionAsked, ManagerInterview, ManagerQuestion, PlanProposal, PlannedMember,
-    PlannedOwner, PlannedTask, QuestionOption, TeamTool,
+    PlannedOwner, PlannedTask, PublishedHandoff, QuestionOption, SentMessage, TeamTool,
 };
-use teamwright_domain::{MemberName, ModelName, TaskTitle};
+use teamwright_domain::{
+    HandoffContent, MemberName, MessageKind, ModelName, PathInFolder, TaskTitle, TeamMessage,
+};
 
 /// The name of the tool server, as Claude Code is told it.
 pub const SERVER_NAME: &str = "teamwright";
@@ -44,6 +53,12 @@ pub const INTERVIEW: &str = "interview";
 /// The name of the tool with which the Advisor proposes a team and a plan.
 pub const PROPOSE_PLAN: &str = "propose_plan";
 
+/// The name of the tool with which a specialist hands a result over.
+pub const PUBLISH_HANDOFF: &str = "publish_handoff";
+
+/// The name of the tool with which a specialist writes to a teammate.
+pub const SEND_MESSAGE: &str = "send_message";
+
 /// What Claude Code puts in front of the name of a tool of this server.
 const PREFIX_IN_SESSION: &str = "mcp__teamwright__";
 
@@ -56,8 +71,39 @@ pub const INTERVIEW_IN_SESSION: &str = "mcp__teamwright__interview";
 /// The name of `propose_plan` inside a session of Claude Code.
 pub const PROPOSE_PLAN_IN_SESSION: &str = "mcp__teamwright__propose_plan";
 
+/// The name of `publish_handoff` inside a session of Claude Code.
+pub const PUBLISH_HANDOFF_IN_SESSION: &str = "mcp__teamwright__publish_handoff";
+
+/// The name of `send_message` inside a session of Claude Code.
+pub const SEND_MESSAGE_IN_SESSION: &str = "mcp__teamwright__send_message";
+
 /// The argument before the name of a member of the team.
 const MEMBER_ARGUMENT: &str = "--member";
+
+/// The argument before the name of a teammate a message may go to.
+const TEAMMATE_ARGUMENT: &str = "--teammate";
+
+/// The argument before the folder the files of a handoff are in.
+const FOLDER_ARGUMENT: &str = "--folder";
+
+/// What a session is told when its handoff has been taken. It goes on.
+pub const HANDOFF_TAKEN: &str = "Your handoff is recorded for whoever builds on this task. Go \
+                                 on, and end your turn with your report to the manager.";
+
+/// What a session is told when its message has been taken. It goes on.
+pub const MESSAGE_TAKEN: &str = "Your message is on its way. The teammate reads it when it \
+                                 next starts to work, so do not wait for an answer in this turn.";
+
+/// What a session is told when it hands over a second time in one turn.
+const HANDOFF_ALREADY_TAKEN: &str = "You have published a handoff in this turn already, and \
+                                     only one is taken. Say what changed in your report.";
+
+/// What a session is told when it has sent as many messages as a turn may.
+const TOO_MANY_MESSAGES: &str = "You have sent as many messages as one turn may. Say the rest \
+                                 in your report.";
+
+/// The most messages a session sends in one turn.
+const MOST_MESSAGES: usize = 5;
 
 /// What a session is told when its question has been taken.
 pub const QUESTION_TAKEN: &str = "Your question is with the manager. End your turn now with one \
@@ -96,6 +142,20 @@ const PROPOSE_PLAN_DESCRIPTION: &str = "Propose the team and the plan of the pro
      manager, who can change them and approves them. Nothing is created before the manager \
      approves. If the project has members or tasks already, propose only the members and the \
      tasks that are to be added. After calling it, end your turn.";
+
+/// What the tool `publish_handoff` tells the model it is for.
+const PUBLISH_HANDOFF_DESCRIPTION: &str = "Hand the result of your task over to whoever builds \
+     on it. Teammates do not read your conversation: this is what they get. Give a short summary \
+     of what you did and what it means for them, the interface contract they may rely on (if \
+     there is one), and the files that hold the result, as paths inside the folder of the \
+     project. Every file must exist. Call it once, when your work is done, before your report; \
+     your turn goes on.";
+
+/// What the tool `send_message` tells the model it is for.
+const SEND_MESSAGE_DESCRIPTION: &str = "Send a question or a note to one teammate, by name. \
+     Use it when a teammate must know something, or when only a teammate can answer. It \
+     reaches the teammate at the start of its next turn, so do not wait for an answer now: \
+     your turn goes on. A choice that is the manager's goes to ask_manager instead.";
 
 /// The fewest and the most options a question to decide may have.
 const FEWEST_OPTIONS: usize = 2;
@@ -154,6 +214,8 @@ pub const fn name_of(tool: &TeamTool) -> &'static str {
         TeamTool::AskManager => ASK_MANAGER,
         TeamTool::Interview => INTERVIEW,
         TeamTool::ProposePlan { .. } => PROPOSE_PLAN,
+        TeamTool::PublishHandoff { .. } => PUBLISH_HANDOFF,
+        TeamTool::SendMessage { .. } => SEND_MESSAGE,
     }
 }
 
@@ -164,19 +226,33 @@ pub fn name_in_session(tool: &TeamTool) -> String {
     format!("{PREFIX_IN_SESSION}{}", name_of(tool))
 }
 
-/// The arguments that name the tools to the server: the name of each tool,
-/// and `--member <name>` for each member the project has when it may
-/// propose a plan.
+/// The arguments that name the tools to the server: the name of each tool;
+/// `--member <name>` for each member the project has when it may propose a
+/// plan; `--folder <path>` for the folder of a handoff; and
+/// `--teammate <name>` for each teammate a message may go to.
 #[must_use]
 pub fn bus_arguments(tools: &[TeamTool]) -> Vec<String> {
     let mut arguments = Vec::new();
     for tool in tools {
         arguments.push(name_of(tool).to_owned());
-        if let TeamTool::ProposePlan { team } = tool {
-            for name in team {
-                arguments.push(MEMBER_ARGUMENT.to_owned());
-                arguments.push(name.clone());
+        match tool {
+            TeamTool::ProposePlan { team } => {
+                for name in team {
+                    arguments.push(MEMBER_ARGUMENT.to_owned());
+                    arguments.push(name.clone());
+                }
             }
+            TeamTool::PublishHandoff { folder } => {
+                arguments.push(FOLDER_ARGUMENT.to_owned());
+                arguments.push(folder.to_string_lossy().into_owned());
+            }
+            TeamTool::SendMessage { teammates } => {
+                for name in teammates {
+                    arguments.push(TEAMMATE_ARGUMENT.to_owned());
+                    arguments.push(name.clone());
+                }
+            }
+            TeamTool::AskManager | TeamTool::Interview => {}
         }
     }
     arguments
@@ -186,29 +262,50 @@ pub fn bus_arguments(tools: &[TeamTool]) -> Vec<String> {
 ///
 /// # Errors
 ///
-/// Returns what is wrong, in words, if an argument names no tool, or if a
-/// `--member` has no name after it.
+/// Returns what is wrong, in words, if an argument names no tool, if a
+/// `--member`, `--teammate` or `--folder` has nothing after it, or if
+/// `publish_handoff` has no folder.
 pub fn tools_from_arguments(arguments: &[String]) -> Result<Vec<TeamTool>, String> {
     let mut tools = Vec::new();
     let mut team = Vec::new();
+    let mut teammates = Vec::new();
+    let mut folder = None;
     let mut given = arguments.iter();
+    let value_after = |given: &mut std::slice::Iter<'_, String>, argument: &str| {
+        given
+            .next()
+            .cloned()
+            .ok_or_else(|| format!("{argument} needs a value after it"))
+    };
     while let Some(argument) = given.next() {
         match argument.as_str() {
             ASK_MANAGER => tools.push(TeamTool::AskManager),
             INTERVIEW => tools.push(TeamTool::Interview),
             PROPOSE_PLAN => tools.push(TeamTool::ProposePlan { team: Vec::new() }),
-            MEMBER_ARGUMENT => team.push(
-                given
-                    .next()
-                    .ok_or_else(|| format!("{MEMBER_ARGUMENT} needs the name of a member"))?
-                    .clone(),
-            ),
+            PUBLISH_HANDOFF => tools.push(TeamTool::PublishHandoff {
+                folder: PathBuf::new(),
+            }),
+            SEND_MESSAGE => tools.push(TeamTool::SendMessage {
+                teammates: Vec::new(),
+            }),
+            MEMBER_ARGUMENT => team.push(value_after(&mut given, MEMBER_ARGUMENT)?),
+            TEAMMATE_ARGUMENT => teammates.push(value_after(&mut given, TEAMMATE_ARGUMENT)?),
+            FOLDER_ARGUMENT => {
+                folder = Some(PathBuf::from(value_after(&mut given, FOLDER_ARGUMENT)?))
+            }
             other => return Err(format!("the team bus has no tool {other}")),
         }
     }
     for tool in &mut tools {
-        if let TeamTool::ProposePlan { team: members } = tool {
-            members.clone_from(&team);
+        match tool {
+            TeamTool::ProposePlan { team: members } => members.clone_from(&team),
+            TeamTool::SendMessage { teammates: names } => names.clone_from(&teammates),
+            TeamTool::PublishHandoff { folder: place } => {
+                *place = folder
+                    .clone()
+                    .ok_or_else(|| format!("{PUBLISH_HANDOFF} needs {FOLDER_ARGUMENT}"))?;
+            }
+            TeamTool::AskManager | TeamTool::Interview => {}
         }
     }
     Ok(tools)
@@ -677,6 +774,129 @@ fn option_from(place: usize, option: &Value) -> Result<QuestionOption, String> {
     Ok(QuestionOption { label, consequence })
 }
 
+/// Reads and checks the arguments of a call of `publish_handoff`.
+///
+/// The summary says something, the contract may be left out, and the files
+/// are a list of paths inside the working folder: none absolute, none that
+/// goes up with `..`, none named twice, at most fifty. Paths are written
+/// with `/` between their parts. Whether the files exist is a question for
+/// the disk, which [`missing_files`] asks.
+///
+/// # Errors
+///
+/// Returns what to change, in plain words, if the arguments are not
+/// acceptable. The model reads it and tries again.
+pub fn handoff_from(arguments: &Value) -> Result<PublishedHandoff, String> {
+    let Some(arguments) = arguments.as_object() else {
+        return Err(
+            "Give the handoff as an object with \"summary\", \"contract\" and \"files\"."
+                .to_owned(),
+        );
+    };
+    let summary = optional_text(arguments, "summary")?.unwrap_or_default();
+    let contract = optional_text(arguments, "contract")?.unwrap_or_default();
+    let files = match arguments.get("files") {
+        None | Some(Value::Null) => Vec::new(),
+        Some(Value::Array(files)) => files
+            .iter()
+            .map(|file| {
+                file.as_str().map(str::to_owned).ok_or_else(|| {
+                    "Every file is a path as text, inside the folder of the project.".to_owned()
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()?,
+        Some(_) => {
+            return Err(
+                "\"files\" is a list of paths inside the folder of the project.".to_owned(),
+            );
+        }
+    };
+    let content = HandoffContent::new(&summary, &contract, &files).map_err(|problem| {
+        format!(
+            "The handoff cannot be recorded: {problem}. Paths are relative to the folder of the \
+             project, such as \"hardware/pinmap.md\"."
+        )
+    })?;
+    Ok(PublishedHandoff {
+        summary: content.summary().to_owned(),
+        contract: content.contract().to_owned(),
+        files: content.files().iter().map(PathInFolder::as_text).collect(),
+    })
+}
+
+/// The files of a handoff that are not there: not inside `folder`, or not
+/// on the disk at all. A link that leads out of the folder counts as not
+/// there.
+#[must_use]
+pub fn missing_files(handoff: &PublishedHandoff, folder: &Path) -> Vec<String> {
+    let Ok(folder) = folder.canonicalize() else {
+        return handoff.files.clone();
+    };
+    handoff
+        .files
+        .iter()
+        .filter(|file| {
+            let inside = folder
+                .join(file.as_str())
+                .canonicalize()
+                .is_ok_and(|place| place.starts_with(&folder));
+            !inside
+        })
+        .cloned()
+        .collect()
+}
+
+/// Reads and checks the arguments of a call of `send_message`. `teammates`
+/// holds the names a message may go to.
+///
+/// The message goes to one of the teammates, whatever the capitals; its
+/// kind is "question" or "note"; its text says something and is not too
+/// long. Whitespace around the texts is removed.
+///
+/// # Errors
+///
+/// Returns what to change, in plain words, if the arguments are not
+/// acceptable. The model reads it and tries again.
+pub fn message_from(arguments: &Value, teammates: &[String]) -> Result<SentMessage, String> {
+    let Some(arguments) = arguments.as_object() else {
+        return Err("Give the message as an object with \"to\", \"kind\" and \"text\".".to_owned());
+    };
+    let to = optional_text(arguments, "to")?.unwrap_or_default();
+    let Some(teammate) = teammates
+        .iter()
+        .find(|name| name.trim().eq_ignore_ascii_case(&to))
+    else {
+        return Err(if teammates.is_empty() {
+            "You have no teammate to write to.".to_owned()
+        } else {
+            format!(
+                "\"{to}\" is not a teammate. Write to one of: {}.",
+                teammates.join(", ")
+            )
+        });
+    };
+    let kind = optional_text(arguments, "kind")?
+        .unwrap_or_default()
+        .parse::<MessageKind>()
+        .map_err(|_| "\"kind\" is \"question\" or \"note\".".to_owned())?;
+    let text = optional_text(arguments, "text")?.unwrap_or_default();
+    if text.is_empty() {
+        return Err("The message is empty. Write it in \"text\".".to_owned());
+    }
+    let length = text.chars().count();
+    if length > TeamMessage::MAX_LENGTH {
+        return Err(format!(
+            "The message has {length} characters. Keep it under {}.",
+            TeamMessage::MAX_LENGTH
+        ));
+    }
+    Ok(SentMessage {
+        to: teammate.trim().to_owned(),
+        kind,
+        text,
+    })
+}
+
 /// Reads a field that is text if it is there, trimmed.
 fn optional_text(object: &Map<String, Value>, key: &str) -> Result<Option<String>, String> {
     match object.get(key) {
@@ -692,8 +912,14 @@ struct Bus {
     /// The tools it offers.
     tools: Vec<TeamTool>,
     /// Whether a question, an interview or a proposal has been taken in
-    /// this turn. A turn carries at most one.
+    /// this turn. A turn carries at most one, and nothing is taken after
+    /// it: the session is to end its turn.
     taken: bool,
+    /// Whether a handoff has been taken in this turn. A turn carries at
+    /// most one.
+    handed_over: bool,
+    /// How many messages have been taken in this turn.
+    messages_sent: usize,
 }
 
 impl Bus {
@@ -702,6 +928,8 @@ impl Bus {
         Self {
             tools,
             taken: false,
+            handed_over: false,
+            messages_sent: 0,
         }
     }
 
@@ -751,6 +979,17 @@ impl Bus {
             .and_then(|parameters| parameters.get("arguments"))
             .cloned()
             .unwrap_or_else(|| json!({}));
+        match tool {
+            TeamTool::PublishHandoff { folder } => {
+                let folder = folder.clone();
+                return Ok(self.hand_over(&arguments, &folder));
+            }
+            TeamTool::SendMessage { teammates } => {
+                let teammates = teammates.clone();
+                return Ok(self.send(&arguments, &teammates));
+            }
+            TeamTool::AskManager | TeamTool::Interview | TeamTool::ProposePlan { .. } => {}
+        }
         let (checked, taken, not_sent) = match tool {
             TeamTool::AskManager => (
                 question_from(&arguments).map(|_| ()),
@@ -767,6 +1006,8 @@ impl Bus {
                 PROPOSAL_TAKEN,
                 "The proposal was not sent to the manager.",
             ),
+            // Answered above; they do not end the turn.
+            TeamTool::PublishHandoff { .. } | TeamTool::SendMessage { .. } => return Ok(json!({})),
         };
         Ok(match checked {
             Ok(()) => {
@@ -775,6 +1016,47 @@ impl Bus {
             }
             Err(problem) => tool_result(&format!("{not_sent} {problem}"), true),
         })
+    }
+}
+
+impl Bus {
+    /// Takes a handoff whose files are all inside `folder`, once a turn.
+    fn hand_over(&mut self, arguments: &Value, folder: &Path) -> Value {
+        const NOT_RECORDED: &str = "The handoff was not recorded.";
+        if self.handed_over {
+            return tool_result(HANDOFF_ALREADY_TAKEN, true);
+        }
+        let handoff = match handoff_from(arguments) {
+            Ok(handoff) => handoff,
+            Err(problem) => return tool_result(&format!("{NOT_RECORDED} {problem}"), true),
+        };
+        let missing = missing_files(&handoff, folder);
+        if !missing.is_empty() {
+            return tool_result(
+                &format!(
+                    "{NOT_RECORDED} These files are not in the folder of the project: {}. Write \
+                     them first, or leave them out.",
+                    missing.join(", ")
+                ),
+                true,
+            );
+        }
+        self.handed_over = true;
+        tool_result(HANDOFF_TAKEN, false)
+    }
+
+    /// Takes a message to a teammate, up to the most a turn may send.
+    fn send(&mut self, arguments: &Value, teammates: &[String]) -> Value {
+        if self.messages_sent >= MOST_MESSAGES {
+            return tool_result(TOO_MANY_MESSAGES, true);
+        }
+        match message_from(arguments, teammates) {
+            Ok(_) => {
+                self.messages_sent += 1;
+                tool_result(MESSAGE_TAKEN, false)
+            }
+            Err(problem) => tool_result(&format!("The message was not sent. {problem}"), true),
+        }
     }
 }
 
@@ -807,7 +1089,69 @@ fn description_of(tool: &TeamTool) -> Value {
         TeamTool::AskManager => ask_manager_tool(),
         TeamTool::Interview => interview_tool(),
         TeamTool::ProposePlan { .. } => propose_plan_tool(),
+        TeamTool::PublishHandoff { .. } => publish_handoff_tool(),
+        TeamTool::SendMessage { teammates } => send_message_tool(teammates),
     }
+}
+
+/// The description of `publish_handoff`.
+fn publish_handoff_tool() -> Value {
+    json!({
+        "name": PUBLISH_HANDOFF,
+        "description": PUBLISH_HANDOFF_DESCRIPTION,
+        "inputSchema": {
+            "type": "object",
+            "required": ["summary"],
+            "properties": {
+                "summary": {
+                    "type": "string",
+                    "description": "What you did and what it means for whoever builds on it, in \
+                                    a few sentences."
+                },
+                "contract": {
+                    "type": "string",
+                    "description": "The interface others may rely on: names, pins, formats, \
+                                    calls, limits. Leave it out if there is none."
+                },
+                "files": {
+                    "type": "array",
+                    "maxItems": HandoffContent::MOST_FILES,
+                    "items": { "type": "string" },
+                    "description": "The files that hold the result, as paths inside the folder \
+                                    of the project, such as \"hardware/pinmap.md\"."
+                }
+            }
+        }
+    })
+}
+
+/// The description of `send_message`, with the names it may go to.
+fn send_message_tool(teammates: &[String]) -> Value {
+    json!({
+        "name": SEND_MESSAGE,
+        "description": SEND_MESSAGE_DESCRIPTION,
+        "inputSchema": {
+            "type": "object",
+            "required": ["to", "kind", "text"],
+            "properties": {
+                "to": {
+                    "type": "string",
+                    "enum": teammates,
+                    "description": "The name of the teammate."
+                },
+                "kind": {
+                    "type": "string",
+                    "enum": ["question", "note"],
+                    "description": "A question that wants an answer, or a note that only tells."
+                },
+                "text": {
+                    "type": "string",
+                    "description": "The message, short and complete: the teammate has not read \
+                                    your conversation."
+                }
+            }
+        }
+    })
 }
 
 /// The description of `ask_manager`.
@@ -1617,5 +1961,295 @@ mod tests {
             ids,
             [&json!("server-discover-probe-1"), &json!(0), &json!(1)]
         );
+    }
+
+    // Handoffs and messages
+
+    fn teammates() -> Vec<String> {
+        vec!["Firmware engineer".to_owned(), "Tester".to_owned()]
+    }
+
+    fn good_handoff() -> Value {
+        json!({
+            "summary": " Pin map v1 is done. ",
+            "contract": "Display on SPI2.",
+            "files": ["hardware\\pinmap.md", "./notes.md"]
+        })
+    }
+
+    fn good_message() -> Value {
+        json!({ "to": "firmware engineer", "kind": "question", "text": " Which pins are free? " })
+    }
+
+    /// A folder with the files of [`good_handoff`] in it.
+    fn folder_with_files() -> tempfile::TempDir {
+        let folder = tempfile::tempdir().unwrap();
+        std::fs::create_dir(folder.path().join("hardware")).unwrap();
+        std::fs::write(folder.path().join("hardware").join("pinmap.md"), "pins").unwrap();
+        std::fs::write(folder.path().join("notes.md"), "notes").unwrap();
+        folder
+    }
+
+    #[test]
+    fn a_good_handoff_is_read_tidied_with_its_paths_written_with_forward_slashes() {
+        let handoff = handoff_from(&good_handoff()).unwrap();
+
+        assert_eq!(
+            handoff,
+            PublishedHandoff {
+                summary: "Pin map v1 is done.".to_owned(),
+                contract: "Display on SPI2.".to_owned(),
+                files: vec!["hardware/pinmap.md".to_owned(), "notes.md".to_owned()],
+            }
+        );
+        let bare = handoff_from(&json!({ "summary": "Done." })).unwrap();
+        assert!(bare.contract.is_empty() && bare.files.is_empty());
+    }
+
+    #[test]
+    fn a_handoff_that_cannot_be_recorded_is_refused_with_what_to_change() {
+        let refused = |change: &dyn Fn(&mut Value)| {
+            let mut arguments = good_handoff();
+            change(&mut arguments);
+            handoff_from(&arguments).unwrap_err()
+        };
+
+        assert!(
+            refused(&|arguments| arguments["summary"] = json!(" "))
+                .contains("the summary of a handoff must not be empty")
+        );
+        assert!(
+            refused(&|arguments| arguments["files"] = json!(["../outside.md"]))
+                .contains("does not stay inside the folder")
+        );
+        assert!(
+            refused(&|arguments| arguments["files"] = json!(["/etc/passwd"]))
+                .contains("does not stay inside the folder")
+        );
+        assert!(
+            refused(&|arguments| arguments["files"] = json!(["a.md", "a.md"]))
+                .contains("named twice")
+        );
+        assert!(refused(&|arguments| arguments["files"] = json!([3])).contains("path as text"));
+        assert!(refused(&|arguments| arguments["files"] = json!("a.md")).contains("is a list"));
+        assert!(refused(&|arguments| arguments["contract"] = json!(1)).contains("must be text"));
+        assert!(handoff_from(&json!("done")).is_err());
+    }
+
+    #[test]
+    fn the_files_of_a_handoff_must_be_in_the_folder() {
+        let folder = folder_with_files();
+        let handoff = handoff_from(&good_handoff()).unwrap();
+
+        assert!(missing_files(&handoff, folder.path()).is_empty());
+        let mut with_missing = handoff.clone();
+        with_missing.files.push("firmware/main.c".to_owned());
+        assert_eq!(
+            missing_files(&with_missing, folder.path()),
+            ["firmware/main.c"]
+        );
+        assert_eq!(
+            missing_files(&handoff, &folder.path().join("nowhere")),
+            handoff.files
+        );
+    }
+
+    #[test]
+    fn a_good_message_goes_to_a_teammate_by_the_name_it_has() {
+        let message = message_from(&good_message(), &teammates()).unwrap();
+
+        assert_eq!(
+            message,
+            SentMessage {
+                to: "Firmware engineer".to_owned(),
+                kind: MessageKind::Question,
+                text: "Which pins are free?".to_owned(),
+            }
+        );
+    }
+
+    #[test]
+    fn a_message_that_cannot_be_sent_is_refused_with_what_to_change() {
+        let refused = |change: &dyn Fn(&mut Value)| {
+            let mut arguments = good_message();
+            change(&mut arguments);
+            message_from(&arguments, &teammates()).unwrap_err()
+        };
+
+        assert_eq!(
+            refused(&|arguments| arguments["to"] = json!("Manager")),
+            "\"Manager\" is not a teammate. Write to one of: Firmware engineer, Tester."
+        );
+        assert_eq!(
+            refused(&|arguments| arguments["kind"] = json!("letter")),
+            "\"kind\" is \"question\" or \"note\"."
+        );
+        assert_eq!(
+            refused(&|arguments| arguments["text"] = json!("  ")),
+            "The message is empty. Write it in \"text\"."
+        );
+        assert!(
+            refused(&|arguments| arguments["text"] = json!("x".repeat(4_001)))
+                .starts_with("The message has 4001 characters")
+        );
+        assert_eq!(
+            message_from(&good_message(), &[]).unwrap_err(),
+            "You have no teammate to write to."
+        );
+    }
+
+    #[test]
+    fn the_folder_and_the_teammates_go_to_the_server_as_arguments_and_are_read_back() {
+        let tools = vec![
+            TeamTool::AskManager,
+            TeamTool::PublishHandoff {
+                folder: PathBuf::from("/projects/SSN"),
+            },
+            TeamTool::SendMessage {
+                teammates: teammates(),
+            },
+        ];
+
+        let arguments = bus_arguments(&tools);
+
+        assert_eq!(
+            arguments,
+            [
+                "ask_manager",
+                "publish_handoff",
+                "--folder",
+                "/projects/SSN",
+                "send_message",
+                "--teammate",
+                "Firmware engineer",
+                "--teammate",
+                "Tester"
+            ]
+        );
+        assert_eq!(tools_from_arguments(&arguments), Ok(tools));
+        assert!(tools_from_arguments(&["publish_handoff".to_owned()]).is_err());
+        assert!(tools_from_arguments(&["--teammate".to_owned()]).is_err());
+        assert_eq!(
+            name_in_session(&TeamTool::PublishHandoff {
+                folder: PathBuf::new()
+            }),
+            PUBLISH_HANDOFF_IN_SESSION
+        );
+        assert_eq!(
+            name_in_session(&TeamTool::SendMessage {
+                teammates: Vec::new()
+            }),
+            SEND_MESSAGE_IN_SESSION
+        );
+    }
+
+    #[test]
+    fn the_server_offers_the_tools_of_a_specialist_with_the_names_of_its_teammates() {
+        let mut bus = Bus::offering(vec![
+            TeamTool::AskManager,
+            TeamTool::PublishHandoff {
+                folder: PathBuf::from("."),
+            },
+            TeamTool::SendMessage {
+                teammates: teammates(),
+            },
+        ]);
+        let answer = answer_of(
+            &mut bus,
+            &json!({ "method": "tools/list", "jsonrpc": "2.0", "id": 1 }),
+        );
+        let tools = answer["result"]["tools"].as_array().unwrap();
+        let names: Vec<&str> = tools
+            .iter()
+            .map(|tool| tool["name"].as_str().unwrap())
+            .collect();
+        assert_eq!(names, ["ask_manager", "publish_handoff", "send_message"]);
+        assert_eq!(tools[1]["inputSchema"]["required"], json!(["summary"]));
+        assert_eq!(
+            tools[2]["inputSchema"]["properties"]["to"]["enum"],
+            json!(["Firmware engineer", "Tester"])
+        );
+        assert!(
+            tools[1]["description"]
+                .as_str()
+                .unwrap()
+                .contains("your turn goes on")
+        );
+    }
+
+    #[test]
+    fn a_handoff_is_taken_once_and_the_session_goes_on_and_may_still_ask() {
+        let folder = folder_with_files();
+        let mut bus = Bus::offering(vec![
+            TeamTool::AskManager,
+            TeamTool::PublishHandoff {
+                folder: folder.path().to_owned(),
+            },
+        ]);
+
+        let first = answer_of(&mut bus, &call_of(PUBLISH_HANDOFF, &good_handoff()));
+        let second = answer_of(&mut bus, &call_of(PUBLISH_HANDOFF, &good_handoff()));
+        let asked = answer_of(&mut bus, &call(&good_arguments()));
+
+        assert_eq!(text_of(&first["result"]), HANDOFF_TAKEN);
+        assert_eq!(first["result"].get("isError"), None);
+        assert_eq!(second["result"]["isError"], true);
+        assert!(text_of(&second["result"]).contains("already"));
+        assert_eq!(text_of(&asked["result"]), QUESTION_TAKEN);
+    }
+
+    #[test]
+    fn a_handoff_with_a_file_that_is_not_there_is_refused_and_may_be_made_again() {
+        let folder = folder_with_files();
+        let mut bus = Bus::offering(vec![TeamTool::PublishHandoff {
+            folder: folder.path().to_owned(),
+        }]);
+        let mut with_missing = good_handoff();
+        with_missing["files"] = json!(["notes.md", "firmware/main.c"]);
+
+        let refused = answer_of(&mut bus, &call_of(PUBLISH_HANDOFF, &with_missing));
+        let taken = answer_of(&mut bus, &call_of(PUBLISH_HANDOFF, &good_handoff()));
+
+        assert_eq!(refused["result"]["isError"], true);
+        assert_eq!(
+            text_of(&refused["result"]),
+            "The handoff was not recorded. These files are not in the folder of the project: \
+             firmware/main.c. Write them first, or leave them out."
+        );
+        assert_eq!(text_of(&taken["result"]), HANDOFF_TAKEN);
+    }
+
+    #[test]
+    fn messages_are_taken_up_to_five_in_a_turn_and_never_after_a_question() {
+        let mut bus = Bus::offering(vec![
+            TeamTool::AskManager,
+            TeamTool::SendMessage {
+                teammates: teammates(),
+            },
+        ]);
+        let refused = answer_of(
+            &mut bus,
+            &call_of(
+                SEND_MESSAGE,
+                &json!({ "to": "Nobody", "kind": "note", "text": "Hi" }),
+            ),
+        );
+        assert!(text_of(&refused["result"]).starts_with("The message was not sent."));
+        for _ in 0..5 {
+            let taken = answer_of(&mut bus, &call_of(SEND_MESSAGE, &good_message()));
+            assert_eq!(text_of(&taken["result"]), MESSAGE_TAKEN);
+        }
+        let sixth = answer_of(&mut bus, &call_of(SEND_MESSAGE, &good_message()));
+        assert_eq!(text_of(&sixth["result"]), TOO_MANY_MESSAGES);
+
+        let mut asking = Bus::offering(vec![
+            TeamTool::AskManager,
+            TeamTool::SendMessage {
+                teammates: teammates(),
+            },
+        ]);
+        answer_of(&mut asking, &call(&good_arguments()));
+        let after = answer_of(&mut asking, &call_of(SEND_MESSAGE, &good_message()));
+        assert_eq!(after["result"]["isError"], true);
     }
 }
