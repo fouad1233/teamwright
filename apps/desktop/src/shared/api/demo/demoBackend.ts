@@ -82,6 +82,7 @@ import type {
   MemoryEntry,
   NewMemoryFact,
   ThemeName,
+  UpdateStatus,
   Turn,
   View,
   ViewFilter,
@@ -352,6 +353,17 @@ export class DemoBackend implements Backend {
    * it starts from the theme the window last remembered there.
    */
   private themeName: ThemeName = rememberedTheme();
+  /**
+   * Versions, as in the program: looking is off until switched on. A look
+   * pretends that a newer version is out, so that the part shows in a browser.
+   */
+  private updates: UpdateStatus = {
+    thisVersion: '0.1.0',
+    isOn: false,
+    lastLook: null,
+    lastLookFailed: false,
+    newer: null,
+  };
   /** What the manager chose about notifications; off until allowed, as in the program. */
   private notifications: NotificationChoice = {
     permission: 'not_asked',
@@ -2015,6 +2027,29 @@ export class DemoBackend implements Backend {
     });
   }
 
+  updateStatus(): Promise<UpdateStatus> {
+    return this.answer(() => ({ ...this.updates }));
+  }
+
+  lookForUpdateIfDue(): Promise<UpdateStatus> {
+    return this.answer(() => {
+      const last = this.updates.lastLook;
+      const isDue = last === null || Date.now() - new Date(last).getTime() >= 24 * 60 * 60 * 1000;
+      return this.updates.isOn && isDue ? this.lookForUpdate() : { ...this.updates };
+    });
+  }
+
+  lookForUpdateNow(): Promise<UpdateStatus> {
+    return this.answer(() => this.lookForUpdate());
+  }
+
+  switchUpdateLook(on: boolean): Promise<UpdateStatus> {
+    return this.answer(() => {
+      this.updates = { ...this.updates, isOn: on };
+      return { ...this.updates };
+    });
+  }
+
   notificationChoice(): Promise<NotificationChoice> {
     return this.answer(() => ({ ...this.notifications }));
   }
@@ -2354,6 +2389,21 @@ export class DemoBackend implements Backend {
       this.integrations.of(project.id).repository === null,
       this.tasksOfProject(project.id),
     );
+  }
+
+  /** A look in the demo: nothing leaves the browser, and a made-up newer version is out. */
+  private lookForUpdate(): UpdateStatus {
+    this.updates = {
+      ...this.updates,
+      lastLook: new Date().toISOString(),
+      lastLookFailed: false,
+      newer: {
+        version: '0.2.0',
+        isPreRelease: true,
+        address: 'https://github.com/fouad1233/teamwright/releases',
+      },
+    };
+    return { ...this.updates };
   }
 
   private changeNotifications(change: Partial<NotificationChoice>): NotificationChoice {

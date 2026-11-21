@@ -1,0 +1,55 @@
+/* A part of the page of this computer: a label over a hairline, then its
+   lines, as the parts about syncing and notifications are. */
+.part {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-width: 680px;
+  padding-top: var(--space-4);
+}
+
+.part > h2 {
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--rule);
+}
+
+.version {
+  color: var(--ink-soft);
+}
+
+/* What is counted is set in the monospace. */
+.number {
+  color: var(--ink);
+  font-family: var(--font-mono);
+}
+
+/* A newer version is news, not an alarm: a quiet card with a brass edge,
+   not the joints of what waits (decision 0015). */
+.newer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--rule);
+  border-left: 2px solid var(--brass);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+}
+
+.newerText {
+  line-height: 1.55;
+}
+
+.look {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.words {
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}

@@ -10,6 +10,7 @@ import { describeFailure } from '@/shared/ui/Toast';
 
 import { ThemeChooser } from '../appearance/ThemeChooser';
 import { NotificationSettings } from '../notifications/NotificationSettings';
+import { VersionSettings } from '../updates/VersionSettings';
 import { waitsForManager } from '../work/waitsForManager';
 import styles from './ComputersPlace.module.css';
 import { DRIVE_FOR_DESKTOP_ADDRESS, driveFolderInWords } from './googleDriveModel';
@@ -53,6 +54,7 @@ export function ComputersPlace({ projects }: ComputersPlaceProps) {
 
       <ThemeChooser />
       <NotificationSettings />
+      <VersionSettings />
     </section>
   );
 }

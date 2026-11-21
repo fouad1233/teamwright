@@ -69,6 +69,7 @@ import type {
   MemoryEntry,
   NewMemoryFact,
   ThemeName,
+  UpdateStatus,
   View,
   ViewFilter,
   Grouping,
@@ -738,6 +739,18 @@ export interface Backend {
   theme(): Promise<ThemeName>;
   /** Chooses the theme of the window on this computer, and returns it. */
   chooseTheme(name: ThemeName): Promise<ThemeName>;
+
+  /** What is known about versions of the program. Nothing is looked up. */
+  updateStatus(): Promise<UpdateStatus>;
+  /**
+   * Looks for a newer version if looking is on and the last look is a day
+   * old or older, and answers with what is known either way.
+   */
+  lookForUpdateIfDue(): Promise<UpdateStatus>;
+  /** Looks for a newer version now, because the manager asked. A look with no answer is no failure: the status says so. */
+  lookForUpdateNow(): Promise<UpdateStatus>;
+  /** Switches looking by itself on or off, on this computer. */
+  switchUpdateLook(on: boolean): Promise<UpdateStatus>;
 
   /**
    * What the manager chose about notifications of the operating system on

@@ -13,6 +13,7 @@ import { areaToShow, showsAreas } from '../areas/areaModel';
 import { useAreas } from '../areas/areaQueries';
 import { SidebarAreas } from '../areas/SidebarAreas';
 import { SyncStateLine } from '../sync/SyncStateLine';
+import { UpdateMark } from '../updates/UpdateMark';
 import { useConversationsWaiting } from '../work/workQueries';
 import { ArchivedProjectsDialog } from './ArchivedProjectsDialog';
 import { CreateProjectDialog } from './CreateProjectDialog';
@@ -117,6 +118,7 @@ export function Sidebar({ projects, activeProjectId }: SidebarProps) {
 
       <div className={styles.foot}>
         <SyncStateLine />
+        <UpdateMark />
       </div>
 
       <CreateProjectDialog

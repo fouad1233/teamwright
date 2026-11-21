@@ -74,6 +74,7 @@ import type {
   MemoryEntry,
   NewMemoryFact,
   ThemeName,
+  UpdateStatus,
   View,
   ViewFilter,
   Grouping,
@@ -663,6 +664,22 @@ export class TauriBackend implements Backend {
 
   chooseTheme(name: ThemeName): Promise<ThemeName> {
     return call('choose_theme', { name });
+  }
+
+  updateStatus(): Promise<UpdateStatus> {
+    return call('update_status');
+  }
+
+  lookForUpdateIfDue(): Promise<UpdateStatus> {
+    return call('look_for_update_if_due');
+  }
+
+  lookForUpdateNow(): Promise<UpdateStatus> {
+    return call('look_for_update_now');
+  }
+
+  switchUpdateLook(on: boolean): Promise<UpdateStatus> {
+    return call('switch_update_look', { on });
   }
 
   notificationChoice(): Promise<NotificationChoice> {

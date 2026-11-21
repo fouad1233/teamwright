@@ -1351,6 +1351,34 @@ export type ThemeName =
   | 'fern'
   | 'tide';
 
+/** A newer version of the program that is out (decision 0043). */
+export interface NewerVersion {
+  /** The version without a `v`, such as `0.2.0`. */
+  version: string;
+  /** Whether it is published as a pre-release. */
+  isPreRelease: boolean;
+  /** The page of the release, an https address. */
+  address: string;
+}
+
+/**
+ * What is known about versions of the program (decision 0043). The choice
+ * to look and the time of the last look are kept on this computer only:
+ * not synced, not logged. Looking is off until switched on.
+ */
+export interface UpdateStatus {
+  /** The version of this program. */
+  thisVersion: string;
+  /** Whether the program looks by itself, at most once a day. */
+  isOn: boolean;
+  /** When it last looked, or null if it never did. */
+  lastLook: Moment | null;
+  /** Whether the last look got no answer. */
+  lastLookFailed: boolean;
+  /** The newer version that is known, or null. */
+  newer: NewerVersion | null;
+}
+
 /** Whether the manager has allowed notifications of the operating system on this computer. */
 export type NotificationPermission = 'not_asked' | 'allowed' | 'declined';
 
