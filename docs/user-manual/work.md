@@ -91,6 +91,103 @@ The line above a question names the project and the task, and the title of
 the task leads to it. What an Advisor wants needs more room: *Open* leads to
 its page.
 
+## When a specialist asks for a permission
+
+A specialist reads and writes in the folders of its project and does nothing
+else on its own (see [safety and trust](safety-and-trust.md)). When it needs
+to run a command, such as a build or a test, or to read a page on the web, it
+does not work around the rule. It asks you, and its turn ends. The request
+waits in the *Inbox*, next to the questions, the oldest first.
+
+<img alt="The inbox with a request for permission: the command python3 tools/check.py, the reason of the specialist, the sentence that a command runs with your rights, four answers and the field What you allow" src="pictures/permission-request.png">
+
+A request says who asks, for which task, and exactly what it wants, in one of
+three kinds: *Command* (one command line), *Commands that start with* (a
+program and its subcommand, such as `cargo build`) or *Web domain*. Under it
+stands the reason in the specialist's own words. For a command there is also
+this sentence: *A command runs on this computer with your rights, like a
+command you type yourself. Allow only what you would run.* Read it.
+
+1. Open the *Inbox* and read what is asked and why.
+2. Pick an answer:
+   - *Allow once*: for the next turn only. If the specialist needs it again,
+     it asks again.
+   - *Allow for this task*: for every turn of that specialist on this task.
+     It is offered only when the request is about a task.
+   - *Always allow* the specialist: for every turn in this project, on this
+     computer, until you take it back.
+   - *Refuse*: the specialist goes on without it and says what could not be
+     done. It is told not to try another way.
+3. If you allow, look at *What you allow* before you press. You may edit it.
+   For a command of more than one word, *This command only* and *Every …
+   command* narrow or widen it to the program and its subcommand. Teamwright
+   checks what you typed again and refuses what could never be allowed (see
+   [what can never be allowed](safety-and-trust.md#what-can-never-be-allowed)).
+4. Add a word for the specialist if you like, and press *Answer*.
+
+Your answer starts a new turn of the same conversation, which says in words
+what was allowed, for how long, or that it was refused. A notification of the
+kind *Someone waits for you* says "*name* asks for permission", if you allowed
+notifications.
+
+A permission holds only on the computer where you gave it, because a command
+is a command of one computer. On another computer the specialist asks again.
+
+**What stands.** The *Team* place lists, under *Permissions*, everything you
+allowed for a task or always, with the specialist it is for, how long it
+holds, and *Take back*. Press *Take back* and the next turn starts without it.
+A permission you allowed once is gone with its turn and is not listed.
+
+Note: permission requests were tested at every layer and seen in the demo,
+where a task whose title starts with *Check*, *Test*, *Measure* or *Run* makes
+the pretended specialist ask. A real specialist has never asked, and no
+command has ever run on a permission in the installed program. The setting
+that keeps even harmless commands from reading outside the folders was taken
+from the documentation of Claude Code and has never been seen in a run.
+
+## The limit of your Claude plan
+
+Your Claude plan allows a certain amount of work in five hours and in a
+week. When you reach the limit, every specialist stops, at once, whatever it
+was doing. This is what you see.
+
+<img alt="The foot of the navigation with the line that the limit of the Claude plan is reached and when it resets, and the Usage part of the Dashboard showing the five hours and the week" src="pictures/plan-limit.png">
+
+- **A line at the foot of the navigation**, under *Computers*: *The limit of
+  your Claude plan is reached. It resets at 22:40.* It is plain and not lit:
+  nothing waits for you, the work only waits for the time. When Teamwright
+  does not know when it resets, the line says *When it resets is not known.*
+- **The turn that was stopped** says *The limit of the Claude plan was
+  reached.* It is not shown in red, because nobody failed. The task stays in
+  work, and nothing is lost: what the specialist had done is kept, and it
+  goes on in the same conversation.
+- **One notification**, of the kind *Someone stopped*: *The limit of your Claude plan
+  is reached*, with the time it resets and that no new work starts before
+  then. You get one, however many specialists stopped. You get one more when
+  the limit has reset.
+- ***Try again*** under the stopped turn. Press it after the reset and the
+  specialist goes on where it stopped.
+
+You may also press *Start work* or *Try again* before the reset, because you
+may know better: you may have upgraded the plan, or the reset may have come
+early. The words beside the button say that the work will most likely stop
+again at once. If it goes through, the limit was over.
+
+The limit is a fact about the Claude account signed in on this computer, so
+another computer, which may use another account, does not show it. The
+[coordinator](coordinator-and-budgets.md#the-coordinator-and-the-limit-of-your-plan)
+starts nothing while it is reached. The Usage part of the
+[Dashboard](dashboard-and-reports.md#the-dashboard) shows the plan in more
+detail.
+
+Note: the limit of the plan was built after an evening on which eight
+specialists stopped at once, and it is tested with recordings and seen in the
+demo, which can pretend that the limit is reached. It has never been seen with
+a real Claude Code: the program was not signed in on the computer where it
+was built. The words Claude Code uses for its limit change with its versions;
+one Teamwright does not recognise shows as an ordinary failed turn with that
+sentence.
+
 ## Handoffs and messages between specialists
 
 Specialists never read each other's conversations. They hand work over

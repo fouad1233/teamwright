@@ -35,11 +35,12 @@ them. The program asks once, in the inbox.
 the Teamwright window is not in front. Three switches say which events tell
 you:
 
-- *Someone waits for you*: a specialist asks you to decide, or the Advisor has
-  questions or a plan.
+- *Someone waits for you*: a specialist asks you to decide or asks for a
+  permission, or the Advisor has questions or a plan.
 - *Work is ready*: a specialist finished its work on a task, and the task
   waits to be checked.
-- *Someone stopped*: a specialist or the Advisor could not go on.
+- *Someone stopped*: a specialist or the Advisor could not go on, or the limit
+  of your Claude plan was reached (once, however many specialists it stopped).
 
 Once the main switch is on there is a way to send a test notification. In the
 installed program the choice was made and kept and the test notification was

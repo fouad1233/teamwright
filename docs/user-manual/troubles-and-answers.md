@@ -16,11 +16,33 @@ never asks for your password.
 npm installed is a script on Windows, and a turn on it is refused with the
 reason. This is not solved yet.
 
+**Every specialist stopped at once.** Most likely the limit of your Claude plan
+was reached. Look at the foot of the navigation: *The limit of your Claude plan
+is reached. It resets …* The stopped turns say *The limit of the Claude plan was
+reached.* Nothing is lost and the tasks stay in work. After the reset, press
+*Try again* under each stopped turn, or let the coordinator go on by itself if
+it is on. If the line says that when it resets is not known, press *Try again*
+once to find out. If there is no such line, read the turns: another reason,
+such as Claude Code not being signed in, says so in words. See
+[the limit of your Claude plan](work.md#the-limit-of-your-claude-plan).
+
 **A specialist says in its report that it could not do something.** It cannot
-run commands, fetch from the internet or leave its folders. It says so
-instead of working around it. See
-[what a specialist may and may not do](safety-and-trust.md). Do the step
-yourself, or give it a skill or a connector tool that does it.
+run commands, fetch from the internet or leave its folders unless you allow
+it. It should ask you for a permission, which waits in the *Inbox*; see
+[when a specialist asks for a permission](work.md#when-a-specialist-asks-for-a-permission).
+For what can never be allowed, see
+[what a specialist may and may not do](safety-and-trust.md#what-can-never-be-allowed).
+Do the step yourself, or give it a skill or a connector tool that does it.
+
+**I allowed a permission and want it back.** Open the *Team* place, find
+*Permissions*, and press *Take back* in its row. The next turn starts without
+it.
+
+**The request I wanted to allow was refused as I typed it.** Teamwright
+refuses a command that could join other commands, name a path outside the
+folder, or start a program that runs whatever follows it. Narrow it, or allow
+one exact command. The list is in
+[what can never be allowed](safety-and-trust.md#what-can-never-be-allowed).
 
 **I cannot remove or ask a specialist, or delete its task or project.** It is
 working. A specialist works on one thing at a time. Press *Stop* first.
@@ -38,7 +60,7 @@ not in a status that means done, its specialist is at work on something else
 or waits for your answer, the limit of specialists at work at once is reached,
 the task is given to a person or to nobody, a budget is used up, or somebody
 already worked on the task (a task that has a conversation is never started
-again).
+again), or the limit of your Claude plan is reached.
 
 **The coordinator asked about a budget.** Look in the inbox. You can raise the
 budget by half, by all of it again, or leave the work stopped.

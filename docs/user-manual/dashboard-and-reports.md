@@ -44,7 +44,18 @@ This picture was taken before the part *Latest activity* was added.
   took on and what it finished. *Open the backlog* goes to the backlog.
 - **Usage.** The tokens the Advisor and every AI specialist have used in this
   project, and the project as a whole. A person uses none and is not listed.
-  A turn's tokens are counted when it ends.
+  A turn's tokens are counted when it ends. Under the table is the part about
+  your Claude plan, *Your Claude plan, on this computer*. It says whether the
+  limit is reached (*The limit is not reached.*, or *The limit of your Claude
+  plan is reached. It resets …*) and, for *Five hours* and *Week*, how much is
+  used and when each starts again, as Claude Code last reported it. What
+  Claude Code did not report is *unknown* or *reset unknown*, never a guess,
+  and a window whose reset has passed is unknown again. A reset time given in
+  another time zone than the one of this computer may show as unknown too.
+  The plan is the same for every project, because all your specialists share
+  it. See [the limit of your Claude plan](work.md#the-limit-of-your-claude-plan).
+  This part was seen in the demo, which pretends a plan, and never with a real
+  Claude Code.
 
 A project without tasks, sprints or a team says what is missing in a sentence
 and leaves those parts out. The dashboard does not show what Teamwright does
