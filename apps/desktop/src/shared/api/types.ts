@@ -2073,6 +2073,11 @@ export interface LibraryConnector {
   addedAt: Moment;
   /** The variables it needs that are not set on this computer. */
   missingVariables: string[];
+  /**
+   * Why no turn is given it any more, in words, if it breaks a rule newer than it, such as a
+   * program named by a relative path.
+   */
+  problem: string | null;
 }
 
 /** A connector as a specialist is given it: only the tools named. */

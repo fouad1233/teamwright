@@ -20,6 +20,7 @@ const parts: LibraryConnector = {
   tools: ['search', 'get', 'order'],
   addedAt: '2026-11-21T00:00:00.000Z',
   missingVariables: [],
+  problem: null,
 };
 
 const library: Library = {

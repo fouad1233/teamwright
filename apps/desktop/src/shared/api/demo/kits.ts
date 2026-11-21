@@ -67,6 +67,11 @@ export function checkConnector(connector: NewConnector): void {
   const start = connector.start;
   if (start.kind === 'program') {
     if (start.program.trim() === '') rule('a connector started as a program names the program');
+    if (!isBareNameOrFullPath(start.program.trim())) {
+      rule(
+        'the program of a connector is a name found on the search path, such as npx, or a full path, such as /usr/local/bin/parts-server or C:\\Tools\\parts-server.exe; a relative path such as ./server or bin/server is refused, because it could name a file in the folder of the project',
+      );
+    }
     if ([start.program, ...start.arguments].some((text) => text.includes('$'))) {
       rule(
         'the program and its arguments cannot contain $; name the environment variables the connector needs instead',
@@ -103,6 +108,12 @@ export function checkConnector(connector: NewConnector): void {
     if (!TOOL.test(tool)) rule(`"${tool}" is not the name of a tool`);
   }
   if (new Set(tools).size !== tools.length) rule('a tool is listed twice');
+}
+
+/** Whether a program is a bare name or a full path, as the domain asks. */
+function isBareNameOrFullPath(program: string): boolean {
+  if (/^(\/|\\\\|[A-Za-z]:[\\/])/.test(program)) return true;
+  return program !== '.' && program !== '..' && !/[/\\:]/.test(program);
 }
 
 /** The variables a connector needs. */
@@ -148,6 +159,7 @@ export class PretendedLibrary {
       tools: ['search_parts', 'get_part', 'place_order'],
       addedAt: this.now(),
       missingVariables: [],
+      problem: null,
     };
     const tickets: LibraryConnector = {
       id: this.newId(),
@@ -160,6 +172,7 @@ export class PretendedLibrary {
       tools: ['read_ticket', 'list_tickets', 'comment'],
       addedAt: this.now(),
       missingVariables: ['TICKETS_TOKEN'],
+      problem: null,
     };
     this.skills.set(projectId, [skill]);
     this.connectors.set(projectId, [parts, tickets]);
@@ -242,6 +255,7 @@ export class PretendedLibrary {
       tools: connector.tools.map((tool) => tool.trim()).filter((tool) => tool !== ''),
       addedAt: this.now(),
       missingVariables: [],
+      problem: null,
     });
     this.connectors.set(projectId, connectors);
   }

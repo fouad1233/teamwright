@@ -185,6 +185,10 @@ pub struct LibraryConnector {
     /// The environment variables it needs that are not set here. While one
     /// is missing, no turn on this computer is given it.
     pub missing_variables: Vec<VariableName>,
+    /// Why no turn is given it any more, if it breaks a rule that is newer
+    /// than it, such as a program named by a relative path. The manager
+    /// removes it and adds it again in the form the rule asks.
+    pub problem: Option<String>,
 }
 
 /// The library of a project and the kits of its specialists.
@@ -318,6 +322,7 @@ impl KitService {
                 .into_iter()
                 .map(|connector| LibraryConnector {
                     missing_variables: missing_variables(self.shelf.as_ref(), &connector),
+                    problem: connector.start().problem(),
                     connector,
                 })
                 .collect(),
@@ -582,8 +587,9 @@ impl KitService {
 
 /// The skills and connectors a turn of a specialist is given: what it was
 /// given of the library, as far as this computer has it. A skill whose
-/// copy is missing here or no longer passes the check, and a connector
-/// whose variables are not all set here, are left out.
+/// copy is missing here or no longer passes the check, a connector whose
+/// variables are not all set here, and a connector that breaks a rule
+/// newer than it, are left out.
 ///
 /// # Errors
 ///
@@ -620,7 +626,8 @@ pub fn turn_kit_of(
         else {
             continue;
         };
-        if !missing_variables(shelf, connector).is_empty() {
+        if !missing_variables(shelf, connector).is_empty() || connector.start().problem().is_some()
+        {
             continue;
         }
         let tools: Vec<String> = given

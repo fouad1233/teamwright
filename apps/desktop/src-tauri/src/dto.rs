@@ -3879,6 +3879,9 @@ pub struct LibraryConnectorDto {
     added_at: String,
     /// The variables it needs that are not set on this computer.
     missing_variables: Vec<String>,
+    /// Why no turn is given it any more, in words, if it breaks a rule
+    /// newer than it.
+    problem: Option<String>,
 }
 
 /// What a specialist was given.
@@ -4039,6 +4042,7 @@ impl From<&teamwright_application::Library> for LibraryDto {
                         .iter()
                         .map(ToString::to_string)
                         .collect(),
+                    problem: entry.problem.clone(),
                 })
                 .collect(),
             kits: library.kits.iter().map(MemberKitDto::from).collect(),

@@ -58,6 +58,23 @@ describe('the library of skills and connectors in the DemoBackend', () => {
     );
     expect(secret.code).toBe('rule_broken');
     expect(secret.message).not.toContain('hunter2');
+
+    for (const program of ['./parts-server', 'bin/parts-server', '..\\parts.exe']) {
+      const relative = await refusal(
+        backend.addConnector(project.id, {
+          ...parts,
+          name: 'relative',
+          start: { kind: 'program', program, arguments: [], variables: [] },
+        }),
+      );
+      expect(relative.message).toContain('relative path');
+    }
+    const full = await backend.addConnector(project.id, {
+      ...parts,
+      name: 'full',
+      start: { kind: 'program', program: 'C:\\Tools\\parts.exe', arguments: [], variables: [] },
+    });
+    expect(full.connectors.map((connector) => connector.problem)).toEqual([null, null]);
     const claude = await refusal(
       backend.addConnector(project.id, {
         ...parts,

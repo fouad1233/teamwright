@@ -151,11 +151,15 @@ impl StartRecord {
 
     fn into_start(self) -> Result<ConnectorStart, DomainError> {
         match self {
+            // Read as it was stored, also when it was stored before the rule
+            // about relative paths or by an older version on another
+            // computer: it is shown and can be removed, and it is never
+            // given to a turn.
             Self::Program {
                 program,
                 arguments,
                 variables,
-            } => ConnectorStart::program(
+            } => ConnectorStart::program_as_stored(
                 &program,
                 arguments,
                 variables

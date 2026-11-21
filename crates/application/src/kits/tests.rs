@@ -420,3 +420,50 @@ fn a_specialist_without_a_kit_gets_nothing() {
     let turn = turn_kit_of(space.kits.as_ref(), space.shelf.as_ref(), &space.specialist).unwrap();
     assert!(turn.is_empty());
 }
+
+#[test]
+fn a_program_named_by_a_relative_path_is_refused_and_a_stored_one_is_never_given() {
+    let space = workspace();
+    let mut relative = parts_program(&[]);
+    if let NewConnectorStart::Program { program, .. } = &mut relative.start {
+        "./parts-server".clone_into(program);
+    }
+    let refusal = space
+        .service
+        .add_connector(space.project.id(), relative)
+        .unwrap_err()
+        .to_string();
+    assert!(refusal.contains("relative path"), "{refusal}");
+
+    // One stored before the rule, or by an older version on another
+    // computer, is shown with its problem and left out of every turn.
+    let stored = Connector::add(
+        space.project.id(),
+        ConnectorName::parse("parts").unwrap(),
+        ConnectorStart::program_as_stored("bin/parts-server", Vec::new(), Vec::new()).unwrap(),
+        vec![ToolName::parse("search").unwrap()],
+        chrono::Utc::now(),
+    )
+    .unwrap();
+    space.kits.save_connector(&stored).unwrap();
+    space
+        .service
+        .set_kit(
+            space.specialist.id(),
+            KitChoice {
+                skills: Vec::new(),
+                connectors: vec![(stored.id(), vec!["search".to_owned()])],
+            },
+        )
+        .unwrap();
+    let library = space.service.library(space.project.id()).unwrap();
+    assert!(
+        library.connectors[0]
+            .problem
+            .as_deref()
+            .is_some_and(|problem| problem.contains("relative path"))
+    );
+    let member = space.members.find(space.specialist.id()).unwrap().unwrap();
+    let turn = turn_kit_of(space.kits.as_ref(), space.shelf.as_ref(), &member).unwrap();
+    assert!(turn.connectors.is_empty());
+}

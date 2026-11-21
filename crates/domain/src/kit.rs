@@ -733,13 +733,74 @@ impl ConnectorStart {
     /// environment, and so hand a connector a secret nobody chose for it.
     /// Secrets reach a program only through the variables named here.
     ///
+    /// The program is named as [`Self::check_program_name`] says: a bare
+    /// name or a full path, never a relative path.
+    ///
     /// # Errors
     ///
     /// Returns [`DomainError::InvalidConnector`] if the program is empty,
-    /// starts with `-`, or if the program or an argument contains `$` or a
-    /// line break, or if there are too many arguments or variables, or a
-    /// variable is named twice.
+    /// starts with `-`, is a relative path, or if the program or an
+    /// argument contains `$` or a line break, or if there are too many
+    /// arguments or variables, or a variable is named twice.
     pub fn program(
+        program: &str,
+        arguments: Vec<String>,
+        variables: Vec<VariableName>,
+    ) -> Result<Self, DomainError> {
+        Self::check_program_name(program)?;
+        Self::program_as_stored(program, arguments, variables)
+    }
+
+    /// Checks how the program of a connector is named: a bare name, which
+    /// is looked for on the search path of the computer (`npx`,
+    /// `parts-server`), or a full path (`/usr/local/bin/parts-server`,
+    /// `C:\Tools\parts-server.exe`). Both forms are accepted on every
+    /// system, because a library travels between computers.
+    ///
+    /// A relative path (`./server`, `bin/server`, `..\server.exe`) is
+    /// refused. It would be found from the folder the program is started
+    /// in; a connector is started in an empty folder of Teamwright's own,
+    /// where it would not be found, and a relative path was a way to run a
+    /// file a specialist wrote. Arguments are not checked this way: a
+    /// relative path among them cannot be told from an ordinary word, and
+    /// the empty folder the connector is started in is the defence.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DomainError::InvalidConnector`] if the program is named by
+    /// a relative path.
+    pub fn check_program_name(program: &str) -> Result<(), DomainError> {
+        let program = program.trim();
+        if is_full_path(program) {
+            return Ok(());
+        }
+        let bare = !program.is_empty()
+            && program != "."
+            && program != ".."
+            && !program.contains(['/', '\\', ':']);
+        if bare {
+            Ok(())
+        } else {
+            Err(invalid_connector(
+                "the program of a connector is a name found on the search path, such as npx, or \
+                 a full path, such as /usr/local/bin/parts-server or C:\\Tools\\parts-server.exe; \
+                 a relative path such as ./server or bin/server is refused, because it could \
+                 name a file in the folder of the project",
+            ))
+        }
+    }
+
+    /// A connector started as a program, as it was stored: every rule of
+    /// [`Self::program`] but the one about how the program is named, which
+    /// is newer than some stored connectors. A connector that breaks it is
+    /// still read, so that the library can be shown and the connector
+    /// removed, but it is never given to a turn ([`Self::problem`]).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DomainError::InvalidConnector`] as [`Self::program`] does,
+    /// except for a relative path.
+    pub fn program_as_stored(
         program: &str,
         arguments: Vec<String>,
         variables: Vec<VariableName>,
@@ -821,6 +882,34 @@ impl ConnectorStart {
             Self::Program { variables, .. } => variables.iter().collect(),
             Self::Address { headers, .. } => headers.iter().map(SecretHeader::variable).collect(),
         }
+    }
+
+    /// Why this connector may not be started any more, if it breaks a rule
+    /// that is newer than it: a program named by a relative path.
+    #[must_use]
+    pub fn problem(&self) -> Option<String> {
+        match self {
+            Self::Program { program, .. } => {
+                Self::check_program_name(program)
+                    .err()
+                    .map(|error| match error {
+                        DomainError::InvalidConnector { reason } => reason,
+                        other => other.to_string(),
+                    })
+            }
+            Self::Address { .. } => None,
+        }
+    }
+}
+
+/// Whether a program is named by a full path, on any system: `/…`, a
+/// drive and a slash (`C:\…`, `C:/…`), or a share (`\\server\…`).
+fn is_full_path(program: &str) -> bool {
+    let mut characters = program.chars();
+    match (characters.next(), characters.next(), characters.next()) {
+        (Some('/'), _, _) | (Some('\\'), Some('\\'), _) => true,
+        (Some(drive), Some(':'), Some('\\' | '/')) => drive.is_ascii_alphabetic(),
+        _ => false,
     }
 }
 
@@ -1325,6 +1414,55 @@ mod tests {
             ConnectorStart::program("server", Vec::new(), vec![variable("A"), variable("A")])
                 .is_err()
         );
+    }
+
+    #[test]
+    fn a_program_is_a_bare_name_or_a_full_path_never_a_relative_path() {
+        for allowed in [
+            "npx",
+            "parts-server",
+            "python3",
+            "parts.exe",
+            "/usr/local/bin/parts-server",
+            "C:\\Tools\\parts-server.exe",
+            "c:/tools/parts-server.exe",
+            "\\\\server\\tools\\parts.exe",
+        ] {
+            assert!(
+                ConnectorStart::program(allowed, Vec::new(), Vec::new()).is_ok(),
+                "{allowed}"
+            );
+        }
+        for refused in [
+            "./server",
+            "server/run",
+            "bin\\server.exe",
+            "..\\server.exe",
+            "../server",
+            ".",
+            "..",
+            "~/bin/server",
+            "C:server.exe",
+            "\\server.exe",
+        ] {
+            let error = ConnectorStart::program(refused, Vec::new(), Vec::new()).unwrap_err();
+            assert!(reason(error).contains("relative path"), "{refused}");
+        }
+        // An argument that looks like a relative path is an ordinary word.
+        assert!(
+            ConnectorStart::program("python3", vec!["server.py".to_owned()], Vec::new()).is_ok()
+        );
+    }
+
+    #[test]
+    fn a_stored_program_named_by_a_relative_path_is_read_and_says_why_it_is_not_started() {
+        let stored = ConnectorStart::program_as_stored("./server", Vec::new(), Vec::new()).unwrap();
+        assert!(stored.problem().unwrap().contains("relative path"));
+        assert!(ConnectorStart::program_as_stored("$X", Vec::new(), Vec::new()).is_err());
+        let sound = ConnectorStart::program("npx", Vec::new(), Vec::new()).unwrap();
+        assert_eq!(sound.problem(), None);
+        let address = ConnectorStart::address("https://parts.example", Vec::new()).unwrap();
+        assert_eq!(address.problem(), None);
     }
 
     #[test]

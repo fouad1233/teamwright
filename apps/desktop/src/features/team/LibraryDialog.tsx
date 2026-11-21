@@ -134,6 +134,12 @@ function LibraryContent({ project }: { project: Project }) {
                       Secrets from the environment: {variablesOf(connector.start).join(', ')}
                     </span>
                   )}
+                  {connector.problem !== null && (
+                    <span className={styles.missing}>
+                      No specialist is given it any more: {connector.problem}. Remove it and add it
+                      again.
+                    </span>
+                  )}
                   {connector.missingVariables.length > 0 && (
                     <span className={styles.missing}>
                       Not set on this computer: {connector.missingVariables.join(', ')}. Until then
@@ -255,7 +261,10 @@ function ConnectorForm({ onAdd, onDone }: ConnectorFormProps) {
       </div>
       {kind === 'program' ? (
         <>
-          <Field label="Command" hint="The program and its arguments, such as npx -y parts-server.">
+          <Field
+            label="Command"
+            hint="The program and its arguments, such as npx -y parts-server. The program is a name found on the search path or a full path,, never a relative path such as ./server."
+          >
             <TextInput
               value={command}
               onChange={(event) => {
