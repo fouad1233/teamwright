@@ -252,6 +252,7 @@ fn request(folder: PathBuf, prompt: &str) -> TurnRequest {
         permissions: PermissionProfile::specialist(),
         team_tools: Vec::new(),
         readable_folders: Vec::new(),
+        kit: teamwright_application::TurnKit::default(),
     }
 }
 

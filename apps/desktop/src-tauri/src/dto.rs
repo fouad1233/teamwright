@@ -3382,6 +3382,241 @@ impl From<&teamwright_application::BudgetQuestionOfProject> for BudgetQuestionDt
     }
 }
 
+// The library of skills and connectors (decision 0039).
+
+/// The library of a project, with what this computer has of it, and what
+/// each specialist was given.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LibraryDto {
+    skills: Vec<LibrarySkillDto>,
+    connectors: Vec<LibraryConnectorDto>,
+    kits: Vec<MemberKitDto>,
+}
+
+/// A skill of a library.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LibrarySkillDto {
+    id: String,
+    name: String,
+    description: String,
+    added_at: String,
+    /// Whether this computer keeps its folder. Without it, no turn here is
+    /// given the skill.
+    here: bool,
+}
+
+/// How a connector is started, both ways on the wire. Variables are named,
+/// never given a value.
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum ConnectorStartDto {
+    /// A program of the computer that runs the turn.
+    Program {
+        program: String,
+        #[serde(default)]
+        arguments: Vec<String>,
+        #[serde(default)]
+        variables: Vec<String>,
+    },
+    /// A tool server at a web address.
+    Address {
+        url: String,
+        #[serde(default)]
+        headers: Vec<ConnectorHeaderDto>,
+    },
+}
+
+/// A header of a connector at a web address, and the variable that holds
+/// its secret.
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectorHeaderDto {
+    name: String,
+    variable: String,
+    #[serde(default)]
+    bearer: bool,
+}
+
+/// A connector of a library.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LibraryConnectorDto {
+    id: String,
+    name: String,
+    start: ConnectorStartDto,
+    tools: Vec<String>,
+    added_at: String,
+    /// The variables it needs that are not set on this computer.
+    missing_variables: Vec<String>,
+}
+
+/// What a specialist was given.
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MemberKitDto {
+    #[serde(default)]
+    member_id: String,
+    #[serde(default)]
+    skills: Vec<String>,
+    #[serde(default)]
+    connectors: Vec<GivenConnectorDto>,
+}
+
+/// A connector as a specialist is given it, with its tools.
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GivenConnectorDto {
+    connector_id: String,
+    tools: Vec<String>,
+}
+
+/// What the interface sends to add a connector to a library.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NewConnectorInput {
+    name: String,
+    start: ConnectorStartDto,
+    #[serde(default)]
+    tools: Vec<String>,
+}
+
+impl From<&teamwright_domain::ConnectorStart> for ConnectorStartDto {
+    fn from(start: &teamwright_domain::ConnectorStart) -> Self {
+        match start {
+            teamwright_domain::ConnectorStart::Program {
+                program,
+                arguments,
+                variables,
+            } => Self::Program {
+                program: program.clone(),
+                arguments: arguments.clone(),
+                variables: variables.iter().map(ToString::to_string).collect(),
+            },
+            teamwright_domain::ConnectorStart::Address { url, headers } => Self::Address {
+                url: url.clone(),
+                headers: headers
+                    .iter()
+                    .map(|header| ConnectorHeaderDto {
+                        name: header.name().to_owned(),
+                        variable: header.variable().to_string(),
+                        bearer: header.bearer(),
+                    })
+                    .collect(),
+            },
+        }
+    }
+}
+
+impl From<NewConnectorInput> for teamwright_application::NewConnector {
+    fn from(input: NewConnectorInput) -> Self {
+        Self {
+            name: input.name,
+            start: match input.start {
+                ConnectorStartDto::Program {
+                    program,
+                    arguments,
+                    variables,
+                } => teamwright_application::NewConnectorStart::Program {
+                    program,
+                    arguments,
+                    variables,
+                },
+                ConnectorStartDto::Address { url, headers } => {
+                    teamwright_application::NewConnectorStart::Address {
+                        url,
+                        headers: headers
+                            .into_iter()
+                            .map(|header| teamwright_application::NewHeader {
+                                name: header.name,
+                                variable: header.variable,
+                                bearer: header.bearer,
+                            })
+                            .collect(),
+                    }
+                }
+            },
+            tools: input.tools,
+        }
+    }
+}
+
+impl From<&teamwright_domain::MemberKit> for MemberKitDto {
+    fn from(kit: &teamwright_domain::MemberKit) -> Self {
+        Self {
+            member_id: kit.member_id().to_string(),
+            skills: kit.skills().iter().map(ToString::to_string).collect(),
+            connectors: kit
+                .connectors()
+                .iter()
+                .map(|given| GivenConnectorDto {
+                    connector_id: given.connector_id().to_string(),
+                    tools: given.tools().iter().map(ToString::to_string).collect(),
+                })
+                .collect(),
+        }
+    }
+}
+
+impl MemberKitDto {
+    /// What the manager chose, read from what the interface sent.
+    pub fn into_choice(self) -> Result<teamwright_application::KitChoice, CommandError> {
+        Ok(teamwright_application::KitChoice {
+            skills: self
+                .skills
+                .iter()
+                .map(|id| parse_id(id))
+                .collect::<Result<_, _>>()?,
+            connectors: self
+                .connectors
+                .into_iter()
+                .map(|given| Ok((parse_id(&given.connector_id)?, given.tools)))
+                .collect::<Result<_, CommandError>>()?,
+        })
+    }
+}
+
+impl From<&teamwright_application::Library> for LibraryDto {
+    fn from(library: &teamwright_application::Library) -> Self {
+        Self {
+            skills: library
+                .skills
+                .iter()
+                .map(|entry| LibrarySkillDto {
+                    id: entry.skill.id().to_string(),
+                    name: entry.skill.name().to_string(),
+                    description: entry.skill.description().to_owned(),
+                    added_at: moment_to_text(entry.skill.added_at()),
+                    here: entry.here,
+                })
+                .collect(),
+            connectors: library
+                .connectors
+                .iter()
+                .map(|entry| LibraryConnectorDto {
+                    id: entry.connector.id().to_string(),
+                    name: entry.connector.name().to_string(),
+                    start: ConnectorStartDto::from(entry.connector.start()),
+                    tools: entry
+                        .connector
+                        .tools()
+                        .iter()
+                        .map(ToString::to_string)
+                        .collect(),
+                    added_at: moment_to_text(entry.connector.added_at()),
+                    missing_variables: entry
+                        .missing_variables
+                        .iter()
+                        .map(ToString::to_string)
+                        .collect(),
+                })
+                .collect(),
+            kits: library.kits.iter().map(MemberKitDto::from).collect(),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used)]
@@ -3390,6 +3625,60 @@ mod tests {
     use teamwright_domain::ComputerId;
 
     use super::*;
+
+    #[test]
+    fn a_connector_and_a_kit_are_read_as_the_interface_sends_them() {
+        let input: NewConnectorInput = serde_json::from_value(serde_json::json!({
+            "name": "tickets",
+            "start": {
+                "kind": "address",
+                "url": "https://tickets.example/mcp",
+                "headers": [{ "name": "Authorization", "variable": "TICKETS_TOKEN", "bearer": true }]
+            },
+            "tools": ["read_ticket"]
+        }))
+        .unwrap();
+        let connector = teamwright_application::NewConnector::from(input);
+        assert_eq!(
+            connector.start,
+            teamwright_application::NewConnectorStart::Address {
+                url: "https://tickets.example/mcp".to_owned(),
+                headers: vec![teamwright_application::NewHeader {
+                    name: "Authorization".to_owned(),
+                    variable: "TICKETS_TOKEN".to_owned(),
+                    bearer: true,
+                }],
+            }
+        );
+        let program: NewConnectorInput = serde_json::from_value(serde_json::json!({
+            "name": "parts",
+            "start": { "kind": "program", "program": "parts-server" },
+            "tools": ["search"]
+        }))
+        .unwrap();
+        assert!(matches!(
+            teamwright_application::NewConnector::from(program).start,
+            teamwright_application::NewConnectorStart::Program { arguments, variables, .. }
+                if arguments.is_empty() && variables.is_empty()
+        ));
+
+        let skill = teamwright_domain::SkillId::generate();
+        let connector = teamwright_domain::ConnectorId::generate();
+        let kit: MemberKitDto = serde_json::from_value(serde_json::json!({
+            "skills": [skill.to_string()],
+            "connectors": [{ "connectorId": connector.to_string(), "tools": ["read_ticket"] }]
+        }))
+        .unwrap();
+        let choice = kit.into_choice().unwrap();
+        assert_eq!(choice.skills, [skill]);
+        assert_eq!(
+            choice.connectors,
+            [(connector, vec!["read_ticket".to_owned()])]
+        );
+        let broken: MemberKitDto =
+            serde_json::from_value(serde_json::json!({ "skills": ["not an id"] })).unwrap();
+        assert!(broken.into_choice().is_err());
+    }
 
     #[test]
     fn the_state_of_syncing_goes_out_in_camel_case_with_its_phase_in_words() {

@@ -14,6 +14,7 @@ mod coordinating;
 mod dto;
 mod error;
 mod events;
+mod skill_shelf;
 mod state;
 
 use std::ffi::OsStr;
@@ -138,6 +139,12 @@ fn main() -> ExitCode {
             commands::team::set_member_instructions,
             commands::team::list_ready_made_specialists,
             commands::team::add_ready_made_member,
+            commands::kits::project_library,
+            commands::kits::add_skill,
+            commands::kits::remove_skill,
+            commands::kits::add_connector,
+            commands::kits::remove_connector,
+            commands::kits::set_member_kit,
             commands::work::agent_program,
             commands::work::list_conversations,
             commands::work::project_usage,

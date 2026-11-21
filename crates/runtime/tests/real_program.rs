@@ -48,6 +48,7 @@ fn request(folder: &Path, prompt: &str, session: SessionChoice) -> TurnRequest {
         permissions: PermissionProfile::specialist(),
         team_tools: Vec::new(),
         readable_folders: Vec::new(),
+        kit: teamwright_application::TurnKit::default(),
     }
 }
 
@@ -452,4 +453,144 @@ fn a_real_session_searches_the_memory_and_remembers_a_fact_through_the_team_bus(
     assert!(fact.text.contains("I2C0"));
     // The answer came from the memory the bus read from its file.
     assert!(outcome.final_text.contains("SPI2"));
+}
+
+/// The names of the skills and commands the user set up for their own use,
+/// in `~/.claude/skills` and `~/.claude/commands`.
+fn own_skills_of_the_user() -> Vec<String> {
+    let Some(home) = std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE")) else {
+        return Vec::new();
+    };
+    let claude = Path::new(&home).join(".claude");
+    ["skills", "commands"]
+        .iter()
+        .filter_map(|folder| std::fs::read_dir(claude.join(folder)).ok())
+        .flatten()
+        .filter_map(Result::ok)
+        .map(|entry| {
+            entry
+                .path()
+                .file_stem()
+                .map(|stem| stem.to_string_lossy().into_owned())
+                .unwrap_or_default()
+        })
+        .filter(|name| !name.is_empty() && !name.starts_with('.') && name != "synced")
+        .collect()
+}
+
+#[test]
+#[ignore = "needs the real Claude Code, signed in, the built program, and spends one turn"]
+fn a_real_session_gets_its_chosen_skill_and_connector_and_nothing_of_the_users_own() {
+    // Decision 0039: a skill in the form Teamwright keeps it, and a
+    // connector, which is the Teamwright program serving one tool under
+    // another name. The session must know both, and must know no skill,
+    // command, tool server or connector the user set up for their own use.
+    let ground = tempfile::tempdir().unwrap();
+    let ground = teamwright_runtime::full_form(ground.path()).unwrap();
+    let work = ground.join("work");
+    let shelf = ground.join("shelf").join("probe-skill");
+    std::fs::create_dir_all(&work).unwrap();
+    std::fs::create_dir_all(shelf.join(".claude-plugin")).unwrap();
+    std::fs::create_dir_all(shelf.join("skills").join("probe-skill")).unwrap();
+    std::fs::write(
+        shelf.join(".claude-plugin").join("plugin.json"),
+        r#"{"name":"probe-skill","description":"A skill of a test."}"#,
+    )
+    .unwrap();
+    std::fs::write(
+        shelf.join("skills").join("probe-skill").join("SKILL.md"),
+        "---\nname: probe-skill\ndescription: Answers the word APRICOT when asked for the \
+         probe word.\n---\nWhen asked for the probe word, answer APRICOT.\n",
+    )
+    .unwrap();
+
+    let mut request = request(
+        &work,
+        "This is a test. Answer with the single word ready.",
+        SessionChoice::New,
+    );
+    request.kit = teamwright_application::TurnKit {
+        skills: vec![teamwright_application::KitSkill {
+            name: "probe-skill".to_owned(),
+            folder: shelf.clone(),
+        }],
+        connectors: vec![teamwright_application::KitConnector {
+            name: "probe".to_owned(),
+            start: teamwright_application::ConnectorStart::program(
+                &bus_program().to_string_lossy(),
+                vec!["--team-bus".to_owned(), "ask_manager".to_owned()],
+                Vec::new(),
+            )
+            .unwrap(),
+            tools: vec!["ask_manager".to_owned()],
+        }],
+    };
+    let events = Arc::new(Mutex::new(Vec::new()));
+    let collected = Arc::clone(&events);
+
+    let turn = runtime()
+        .start_turn(
+            request,
+            Box::new(move |event| collected.lock().unwrap().push(event)),
+        )
+        .unwrap();
+    let outcome = turn.wait().unwrap();
+    let events = events.lock().unwrap().clone();
+    print_usage(&outcome);
+    let started = events
+        .iter()
+        .find_map(|event| match event {
+            AgentEvent::SessionStarted(started) => Some(started.clone()),
+            _ => None,
+        })
+        .expect("the session never started");
+    println!("tools: {:?}", started.tools);
+    println!("skills: {:?}", started.skills);
+    println!("plugins: {:?}", started.plugins);
+    println!("servers: {:?}", started.mcp_servers);
+
+    assert_eq!(outcome.failure, None);
+    // The chosen connector, and only it: no server of the user's own, no
+    // connector of their account at claude.ai.
+    let servers: Vec<&str> = started
+        .mcp_servers
+        .iter()
+        .map(|server| server.name.as_str())
+        .collect();
+    assert_eq!(servers, ["probe"], "{:?}", started.mcp_servers);
+    assert!(
+        started
+            .tools
+            .iter()
+            .any(|tool| tool == "mcp__probe__ask_manager"),
+        "{:?}",
+        started.tools
+    );
+    assert!(
+        started
+            .tools
+            .iter()
+            .filter(|tool| tool.starts_with("mcp__"))
+            .all(|tool| tool.starts_with("mcp__probe__")),
+        "{:?}",
+        started.tools
+    );
+    // The chosen skill, and none of the user's own.
+    assert!(
+        started
+            .skills
+            .iter()
+            .any(|skill| skill.contains("probe-skill")),
+        "{:?}",
+        started.skills
+    );
+    assert_eq!(started.plugins, ["probe-skill"], "{:?}", started.plugins);
+    let own = own_skills_of_the_user();
+    for skill in &started.skills {
+        let bare = skill.rsplit(':').next().unwrap_or(skill);
+        assert!(
+            bare == "probe-skill" || !own.iter().any(|mine| mine == bare),
+            "the session knows the user's own skill {skill}"
+        );
+    }
 }

@@ -29,6 +29,7 @@ use crate::agent_runtime::{
     TurnFailure, TurnOutcome, TurnRequest,
 };
 use crate::error::ApplicationError;
+use crate::kits::{KitRepository, SkillShelf, turn_kit_of};
 use crate::memory::{
     MAX_FACT_LENGTH, MOST_FACTS_PER_TURN, contract_entries, decision_entry, facts_remembered_in,
     memory_in_words, remembered_entries,
@@ -172,6 +173,11 @@ pub struct WorkPorts {
     pub places: Arc<dyn PlacesRepository>,
     /// The files and folders of the computer.
     pub file_system: Arc<dyn FileSystem>,
+    /// The libraries of skills and connectors, and what each specialist
+    /// was given of its own.
+    pub kits: Arc<dyn KitRepository>,
+    /// The copies of skills on this computer, and its environment.
+    pub shelf: Arc<dyn SkillShelf>,
     /// The program that runs the specialists.
     pub runtime: Arc<dyn AgentRuntime>,
     /// Who is told about every change to a conversation.
@@ -741,6 +747,7 @@ impl WorkService {
         let working_folder = self.inner.places.work_folder_of(project)?;
         let mut delivered = Vec::new();
         let mut prompt = prompt;
+        let mut kit = agent_runtime::TurnKit::default();
         let (model, effort, instructions, permissions, team_tools) = match worker {
             Worker::Specialist(member) => {
                 let team = ports.members.list_for_project(project.id())?;
@@ -769,6 +776,9 @@ impl WorkService {
                         ),
                     },
                 ]);
+                // What the manager gave the specialist, as far as this
+                // computer has it (decision 0039).
+                kit = turn_kit_of(ports.kits.as_ref(), ports.shelf.as_ref(), member)?;
                 (
                     member.model().map(ToString::to_string),
                     member.effort(),
@@ -806,6 +816,7 @@ impl WorkService {
             permissions,
             team_tools,
             readable_folders,
+            kit,
         };
         let handle = ports
             .runtime
@@ -1940,6 +1951,8 @@ mod tests {
         memory: Arc<crate::in_memory::InMemoryMemoryRepository>,
         places: Arc<InMemoryPlacesRepository>,
         file_system: Arc<PretendFileSystem>,
+        kits: Arc<crate::kits::InMemoryKitRepository>,
+        shelf: Arc<crate::kits::PretendShelf>,
         runtime: Arc<ScriptedRuntime>,
         listener: Arc<RecordingWorkListener>,
         clock: Arc<ManualClock>,
@@ -1966,6 +1979,8 @@ mod tests {
                 folders: Arc::new(FixedProjectFolders::inside("projects")),
                 places: self.places.clone(),
                 file_system: self.file_system.clone(),
+                kits: self.kits.clone(),
+                shelf: self.shelf.clone(),
                 runtime: self.runtime.clone(),
                 listener: self.listener.clone(),
                 clock: self.clock.clone(),
@@ -2001,6 +2016,8 @@ mod tests {
             memory: Arc::new(crate::in_memory::InMemoryMemoryRepository::default()),
             places: Arc::new(InMemoryPlacesRepository::default()),
             file_system: Arc::new(PretendFileSystem::default()),
+            kits: Arc::new(crate::kits::InMemoryKitRepository::default()),
+            shelf: Arc::new(crate::kits::PretendShelf::default()),
             runtime: Arc::new(ScriptedRuntime::new()),
             listener: Arc::new(RecordingWorkListener::default()),
             clock: Arc::new(ManualClock::starting_at(start_of_day())),
@@ -2407,6 +2424,63 @@ mod tests {
                 .prompt
                 .starts_with("Your task is SSN-1: Draw the schematic")
         );
+    }
+
+    #[test]
+    fn a_turn_of_a_specialist_is_given_its_kit_and_the_advisor_none() {
+        use crate::kits::{KitChoice, KitService, NewConnector, NewConnectorStart};
+
+        let workspace = workspace();
+        let ports = &workspace.ports;
+        let kits = KitService::new(
+            ports.kits.clone(),
+            ports.shelf.clone(),
+            ports.projects.clone(),
+            ports.members.clone(),
+            ports.clock.clone(),
+        );
+        ports.shelf.put_folder(
+            "/skills/pcb-review",
+            "---\nname: pcb-review\ndescription: Reviews a layout.\n---\n",
+        );
+        let skill = kits
+            .add_skill(
+                workspace.project.id(),
+                std::path::Path::new("/skills/pcb-review"),
+            )
+            .unwrap();
+        let connector = kits
+            .add_connector(
+                workspace.project.id(),
+                NewConnector {
+                    name: "parts".to_owned(),
+                    start: NewConnectorStart::Program {
+                        program: "parts-server".to_owned(),
+                        arguments: Vec::new(),
+                        variables: Vec::new(),
+                    },
+                    tools: vec!["search".to_owned(), "order".to_owned()],
+                },
+            )
+            .unwrap();
+        kits.set_kit(
+            workspace.engineer.id(),
+            KitChoice {
+                skills: vec![skill.id()],
+                connectors: vec![(connector.id(), vec!["search".to_owned()])],
+            },
+        )
+        .unwrap();
+
+        workspace.work.start_work(workspace.schematic.id()).unwrap();
+
+        let request = &ports.runtime.requests()[0];
+        assert_eq!(request.kit.skills.len(), 1);
+        assert_eq!(request.kit.skills[0].name, "pcb-review");
+        assert_eq!(request.kit.connectors.len(), 1);
+        assert_eq!(request.kit.connectors[0].tools, ["search"]);
+        // The profile of a specialist is unchanged by what it was given.
+        assert_eq!(request.permissions, PermissionProfile::specialist());
     }
 
     #[test]

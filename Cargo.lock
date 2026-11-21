@@ -4124,6 +4124,7 @@ dependencies = [
  "teamwright-runtime",
  "teamwright-storage",
  "teamwright-workbook",
+ "tempfile",
  "thiserror 2.0.21",
 ]
 

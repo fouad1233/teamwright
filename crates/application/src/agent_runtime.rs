@@ -509,6 +509,60 @@ pub struct TurnRequest {
     /// Folders outside the working folder that the session may read from
     /// and must not write to.
     pub readable_folders: Vec<PathBuf>,
+    /// The skills and connectors the manager gave the specialist, as far as
+    /// this computer has them. Empty for the Advisor.
+    pub kit: TurnKit,
+}
+
+/// How a connector is started. It belongs to the domain; it is named here
+/// too because a turn carries it.
+pub use teamwright_domain::ConnectorStart;
+
+/// The skills and connectors a turn is given
+/// ([decision 0039](../../../docs/decisions/0039-skills-and-connectors-chosen-by-the-manager.md)).
+///
+/// The session gets these and nothing of the user's own setup. A connector
+/// is a way out of the folder of the project, so the session may use only
+/// the tools of it named here, each by name.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct TurnKit {
+    /// The skills, each a folder of its own on this computer.
+    pub skills: Vec<KitSkill>,
+    /// The connectors, each with the tools the session may use.
+    pub connectors: Vec<KitConnector>,
+}
+
+impl TurnKit {
+    /// Whether the turn is given nothing.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.skills.is_empty() && self.connectors.is_empty()
+    }
+}
+
+/// A skill a turn is given.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct KitSkill {
+    /// The name of the skill, which is also the name of the folder that
+    /// holds it.
+    pub name: String,
+    /// The folder that holds the skill in the form the agent program loads
+    /// for one session: a manifest in `.claude-plugin/plugin.json` and the
+    /// skill in `skills/<name>/`, and nothing else.
+    pub folder: PathBuf,
+}
+
+/// A connector a turn is given.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct KitConnector {
+    /// The name of the connector, which is the name of its tool server in
+    /// the session.
+    pub name: String,
+    /// How it is started.
+    pub start: ConnectorStart,
+    /// The tools of it the session may use, by the connector's names for
+    /// them. Its other tools are denied when the session tries them.
+    pub tools: Vec<String>,
 }
 
 /// Something that happened during a turn.

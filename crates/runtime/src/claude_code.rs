@@ -141,9 +141,14 @@ impl AgentRuntime for ClaudeCode {
 
     fn start_turn(
         &self,
-        request: TurnRequest,
+        mut request: TurnRequest,
         listener: Box<dyn FnMut(AgentEvent) + Send>,
     ) -> Result<Box<dyn RunningTurn>, AgentRuntimeError> {
+        // The folder of a skill is named in its full form, like a folder the
+        // session may read, which it also is.
+        for skill in &mut request.kit.skills {
+            skill.folder = full_folder(&skill.folder)?;
+        }
         let readable_folders = request
             .readable_folders
             .iter()
@@ -402,6 +407,7 @@ mod tests {
             permissions: PermissionProfile::specialist(),
             team_tools: vec![TeamTool::AskManager],
             readable_folders: Vec::new(),
+            kit: teamwright_application::TurnKit::default(),
         };
         let without_bus = ClaudeCode::new();
         let with_bus = ClaudeCode::new().with_team_bus("teamwright", vec!["--team-bus".to_owned()]);
@@ -433,6 +439,7 @@ mod tests {
             permissions: PermissionProfile::specialist(),
             team_tools: Vec::new(),
             readable_folders: vec![folder.path().join("missing")],
+            kit: teamwright_application::TurnKit::default(),
         };
 
         let refusal = ClaudeCode::new()
@@ -458,6 +465,7 @@ mod tests {
             permissions: PermissionProfile::specialist(),
             team_tools: vec![TeamTool::AskManager],
             readable_folders: Vec::new(),
+            kit: teamwright_application::TurnKit::default(),
         };
         assert!(memory_file_for(&request).unwrap().is_none());
 
@@ -508,6 +516,7 @@ mod tests {
             permissions: PermissionProfile::specialist(),
             team_tools: vec![TeamTool::AskManager],
             readable_folders: Vec::new(),
+            kit: teamwright_application::TurnKit::default(),
         };
 
         let refusal = ClaudeCode::new()

@@ -30,6 +30,7 @@ mod claude_code;
 mod decode;
 mod earlier;
 mod environment;
+mod kit;
 mod locate;
 pub mod memory_file;
 mod process;

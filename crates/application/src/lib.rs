@@ -28,6 +28,7 @@ pub mod files;
 pub mod google_drive;
 pub mod in_memory;
 pub mod integrations;
+pub mod kits;
 pub mod memory;
 pub mod notifications;
 pub mod places;
@@ -55,6 +56,7 @@ pub use agent_runtime::{
     SessionContext, SessionId, SessionStarted, SignIn, TeamTool, TokenCounts, TurnFailure,
     TurnOutcome, TurnRequest,
 };
+pub use agent_runtime::{ConnectorStart, KitConnector, KitSkill, TurnKit};
 pub use appearance::{AppearanceService, Theme, ThemeStore};
 pub use areas::AreaService;
 pub use checklists::ChecklistService;
@@ -88,6 +90,11 @@ pub use integrations::messages::{
 pub use integrations::{
     IntegrationSettings, IntegrationStore, ListeningAddress, ProjectIntegrations, SlackChannel,
     events_sent_to_an_address, events_told_in_a_channel,
+};
+pub use kits::{
+    InMemoryKitRepository, KeptSkill, KitChoice, KitRepository, KitService, Library,
+    LibraryConnector, LibrarySkill, MAX_SKILL_BYTES, MAX_SKILL_FILES, NewConnector,
+    NewConnectorStart, NewHeader, PretendShelf, SKILL_FILE, SkillFolder, SkillShelf, turn_kit_of,
 };
 pub use memory::{
     MOST_FACTS_PER_TURN, MemoryService, NewFact, Searchable, contract_entries, decision_entry,

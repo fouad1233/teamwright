@@ -19,6 +19,7 @@ teamwright-workbook.workspace = true
 
 chrono.workspace = true
 serde.workspace = true
+serde_json.workspace = true
 tauri = { version = "2", features = [] }
 # The windows of the operating system for choosing a folder or files.
 tauri-plugin-dialog = "2"
@@ -27,7 +28,7 @@ tauri-plugin-notification = "2"
 thiserror.workspace = true
 
 [dev-dependencies]
-serde_json.workspace = true
+tempfile.workspace = true
 
 [lints]
 workspace = true

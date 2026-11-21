@@ -202,7 +202,12 @@ pub(crate) const fn merging_of(entity: Entity) -> Merging {
         | Entity::Proposal
         | Entity::Handoff
         | Entity::Digest
-        | Entity::CoordinatorEntry => Merging::Whole,
+        | Entity::CoordinatorEntry
+        // A skill, a connector and a kit change as a whole: the later one
+        // wins whole (decision 0039).
+        | Entity::Skill
+        | Entity::Connector
+        | Entity::MemberKit => Merging::Whole,
         Entity::ProjectPlaces => Merging::NeverLeaves,
     }
 }

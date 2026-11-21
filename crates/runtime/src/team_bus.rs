@@ -239,20 +239,16 @@ pub(crate) struct TeamBus {
 }
 
 impl TeamBus {
-    /// The configuration of tool servers that Claude Code is given with
-    /// `--mcp-config`: this one server, under its name, offering `tools`.
-    pub(crate) fn configuration(&self, tools: &[TeamTool]) -> String {
+    /// The entry of this server in the configuration of tool servers that
+    /// Claude Code is given with `--mcp-config`, under its name: how it is
+    /// started, offering `tools`.
+    pub(crate) fn server(&self, tools: &[TeamTool]) -> serde_json::Value {
         let mut arguments = self.arguments.clone();
         arguments.extend(bus_arguments(tools));
         json!({
-            "mcpServers": {
-                SERVER_NAME: {
-                    "command": self.program.to_string_lossy(),
-                    "args": arguments,
-                }
-            }
+            "command": self.program.to_string_lossy(),
+            "args": arguments,
         })
-        .to_string()
     }
 
     /// The same bus, started with the file that holds the memory of the

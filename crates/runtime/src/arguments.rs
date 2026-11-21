@@ -12,7 +12,8 @@ use teamwright_application::{
     TurnRequest,
 };
 
-use crate::team_bus::{TeamBus, name_in_session};
+use crate::kit::{SESSION_SETTINGS, connector_entry, skill_rule};
+use crate::team_bus::{SERVER_NAME, TeamBus, name_in_session};
 
 /// The first version that can open a session in the Claude desktop app.
 pub const FIRST_VERSION_WITH_DESKTOP: ProgramVersion = ProgramVersion::new(2, 1, 285);
@@ -96,6 +97,12 @@ pub fn turn_arguments(
     // not know the option refuses to start, which is the safe way to fail.
     if permissions.confined_to_working_folder {
         arguments.push("--restricted".into());
+        // No setting source at all: not the user's own skills, commands,
+        // agents and settings, and not those of the folders the session
+        // works in (decision 0039). Joined with `=`, because the list is
+        // empty; the program forwards it in this form itself.
+        arguments.push("--setting-sources=".into());
+        push_pair(&mut arguments, "--settings", SESSION_SETTINGS);
     }
     if permissions.only_given_tool_servers {
         arguments.push("--strict-mcp-config".into());
@@ -103,17 +110,46 @@ pub fn turn_arguments(
 
     let mut allowed_tools = permissions.allowed_tools.clone();
     let mut disallowed_tools = permissions.disallowed_tools.clone();
+    // Each skill is a plugin of its own for this session. Its folder may be
+    // read, for the files the skill points to, and not written.
+    let mut skill_folders = Vec::new();
+    for skill in &request.kit.skills {
+        check_value("skill", &skill.name)?;
+        let folder = skill.folder.to_string_lossy().into_owned();
+        check_value("skill folder", &folder)?;
+        push_pair(&mut arguments, "--plugin-dir", &folder);
+        allowed_tools.push(skill_rule(&skill.name));
+        skill_folders.push(skill.folder.clone());
+    }
+    // The configuration is one argument, JSON, as the program reads a
+    // configuration given in place of a file: the team bus and the
+    // connectors, each under its own name.
+    let mut servers = serde_json::Map::new();
     if let Some(team_bus) = team_bus {
-        // The configuration is one argument, JSON, as the program reads a
-        // configuration given in place of a file.
+        servers.insert(SERVER_NAME.to_owned(), team_bus.server(&request.team_tools));
+        allowed_tools.extend(request.team_tools.iter().map(name_in_session));
+    }
+    for connector in &request.kit.connectors {
+        let (entry, tools) = connector_entry(connector)?;
+        if servers.insert(connector.name.clone(), entry).is_some() {
+            return Err(invalid(&format!(
+                "the connector {} is given twice",
+                connector.name
+            )));
+        }
+        // A connector reaches outside the folder: only the tools the
+        // manager gave are allowed, one by one. Its other tools are denied
+        // when the session tries them, as nobody can be asked.
+        allowed_tools.extend(tools);
+    }
+    if !servers.is_empty() {
         push_pair(
             &mut arguments,
             "--mcp-config",
-            &team_bus.configuration(&request.team_tools),
+            &serde_json::json!({ "mcpServers": servers }).to_string(),
         );
-        allowed_tools.extend(request.team_tools.iter().map(name_in_session));
     }
-    for folder in readable_folders {
+    for folder in readable_folders.iter().chain(&skill_folders) {
         let folder = folder.to_string_lossy();
         check_value("folder", &folder)?;
         push_pair(&mut arguments, "--add-dir", &folder);
@@ -200,7 +236,10 @@ const fn permission_mode_name(mode: PermissionMode) -> &'static str {
 mod tests {
     use std::path::PathBuf;
 
-    use teamwright_application::{PermissionProfile, TeamTool};
+    use teamwright_application::{
+        ConnectorStart, KitConnector, KitSkill, PermissionProfile, TeamTool, TurnKit,
+    };
+    use teamwright_domain::{SecretHeader, VariableName};
 
     use super::*;
 
@@ -215,6 +254,7 @@ mod tests {
             permissions: PermissionProfile::specialist(),
             team_tools: vec![TeamTool::AskManager],
             readable_folders: Vec::new(),
+            kit: TurnKit::default(),
         }
     }
 
@@ -381,6 +421,9 @@ mod tests {
                 "--permission-prompts",
                 "none",
                 "--restricted",
+                "--setting-sources=",
+                "--settings",
+                r#"{"disableAllHooks":true,"disableSkillShellExecution":true,"disableClaudeAiConnectors":true}"#,
                 "--strict-mcp-config",
                 "--tools",
                 "Read",
@@ -501,6 +544,185 @@ mod tests {
         assert_eq!(
             text(&desktop_arguments(&id)),
             ["--desktop", "--resume", "abc"]
+        );
+    }
+
+    fn kit() -> TurnKit {
+        TurnKit {
+            skills: vec![KitSkill {
+                name: "pcb-review".to_owned(),
+                folder: PathBuf::from("/home/sample/.teamwright/skills/0196f3a2"),
+            }],
+            connectors: vec![
+                KitConnector {
+                    name: "parts".to_owned(),
+                    start: ConnectorStart::program(
+                        "parts-server",
+                        vec!["--stdio".to_owned()],
+                        vec![VariableName::parse("PARTS_TOKEN").unwrap()],
+                    )
+                    .unwrap(),
+                    tools: vec!["search_parts".to_owned()],
+                },
+                KitConnector {
+                    name: "tickets".to_owned(),
+                    start: ConnectorStart::address(
+                        "https://tickets.example/mcp",
+                        vec![
+                            SecretHeader::new(
+                                "Authorization",
+                                VariableName::parse("TICKETS_TOKEN").unwrap(),
+                                true,
+                            )
+                            .unwrap(),
+                        ],
+                    )
+                    .unwrap(),
+                    tools: vec!["read_ticket".to_owned(), "list_tickets".to_owned()],
+                },
+            ],
+        }
+    }
+
+    #[test]
+    fn a_specialist_with_a_kit_has_exactly_these_arguments() {
+        let mut given = request();
+        given.kit = kit();
+
+        let arguments = text(&turn_arguments(&given, &[], Some(&bus())).unwrap());
+
+        let configuration = serde_json::json!({
+            "mcpServers": {
+                "teamwright": {
+                    "command": r"C:\Program Files\Teamwright\teamwright.exe",
+                    "args": ["--team-bus", "ask_manager"]
+                },
+                "parts": {
+                    "command": "parts-server",
+                    "args": ["--stdio"],
+                    "env": { "PARTS_TOKEN": "${PARTS_TOKEN}" }
+                },
+                "tickets": {
+                    "type": "http",
+                    "url": "https://tickets.example/mcp",
+                    "headers": { "Authorization": "Bearer ${TICKETS_TOKEN}" }
+                }
+            }
+        });
+        let configuration_at = arguments
+            .iter()
+            .position(|argument| argument == "--mcp-config")
+            .unwrap();
+        let given_configuration: serde_json::Value =
+            serde_json::from_str(&arguments[configuration_at + 1]).unwrap();
+        assert_eq!(given_configuration, configuration);
+        let mut expected: Vec<String> = [
+            "-p",
+            "--output-format",
+            "stream-json",
+            "--verbose",
+            "--permission-mode",
+            "acceptEdits",
+            "--permission-prompts",
+            "none",
+            "--restricted",
+            "--setting-sources=",
+            "--settings",
+            r#"{"disableAllHooks":true,"disableSkillShellExecution":true,"disableClaudeAiConnectors":true}"#,
+            "--strict-mcp-config",
+            "--plugin-dir",
+            "/home/sample/.teamwright/skills/0196f3a2",
+            "--mcp-config",
+        ]
+        .map(String::from)
+        .to_vec();
+        expected.push(arguments[configuration_at + 1].clone());
+        expected.extend(
+            [
+                "--add-dir",
+                "/home/sample/.teamwright/skills/0196f3a2",
+                "--tools",
+                "Read",
+                "Glob",
+                "Grep",
+                "Edit",
+                "Write",
+                "NotebookEdit",
+                "Skill",
+                "ToolSearch",
+                "--allowedTools",
+                "Read",
+                "Glob",
+                "Grep",
+                "Skill(pcb-review:pcb-review)",
+                "mcp__teamwright__ask_manager",
+                "mcp__parts__search_parts",
+                "mcp__tickets__read_ticket",
+                "mcp__tickets__list_tickets",
+                "--disallowedTools",
+                "Bash",
+                "PowerShell",
+                "Edit(/home/sample/.teamwright/skills/0196f3a2/**)",
+            ]
+            .map(String::from),
+        );
+        assert_eq!(arguments, expected);
+    }
+
+    #[test]
+    fn no_tool_of_a_connector_is_allowed_wholesale_and_no_secret_is_an_argument() {
+        let mut given = request();
+        given.kit = kit();
+        let arguments = text(&turn_arguments(&given, &[], None).unwrap());
+
+        // No rule that allows a whole server, nor any tool by a pattern.
+        assert!(!arguments.iter().any(|argument| {
+            argument == "mcp__parts"
+                || argument == "mcp__tickets"
+                || (argument.starts_with("mcp__") && argument.contains('*'))
+        }));
+        // The secrets are named, never given: Claude Code reads them from
+        // its own environment.
+        assert!(arguments.join(" ").contains("${PARTS_TOKEN}"));
+        // The team bus is not there without a bus; the connectors are.
+        let configuration_at = arguments
+            .iter()
+            .position(|argument| argument == "--mcp-config")
+            .unwrap();
+        let configuration: serde_json::Value =
+            serde_json::from_str(&arguments[configuration_at + 1]).unwrap();
+        assert!(configuration["mcpServers"].get("teamwright").is_none());
+        assert!(configuration["mcpServers"].get("parts").is_some());
+    }
+
+    #[test]
+    fn a_connector_named_like_the_team_bus_or_given_twice_is_refused() {
+        let mut given = request();
+        given.kit = kit();
+        given.kit.connectors[0].name = "teamwright".to_owned();
+        assert!(turn_arguments(&given, &[], Some(&bus())).is_err());
+
+        let mut twice = request();
+        twice.kit = kit();
+        let first = twice.kit.connectors[0].clone();
+        twice.kit.connectors.push(first);
+        assert!(turn_arguments(&twice, &[], None).is_err());
+
+        let mut dashed = request();
+        dashed.kit = kit();
+        dashed.kit.skills[0].folder = PathBuf::from("--dangerously-skip-permissions");
+        assert!(turn_arguments(&dashed, &[], None).is_err());
+    }
+
+    #[test]
+    fn a_session_that_is_not_confined_is_not_given_the_settings_of_a_confined_one() {
+        let mut open = request();
+        open.permissions.confined_to_working_folder = false;
+        let arguments = text(&turn_arguments(&open, &[], None).unwrap());
+        assert!(
+            !arguments
+                .iter()
+                .any(|argument| argument.starts_with("--setting"))
         );
     }
 }

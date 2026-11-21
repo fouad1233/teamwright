@@ -96,11 +96,18 @@ pub(crate) enum Entity {
     Budget,
     /// One entry of the record of a coordinator. It never changes.
     CoordinatorEntry,
+    /// A skill in the library of a project.
+    Skill,
+    /// A connector in the library of a project.
+    Connector,
+    /// What a specialist was given of the library. Its identifier is the
+    /// member's.
+    MemberKit,
 }
 
 impl Entity {
     /// Every kind of thing whose changes are logged.
-    pub(crate) const ALL: [Self; 21] = [
+    pub(crate) const ALL: [Self; 24] = [
         Self::Project,
         Self::Task,
         Self::Member,
@@ -122,6 +129,9 @@ impl Entity {
         Self::Coordinator,
         Self::Budget,
         Self::CoordinatorEntry,
+        Self::Skill,
+        Self::Connector,
+        Self::MemberKit,
     ];
 
     /// The entity of a name in the log, if this version knows it.
@@ -153,6 +163,9 @@ impl Entity {
             Self::Coordinator => "coordinator",
             Self::Budget => "budget",
             Self::CoordinatorEntry => "coordinator_entry",
+            Self::Skill => "skill",
+            Self::Connector => "connector",
+            Self::MemberKit => "member_kit",
         }
     }
 }

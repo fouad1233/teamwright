@@ -110,6 +110,8 @@ fn planning() -> Planning {
         folders: Arc::new(FixedProjectFolders::inside("projects")),
         places,
         file_system: Arc::new(PretendFileSystem::default()),
+        kits: Arc::new(crate::kits::InMemoryKitRepository::default()),
+        shelf: Arc::new(crate::kits::PretendShelf::default()),
         runtime: runtime.clone(),
         listener: listener.clone(),
         clock: clock.clone(),

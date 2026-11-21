@@ -378,7 +378,10 @@ fn parents_of(
         | Entity::Digest
         | Entity::Coordinator
         | Entity::Budget
-        | Entity::CoordinatorEntry => {
+        | Entity::CoordinatorEntry
+        | Entity::Skill
+        | Entity::Connector
+        | Entity::MemberKit => {
             text_of(state, "project_id").map(|id| (Entity::Project, id.to_owned()))
         }
         // A handoff cannot exist without its task, which cannot exist
@@ -1166,7 +1169,10 @@ impl Round {
             | Entity::Digest
             | Entity::Coordinator
             | Entity::Budget
-            | Entity::CoordinatorEntry => state
+            | Entity::CoordinatorEntry
+            | Entity::Skill
+            | Entity::Connector
+            | Entity::MemberKit => state
                 .and_then(|state| text_of(state, "project_id"))
                 .map(str::to_owned),
             _ => match &conversation {

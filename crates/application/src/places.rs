@@ -537,6 +537,8 @@ mod tests {
                 folders,
                 places,
                 file_system: file_system.clone(),
+                kits: Arc::new(crate::kits::InMemoryKitRepository::default()),
+                shelf: Arc::new(crate::kits::PretendShelf::default()),
                 runtime: Arc::new(ScriptedRuntime::new()),
                 listener: Arc::new(RecordingWorkListener::default()),
                 clock,

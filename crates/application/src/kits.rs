@@ -1,0 +1,878 @@
+//! The library of skills and connectors of a project, and what each
+//! specialist is given of it
+//! ([decision 0039](../../../docs/decisions/0039-skills-and-connectors-chosen-by-the-manager.md)).
+//!
+//! The library is data of the project: it is logged and reaches the other
+//! computers. What belongs to one computer is not: the copy of a skill's
+//! folder, which [`SkillShelf`] keeps on this computer, and the values of
+//! the environment variables a connector needs, which come from the
+//! environment Teamwright was started in. A turn is given only what this
+//! computer has; the rest is shown to the manager as missing here.
+
+use std::collections::{BTreeMap, BTreeSet};
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+
+use teamwright_domain::{
+    Connector, ConnectorId, ConnectorName, ConnectorStart, DomainError, GivenConnector, Member,
+    MemberId, MemberKind, MemberKit, ProjectId, SecretHeader, Skill, SkillFile, SkillId, ToolName,
+    VariableName,
+};
+
+use crate::agent_runtime::{KitConnector, KitSkill, TurnKit};
+use crate::error::ApplicationError;
+use crate::ports::{Clock, MemberRepository, ProjectRepository, StorageError};
+
+/// The most files a skill's folder may hold.
+pub const MAX_SKILL_FILES: usize = 200;
+
+/// The most bytes a skill's folder may hold: 10 MiB.
+pub const MAX_SKILL_BYTES: u64 = 10 * 1024 * 1024;
+
+/// The name of the file that makes a folder a skill.
+pub const SKILL_FILE: &str = "SKILL.md";
+
+/// Stores the libraries of the projects and the kits of the specialists.
+/// Every write is logged and reaches the other computers.
+pub trait KitRepository: Send + Sync {
+    /// The skills of the library of a project, in no particular order.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if stored data could not be read.
+    fn skills_of_project(&self, project_id: ProjectId) -> Result<Vec<Skill>, StorageError>;
+
+    /// The connectors of the library of a project, in no particular order.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if stored data could not be read.
+    fn connectors_of_project(&self, project_id: ProjectId) -> Result<Vec<Connector>, StorageError>;
+
+    /// The kits of the specialists of a project, in no particular order. A
+    /// specialist that was never given anything has none.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if stored data could not be read.
+    fn kits_of_project(&self, project_id: ProjectId) -> Result<Vec<MemberKit>, StorageError>;
+
+    /// The kit of one specialist, if it has one.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if stored data could not be read.
+    fn kit_of(&self, member_id: MemberId) -> Result<Option<MemberKit>, StorageError>;
+
+    /// Stores a skill of a library.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if it could not be written.
+    fn save_skill(&self, skill: &Skill) -> Result<(), StorageError>;
+
+    /// Stores a connector of a library.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if it could not be written.
+    fn save_connector(&self, connector: &Connector) -> Result<(), StorageError>;
+
+    /// Stores the kit of a specialist, replacing the one before.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if it could not be written.
+    fn save_kit(&self, kit: &MemberKit) -> Result<(), StorageError>;
+
+    /// Removes a skill from its library and stores the kits that had it,
+    /// without it, in one write. A skill that is not stored is ignored.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if it could not be written; then nothing is.
+    fn remove_skill(&self, id: SkillId, kits: &[MemberKit]) -> Result<(), StorageError>;
+
+    /// Removes a connector from its library and stores the kits that had
+    /// it, without it, in one write.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if it could not be written; then nothing is.
+    fn remove_connector(&self, id: ConnectorId, kits: &[MemberKit]) -> Result<(), StorageError>;
+}
+
+/// What a folder the manager points at holds, as far as the check of a
+/// skill needs it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SkillFolder {
+    /// The name of the folder itself.
+    pub folder_name: String,
+    /// The text of its `SKILL.md`, if it has one directly inside.
+    pub skill_text: Option<String>,
+    /// How many files it holds, in all its folders. Counting stops a little
+    /// past [`MAX_SKILL_FILES`].
+    pub files: usize,
+    /// How many bytes they have together.
+    pub bytes: u64,
+    /// Whether it holds a link (on Windows also a junction), which could
+    /// lead outside it.
+    pub has_links: bool,
+}
+
+/// A skill whose folder this computer keeps.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct KeptSkill {
+    /// The folder the agent program is given: the manifest and
+    /// `skills/<name>/`.
+    pub folder: PathBuf,
+    /// The name of the folder of the skill inside it.
+    pub skill_folder_name: String,
+    /// The text of the kept `SKILL.md`, read again for every turn.
+    pub skill_text: String,
+}
+
+/// The disk and the environment of this computer, as far as skills and
+/// connectors need them. Nothing it keeps reaches another computer.
+pub trait SkillShelf: Send + Sync {
+    /// Looks at a folder the manager chose as a skill.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if it is not a folder or cannot be read.
+    fn read_folder(&self, folder: &Path) -> Result<SkillFolder, StorageError>;
+
+    /// Copies a skill's folder onto the shelf of this computer, in the form
+    /// the agent program loads for one session, replacing an earlier copy.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the folder cannot be read or the copy written.
+    fn keep(&self, from: &Path, skill: &Skill) -> Result<(), StorageError>;
+
+    /// The copy of a skill this computer keeps, if it keeps one that can be
+    /// read.
+    fn kept(&self, skill: SkillId) -> Option<KeptSkill>;
+
+    /// Removes the copy of a skill from this computer. A skill without one
+    /// is ignored. The folder the manager chose is never touched.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the copy cannot be removed.
+    fn forget(&self, skill: SkillId) -> Result<(), StorageError>;
+
+    /// Whether an environment variable is set, and not empty, in the
+    /// environment Teamwright was started in. Its value is never read here.
+    fn has_variable(&self, name: &VariableName) -> bool;
+}
+
+/// A skill of the library, with whether this computer has its folder.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LibrarySkill {
+    /// The skill.
+    pub skill: Skill,
+    /// Whether this computer keeps a copy of its folder that still passes
+    /// the check. Without one, no turn on this computer is given it.
+    pub here: bool,
+}
+
+/// A connector of the library, with what this computer lacks of it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LibraryConnector {
+    /// The connector.
+    pub connector: Connector,
+    /// The environment variables it needs that are not set here. While one
+    /// is missing, no turn on this computer is given it.
+    pub missing_variables: Vec<VariableName>,
+}
+
+/// The library of a project and the kits of its specialists.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Library {
+    /// The skills, by name.
+    pub skills: Vec<LibrarySkill>,
+    /// The connectors, by name.
+    pub connectors: Vec<LibraryConnector>,
+    /// What each specialist of the project was given, naming only skills
+    /// and connectors the library has.
+    pub kits: Vec<MemberKit>,
+}
+
+/// A connector the manager describes, before it is checked.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NewConnector {
+    /// Its name.
+    pub name: String,
+    /// How it is started.
+    pub start: NewConnectorStart,
+    /// The names of its tools that the manager may give.
+    pub tools: Vec<String>,
+}
+
+/// How a connector is started, before it is checked.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum NewConnectorStart {
+    /// A program, with its arguments and the variables it is handed.
+    Program {
+        /// The program.
+        program: String,
+        /// Its arguments.
+        arguments: Vec<String>,
+        /// The names of the environment variables it is handed.
+        variables: Vec<String>,
+    },
+    /// A web address, with the headers that carry its secrets.
+    Address {
+        /// The address.
+        url: String,
+        /// The headers.
+        headers: Vec<NewHeader>,
+    },
+}
+
+/// A header of a connector at a web address, before it is checked.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NewHeader {
+    /// The name of the header.
+    pub name: String,
+    /// The environment variable that holds its secret.
+    pub variable: String,
+    /// Whether the value is `Bearer ` and the secret.
+    pub bearer: bool,
+}
+
+/// What the manager gives one specialist.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct KitChoice {
+    /// The skills.
+    pub skills: Vec<SkillId>,
+    /// The connectors, each with the names of the tools given of it.
+    pub connectors: Vec<(ConnectorId, Vec<String>)>,
+}
+
+/// The use cases of the library of a project and of the kits of its
+/// specialists.
+#[derive(Clone)]
+pub struct KitService {
+    kits: Arc<dyn KitRepository>,
+    shelf: Arc<dyn SkillShelf>,
+    projects: Arc<dyn ProjectRepository>,
+    members: Arc<dyn MemberRepository>,
+    clock: Arc<dyn Clock>,
+}
+
+impl KitService {
+    /// Creates the service.
+    #[must_use]
+    pub fn new(
+        kits: Arc<dyn KitRepository>,
+        shelf: Arc<dyn SkillShelf>,
+        projects: Arc<dyn ProjectRepository>,
+        members: Arc<dyn MemberRepository>,
+        clock: Arc<dyn Clock>,
+    ) -> Self {
+        Self {
+            kits,
+            shelf,
+            projects,
+            members,
+            clock,
+        }
+    }
+
+    /// The library of a project, with what this computer has of it, and
+    /// the kits of its specialists.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if there is no such project or storage fails.
+    pub fn library(&self, project_id: ProjectId) -> Result<Library, ApplicationError> {
+        self.require_project(project_id)?;
+        let mut skills = self.kits.skills_of_project(project_id)?;
+        skills.sort_by(|first, second| first.name().cmp(second.name()));
+        let mut connectors = self.kits.connectors_of_project(project_id)?;
+        connectors.sort_by(|first, second| first.name().cmp(second.name()));
+        let members: BTreeSet<MemberId> = self
+            .members
+            .list_for_project(project_id)?
+            .iter()
+            .map(Member::id)
+            .collect();
+        let kits = self
+            .kits
+            .kits_of_project(project_id)?
+            .into_iter()
+            .filter(|kit| members.contains(&kit.member_id()))
+            .map(|kit| known_part(&kit, &skills, &connectors))
+            .collect();
+        Ok(Library {
+            skills: skills
+                .into_iter()
+                .map(|skill| LibrarySkill {
+                    here: usable_here(self.shelf.as_ref(), &skill).is_some(),
+                    skill,
+                })
+                .collect(),
+            connectors: connectors
+                .into_iter()
+                .map(|connector| LibraryConnector {
+                    missing_variables: missing_variables(self.shelf.as_ref(), &connector),
+                    connector,
+                })
+                .collect(),
+            kits,
+        })
+    }
+
+    /// Adds the skill in a folder to the library of a project, and keeps a
+    /// copy of the folder on this computer. The folder the manager chose is
+    /// only read.
+    ///
+    /// A skill of the same name that this computer does not keep yet, added
+    /// on another computer, is the one added again: the copy is taken here,
+    /// and the specialists that have it keep it.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if there is no such project; if the folder is not a
+    /// skill, holds a link, or is too large; if the library already has a
+    /// skill of that name that this computer keeps; or if storage fails.
+    pub fn add_skill(
+        &self,
+        project_id: ProjectId,
+        folder: &Path,
+    ) -> Result<Skill, ApplicationError> {
+        self.require_project(project_id)?;
+        let found = self.shelf.read_folder(folder)?;
+        let Some(text) = &found.skill_text else {
+            return Err(not_a_skill(&format!(
+                "the folder {} has no {SKILL_FILE} directly inside",
+                found.folder_name
+            )));
+        };
+        if found.has_links {
+            return Err(not_a_skill(
+                "the folder holds a link, which could lead outside it",
+            ));
+        }
+        if found.files > MAX_SKILL_FILES || found.bytes > MAX_SKILL_BYTES {
+            return Err(not_a_skill(&format!(
+                "the folder is larger than a skill may be: at most {MAX_SKILL_FILES} files and \
+                 {} MiB",
+                MAX_SKILL_BYTES / 1024 / 1024
+            )));
+        }
+        let file = SkillFile::check(text, &found.folder_name)?;
+        let existing = self
+            .kits
+            .skills_of_project(project_id)?
+            .into_iter()
+            .find(|skill| skill.name() == file.name());
+        let skill = match existing {
+            Some(skill) if self.shelf.kept(skill.id()).is_some() => {
+                return Err(not_a_skill(&format!(
+                    "the library already has the skill \"{}\"; remove it first to add it again",
+                    skill.name()
+                )));
+            }
+            Some(mut skill) => {
+                skill.take_again(file)?;
+                skill
+            }
+            None => Skill::add(project_id, file, self.clock.now()),
+        };
+        // The copy is made first: a skill that is stored has a copy here.
+        self.shelf.keep(folder, &skill)?;
+        if let Err(error) = self.kits.save_skill(&skill) {
+            // Nothing refers to the copy yet; a failure to remove it only
+            // leaves a folder nobody uses.
+            let _ = self.shelf.forget(skill.id());
+            return Err(error.into());
+        }
+        Ok(skill)
+    }
+
+    /// Removes a skill from the library, from every specialist that has
+    /// it, and its copy from this computer. The folder the manager chose
+    /// is never touched; copies on other computers go when they next open
+    /// the library and find the skill gone.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if there is no such skill or storage fails.
+    pub fn remove_skill(&self, project_id: ProjectId, id: SkillId) -> Result<(), ApplicationError> {
+        let skills = self.kits.skills_of_project(project_id)?;
+        if !skills.iter().any(|skill| skill.id() == id) {
+            return Err(ApplicationError::NotFound {
+                kind: "skill",
+                id: id.to_string(),
+            });
+        }
+        let kits: Vec<MemberKit> = self
+            .kits
+            .kits_of_project(project_id)?
+            .into_iter()
+            .filter_map(|mut kit| kit.without_skill(id).then_some(kit))
+            .collect();
+        self.kits.remove_skill(id, &kits)?;
+        self.shelf.forget(id)?;
+        Ok(())
+    }
+
+    /// Adds a connector to the library of a project.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if there is no such project, if the connector
+    /// breaks a rule, if the library has a connector of that name already,
+    /// or if storage fails.
+    pub fn add_connector(
+        &self,
+        project_id: ProjectId,
+        new: NewConnector,
+    ) -> Result<Connector, ApplicationError> {
+        self.require_project(project_id)?;
+        let name = ConnectorName::parse(&new.name)?;
+        let start = match new.start {
+            NewConnectorStart::Program {
+                program,
+                arguments,
+                variables,
+            } => ConnectorStart::program(
+                &program,
+                arguments,
+                parse_all(&variables, VariableName::parse)?,
+            )?,
+            NewConnectorStart::Address { url, headers } => {
+                let headers = headers
+                    .iter()
+                    .map(|header| {
+                        SecretHeader::new(
+                            &header.name,
+                            VariableName::parse(&header.variable)?,
+                            header.bearer,
+                        )
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+                ConnectorStart::address(&url, headers)?
+            }
+        };
+        let tools = parse_all(&new.tools, ToolName::parse)?;
+        if self
+            .kits
+            .connectors_of_project(project_id)?
+            .iter()
+            .any(|connector| connector.name() == &name)
+        {
+            return Err(DomainError::InvalidConnector {
+                reason: format!("the library already has a connector called {name}"),
+            }
+            .into());
+        }
+        let connector = Connector::add(project_id, name, start, tools, self.clock.now())?;
+        self.kits.save_connector(&connector)?;
+        Ok(connector)
+    }
+
+    /// Removes a connector from the library and from every specialist
+    /// that has it.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if there is no such connector or storage fails.
+    pub fn remove_connector(
+        &self,
+        project_id: ProjectId,
+        id: ConnectorId,
+    ) -> Result<(), ApplicationError> {
+        let connectors = self.kits.connectors_of_project(project_id)?;
+        if !connectors.iter().any(|connector| connector.id() == id) {
+            return Err(ApplicationError::NotFound {
+                kind: "connector",
+                id: id.to_string(),
+            });
+        }
+        let kits: Vec<MemberKit> = self
+            .kits
+            .kits_of_project(project_id)?
+            .into_iter()
+            .filter_map(|mut kit| kit.without_connector(id).then_some(kit))
+            .collect();
+        self.kits.remove_connector(id, &kits)?;
+        Ok(())
+    }
+
+    /// Gives a specialist these skills and connectors of the library of its
+    /// project, and nothing else, and answers with its kit.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if there is no such member; if it is a person, who
+    /// runs no session; if a skill or a connector is not in the library of
+    /// its project; if a tool is not one of its connector's; if the kit
+    /// breaks a rule; or if storage fails.
+    pub fn set_kit(
+        &self,
+        member_id: MemberId,
+        choice: KitChoice,
+    ) -> Result<MemberKit, ApplicationError> {
+        let member = self
+            .members
+            .find(member_id)?
+            .ok_or_else(|| ApplicationError::NotFound {
+                kind: "member",
+                id: member_id.to_string(),
+            })?;
+        let project_id = member.project_id();
+        if member.kind() != MemberKind::Agent
+            && !(choice.skills.is_empty() && choice.connectors.is_empty())
+        {
+            return Err(DomainError::InvalidConnector {
+                reason: "only an AI specialist is given skills and connectors".to_owned(),
+            }
+            .into());
+        }
+        let skills = self.kits.skills_of_project(project_id)?;
+        for skill in &choice.skills {
+            if !skills.iter().any(|known| known.id() == *skill) {
+                return Err(ApplicationError::NotFound {
+                    kind: "skill",
+                    id: skill.to_string(),
+                });
+            }
+        }
+        let connectors = self.kits.connectors_of_project(project_id)?;
+        let mut given = Vec::new();
+        for (connector_id, tools) in choice.connectors {
+            let connector = connectors
+                .iter()
+                .find(|known| known.id() == connector_id)
+                .ok_or_else(|| ApplicationError::NotFound {
+                    kind: "connector",
+                    id: connector_id.to_string(),
+                })?;
+            let tools = parse_all(&tools, ToolName::parse)?;
+            if let Some(unknown) = tools.iter().find(|tool| !connector.tools().contains(tool)) {
+                return Err(DomainError::InvalidConnector {
+                    reason: format!(
+                        "the connector {} has no tool called {unknown}",
+                        connector.name()
+                    ),
+                }
+                .into());
+            }
+            given.push(GivenConnector::new(connector_id, tools)?);
+        }
+        let kit = MemberKit::new(member_id, project_id, choice.skills, given)?;
+        self.kits.save_kit(&kit)?;
+        Ok(kit)
+    }
+
+    fn require_project(&self, id: ProjectId) -> Result<(), ApplicationError> {
+        self.projects
+            .find(id)?
+            .map(|_| ())
+            .ok_or_else(|| ApplicationError::NotFound {
+                kind: "project",
+                id: id.to_string(),
+            })
+    }
+}
+
+/// The skills and connectors a turn of a specialist is given: what it was
+/// given of the library, as far as this computer has it. A skill whose
+/// copy is missing here or no longer passes the check, and a connector
+/// whose variables are not all set here, are left out.
+///
+/// # Errors
+///
+/// Returns an error if storage fails.
+pub fn turn_kit_of(
+    kits: &dyn KitRepository,
+    shelf: &dyn SkillShelf,
+    member: &Member,
+) -> Result<TurnKit, ApplicationError> {
+    let Some(kit) = kits.kit_of(member.id())? else {
+        return Ok(TurnKit::default());
+    };
+    if member.kind() != MemberKind::Agent || kit.is_empty() {
+        return Ok(TurnKit::default());
+    }
+    let skills = kits.skills_of_project(member.project_id())?;
+    let connectors = kits.connectors_of_project(member.project_id())?;
+    let mut turn = TurnKit::default();
+    for id in kit.skills() {
+        let Some(skill) = skills.iter().find(|skill| skill.id() == *id) else {
+            continue;
+        };
+        if let Some(kept) = usable_here(shelf, skill) {
+            turn.skills.push(KitSkill {
+                name: skill.name().to_string(),
+                folder: kept.folder,
+            });
+        }
+    }
+    for given in kit.connectors() {
+        let Some(connector) = connectors
+            .iter()
+            .find(|connector| connector.id() == given.connector_id())
+        else {
+            continue;
+        };
+        if !missing_variables(shelf, connector).is_empty() {
+            continue;
+        }
+        let tools: Vec<String> = given
+            .tools()
+            .iter()
+            .filter(|tool| connector.tools().contains(tool))
+            .map(ToString::to_string)
+            .collect();
+        if tools.is_empty() {
+            continue;
+        }
+        turn.connectors.push(KitConnector {
+            name: connector.name().to_string(),
+            start: connector.start().clone(),
+            tools,
+        });
+    }
+    Ok(turn)
+}
+
+/// The copy of a skill this computer keeps, if it is there and still the
+/// same skill, passing the check. The copy is read again for every turn,
+/// so that a copy changed on the disk is checked again.
+fn usable_here(shelf: &dyn SkillShelf, skill: &Skill) -> Option<KeptSkill> {
+    let kept = shelf.kept(skill.id())?;
+    let file = SkillFile::check(&kept.skill_text, &kept.skill_folder_name).ok()?;
+    (file.name() == skill.name() && kept.skill_folder_name == skill.name().as_str()).then_some(kept)
+}
+
+/// The variables of a connector that are not set on this computer.
+fn missing_variables(shelf: &dyn SkillShelf, connector: &Connector) -> Vec<VariableName> {
+    connector
+        .start()
+        .variables()
+        .into_iter()
+        .filter(|variable| !shelf.has_variable(variable))
+        .cloned()
+        .collect()
+}
+
+/// A kit with only the skills and connectors the library has, and of each
+/// connector only the tools it lists. What another computer removed while
+/// this one gave it is dropped here, without a write.
+fn known_part(kit: &MemberKit, skills: &[Skill], connectors: &[Connector]) -> MemberKit {
+    let known_skills = kit
+        .skills()
+        .iter()
+        .copied()
+        .filter(|id| skills.iter().any(|skill| skill.id() == *id))
+        .collect();
+    let known_connectors = kit
+        .connectors()
+        .iter()
+        .filter_map(|given| {
+            let connector = connectors
+                .iter()
+                .find(|connector| connector.id() == given.connector_id())?;
+            let tools = given
+                .tools()
+                .iter()
+                .filter(|tool| connector.tools().contains(tool))
+                .cloned()
+                .collect();
+            GivenConnector::new(given.connector_id(), tools).ok()
+        })
+        .collect();
+    MemberKit::new(
+        kit.member_id(),
+        kit.project_id(),
+        known_skills,
+        known_connectors,
+    )
+    .unwrap_or_else(|_| MemberKit::empty(kit.member_id(), kit.project_id()))
+}
+
+fn parse_all<T>(
+    texts: &[String],
+    parse: impl Fn(&str) -> Result<T, DomainError>,
+) -> Result<Vec<T>, DomainError> {
+    texts
+        .iter()
+        .filter(|text| !text.trim().is_empty())
+        .map(|text| parse(text))
+        .collect()
+}
+
+fn not_a_skill(reason: &str) -> ApplicationError {
+    DomainError::NotASkill {
+        reason: reason.to_owned(),
+    }
+    .into()
+}
+
+fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
+    mutex.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
+/// Keeps the libraries and the kits in memory, for tests.
+#[derive(Debug, Default)]
+pub struct InMemoryKitRepository {
+    skills: Mutex<BTreeMap<SkillId, Skill>>,
+    connectors: Mutex<BTreeMap<ConnectorId, Connector>>,
+    kits: Mutex<BTreeMap<MemberId, MemberKit>>,
+}
+
+impl KitRepository for InMemoryKitRepository {
+    fn skills_of_project(&self, project_id: ProjectId) -> Result<Vec<Skill>, StorageError> {
+        Ok(lock(&self.skills)
+            .values()
+            .filter(|skill| skill.project_id() == project_id)
+            .cloned()
+            .collect())
+    }
+
+    fn connectors_of_project(&self, project_id: ProjectId) -> Result<Vec<Connector>, StorageError> {
+        Ok(lock(&self.connectors)
+            .values()
+            .filter(|connector| connector.project_id() == project_id)
+            .cloned()
+            .collect())
+    }
+
+    fn kits_of_project(&self, project_id: ProjectId) -> Result<Vec<MemberKit>, StorageError> {
+        Ok(lock(&self.kits)
+            .values()
+            .filter(|kit| kit.project_id() == project_id)
+            .cloned()
+            .collect())
+    }
+
+    fn kit_of(&self, member_id: MemberId) -> Result<Option<MemberKit>, StorageError> {
+        Ok(lock(&self.kits).get(&member_id).cloned())
+    }
+
+    fn save_skill(&self, skill: &Skill) -> Result<(), StorageError> {
+        lock(&self.skills).insert(skill.id(), skill.clone());
+        Ok(())
+    }
+
+    fn save_connector(&self, connector: &Connector) -> Result<(), StorageError> {
+        lock(&self.connectors).insert(connector.id(), connector.clone());
+        Ok(())
+    }
+
+    fn save_kit(&self, kit: &MemberKit) -> Result<(), StorageError> {
+        lock(&self.kits).insert(kit.member_id(), kit.clone());
+        Ok(())
+    }
+
+    fn remove_skill(&self, id: SkillId, kits: &[MemberKit]) -> Result<(), StorageError> {
+        for kit in kits {
+            self.save_kit(kit)?;
+        }
+        lock(&self.skills).remove(&id);
+        Ok(())
+    }
+
+    fn remove_connector(&self, id: ConnectorId, kits: &[MemberKit]) -> Result<(), StorageError> {
+        for kit in kits {
+            self.save_kit(kit)?;
+        }
+        lock(&self.connectors).remove(&id);
+        Ok(())
+    }
+}
+
+/// A shelf that pretends, for tests: folders it is told about, the copies
+/// it made, and the variables that are set.
+#[derive(Debug, Default)]
+pub struct PretendShelf {
+    folders: Mutex<BTreeMap<PathBuf, SkillFolder>>,
+    kept: Mutex<BTreeMap<SkillId, KeptSkill>>,
+    variables: Mutex<BTreeSet<String>>,
+}
+
+impl PretendShelf {
+    /// Makes a folder exist, with this `SKILL.md` and nothing else.
+    pub fn put_folder(&self, path: impl Into<PathBuf>, skill_text: &str) {
+        let path = path.into();
+        let folder_name = path
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        lock(&self.folders).insert(
+            path,
+            SkillFolder {
+                folder_name,
+                skill_text: Some(skill_text.to_owned()),
+                files: 1,
+                bytes: skill_text.len() as u64,
+                has_links: false,
+            },
+        );
+    }
+
+    /// Makes a folder exist as it is described.
+    pub fn put_described_folder(&self, path: impl Into<PathBuf>, folder: SkillFolder) {
+        lock(&self.folders).insert(path.into(), folder);
+    }
+
+    /// Sets an environment variable.
+    pub fn set_variable(&self, name: &str) {
+        lock(&self.variables).insert(name.to_owned());
+    }
+
+    /// Changes the kept copy of a skill, as an edit on the disk would.
+    pub fn change_kept(&self, skill: SkillId, skill_text: &str) {
+        if let Some(kept) = lock(&self.kept).get_mut(&skill) {
+            skill_text.clone_into(&mut kept.skill_text);
+        }
+    }
+
+    /// Forgets every copy, as another computer that never kept them.
+    pub fn clear_kept(&self) {
+        lock(&self.kept).clear();
+    }
+}
+
+impl SkillShelf for PretendShelf {
+    fn read_folder(&self, folder: &Path) -> Result<SkillFolder, StorageError> {
+        lock(&self.folders)
+            .get(folder)
+            .cloned()
+            .ok_or_else(|| StorageError::new(format!("{} is not a folder", folder.display())))
+    }
+
+    fn keep(&self, from: &Path, skill: &Skill) -> Result<(), StorageError> {
+        let found = self.read_folder(from)?;
+        lock(&self.kept).insert(
+            skill.id(),
+            KeptSkill {
+                folder: PathBuf::from("shelf").join(skill.id().to_string()),
+                skill_folder_name: skill.name().to_string(),
+                skill_text: found.skill_text.unwrap_or_default(),
+            },
+        );
+        Ok(())
+    }
+
+    fn kept(&self, skill: SkillId) -> Option<KeptSkill> {
+        lock(&self.kept).get(&skill).cloned()
+    }
+
+    fn forget(&self, skill: SkillId) -> Result<(), StorageError> {
+        lock(&self.kept).remove(&skill);
+        Ok(())
+    }
+
+    fn has_variable(&self, name: &VariableName) -> bool {
+        lock(&self.variables).contains(name.as_str())
+    }
+}
+
+#[cfg(test)]
+mod tests;

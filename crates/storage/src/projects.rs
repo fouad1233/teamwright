@@ -278,6 +278,16 @@ pub(crate) fn remove_project(
     // The tags go after the tasks that carry them and the views that show
     // only the tasks with one.
     delete_rows_of_project(transaction, operations, "tags", Entity::Tag, id)?;
+    // The kits name the library, so they go before it.
+    delete_rows_of_project(
+        transaction,
+        operations,
+        "member_kits",
+        Entity::MemberKit,
+        id,
+    )?;
+    delete_rows_of_project(transaction, operations, "connectors", Entity::Connector, id)?;
+    delete_rows_of_project(transaction, operations, "skills", Entity::Skill, id)?;
     delete_rows_of_project(transaction, operations, "members", Entity::Member, id)?;
     // The statuses are part of the project in the log, so their removal is
     // covered by the deletion of the project.

@@ -33,9 +33,14 @@ use crate::coordinating::{CoordinatorNudge, start_coordinating};
 use crate::dto::{ConversationDto, DataChangedDto, SyncStateDto};
 use crate::error::CommandError;
 use crate::events;
+use crate::skill_shelf::LocalSkillShelf;
 
 /// The name of the database file inside the application's data directory.
 const DATABASE_FILE_NAME: &str = "teamwright.db";
+
+/// The folder inside the application's data directory that keeps the copies
+/// of the skills of the libraries, on this computer only (decision 0039).
+const SKILL_SHELF_FOLDER: &str = "skills";
 
 /// Names a folder to keep the data in, instead of the place the operating
 /// system assigns to the application. Tests use it to stay away from the
@@ -130,6 +135,9 @@ pub struct AppState {
     pub tags: TagService,
     /// The use cases for the checklists of tasks.
     pub checklists: ChecklistService,
+    /// The library of skills and connectors of a project, and what each
+    /// specialist is given of it.
+    pub kits: teamwright_application::KitService,
     /// The use cases for the team of a project.
     pub team: TeamService,
     /// The use cases for the folders of a project.
@@ -214,6 +222,12 @@ impl AppState {
         let coordinator_repository = Arc::new(SqliteCoordinatorRepository::new(database.clone()));
         let (coordinator_nudge, coordinator_inbox) = CoordinatorNudge::new();
         let runtime: Arc<dyn AgentRuntime> = Arc::new(agent_program());
+        let kit_repository = Arc::new(teamwright_storage::SqliteKitRepository::new(
+            database.clone(),
+        ));
+        let shelf = Arc::new(LocalSkillShelf::new(
+            data_directory.join(SKILL_SHELF_FOLDER),
+        ));
         let clock = Arc::new(SystemClock);
         let folders: Arc<dyn ProjectFolders> = Arc::new(FoldersOfProjects {
             root: projects_directory(app).map_err(|error| error.to_string()),
@@ -270,6 +284,8 @@ impl AppState {
             folders: folders.clone(),
             places: places_repository.clone(),
             file_system: file_system.clone(),
+            kits: kit_repository.clone(),
+            shelf: shelf.clone(),
             runtime,
             listener: Arc::new(EventToInterface {
                 app: app.clone(),
@@ -385,6 +401,13 @@ impl AppState {
                 clock.clone(),
             ),
             checklists: ChecklistService::new(task_repository.clone(), clock.clone()),
+            kits: teamwright_application::KitService::new(
+                kit_repository,
+                shelf,
+                project_repository.clone(),
+                member_repository.clone(),
+                clock.clone(),
+            ),
             team: TeamService::new(
                 project_repository,
                 member_repository,

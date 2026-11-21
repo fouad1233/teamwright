@@ -114,6 +114,8 @@ fn office_on(this_computer: ComputerId) -> Office {
         folders: Arc::new(FixedProjectFolders::inside("projects")),
         places: Arc::new(InMemoryPlacesRepository::default()),
         file_system: Arc::new(PretendFileSystem::default()),
+        kits: Arc::new(crate::kits::InMemoryKitRepository::default()),
+        shelf: Arc::new(crate::kits::PretendShelf::default()),
         runtime: runtime.clone(),
         listener: Arc::new(RecordingWorkListener::default()),
         clock: clock.clone(),
