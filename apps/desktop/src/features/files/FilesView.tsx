@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 
-import { useBackend } from '@/shared/api/BackendProvider';
+import { useBackend, useIsDemo } from '@/shared/api/BackendProvider';
 import type { FileEntry, Id, Project } from '@/shared/api/types';
 import { classNames } from '@/shared/lib/classNames';
 import { Button, IconButton } from '@/shared/ui/Button';
@@ -240,6 +240,8 @@ function Listing({
 }: ListingProps) {
   const backend = useBackend();
   const notifier = useNotifier();
+  // A browser has no programs to open a file with and no file manager.
+  const isDemo = useIsDemo();
   const [typed, setTyped] = useState('');
   const [active, setActive] = useState(0);
   const rows = useRef<(HTMLTableRowElement | null)[]>([]);
@@ -301,17 +303,24 @@ function Listing({
     }
   }
 
+  /** Says, in the demo, that an action is for the desktop program. */
+  function onlyOnTheComputer(applies: boolean): Pick<Action, 'detail'> {
+    return isDemo && applies ? { detail: 'In the desktop program, not in the demo' } : {};
+  }
+
   function actionsOf(entry: FileEntry): Action[] {
     const entryPath = childPath(path, entry.name);
     return [
       {
         label: entry.kind === 'folder' ? 'Open' : 'Open with its program',
-        isDisabled: entry.kind === 'link',
+        ...onlyOnTheComputer(entry.kind === 'file'),
+        isDisabled: entry.kind === 'link' || (isDemo && entry.kind === 'file'),
         onSelect: () => open(entry),
       },
       {
         label: 'Show in folder',
-        isDisabled: entry.kind === 'link',
+        ...onlyOnTheComputer(true),
+        isDisabled: entry.kind === 'link' || isDemo,
         onSelect: () => show(entryPath),
       },
       { label: 'Copy path', onSelect: () => copyPath(fullPathOf(folder, path, entry.name)) },
@@ -353,7 +362,12 @@ function Listing({
       detail: 'Names that begin with a dot',
       onSelect: () => onShowHidden(!content.showsHidden),
     },
-    { label: 'Show in folder', onSelect: () => show(path) },
+    {
+      label: 'Show in folder',
+      ...onlyOnTheComputer(true),
+      isDisabled: isDemo,
+      onSelect: () => show(path),
+    },
     { label: 'Copy path', onSelect: () => copyPath(fullPathOf(folder, path)) },
   ];
 

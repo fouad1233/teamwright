@@ -1,3 +1,4 @@
+import { useIsDemo } from '@/shared/api/BackendProvider';
 import type { NotificationKind } from '@/shared/api/types';
 import { Button } from '@/shared/ui/Button';
 import { Switch } from '@/shared/ui/Switch';
@@ -31,6 +32,8 @@ const KINDS: readonly { kind: NotificationKind; label: string; hint: string }[] 
 export function NotificationSettings() {
   const choice = useNotificationChoice();
   const commands = useNotificationCommands();
+  // A browser shows no notifications of the system, so the demo cannot send one.
+  const isDemo = useIsDemo();
 
   if (!choice.data) {
     return null;
@@ -62,16 +65,18 @@ export function NotificationSettings() {
           />
         ))}
       </div>
-      <div>
-        <Button
-          disabled={!allowed}
-          onClick={() => {
-            void commands.sendTest();
-          }}
-        >
-          Send a test notification
-        </Button>
-      </div>
+      {!isDemo && (
+        <div>
+          <Button
+            disabled={!allowed}
+            onClick={() => {
+              void commands.sendTest();
+            }}
+          >
+            Send a test notification
+          </Button>
+        </div>
+      )}
     </section>
   );
 }

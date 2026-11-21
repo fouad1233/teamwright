@@ -1,3 +1,4 @@
+import { useIsDemo } from '@/shared/api/BackendProvider';
 import { Button } from '@/shared/ui/Button';
 
 import styles from './AskToNotify.module.css';
@@ -7,13 +8,16 @@ import { useNotificationChoice, useNotificationCommands } from './notificationQu
 /**
  * Asks once whether Teamwright may tell the manager, with a notification of
  * the system, when someone needs them. It shows where something first
- * waits for the manager, and never again once answered either way.
+ * waits for the manager, and never again once answered either way. The
+ * demo does not ask.
  */
 export function AskToNotify() {
   const choice = useNotificationChoice();
   const commands = useNotificationCommands();
+  // A browser shows no notifications of the system, so the demo does not ask.
+  const isDemo = useIsDemo();
 
-  if (!shouldAsk(choice.data)) {
+  if (isDemo || !shouldAsk(choice.data)) {
     return null;
   }
 

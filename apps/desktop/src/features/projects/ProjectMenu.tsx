@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 
+import { useIsDemo } from '@/shared/api/BackendProvider';
 import type { Project } from '@/shared/api/types';
 import { Button, IconButton } from '@/shared/ui/Button';
 import { Dialog } from '@/shared/ui/Dialog';
@@ -44,6 +45,8 @@ interface ProjectMenuProps {
 export function ProjectMenu({ project, taskCount }: ProjectMenuProps) {
   const commands = useProjectCommands();
   const exportWorkbook = useWorkbookExport();
+  // A browser has no files to write a workbook into.
+  const isDemo = useIsDemo();
   const memberCount = useTeamMembers().length;
   const [openDialog, setOpenDialog] = useState<OpenDialog | null>(null);
 
@@ -98,6 +101,8 @@ export function ProjectMenu({ project, taskCount }: ProjectMenuProps) {
           },
           {
             label: 'Export to Excel…',
+            detail: isDemo ? 'In the desktop program, not in the demo' : undefined,
+            isDisabled: isDemo,
             icon: <FileSpreadsheet />,
             onSelect: () => {
               void exportWorkbook(project);
