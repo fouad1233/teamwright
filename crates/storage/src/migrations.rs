@@ -32,6 +32,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("schema/0019_tags_and_checklists.sql"),
     include_str!("schema/0022_status_limits.sql"),
     include_str!("schema/0025_memory.sql"),
+    include_str!("schema/0028_conversation_digests.sql"),
 ];
 
 /// Applies the migrations a database has not seen yet. Each one runs in its

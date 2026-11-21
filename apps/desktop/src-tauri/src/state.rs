@@ -23,10 +23,10 @@ use teamwright_integrations::{GhCommandLine, GhLocator, HttpsSender};
 use teamwright_runtime::ClaudeCode;
 use teamwright_storage::{
     Database, FolderOfComputers, SqliteAreaRepository, SqliteConversationRepository,
-    SqliteIntegrationStore, SqliteMemberRepository, SqliteNotificationChoice,
-    SqlitePlacesRepository, SqlitePlanningRepository, SqliteProjectRepository,
-    SqliteSprintRepository, SqliteSyncLedger, SqliteTagRepository, SqliteTaskRepository,
-    SqliteThemeStore, SqliteViewRepository,
+    SqliteDigestRepository, SqliteIntegrationStore, SqliteMemberRepository,
+    SqliteNotificationChoice, SqlitePlacesRepository, SqlitePlanningRepository,
+    SqliteProjectRepository, SqliteSprintRepository, SqliteSyncLedger, SqliteTagRepository,
+    SqliteTaskRepository, SqliteThemeStore, SqliteViewRepository,
 };
 
 use crate::dto::{ConversationDto, DataChangedDto, SyncStateDto};
@@ -199,7 +199,7 @@ impl AppState {
             database.clone(),
         ));
         let digest_repository: Arc<dyn DigestRepository> =
-            Arc::new(teamwright_application::in_memory::InMemoryDigestRepository::default());
+            Arc::new(SqliteDigestRepository::new(database.clone()));
         let runtime: Arc<dyn AgentRuntime> = Arc::new(agent_program());
         let clock = Arc::new(SystemClock);
         let folders: Arc<dyn ProjectFolders> = Arc::new(FoldersOfProjects {

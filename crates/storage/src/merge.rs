@@ -184,7 +184,8 @@ pub(crate) const fn merging_of(entity: Entity) -> Merging {
         | Entity::Decision
         | Entity::Interview
         | Entity::Proposal
-        | Entity::Handoff => Merging::Whole,
+        | Entity::Handoff
+        | Entity::Digest => Merging::Whole,
         Entity::ProjectPlaces => Merging::NeverLeaves,
     }
 }

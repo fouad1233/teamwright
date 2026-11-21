@@ -254,6 +254,7 @@ pub(crate) fn remove_project(
         Entity::TeamMessage,
         id,
     )?;
+    delete_rows_of_project(transaction, operations, "digests", Entity::Digest, id)?;
     delete_rows_of_project(transaction, operations, "tasks", Entity::Task, id)?;
     delete_rows_of_project(transaction, operations, "sprints", Entity::Sprint, id)?;
     delete_rows_of_project(transaction, operations, "views", Entity::View, id)?;

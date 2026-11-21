@@ -14,6 +14,7 @@ use serde_json::{Map, Value};
 
 use crate::areas;
 use crate::conversations;
+use crate::digests;
 use crate::error::DatabaseError;
 use crate::members;
 use crate::memory;
@@ -50,6 +51,7 @@ pub(crate) fn write_state(
         Entity::TeamMessage => teamwork::write_message_state(transaction, state),
         Entity::Tag => tags::write_state(transaction, state),
         Entity::MemoryEntry => memory::write_entry_state(transaction, state),
+        Entity::Digest => digests::write_state(transaction, state),
         Entity::Conversation => conversations::write_conversation_state(transaction, state),
         Entity::Turn => conversations::write_turn_state(transaction, state),
         Entity::TurnStep => conversations::write_step_state(transaction, state),
@@ -107,6 +109,9 @@ pub(crate) fn remove(
         Entity::MemoryEntry => {
             memory::remove_entry(transaction, entity_id)?;
         }
+        Entity::Digest => {
+            digests::remove_digest(transaction, entity_id)?;
+        }
         Entity::Conversation => {
             conversations::remove_conversation(transaction, operations, entity_id)?;
         }
@@ -152,6 +157,7 @@ mod tests {
     const TABLES: &[&str] = &[
         "projects",
         "areas",
+        "digests",
         "statuses",
         "tasks",
         "task_dependencies",
@@ -379,6 +385,18 @@ mod tests {
             )
             .unwrap();
         conversations.save_turn(&proposing).unwrap();
+        teamwright_application::DigestRepository::save(
+            &crate::digests::SqliteDigestRepository::new(database.clone()),
+            &teamwright_domain::Digest::keep(
+                project.id(),
+                teamwright_domain::DigestSource::new("folder/session", "/home/ada/air").unwrap(),
+                teamwright_domain::DigestTitle::parse("Sensor plan").unwrap(),
+                teamwright_domain::DigestText::parse("First request:\nPlan it.").unwrap(),
+                (Some(moment(-60)), None),
+                moment(10),
+            ),
+        )
+        .unwrap();
         database
     }
 

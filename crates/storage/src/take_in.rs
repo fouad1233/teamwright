@@ -374,9 +374,8 @@ fn parents_of(
         | Entity::Tag
         | Entity::Conversation
         | Entity::TeamMessage
-        | Entity::MemoryEntry => {
-            text_of(state, "project_id").map(|id| (Entity::Project, id.to_owned()))
-        }
+        | Entity::MemoryEntry
+        | Entity::Digest => text_of(state, "project_id").map(|id| (Entity::Project, id.to_owned())),
         // A handoff cannot exist without its task, which cannot exist
         // without its project.
         Entity::Handoff => text_of(state, "task_id").map(|id| (Entity::Task, id.to_owned())),
@@ -1158,7 +1157,8 @@ impl Round {
             | Entity::View
             | Entity::Area
             | Entity::Tag
-            | Entity::Conversation => state
+            | Entity::Conversation
+            | Entity::Digest => state
                 .and_then(|state| text_of(state, "project_id"))
                 .map(str::to_owned),
             _ => match &conversation {

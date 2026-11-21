@@ -85,11 +85,14 @@ pub(crate) enum Entity {
     /// An entry of the memory of a project. Only whether a newer entry
     /// replaced it changes.
     MemoryEntry,
+    /// A digest of an earlier conversation, kept with a project. It never
+    /// changes.
+    Digest,
 }
 
 impl Entity {
     /// Every kind of thing whose changes are logged.
-    pub(crate) const ALL: [Self; 17] = [
+    pub(crate) const ALL: [Self; 18] = [
         Self::Project,
         Self::Task,
         Self::Member,
@@ -107,6 +110,7 @@ impl Entity {
         Self::TeamMessage,
         Self::Tag,
         Self::MemoryEntry,
+        Self::Digest,
     ];
 
     /// The entity of a name in the log, if this version knows it.
@@ -134,6 +138,7 @@ impl Entity {
             Self::TeamMessage => "team_message",
             Self::Tag => "tag",
             Self::MemoryEntry => "memory_entry",
+            Self::Digest => "digest",
         }
     }
 }
