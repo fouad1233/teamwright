@@ -117,3 +117,23 @@ kept with a project travels to the other computers through the sync folder
   sync folder with everything in it.
 - **Let the manager import several conversations in one step.** One at a
   time keeps the reading honest: each digest is read before it is kept.
+
+## Note of 21 November 2026: more forms of secrets, after a review
+
+A review found three common forms the rules missed. They are now hidden:
+
+- JSON Web Tokens: three runs of letters, numbers, hyphens and underscores
+  joined by dots, the first starting `eyJ` (an unsigned token, with an empty
+  last run, too).
+- Long runs of hexadecimal characters, 32 or more. A commit hash of 7 to 12
+  characters stays, but a full hash of 40 is hidden: it cannot be told from
+  a key.
+- The value after `--password`, `--token`, `--secret` (and other flags that
+  name a secret) and after `-p`, with a space or `=`, and pairs such as
+  `token=` or `"password": "..."`. A flag after the flag is not its value.
+  After `-p` a path stays, so that `mkdir -p out/logs` reads as it was; a
+  word such as `mkdir -p out` is still hidden, which is the cost of hiding
+  too much rather than too little.
+
+The rules still guess. The manager still reads every digest before it is
+kept.

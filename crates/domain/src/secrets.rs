@@ -51,6 +51,25 @@ const LEAST_AFTER_PREFIX: usize = 12;
 /// to be taken for a key when it mixes capitals, small letters and digits.
 const LEAST_RANDOM_RUN: usize = 32;
 
+/// How many hexadecimal digits in a row make a key. A short commit hash of
+/// 7 to 12 digits stays; a full hash of 40 and any longer run is hidden,
+/// since a key and a full hash look the same.
+const LEAST_HEX_RUN: usize = 32;
+
+/// What the word after the one being read must be, as far as the words
+/// before it say.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Next {
+    /// Nothing special.
+    Ordinary,
+    /// A secret: it comes after `Bearer` or a name such as `password:`.
+    Secret,
+    /// The value of a flag such as `--password` or `-p`. It is hidden
+    /// unless it is another flag, or, when `unless_a_path`, a path: `-p`
+    /// is also what `mkdir -p src/lib` says.
+    ValueOfFlag { unless_a_path: bool },
+}
+
 /// Words that, followed by `=` or `:`, say that a secret comes next.
 const SECRET_NAMES: &[&str] = &[
     "password",
@@ -82,12 +101,12 @@ const SECRET_NAMES: &[&str] = &[
 pub fn hide_secrets(text: &str) -> String {
     let text = hide_private_keys(text);
     let mut hidden = String::with_capacity(text.len());
-    let mut hides_next_word = false;
+    let mut next = Next::Ordinary;
     let mut word = String::new();
     for character in text.chars() {
         if character.is_whitespace() {
             if !word.is_empty() {
-                hides_next_word = push_word(&mut hidden, &word, hides_next_word);
+                next = push_word(&mut hidden, &word, next);
                 word.clear();
             }
             hidden.push(character);
@@ -96,30 +115,40 @@ pub fn hide_secrets(text: &str) -> String {
         }
     }
     if !word.is_empty() {
-        push_word(&mut hidden, &word, hides_next_word);
+        push_word(&mut hidden, &word, next);
     }
     hidden
 }
 
-/// Adds one word to the text, hidden if it must be, and says whether the
-/// word after it must be hidden too.
-fn push_word(hidden: &mut String, word: &str, is_a_secret: bool) -> bool {
-    if is_a_secret {
-        // "Authorization: Bearer abc…": the kind of the secret is shown,
-        // the secret is the word after it.
-        if is_a_kind_of_credential(word) {
-            hidden.push_str(word);
-            return true;
+/// Adds one word to the text, hidden if it must be, and says what the word
+/// after it must be.
+fn push_word(hidden: &mut String, word: &str, expected: Next) -> Next {
+    match expected {
+        Next::Ordinary => {}
+        Next::Secret => {
+            // "Authorization: Bearer abc…": the kind of the secret is shown,
+            // the secret is the word after it.
+            if is_a_kind_of_credential(word) {
+                hidden.push_str(word);
+                return Next::Secret;
+            }
+            push_hidden(hidden, word);
+            return Next::Ordinary;
         }
-        hidden.push_str(HIDDEN);
-        return false;
+        Next::ValueOfFlag { unless_a_path } => {
+            let is_another_flag = word.starts_with('-');
+            if !is_another_flag && !(unless_a_path && looks_like_a_path(word)) {
+                push_hidden(hidden, word);
+                return Next::Ordinary;
+            }
+        }
     }
     let (before, core, after) = strip_marks(word);
     if looks_like_a_token(core) {
         hidden.push_str(before);
         hidden.push_str(HIDDEN);
         hidden.push_str(after);
-        return false;
+        return Next::Ordinary;
     }
     if let Some((name, separator_end)) = secret_assignment(core) {
         hidden.push_str(before);
@@ -127,21 +156,66 @@ fn push_word(hidden: &mut String, word: &str, is_a_secret: bool) -> bool {
         if separator_end < core.len() {
             hidden.push_str(HIDDEN);
             hidden.push_str(after);
-            return false;
+            return Next::Ordinary;
         }
         hidden.push_str(after);
         // "password:" with the value in the next word.
-        return !name.is_empty();
+        return if name.is_empty() {
+            Next::Ordinary
+        } else {
+            Next::Secret
+        };
     }
     if let Some(shown) = address_without_credentials(core) {
         hidden.push_str(before);
         hidden.push_str(&shown);
         hidden.push_str(after);
-        return false;
+        return Next::Ordinary;
     }
     hidden.push_str(word);
     // "Bearer abc…": the token is the next word.
-    is_a_kind_of_credential(core)
+    if is_a_kind_of_credential(core) {
+        return Next::Secret;
+    }
+    // "--password abc", "-p abc".
+    match core {
+        "-p" => Next::ValueOfFlag {
+            unless_a_path: true,
+        },
+        _ if names_a_secret(core.trim_start_matches('-')) && core.starts_with("--") => {
+            Next::ValueOfFlag {
+                unless_a_path: false,
+            }
+        }
+        _ => Next::Ordinary,
+    }
+}
+
+/// Adds a word as [`HIDDEN`], keeping the quotation marks and punctuation
+/// around it.
+fn push_hidden(hidden: &mut String, word: &str) {
+    let (before, _, after) = strip_marks(word);
+    hidden.push_str(before);
+    hidden.push_str(HIDDEN);
+    hidden.push_str(after);
+}
+
+/// Whether a word is a path of a file or folder: it holds a separator or
+/// starts like a relative or home path.
+fn looks_like_a_path(word: &str) -> bool {
+    word.contains(['/', '\\']) || word.starts_with(['.', '~'])
+}
+
+/// Whether a lower-case or mixed-case name, without leading hyphens, names
+/// a secret: one of [`SECRET_NAMES`], alone or at the end of a longer name.
+fn names_a_secret(name: &str) -> bool {
+    let lowered = name.to_ascii_lowercase();
+    SECRET_NAMES.iter().any(|secret| {
+        lowered == *secret
+            || lowered.ends_with(&format!("_{secret}"))
+            || lowered.ends_with(&format!("-{secret}"))
+            || lowered.ends_with(&format!(".{secret}"))
+    })
 }
 
 /// Whether a word names the kind of a credential that follows it.
@@ -176,7 +250,43 @@ fn looks_like_a_token(core: &str) -> bool {
                 .chars()
                 .all(|character| character.is_ascii_alphanumeric() || "-_.".contains(character))
     });
-    has_known_prefix || looks_random(core)
+    has_known_prefix
+        || looks_random(core)
+        || looks_like_a_web_token(core)
+        || looks_like_a_hex_key(core)
+}
+
+/// Whether a word is a JSON Web Token: three runs of letters, digits,
+/// hyphens and underscores joined by dots, the first starting `eyJ` (an
+/// encoded `{"`). The last run, the signature, may be empty.
+fn looks_like_a_web_token(core: &str) -> bool {
+    let mut runs = core.split('.');
+    // A full stop after the token ends a sentence and is not read as part
+    // of it, so an unsigned token may arrive as two runs.
+    let (Some(header), Some(claims), signature, None) =
+        (runs.next(), runs.next(), runs.next(), runs.next())
+    else {
+        return false;
+    };
+    if signature.is_none() && !claims.starts_with("eyJ") {
+        return false;
+    }
+    let signature = signature.unwrap_or_default();
+    let is_base64url = |run: &str| {
+        run.chars()
+            .all(|character| character.is_ascii_alphanumeric() || "-_".contains(character))
+    };
+    header.starts_with("eyJ")
+        && !claims.is_empty()
+        && is_base64url(header)
+        && is_base64url(claims)
+        && is_base64url(signature)
+}
+
+/// Whether a word is a long run of hexadecimal digits, as a key or a
+/// digest is written. A commit hash of 7 to 12 digits is shorter.
+fn looks_like_a_hex_key(core: &str) -> bool {
+    core.len() >= LEAST_HEX_RUN && core.chars().all(|character| character.is_ascii_hexdigit())
 }
 
 /// Whether a word is a long run of the characters of encoded data that
@@ -198,15 +308,14 @@ fn looks_random(core: &str) -> bool {
 fn secret_assignment(core: &str) -> Option<(&str, usize)> {
     let separator = core.find(['=', ':'])?;
     let name = &core[..separator];
-    let lowered = name.to_ascii_lowercase();
-    let lowered = lowered.trim_start_matches('-');
-    let names_a_secret = SECRET_NAMES.iter().any(|secret| {
-        lowered == *secret
-            || lowered.ends_with(&format!("_{secret}"))
-            || lowered.ends_with(&format!("-{secret}"))
-            || lowered.ends_with(&format!(".{secret}"))
-    });
-    if !names_a_secret {
+    // `"password": "x"` in JSON, and `'token'=…`: the quotes are not the name.
+    let bare = name
+        .trim_end_matches(['"', '\'', '`'])
+        .trim_start_matches(['"', '\'', '`']);
+    let bare = bare.trim_start_matches('-');
+    // `-p=x` is the short flag of a password.
+    let is_the_short_flag = name == "-p" && core[separator..].starts_with('=');
+    if !is_the_short_flag && !names_a_secret(bare) {
         return None;
     }
     let mut separator_end = separator + 1;
@@ -269,9 +378,100 @@ mod tests {
 
     #[test]
     fn plain_words_paths_and_fingerprints_are_kept() {
-        let text = "Please fix src/features/advisor/AdvisorView.tsx and commit 1e8ccc5a9f0b2c4d6e8f0a1b2c3d4e5f6a7b8c9d.";
+        let text = "Please fix src/features/advisor/AdvisorView.tsx and commit 1e8ccc5a9f0b.";
 
         assert_eq!(hide_secrets(text), text);
+    }
+
+    #[test]
+    fn short_commit_hashes_and_paths_are_kept() {
+        for text in [
+            "see commit 1e8ccc5 and 40cc186a",
+            "show eff32b2d6a1c",
+            "open /home/user/robotics/teamwright/crates/domain/src/secrets.rs",
+            "mkdir -p crates/domain/src and cd ../src",
+            "cp -p ./a.txt ~/b.txt",
+            "the password is important and a token of thanks",
+        ] {
+            assert_eq!(hide_secrets(text), text);
+        }
+    }
+
+    #[test]
+    fn a_json_web_token_is_hidden() {
+        let jwt = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U";
+
+        assert_eq!(
+            hide_secrets(&format!("got {jwt} back")),
+            "got [hidden] back"
+        );
+        assert_eq!(hide_secrets(&format!("({jwt}).")), "([hidden]).");
+        // The signature of an unsigned token is empty.
+        assert_eq!(
+            hide_secrets("eyJhbGciOiJub25lIn0.eyJzdWIiOiJ4In0."),
+            "[hidden]."
+        );
+        // Dots alone do not make a token.
+        assert_eq!(
+            hide_secrets("eyJ.only.two.dots.more"),
+            "eyJ.only.two.dots.more"
+        );
+        assert_eq!(hide_secrets("version 1.2.3"), "version 1.2.3");
+    }
+
+    #[test]
+    fn a_long_hexadecimal_key_is_hidden() {
+        assert_eq!(
+            hide_secrets("key 3f2a9c4e8b1d7a6f5e0c9b8a7d6e5f4a here"),
+            "key [hidden] here"
+        );
+        assert_eq!(
+            hide_secrets("sha 1e8ccc5a9f0b2c4d6e8f0a1b2c3d4e5f6a7b8c9d"),
+            "sha [hidden]"
+        );
+        // 31 digits are not a key.
+        assert_eq!(
+            hide_secrets("3f2a9c4e8b1d7a6f5e0c9b8a7d6e5f4"),
+            "3f2a9c4e8b1d7a6f5e0c9b8a7d6e5f4"
+        );
+    }
+
+    #[test]
+    fn the_value_of_a_flag_that_names_a_secret_is_hidden() {
+        assert_eq!(
+            hide_secrets("login --password hunter2 --user fouad"),
+            "login --password [hidden] --user fouad"
+        );
+        assert_eq!(
+            hide_secrets("tool --token abc123 run"),
+            "tool --token [hidden] run"
+        );
+        assert_eq!(hide_secrets("x --secret s3cr3t"), "x --secret [hidden]");
+        assert_eq!(hide_secrets("mysql -p hunter2"), "mysql -p [hidden]");
+        assert_eq!(hide_secrets("mysql -p=hunter2"), "mysql -p=[hidden]");
+        assert_eq!(hide_secrets("--password=hunter2"), "--password=[hidden]");
+        // A flag after the flag is not its value.
+        assert_eq!(
+            hide_secrets("run --token --verbose"),
+            "run --token --verbose"
+        );
+        // A path after -p is a path.
+        assert_eq!(hide_secrets("mkdir -p out/logs"), "mkdir -p out/logs");
+    }
+
+    #[test]
+    fn pairs_of_a_name_and_a_value_are_hidden() {
+        assert_eq!(hide_secrets("token=abc123"), "token=[hidden]");
+        assert_eq!(hide_secrets("api_key=abc123 x=1"), "api_key=[hidden] x=1");
+        assert_eq!(hide_secrets("password=hunter2;"), "password=[hidden];");
+        assert_eq!(
+            hide_secrets(r#"{"password": "hunter2", "user": "fouad"}"#),
+            r#"{"password": "[hidden]", "user": "fouad"}"#
+        );
+        assert_eq!(
+            hide_secrets(r#"{"token":"abc123"}"#),
+            r#"{"token":[hidden]"}"#
+        );
     }
 
     #[test]
