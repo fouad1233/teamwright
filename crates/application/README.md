@@ -15,7 +15,7 @@ window or agent runtime.
 | `team` | `TeamService`: put members on the team of a project, change them, take them off |
 | `places` | `PlacesService`: the folders of a project: choose its work folder, add and take away reference folders, copy reference files into it |
 | `files` | `ProjectFilesService`: what lies in the folders of a project, for the files view: `list` a folder at a path inside it, `locate` an entry to open or show, each path checked first |
-| `work` | `WorkService`: let AI specialists work: start on a task, ask, reply, answer a specialist's question, list what waits for the manager, stop, follow every event, open a session in the desktop app, recover after a restart; `brief_for` and `instructions_for`. Its part `advisor`: plan a project with the Advisor (`advise`, `answer_interview`, `approve_proposal`); `ApprovedProposal`, `answers_in_words` and `instructions_for_advisor` |
+| `work` | `WorkService`: let AI specialists work: start on a task, ask, reply, answer a specialist's question, list what waits for the manager, stop, follow every event, open a session in the desktop app, recover after a restart; `brief_for` and `instructions_for`. Its part `advisor`: plan a project with the Advisor (`advise`, `answer_interview`, `change_proposal`, `approve_proposal`); `ProposalEdit`, `ApprovedProposal`, `answers_in_words` and `instructions_for_advisor` |
 | `teamwork` | `TeamworkService`: what specialists hand each other: every handoff and message of a project (`talk_of_project`, as `TeamTalk`) and the messages that wait for a member (`messages_waiting_for`, for the coordinator); the rules across stored things: `messages_waiting_for` (sent to the member, not delivered, the oldest first), `latest_handoff_of` (the handoff of a task that counts), `handoffs_in_words` (the part of a brief) and `messages_in_words` (what a turn is told) |
 | `google_drive` | `GoogleDriveService`: the folder that Google Drive for desktop keeps on this computer (`find_drive_folders`, `look`, `prepare`), behind the port `DriveSurroundings`; see "Syncing through Google Drive" |
 | `sync` | `SyncService`: keep several computers of one manager in step through a folder the manager owns (`round`, `choose_folder`, `stop`, `rename_this_computer`, `accept`, `ignore`, `notices`, `dismiss`, `new_identity`); the ports `SyncFolder` and `SyncLedger`, and the operations that travel between computers |
@@ -387,9 +387,20 @@ start or end.
   questions first") and while the Advisor works (`advisor_busy`). The
   session of the Advisor does not see an approval happen. So a reply that
   follows one reaches the Advisor as `message_after_approval`: the words of
-  the manager with the news that the proposal was approved, and that a
-  proposal from then on holds only what is to be added. The turn keeps the
-  words of the manager alone.
+  the manager with the news that the proposal was approved, what was
+  approved as it was approved (members, and tasks with owners, sizes and
+  what they wait for, so that a task the manager renamed or took out is
+  not proposed again), and that a proposal from then on holds only what is
+  to be added. The turn keeps the words of the manager alone.
+- `change_proposal` makes one change of the manager's (`ProposalEdit`) to
+  the open proposal, checked by the domain (`ProposalChange`) and against
+  the team: an owner must be on the team or in the proposal, and a
+  proposed member whose name the team has cannot be taken out ("Firmware
+  engineer is on the team already: approving does not add them again").
+  The turn is saved, so the change is logged with the whole proposal,
+  kept over a restart and taken in by the other computers. Refusals:
+  `no_proposal_open`, `runs_elsewhere`, `rule_broken` with the reason in
+  words. A refused change changes nothing.
 - `approve_proposal` takes what the manager left of the proposal
   (`ApprovedProposal`) and checks all of it first (`no_proposal_open`; the
   rules of names, titles and plans; a task given to somebody who is neither

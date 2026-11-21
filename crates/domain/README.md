@@ -20,12 +20,12 @@ done with them. It does no input or output.
 | `project_files` | `PathInFolder`: a path inside a folder of a project that cannot leave it by how it is written (no `..`, no root, no drive, no colon); `FolderEntry`, `EntryKind`, `listing_of`: what a folder holds as the files view shows it (noise left out by `is_noise`, folders first, at most `MOST_ENTRIES`); `runs_as_program`: the endings Teamwright does not open |
 | `area` | `Area`: a part of a project with a job of its own, such as its firmware, with a name and a place among the areas of the project |
 | `task_history` | `TaskChange`, `history_of`: what changed from one version of a task to the next |
-| `dependencies` | `DependencyGraph`: which task waits for which |
+| `dependencies` | `DependencyGraph`: which task waits for which, for the tasks of a project or of a proposal |
 | `integration` | `EventKind` (with stable names such as `task.status_changed`): the kinds of events a Slack channel or a web address can hear; `WebAddress`: an https address whose `Debug` form and `shown()` hide all but the host, since it may be a secret; `RepositoryName`: `owner/name` of a GitHub repository, also read from a git remote (`of_remote`) |
 | `member` | `Member`, `MemberKind`: an AI agent or a person on the team of a project; `MemberProfile`, `Effort`: the model and the effort of a specialist; `MemberInstructions`: its instructions, in the manager's words |
 | `ready_made` | `ReadyMadeSpecialist`: the twelve roles that ship with Teamwright, each with a description, instructions, a model and an effort ([decision 0031](../../docs/decisions/0031-instructions-and-ready-made-specialists.md)) |
 | `conversation` | `Conversation`, `Turn`, `Step`, `TokenCounts`, `ContextUse` (how full the context of a session was after a turn; nearly full from 80 % of the window; `context_of` a conversation is that of its last turn that reported one): the work of an AI specialist or of the Advisor, one request at a time; `DecisionRequest`, `DecisionOption`, `DecisionAnswer`: a question a specialist asks the manager to decide |
-| `planning` | `Interview`, `InterviewQuestion`, `InterviewAnswer`: the questions the Advisor asks before it proposes; `Proposal`, `ProposedMember`, `ProposedTask`, `ProposedOwner`: the team and the plan it proposes |
+| `planning` | `Interview`, `InterviewQuestion`, `InterviewAnswer`: the questions the Advisor asks before it proposes; `Proposal`, `ProposedMember`, `ProposedTask`, `ProposedOwner`: the team and the plan it proposes; `ProposalChange`: one change of the manager's to it before approving |
 | `teamwork` | `Handoff`, `HandoffContent`: the result of a task for whoever builds on it (a summary, an interface contract, the files that hold it as `PathInFolder`s); `TeamMessage`, `MessageKind`, `MessageDelivery`: a question or a note from one specialist to another and when it reached its receiver; `SaidIn`: who said it, in which conversation and turn |
 | `error` | `DomainError`: every rule that can be broken |
 | `time` | `Timestamp`, `CalendarDate` |
@@ -135,6 +135,20 @@ done with them. It does no input or output.
 - A message says something (at most 4,000 characters) and goes to another
   member than its sender. It is delivered once: delivering it again changes
   nothing.
+- Before it is approved, the manager changes a proposal one
+  `ProposalChange` at a time (`Proposal::change`, `Turn::change_proposal`):
+  the title, description, size, priority or owner of a task, a task to wait
+  for added or taken out, a task added at the end, a task or a member taken
+  out, the model and effort of a member. The whole plan is checked again
+  after each change, and a refused change leaves it as it was (`the
+  proposal has no task 5`, `"Route the board" cannot wait for "Define the
+  outline", which waits for it already`). Taking a task out takes out what
+  waited for it and moves the places after it up by one; taking a member
+  out leaves its tasks to nobody. Nothing is ever left empty.
+- Tasks never wait for each other in a circle. `DependencyGraph` holds the
+  rule once, for the tasks of a project (by identifier) and for those of a
+  proposal (by place): `would_create_cycle` for one more dependency,
+  `has_cycle` for a whole set.
 
 ## How to work in it
 

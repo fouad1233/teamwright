@@ -209,8 +209,9 @@ The shell is where the work of an AI specialist meets the outside world
   `open`, `xdg-open`), without a shell. `Backend.openWebAddress` calls it;
   the demo does what a link does (`window.open` with `noopener`). The Embed
   view's "Open in the browser" uses it.
-- **Planning with the Advisor.** The commands `advise`, `answer_interview`
-  and `approve_proposal` in `commands/work.rs` carry it out; `reply` and
+- **Planning with the Advisor.** The commands `advise`, `answer_interview`,
+  `change_proposal` and `approve_proposal` in `commands/work.rs` carry it
+  out; `reply` and
   `list_conversations_waiting` serve conversations with the Advisor too. In
   `dto.rs`, a conversation says whether it `isWithAdvisor`, a turn carries
   its `interview` and its `proposal`, a conversation names the computer it
@@ -219,7 +220,11 @@ The shell is where the work of an AI specialist meets the outside world
   `{"kind": "manager"}` or `{"kind": "member", "name": "…"}`. A place sent
   as a number that is not a whole number from 0, such as `-1` or `1.5`, is
   read as a place that is not there, so that the use case refuses it with
-  the rule it breaks.
+  the rule it breaks. A change of a proposal (`ProposalChange` in
+  `types.ts`, `ProposalEditInput` in `dto.rs`) is tagged by its `kind`
+  (`retitle`, `describe`, `estimate`, `prioritize`, `giveTo`, `addWait`,
+  `removeWait`, `addTask`, `removeTask`, `removeMember`, `setProfile`) and
+  names tasks and members by their places.
 - **Instructions and ready-made specialists**
   ([decision 0031](../../docs/decisions/0031-instructions-and-ready-made-specialists.md)).
   A member on the wire carries its `instructions`. The commands
@@ -451,6 +456,16 @@ Rules of the interface:
   Claude, show a question with its options but nothing to pick
   (`DecisionCard` with `answeredOn`), and put `RunsElsewhere` in their
   place, with the name of the computer from the state of syncing.
+- **A proposal is changed where it stands.** `ProposalCard` keeps no draft
+  of its own: every change (a title or a size typed in its row, an owner,
+  a description, a priority, a task to wait for picked with `Picker` from
+  `features/tasks/TaskPicker.tsx`, a task added or taken out, a member
+  taken out or given another model or effort) goes to the backend at
+  once through `changeProposal`, and the card shows the proposal as it
+  comes back. A refused change shows its reason under the row it
+  concerns, not in a notice. Approve sends the proposal as it reads. The
+  demo backend applies the same changes with the same refusals
+  (`proposalAfter` in `shared/api/demo/planning.ts`).
 - **What belongs to the window stays in the window.** Which view or place
   is open (`app/navigation.tsx`) and which tasks show their subtasks
   (`features/tasks/subtaskFolds.ts`) say something about the window and

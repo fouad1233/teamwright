@@ -113,3 +113,36 @@ five sentences about a small device that measures the air.
 - **Let the Advisor create members and tasks itself, through tools.** The
   principle that nothing starts before the manager approves would then
   depend on the Advisor asking first.
+
+## Note of 21 November 2026: the manager changes a proposal before approving
+
+- **Every change is stored as it is made.** Before, the manager's changes
+  lived only in the window until the proposal was approved, and were lost
+  when the program closed. Now each change (`change_proposal`) is checked
+  by the domain and stored with the turn, logged as the whole proposal like
+  the rest of it. So a change survives a restart and reaches the other
+  computers the way the proposal does. As with approving, only the
+  computer the conversation runs on changes it, because the proposal
+  merges whole and two computers changing it at once would lose one side.
+- **What can be changed:** the title, the description, the size, the
+  priority and the owner of a task; the tasks of the same proposal it
+  waits for (one at a time, added or taken out); a task of the manager's
+  own, added at the end; a task or a member taken out; the model and the
+  effort of a member. Taking a task out takes out what waited for it.
+  Taking a member out leaves its tasks to nobody, and a proposed member
+  the team already has cannot be taken out, because approving does not
+  add it anyway.
+- **The rule of circles is written once.** `DependencyGraph` works on the
+  identifiers of tasks of a project and on the places of the tasks of a
+  proposal. The proposal, the team bus and the board use the same one.
+- **The proposal as the Advisor first made it is not kept.** "Undo my
+  changes" went with the draft in the window. Each change can be made
+  back by hand, except a removed task or member, which the manager adds
+  again by hand or asks the Advisor for. Keeping the first form would
+  have needed a second copy of the proposal in storage, for little use.
+- **The Advisor is told what was approved, as it was approved.** Its
+  session remembers its proposal as it made it. When the manager writes
+  after approving, the message now lists the members and the tasks that
+  were approved, with their owners, sizes and what they wait for, and
+  says that what it proposed and does not find there was left out on
+  purpose.

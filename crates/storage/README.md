@@ -122,8 +122,9 @@ involved.
   their own, keyed by the turn: `turn_interviews` with its questions (each
   with its answer) and their options, and `turn_proposals` with its members,
   its tasks and what each task waits for. Each is written only when it
-  differs from what is stored: when it is made, and when it is answered or
-  approved. They are logged as the entities `interview` and `proposal` with
+  differs from what is stored: when it is made, when the manager changes a
+  proposal before approving it (each change is one logged state), and when
+  it is answered or approved. They are logged as the entities `interview` and `proposal` with
   the identifier of the turn, and the logged state is the whole of it.
   Rows are updated in place by position, and positions a list no longer has
   are deleted.
