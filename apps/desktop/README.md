@@ -213,6 +213,26 @@ The shell is where the work of an AI specialist meets the outside world
   (`features/advisor/EarlierConversations.tsx`). The demo pretends to find
   seven made-up conversations (`shared/api/demo/earlierConversations.ts`);
   the empty demo finds none.
+- **Permission requests**
+  ([decision 0038](../../docs/decisions/0038-permission-requests-routed-to-the-manager.md)).
+  `commands/permissions.rs` gives the requests of a project
+  (`permission_requests`, `PermissionRequestDto` with its answer and
+  whether it was given on this computer), those that wait
+  (`open_permission_requests`), answering one (`answer_permission`,
+  `PermissionAnswerInput`: allow with a scope, a kind and the text, or
+  refuse, each with a word), which answers with the conversation it goes
+  on in, and taking a standing one back (`withdraw_permission`). The inbox
+  shows an open request beside the questions, the oldest first
+  (`features/permissions/PermissionCard`): who asks, the task, exactly the
+  command or the domain in the type of code, why, and for a command one
+  plain sentence that it runs with the manager's rights; the manager picks
+  once, for the task, always or refuse, may narrow a command to its program
+  and subcommand or edit it, and answers. Team lists the standing
+  permissions of the specialists, each with "Take back"
+  (`StandingPermissions`). The demo backend keeps requests in
+  `shared/api/demo/permissions.ts`; its simulated specialist asks to run a
+  script on a task whose title starts with "Check", "Test", "Measure" or
+  "Run", and the sample project has one standing permission.
 - **What the agents spent.** `project_usage` answers with what every member,
   the Advisor and those who left have spent (`ProjectUsageDto`: the tokens
   by kind and in all, the turns that ended, the model of the latest turn,

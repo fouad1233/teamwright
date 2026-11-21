@@ -22,17 +22,18 @@ window or agent runtime.
 | `work` | `WorkService`: let AI specialists work: start on a task, ask, reply, answer a specialist's question, list what waits for the manager, stop, follow every event, open a session in the desktop app, recover after a restart; `brief_for` and `instructions_for`. Its part `advisor`: plan a project with the Advisor (`advise`, `answer_interview`, `change_proposal`, `approve_proposal`); `ProposalEdit`, `ApprovedProposal`, `answers_in_words` and `instructions_for_advisor` |
 | `digests` | `DigestService`: earlier conversations as digests ([decision 0041](../../docs/decisions/0041-earlier-conversations-as-digests.md)): `find_earlier` (grouped by folder, the folders of the project first), `draft`, `keep` (once per conversation), `digests_of`, `remove`; `group_by_folder`. The Advisor's first turn carries the kept digests (`digests_for_advisor`, at most `ADVISOR_DIGESTS_LENGTH` characters) |
 | `teamwork` | `TeamworkService`: what specialists hand each other: every handoff and message of a project (`talk_of_project`, as `TeamTalk`) and the messages that wait for a member (`messages_waiting_for`, for the coordinator); the rules across stored things: `messages_waiting_for` (sent to the member, not delivered, the oldest first), `latest_handoff_of` (the handoff of a task that counts), `handoffs_in_words` (the part of a brief) and `messages_in_words` (what a turn is told) |
+| `permissions` | `PermissionService`: the permission requests of a project (`requests_of_project`), those that wait for the manager in every project not archived (`open_requests`), and the taking back of a permission allowed for a task or always (`withdraw`) ([decision 0038](../../docs/decisions/0038-permission-requests-routed-to-the-manager.md)) |
 | `memory` | `MemoryService`: the memory of a project, as the manager keeps it: every entry (`memory_of_project`), a search (`search`), a fact the manager writes (`add_fact`, `NewFact`), a change, which is a newer entry that replaces the older (`change`), and a removal (`remove`); the rules across stored things: `decision_entry` (an answered decision request as a decision), `contract_entries` (the contract of a handoff, replacing the earlier contract of its task), `facts_remembered_in` and `MOST_FACTS_PER_TURN`, `search` (the entries that fit, newest first, over anything `Searchable`), `memory_in_words` (the part of a brief, within `MEMORY_IN_BRIEF_LENGTH`) and `remembered_entries` (what a search of the team bus reads) ([decision 0036](../../docs/decisions/0036-project-memory.md)) |
 | `coordinator` | The coordinator ([decision 0037](../../docs/decisions/0037-the-coordinator.md)): `next_steps`, a pure rule that answers, from a `Situation`, which tasks start with which specialist (`Start`), which specialist gets a turn to answer a teammate's question (`Wake`, at most `MESSAGE_TURNS_PER_HOUR`), which used-up budgets are asked about, and what waits and why (`Waiting`, `WaitReason`); `spending_of` (tokens in all of ended turns, by project, member and task); `words` (the sentences of its record); `CoordinatorService`: switch on and off, the limit, budgets and the answers about them, `budget_questions` for the inbox, and `act`, which does what the rule says through `WorkService` on the computer it runs on and writes down what it did |
 | `google_drive` | `GoogleDriveService`: the folder that Google Drive for desktop keeps on this computer (`find_drive_folders`, `look`, `prepare`), behind the port `DriveSurroundings`; see "Syncing through Google Drive" |
 | `sync` | `SyncService`: keep several computers of one manager in step through a folder the manager owns (`round`, `choose_folder`, `stop`, `rename_this_computer`, `accept`, `ignore`, `notices`, `dismiss`, `new_identity`); the ports `SyncFolder` and `SyncLedger`, and the operations that travel between computers |
 | `workbook` | `WorkbookService`: gather a project into a workbook of four sheets (summary, tasks, sprints, team) as plain data: `Workbook`, `Sheet`, `SheetContent`, `Section`, `Table`, `Column` and `Cell`, whose kind says whether it is text, a whole number, hours, a date or a status. Writing the file is done outside this crate ([decision 0025](../../docs/decisions/0025-the-project-as-a-workbook.md)) |
 | `project_report` | `ProjectReportService`: gather the report of a whole project as plain data (`ProjectReport`: the brief, the work done by area and by holder, the plan against what happened, the sprints, the usage by who and by model, the decisions, the handoffs, what is open), and `report_in_markdown`, which writes it as a Markdown file ([decision 0042](../../docs/decisions/0042-the-report-of-a-whole-project.md)) |
-| `ports` | The interfaces the services need: `ProjectRepository`, `TaskRepository`, `MemberRepository`, `ConversationRepository`, `PlanningRepository`, `PlacesRepository`, `SprintRepository`, `ViewRepository`, `AreaRepository`, `TagRepository`, `TeamworkRepository`, `DigestRepository`, `EarlierConversations` (with `FoundConversation`), `MemoryRepository`, `ProjectFolders`, `FileSystem`, `FolderReader`, `WorkListener`, `Clock` (which also tells the day a moment falls on) |
+| `ports` | The interfaces the services need: `ProjectRepository`, `TaskRepository`, `MemberRepository`, `ConversationRepository`, `PlanningRepository`, `PlacesRepository`, `SprintRepository`, `ViewRepository`, `AreaRepository`, `TagRepository`, `TeamworkRepository`, `DigestRepository`, `EarlierConversations` (with `FoundConversation`), `MemoryRepository`, `PermissionRepository`, `ProjectFolders`, `FileSystem`, `FolderReader`, `WorkListener`, `Clock` (which also tells the day a moment falls on) |
 | `agent_runtime` | `AgentRuntime`: the interface to the program that runs a team member's session, and the data it speaks |
 | `error` | `ApplicationError`, with a stable `code()` for interfaces |
 | `clock` | `SystemClock`, the real clock |
-| `in_memory` | In-memory repositories (`InMemoryPlanningRepository` stores an approved plan into the others, `InMemorySprintRepository` stores the tasks that change with a sprint into the task repository, `InMemoryViewRepository`, `InMemoryAreaRepository`, `InMemoryTagRepository`, `InMemoryTeamworkRepository`, `InMemoryDigestRepository`, pretended earlier conversations, `InMemoryMemoryRepository`), fixed project folders, a pretended file system, a listener that records, a scripted agent runtime and a settable clock, for tests and demos |
+| `in_memory` | In-memory repositories (`InMemoryPlanningRepository` stores an approved plan into the others, `InMemorySprintRepository` stores the tasks that change with a sprint into the task repository, `InMemoryViewRepository`, `InMemoryAreaRepository`, `InMemoryTagRepository`, `InMemoryTeamworkRepository`, `InMemoryDigestRepository`, pretended earlier conversations, `InMemoryMemoryRepository`, `InMemoryPermissionRepository`), fixed project folders, a pretended file system, a listener that records, a scripted agent runtime and a settable clock, for tests and demos |
 
 ## How a use case is built
 
@@ -416,6 +417,26 @@ question; every request to the specialist is a turn of it.
   `member_busy`). The answer is stored only if the new turn starts.
   `reply` is refused while a question is open (`decision_open`), after the
   checks it had before.
+- **Permission requests**
+  ([decision 0038](../../docs/decisions/0038-permission-requests-routed-to-the-manager.md)).
+  Every turn of a specialist has `TeamTool::AskPermission`. A
+  `PermissionAsked` event of a running turn becomes a `PermissionRequest`
+  of the conversation's task, stored through `PermissionRepository`, and a
+  notice among the steps of the turn. A turn that ends with an open request
+  does not move its task on to checking, and its end is told as
+  `WaitsFor::Permission` (`event_of_permission_request`), which a
+  notification words. `answer_permission` takes a `PermissionReply`
+  (allowed with a scope, a kind and the text the manager saw, perhaps
+  edited and checked again; or refused, each with a word), starts a turn of
+  origin `Decision` whose request says it in words, and stores the answer
+  only if the turn starts. Allowing for the task in a conversation that is
+  not about one is refused (`rule_broken`). Every turn of a specialist is
+  started with `PermissionProfile::specialist().with_granted(rules)`, the
+  rules its requests give it on this computer (`granted_rules`), which the
+  instructions of the turn also list. `with_granted` adds exactly those
+  rules: the shell or the fetching tool, the rules, the programs that change
+  files denied by name, and reads blocked outside the folders for commands;
+  nothing else of the profile changes.
 - `waiting_for_manager` lists the conversations with an open question, an
   open interview or an open proposal in every project that is not archived,
   the one that has waited longest first. Those whose home is another

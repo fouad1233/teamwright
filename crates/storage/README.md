@@ -31,6 +31,7 @@ involved.
 | `teamwork` | `SqliteTeamworkRepository`: the handoffs of tasks with their files, and the messages between specialists |
 | `memory` | `SqliteMemoryRepository`: the entries of the memory of the projects |
 | `digests` | `SqliteDigestRepository`: the digests of earlier conversations kept with a project (migration 0028, entity `digest`, merged whole, logged and synced; [decision 0041](../../docs/decisions/0041-earlier-conversations-as-digests.md)) |
+| `permissions` | `SqlitePermissionRepository`: the permission requests of the specialists, with the manager's answers |
 | `places` | `SqlitePlacesRepository`: the work folder and the reference folders chosen for each project |
 | `operations` | The operation log, the hybrid logical clock, and the recorder that keeps the stamps of the fields |
 | `merge` | How each kind of thing merges field by field, and `MergedState`, a row of `merged_states` |
@@ -263,6 +264,15 @@ involved.
   filters by them, and number fields, and choices of one field, given one
   name on two computers. Deleting a project deletes and logs its fields
   after its tasks and views. Nothing is logged by the migration.
+- **Permission requests** (migration `0031_permission_requests.sql`,
+  [decision 0038](../../docs/decisions/0038-permission-requests-routed-to-the-manager.md)).
+  A request has a row in `permission_requests` and is logged as the entity
+  `permission_request` with its whole state. It merges by field: the
+  answer (decision, scope, the rule allowed, the note, when, on which
+  computer, the turn it started) is one field, and `withdrawn_at` another.
+  Only the project is a reference the database enforces; deleting a project
+  deletes and logs its requests. A stored rule is checked again when it is
+  read, so a rule that could never be allowed is not read back as allowed.
 - **An approved plan is one transaction.** `SqlitePlanningRepository`
   writes the project (with its next task number), every new member, every
   new task with what it waits for, and the turn with its approved proposal,

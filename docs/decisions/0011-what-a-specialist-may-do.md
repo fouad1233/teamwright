@@ -84,3 +84,13 @@ and the same test is refused both times.
 The first version also left the manager's own tool servers and connectors
 known to the session, with their tools denied. They are now not there at
 all.
+
+## Note, 21 November 2026
+
+A request for permission can now reach the manager
+([decision 0038](0038-permission-requests-routed-to-the-manager.md)). The
+profile above is still what every turn starts with. A specialist asks with
+the tool `ask_permission`; the manager allows one command, a prefix of
+commands or a web domain, once, for a task or always; and a turn is started
+with exactly those rules added. Nothing else of this profile changes, and
+nothing in a running turn can approve anything.

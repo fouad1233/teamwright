@@ -9,7 +9,7 @@ done with them. It does no input or output.
 
 | Module | Concepts |
 |---|---|
-| `ids` | `ProjectId`, `StatusId`, `TaskId`, `SprintId`, `ViewId`, `AreaId`, `TagId`, `ChecklistItemId`, `MemberId`, `ConversationId`, `TurnId`, `HandoffId`, `TeamMessageId`, `MemoryEntryId`: one identifier type per kind of thing |
+| `ids` | `ProjectId`, `StatusId`, `TaskId`, `SprintId`, `ViewId`, `AreaId`, `TagId`, `ChecklistItemId`, `MemberId`, `ConversationId`, `TurnId`, `HandoffId`, `TeamMessageId`, `MemoryEntryId`, `PermissionRequestId`: one identifier type per kind of thing |
 | `text` | `ProjectName`, `StatusName`, `TaskTitle`, `SprintName`, `ViewName`, `AreaName`, `TagName`, `ChecklistText`, `MemberName`: names that are never empty, never multi-line, never too long; `ModelName`: the name of a model |
 | `color` | `Color`: the named colors a status or a team member can have |
 | `workflow` | `Workflow`, `Status`, `StatusCategory` |
@@ -39,6 +39,7 @@ done with them. It does no input or output.
 | `digest` | `EarlierConversation` (what a reader found in a conversation held with Claude Code before), `DigestDraft::of` (the digest made by rules: where and when, the first request, the later ones in order, the files written or changed, the last answer, each cut to a length), `Digest`, `DigestText`, `DigestSource` ([decision 0041](../../docs/decisions/0041-earlier-conversations-as-digests.md)) |
 | `secrets` | `hide_secrets`: replaces what looks like a secret (known tokens, long random runs, `password=…`, the word after `Bearer`, credentials in an address, private keys) by `[hidden]` |
 | `teamwork` | `Handoff`, `HandoffContent`: the result of a task for whoever builds on it (a summary, an interface contract, the files that hold it as `PathInFolder`s); `TeamMessage`, `MessageKind`, `MessageDelivery`: a question or a note from one specialist to another and when it reached its receiver; `SaidIn`: who said it, in which conversation and turn |
+| `permission` | `PermissionRule` (`PermissionKind`: one command, a prefix of commands, a web domain) and its form as a rule of the agent program (`tool_rule`); `PermissionRequest`: what a specialist asked and why, and the manager's answer (`PermissionDecision`, `PermissionScope`: once, for the task, always; `Answered`); `granted_rules`: the rules the requests give a turn (`TurnAbout`); `FILE_CHANGING_PROGRAMS` ([decision 0038](../../docs/decisions/0038-permission-requests-routed-to-the-manager.md)) |
 | `memory` | `MemoryEntry`, `MemoryKind`, `MemoryContent`: an entry of the memory of a project, a decision, a fact or a contract, with a short title and a text; `MemoryOrigin`, `MemorySource`: where it came from (the manager, a specialist, an answered decision request, a handoff); `SearchWords`: the words of a search and whether an entry fits them ([decision 0036](../../docs/decisions/0036-project-memory.md)) |
 | `coordination` | `Coordinator` (off, or on one computer; `ConcurrencyLimit` 1 to 8, 2 at first), `TokenBudget` (1,000 to 10^12 tokens, with two raises in round numbers), `Budget` of a `BudgetScope` (project, member or task) with its `BudgetQuestion`, asked once until answered or changed; `CoordinatorEntry`, one sentence of the coordinator's record |
 | `error` | `DomainError`: every rule that can be broken |
@@ -204,6 +205,18 @@ done with them. It does no input or output.
 - A search in memory has one to twelve words in at most 200 characters,
   each counted once in small letters. An entry fits when each word begins
   a word of its title or its text, whatever the capitals.
+- A permission rule never allows more than it shows (decision 0038). A
+  command is one line without anything that joins, redirects or widens it
+  (`; & | < > $` and the like), names no path outside the folder of the
+  project and nothing of `.claude` or Teamwright, and never runs the agent
+  program, Teamwright, anything with other rights, or a program that changes
+  files. A prefix is a program and its subcommand, never a program that runs
+  whatever follows it. A web domain is a host name of the web, never the
+  computer itself or the local network. A request has a reason, is answered
+  once, and only a permission allowed for a task or for always can be taken
+  back. It holds only for its specialist, its project and the computer it
+  was allowed on: once, for the turn the answer started; for a task, for the
+  turns about it; always, until taken back.
 
 ## How to work in it
 

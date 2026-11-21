@@ -127,8 +127,9 @@ Points to notice:
   session. What the session said reaches Teamwright in the stream of events
   that the agent runtime reads anyway
   ([decision 0012](../decisions/0012-a-specialist-asks-through-a-tool.md)).
-  A specialist has three tools: `ask_manager`, `publish_handoff` and
-  `send_message`; the Advisor has two more, `interview` and `propose_plan`.
+  A specialist has `ask_manager`, `ask_permission` (decision 0038),
+  `publish_handoff`, `send_message`, `remember` and `search_memory`; the
+  Advisor has `interview` and `propose_plan`.
   A handoff and a message travel like a question, and neither ends the
   turn. The latest handoff of a task goes into the brief of every task that
   builds on it, and a message is delivered with the next turn of its
@@ -242,7 +243,15 @@ them.
   manager added for reading, and nothing else on the computer
   ([decision 0011](../decisions/0011-what-a-specialist-may-do.md)).
 - Risky tool use by a team member is not approved by Teamwright on the
-  manager's behalf. It is forwarded to the manager.
+  manager's behalf. It is forwarded to the manager: a specialist asks with
+  the tool `ask_permission` for one command, a prefix of commands or a web
+  domain, the request waits in the inbox, and the manager's answer starts
+  the next turn with exactly that rule added to what it may do, once, for
+  the task or always, on the computer where it was allowed. Some things can
+  never be allowed: running the agent program or Teamwright, anything with
+  other rights, the programs that change files, paths outside the folder of
+  the project, and the computer itself or the local network
+  ([decision 0038](../decisions/0038-permission-requests-routed-to-the-manager.md)).
 - Nothing is sent anywhere except to Claude Code and, if the user sets it up,
   to the user's own sync folder. Teamwright makes no network connection to
   sync. What goes into the folder is not encrypted in the first version:

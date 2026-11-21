@@ -20,7 +20,7 @@ format of its output.
 | `decode` | Turns the JSON lines of headless mode into `AgentEvent`s and a `TurnOutcome` |
 | `plan_limit` | Reads from the program's sentence that the limit of the plan was reached, and the reset time it gives (`limit_in_words`, `reset_in_words`) |
 | `sign_in` | Reads the answer of `claude auth status --json` |
-| `team_bus` | The tool server through which a specialist asks the manager to decide, hands its result over, writes to a teammate, and remembers and searches in the memory of the project, and the Advisor interviews and proposes |
+| `team_bus` | The tool server through which a specialist asks the manager to decide or for a permission, hands its result over, writes to a teammate, and remembers and searches in the memory of the project, and the Advisor interviews and proposes |
 | `memory_file` | `MemoryFile`: the current entries of the memory of a project in a file of their own for one turn, which the team bus reads (`entries_from`) and which is removed when the turn is dropped |
 | `earlier` | `EarlierConversationsOnDisk`: reads the conversations Claude Code keeps in `projects` of its settings folder, tolerant of lines it does not know, for digests ([decision 0041](../../docs/decisions/0041-earlier-conversations-as-digests.md)). The format is not published; the ignored test `reads_the_conversations_of_this_computer` reads the real ones and prints counts only |
 
@@ -148,7 +148,18 @@ arguments):
   A fact the turn remembered is found by a later search of the same turn
   ([decision 0036](../../docs/decisions/0036-project-memory.md)).
 
-None of the last four ends the turn: the server answers that the
+- `ask_permission`: a specialist asks the manager for permission to do
+  something it may not do on its own: a `kind` (`command`,
+  `command_prefix` or `web_domain`), `what` (the command line, the prefix
+  or the domain) and a `reason`, checked by the rules of a permission of
+  the domain (`permission_from`). Like a question, it ends the turn: the
+  server answers that nothing is allowed yet and that the answer comes as
+  the next message, and the decoder reports `PermissionAsked`
+  ([decision 0038](../../docs/decisions/0038-permission-requests-routed-to-the-manager.md)).
+  No `--permission-prompt-tool` is given: nothing in a running turn can
+  approve anything.
+
+None of `publish_handoff`, `send_message`, `remember` and `search_memory` ends the turn: the server answers that the
 handoff is recorded, that the message is on its way, that the fact is
 remembered or what the search found, and the session goes on
 ([decision 0029](../../docs/decisions/0029-handoffs-and-messages-between-specialists.md)).
@@ -215,6 +226,23 @@ use, with the words searched as its summary.
 - **No rules about the team.** What a team member may do is decided by the
   application and arrives as a `PermissionProfile`; this crate only
   translates it.
+
+## A turn with allowed rules
+
+A profile that `PermissionProfile::with_granted` widened (decision 0038)
+reaches the arguments like any other: `Bash` among `--tools` when a command
+is allowed, `WebFetch` when a domain is, each rule in `--allowedTools`
+(`Bash(npm test)`, `Bash(cargo test *)`, `WebFetch(domain:docs.rs)`), the
+programs that change files in `--disallowedTools` (`Bash(rm *)`, …), and,
+for commands, `--settings` with
+`{"permissions":{"blockReadsOutsideWorkingDirectories":true}}`
+(`READS_BLOCKED_SETTINGS`), so that a command that reads outside the
+folders would need approval, which is denied. `--permission-mode
+acceptEdits`, `--permission-prompts none`, `--restricted` and
+`--strict-mcp-config` stay. These flags and rules were read in
+`claude --help` of 2.1.289 and in the documentation; a turn with them has
+never run (the test `a_real_session_asks_to_run_a_command_and_runs_it_once_allowed`
+in `tests/real_program.rs` would prove it).
 
 ## What Claude Code does that matters here
 
