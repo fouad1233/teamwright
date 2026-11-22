@@ -36,12 +36,16 @@ Do the step yourself, or give it a skill or a connector tool that does it.
 
 **I allowed a permission and want it back.** Open the *Team* place, find
 *Permissions*, and press *Take back* in its row. The next turn starts without
-it.
+it. A row marked *no longer valid* already allows nothing; *Take back*
+removes it.
 
 **The request I wanted to allow was refused as I typed it.** Teamwright
-refuses a command that could join other commands, name a path outside the
-folder, or start a program that runs whatever follows it. Narrow it, or allow
-one exact command. The list is in
+refuses a command that could join or quote other commands, name a path
+outside the folder anywhere in a word, or start with a program that only
+starts another. It also refuses a command allowed always, any command on
+Windows, and a command for a specialist that has a connector given a secret,
+and says which. Allow one exact command, once or for the task. The list is
+in
 [what can never be allowed](safety-and-trust.md#what-can-never-be-allowed).
 
 **I cannot remove or ask a specialist, or delete its task or project.** It is

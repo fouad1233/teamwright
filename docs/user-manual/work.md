@@ -102,27 +102,32 @@ waits in the *Inbox*, next to the questions, the oldest first.
 <img alt="The inbox with a request for permission: the command python3 tools/check.py, the reason of the specialist, the sentence that a command runs with your rights, four answers and the field What you allow" src="pictures/permission-request.png">
 
 A request says who asks, for which task, and exactly what it wants, in one of
-three kinds: *Command* (one command line), *Commands that start with* (a
-program and its subcommand, such as `cargo build`) or *Web domain*. Under it
-stands the reason in the specialist's own words. For a command there is also
-this sentence: *A command runs on this computer with your rights, like a
-command you type yourself. Allow only what you would run.* Read it.
+two kinds: *Command* (one exact command line) or *Web domain*. Under it
+stands the reason in the specialist's own words. For a command there are also
+these sentences: *This specialist can change the files this command runs
+(scripts, build files, tests). Allowing it lets the specialist run any
+program as you.* and what the sandbox it runs in holds it to. Read them.
 
 1. Open the *Inbox* and read what is asked and why.
 2. Pick an answer:
    - *Allow once*: for the next turn only. If the specialist needs it again,
      it asks again.
    - *Allow for this task*: for every turn of that specialist on this task.
-     It is offered only when the request is about a task.
-   - *Always allow* the specialist: for every turn in this project, on this
-     computer, until you take it back.
+     It is offered only when the request is about a task. A turn that the
+     coordinator starts only to answer the questions of teammates runs no
+     command, whatever you allowed.
+   - *Always allow* the specialist, offered only for a web domain: for every
+     turn in this project, on this computer, until you take it back. A
+     command is never allowed always.
    - *Refuse*: the specialist goes on without it and says what could not be
      done. It is told not to try another way.
 3. If you allow, look at *What you allow* before you press. You may edit it.
-   For a command of more than one word, *This command only* and *Every …
-   command* narrow or widen it to the program and its subcommand. Teamwright
-   checks what you typed again and refuses what could never be allowed (see
+   Teamwright checks what you typed again and refuses what could never be
+   allowed (see
    [what can never be allowed](safety-and-trust.md#what-can-never-be-allowed)).
+   It also refuses a command for a specialist that has a connector given a
+   secret in an environment variable, and every command on Windows, and
+   says why.
 4. Add a word for the specialist if you like, and press *Answer*.
 
 Your answer starts a new turn of the same conversation, which says in words
@@ -132,18 +137,24 @@ notifications.
 
 A permission holds only on the computer where you gave it, because a command
 is a command of one computer. On another computer the specialist asks again.
+An answer that reaches a computer through the sync folder is shown there as
+answered and allows nothing.
 
 **What stands.** The *Team* place lists, under *Permissions*, everything you
-allowed for a task or always, with the specialist it is for, how long it
-holds, and *Take back*. Press *Take back* and the next turn starts without it.
-A permission you allowed once is gone with its turn and is not listed.
+allowed for a task, and every web domain you allowed always, with the
+specialist it is for, how long it holds, and *Take back*. Press *Take back*
+and the next turn starts without it. A permission you allowed once is gone
+with its turn and is not listed. A command allowed always before
+21 November 2026, when that was still possible, is listed as *no longer
+valid*: it allows nothing, and *Take back* removes it.
 
 Note: permission requests were tested at every layer and seen in the demo,
 where a task whose title starts with *Check*, *Test*, *Measure* or *Run* makes
 the pretended specialist ask. A real specialist has never asked, and no
-command has ever run on a permission in the installed program. The setting
-that keeps even harmless commands from reading outside the folders was taken
-from the documentation of Claude Code and has never been seen in a run.
+command has ever run on a permission in the installed program. The sandbox
+every allowed command runs in, and the setting that keeps commands from
+reading outside the folders, were taken from the documentation of Claude
+Code and have never been seen in a run.
 
 ## The limit of your Claude plan
 

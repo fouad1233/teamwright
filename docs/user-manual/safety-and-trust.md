@@ -53,27 +53,36 @@ you, with its reason, and you answer in the inbox (see
 to open what is closed above, and it opens exactly what you read and nothing
 more. Read this part before you allow anything.
 
-**A command you allow runs on your computer, with your rights.** It is like a
-command you type yourself, in your own terminal. There is no sandbox around it
-and no second guard: Teamwright checks what you allow, but once a command
-runs, it can do whatever your account can do.
+**A command can run anything the specialist writes.** A specialist may write
+files in its folder, and most commands worth allowing run files from that
+folder: `npm test` and `npm run` run `package.json`, `cargo build` runs
+`build.rs`, `make` runs the `Makefile`, `pytest` runs `conftest.py`. So
+allowing such a command lets the specialist run any program as you. Allow it
+only when you would be content to run the files of the project yourself.
 
-**A command can run what the specialist wrote.** A specialist that may write
-files in its folder, and may run a program that executes files from that
-folder, can in effect run what it writes. `npm test`, `cargo build` and
-`make` all run code of the project, and the specialist writes that code. So
-allow build and test commands only for projects whose files you trust, and
-only when you would be content to run them yourself.
+**A command runs in a sandbox.** Every allowed command runs inside the
+sandbox of Claude Code: it can change files only in the folder of the
+project, cannot read the rest of your home folder (Claude Code still lets it
+read your git settings), and reaches no web domain you have not allowed. If
+the sandbox cannot start, the turn does not start. Claude Code has no
+sandbox on Windows, so on Windows no command can be allowed. The sandbox has
+not been seen working yet (see the note below).
+
+**There are no standing commands.** A command is allowed once or for one
+task, never always. A web domain may be allowed always. A turn the
+coordinator starts only to answer the questions of teammates runs no
+command. A specialist that has a connector given a secret in an environment
+variable is allowed no command, because a command could read the secret.
 
 Some choices keep the risk smaller:
 
-- Prefer *Allow once* or *Allow for this task* to *Always allow*.
-- Prefer one exact command to every command of a program.
-- Read *What you allow* before you press *Answer*. Nothing is allowed that is
-  not shown.
+- Prefer *Allow once* to *Allow for this task*.
+- Read *What you allow* before you press *Answer*. It is one exact command,
+  and nothing is allowed that is not shown.
 - Look at *Permissions* in the *Team* place now and then, and press *Take
   back* on what you no longer need.
-- A permission holds only on the computer where you gave it.
+- A permission holds only on the computer where you gave it. An answer that
+  arrives through the sync folder allows nothing.
 
 ### What can never be allowed
 
@@ -81,24 +90,30 @@ Teamwright refuses these however a request is worded, and however you edit
 it. The check is made on the request, on your answer and again when a turn
 starts.
 
-- **A command that joins or changes other commands**: one that contains any
-  of ``; & | < > ` $ * ? ( ) { } [ ] \ ~ ! # % ^``, or that starts by setting
-  a variable. Those join commands, redirect output, put in the output of
-  another command, or would make the rule wider than it reads.
-- **A command that names an absolute path, a drive or `..`**, or has `.claude`
-  or `teamwright` in it. So it cannot name the data of Teamwright, the sync
-  folder or the settings of Claude Code.
-- **These programs, as any command:** `claude`, `teamwright`, `sudo`, `su`,
-  `doas`, `pkexec`, `runas` and `gsudo`; and the programs that change files:
-  `rm`, `rmdir`, `mv`, `cp`, `mkdir`, `touch`, `ln`, `chmod`, `chown`,
-  `chgrp`, `dd`, `tee`, `truncate`, `shred` and `install`. A specialist
-  changes files with its file tools, which stay in the folder.
-- **Every command of a program that runs whatever follows it**: shells,
-  interpreters such as `python` and `node`, and `env`, `xargs`, `eval`,
-  `exec`, `nohup`, `timeout`, `watch`, `find`, `npx`, `curl`, `wget` and
-  `ssh`. Such a program can be allowed only as one exact command, which you
-  read in full. A rule for several commands needs at least two words, the
-  program and its subcommand.
+- **Anything but one exact command.** There is no rule for every command
+  that starts with a program and its subcommand: what follows such a start
+  can change what the program does (`git log --output=…`).
+- **A command that joins, quotes or changes other commands**: one that
+  contains any of ``; & | < > ` $ * ? ( ) { } [ ] \ ~ ! # % ^``, a quote
+  (`"` or `'`), or that starts by setting a variable. Those join commands,
+  redirect output, put in the output of another command, or make the shell
+  read another word than the one checked.
+- **A command on more than one line**, with a tab, or with a character
+  outside plain keyboard letters, digits and signs.
+- **A command that names an absolute path, a drive, `~` or `..`** anywhere in
+  a word, also after `=` or glued to an option (`--output=/…`, `-o/…`), or
+  has `.claude` or `teamwright` in it. So it cannot name the data of
+  Teamwright, the sync folder or the settings of Claude Code.
+- **These programs, anywhere in a command:** `claude`, `teamwright`, `sudo`,
+  `su`, `doas`, `pkexec`, `runas` and `gsudo`. **And at its start:** the
+  programs that change files, `rm`, `rmdir`, `mv`, `cp`, `mkdir`, `touch`,
+  `ln`, `chmod`, `chown`, `chgrp`, `dd`, `tee`, `truncate`, `shred` and
+  `install` (a specialist changes files with its file tools, which stay in
+  the folder), and the programs that only start another: `env`, `xargs`,
+  `eval`, `exec`, `nohup`, `timeout`, `time`, `nice`, `ionice`, `watch`,
+  `stdbuf`, `setsid`, `command` and `builtin`.
+- **A command allowed always**, and any command on Windows or for a
+  specialist with a secret in reach (see above).
 - **A web domain** that is a single word, `localhost`, a name ending in
   `.local`, or an address in numbers. Your computer and your local network
   stay closed. A domain may be one host, or all the hosts under one name,
@@ -108,15 +123,16 @@ A refused request adds nothing, and refused stays refused: the specialist is
 told not to try another way.
 
 What was not proven: Teamwright decides what may be allowed, and starts every
-turn with exactly those rules. How Claude Code matches a command against a
-rule is Claude Code's own, and its documentation warns that a rule on a
-program is not a boundary around it: an allowed program can start others. A
-sandbox around commands would be the next step, and does not exist yet.
+turn with exactly those rules and the sandbox. How Claude Code matches a
+command against a rule, and how its sandbox holds a command in, are Claude
+Code's own; its documentation warns that a rule on a program is not a
+boundary around it, which is why the sandbox is there.
 
 Note: permissions were tested at every layer and seen in the demo. They have
-never been tried with a real specialist, and no command has run on a
-permission in the installed program. On Windows, commands go through the shell
-tool of Claude Code and were not tried.
+never been tried with a real specialist, no command has run on a permission
+in the installed program, and the sandbox has never been seen working: Claude
+Code was not signed in when it was built. Until a real run has shown it,
+allow a command only as if there were no sandbox.
 
 ## A connector is a way out of the folder
 
