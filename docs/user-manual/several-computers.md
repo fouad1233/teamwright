@@ -115,7 +115,19 @@ specialists, which can quote files they read. Also the name of each computer
 and its version of Teamwright. The folders of a project and the files in them
 do not. Nothing in the folder is encrypted, so choose a folder only you can
 read. What stays on this computer: integration addresses, the theme, the
-choices about notifications and about looking for a newer version.
+choices about notifications and about looking for a newer version, the
+copies of skills, and which connectors and tools you confirmed here.
 
 Every computer should run the same version of Teamwright. An older version
 passes over what it does not know.
+
+## Connectors from another computer
+
+The library of skills and connectors travels with the project, but each
+computer decides for itself what it starts. A connector added or changed on
+another computer, and a tool given to a specialist there, wait on this
+computer until you confirm them here (see
+[skills and connectors](the-team.md#skills-and-connectors)). What you
+confirmed stays on this computer and never goes into the folder, so someone
+who can write the folder cannot confirm anything for you. A skill was
+already of one computer: its folder must be added on each.

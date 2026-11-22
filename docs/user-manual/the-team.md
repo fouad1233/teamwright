@@ -145,6 +145,22 @@ and give it:
    Claude Code sends the header itself.
 4. The names of the tools it offers that you may give out, separated by commas.
 
+**A connector from another computer must be confirmed here.** The library
+travels to your other computers through the sync folder, and anyone who can
+write that folder could change what a connector starts. So a connector you
+add on this computer is confirmed on this computer, and one that arrives or
+changes through the sync folder waits: the library marks it *Waits for you
+on this computer* and shows exactly what it would start (the program and
+each argument apart, the variables it is handed, or the address and its
+headers, and its tools). No specialist on this computer is given it until
+you look and press *Confirm on this computer*. Any later change, from any
+computer, asks again. The same holds for what a specialist is given: tools
+given to it on another computer are listed under *Given on another
+computer*, and no turn here uses them until you press *Confirm*. Removing
+needs no confirmation. After you update Teamwright, every connector and
+every tool given before asks once on each computer, because nothing was
+confirmed then.
+
 **Giving them to a specialist.** Open *Change* on the member. Under *Skills
 and connectors* a switch turns each skill on, and each tool of each
 connector has a switch of its own. The dialog says: "This specialist can
@@ -153,8 +169,9 @@ that is off is denied. The row of the specialist in the Team place says what
 it was given.
 
 Skills and connectors were tested on storage, on two databases taking in
-each other's changes, on the exact command line a turn is started with, and
-seen in the demo. They have never been run against the real Claude Code, and
+each other's changes (including a connector changed on the other computer
+and its confirmation here), on the exact command line a turn is started
+with, and seen in the demo. They have never been run against the real Claude Code, and
 every earlier real test must be run again because every turn changed. Treat
 this part as new and not yet tried with a real specialist.
 
