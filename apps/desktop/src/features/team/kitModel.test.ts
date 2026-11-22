@@ -4,7 +4,9 @@ import type { Library, LibraryConnector } from '@/shared/api/types';
 
 import {
   choiceOf,
+  confirmationOf,
   isToolGiven,
+  isToolWaiting,
   kitInWords,
   sameChoice,
   startInWords,
@@ -21,6 +23,8 @@ const parts: LibraryConnector = {
   addedAt: '2026-11-21T00:00:00.000Z',
   missingVariables: [],
   problem: null,
+  fingerprint: 'f1',
+  confirmed: true,
 };
 
 const library: Library = {
@@ -31,6 +35,7 @@ const library: Library = {
   kits: [
     { memberId: 'm1', skills: ['s1'], connectors: [{ connectorId: 'c1', tools: ['search'] }] },
   ],
+  waitingTools: [],
 };
 
 describe('the kit of a specialist', () => {
@@ -57,6 +62,25 @@ describe('the kit of a specialist', () => {
     expect(
       sameChoice({ skills: ['a', 'b'], connectors: [] }, { skills: ['b', 'a'], connectors: [] }),
     ).toBe(true);
+  });
+
+  it('says when part of a kit waits for confirmation on this computer', () => {
+    const waiting: Library = {
+      ...library,
+      waitingTools: [{ memberId: 'm1', connectorId: 'c1', tools: ['search'] }],
+    };
+    expect(kitInWords(waiting, 'm1')).toBe(
+      'pcb-review · parts (1 tool), part of it waiting for your confirmation on this computer',
+    );
+    expect(isToolWaiting(waiting, 'm1', 'c1', 'search')).toBe(true);
+    expect(isToolWaiting(waiting, 'm1', 'c1', 'get')).toBe(false);
+    expect(isToolWaiting(waiting, undefined, 'c1', 'search')).toBe(false);
+    expect(confirmationOf(waiting.waitingTools)).toEqual({
+      skills: [],
+      connectors: [{ connectorId: 'c1', tools: ['search'] }],
+    });
+    const changed: Library = { ...library, connectors: [{ ...parts, confirmed: false }] };
+    expect(kitInWords(changed, 'm1')).toContain('waiting for your confirmation');
   });
 
   it('reads words typed on a line and says how a connector starts', () => {

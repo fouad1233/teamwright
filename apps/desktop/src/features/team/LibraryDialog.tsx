@@ -1,7 +1,7 @@
-import { FolderPlus, Plug, Trash2 } from 'lucide-react';
+import { Check, FolderPlus, Plug, Trash2 } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 
-import type { ConnectorStart, Project } from '@/shared/api/types';
+import type { ConnectorStart, Library, LibraryConnector, Project } from '@/shared/api/types';
 import { classNames } from '@/shared/lib/classNames';
 import { Button, IconButton } from '@/shared/ui/Button';
 import { Dialog } from '@/shared/ui/Dialog';
@@ -11,8 +11,9 @@ import { Switch } from '@/shared/ui/Switch';
 import { describeFailure } from '@/shared/ui/Toast';
 
 import styles from './LibraryDialog.module.css';
-import { startInWords, variablesOf, wordsOf } from './kitModel';
-import { useLibrary, useLibraryCommands } from './kitQueries';
+import { confirmationOf, startInWords, variablesOf, wordsOf } from './kitModel';
+import { useLibrary, useLibraryCommands, type LibraryCommands } from './kitQueries';
+import { useTeamMembers } from './TeamContext';
 
 interface LibraryDialogProps {
   open: boolean;
@@ -130,15 +131,35 @@ function LibraryContent({ project }: { project: Project }) {
             {connectors.map((connector) => (
               <li key={connector.id} className={styles.item}>
                 <div className={styles.words}>
-                  <span className={styles.name}>{connector.name}</span>
-                  <span className={classNames(styles.detail, styles.start)} data-selectable>
-                    {startInWords(connector.start)}
+                  <span className={styles.name}>
+                    {connector.name}
+                    {!connector.confirmed && (
+                      <span className={classNames('label', styles.waiting)}>
+                        Waits for you on this computer
+                      </span>
+                    )}
                   </span>
-                  <span className={styles.detail}>Tools: {connector.tools.join(', ')}</span>
-                  {variablesOf(connector.start).length > 0 && (
-                    <span className={styles.detail}>
-                      Secrets from the environment: {variablesOf(connector.start).join(', ')}
-                    </span>
+                  {connector.confirmed ? (
+                    <>
+                      <span className={classNames(styles.detail, styles.start)} data-selectable>
+                        {startInWords(connector.start)}
+                      </span>
+                      <span className={styles.detail}>Tools: {connector.tools.join(', ')}</span>
+                      {variablesOf(connector.start).length > 0 && (
+                        <span className={styles.detail}>
+                          Secrets from the environment: {variablesOf(connector.start).join(', ')}
+                        </span>
+                      )}
+                    </>
+                  ) : (
+                    <ConnectorToConfirm
+                      connector={connector}
+                      onConfirm={() =>
+                        attempt(() =>
+                          commands.confirmConnector(connector.id, connector.fingerprint),
+                        )
+                      }
+                    />
                   )}
                   {connector.problem !== null && (
                     <span className={styles.missing}>
@@ -187,8 +208,164 @@ function LibraryContent({ project }: { project: Project }) {
         )}
       </section>
 
+      {library.data.waitingTools.length > 0 && (
+        <WaitingKits
+          library={library.data}
+          onConfirm={(memberId, shown) => attempt(() => commands.confirmKit(memberId, shown))}
+        />
+      )}
+
       {refusal !== null && <Refusal>{refusal}</Refusal>}
     </div>
+  );
+}
+
+interface ConnectorToConfirmProps {
+  connector: LibraryConnector;
+  onConfirm: () => Promise<void>;
+}
+
+/**
+ * A connector that arrived or changed through the sync folder: exactly what
+ * would be started on this computer, and the confirmation that lets it
+ * start here (decision 0039, note of 22 November 2026).
+ */
+function ConnectorToConfirm({ connector, onConfirm }: ConnectorToConfirmProps) {
+  const start = connector.start;
+  return (
+    <div className={styles.confirm}>
+      <p className={styles.detail}>
+        Added or changed on another computer. Nothing on this computer starts it until you have
+        looked at exactly what it would start, and confirmed it here.
+      </p>
+      <dl className={styles.definition}>
+        {start.kind === 'program' ? (
+          <>
+            <dt>Program</dt>
+            <dd>
+              <code className={styles.word} data-selectable>
+                {start.program}
+              </code>
+            </dd>
+            <dt>Arguments</dt>
+            <dd>
+              {start.arguments.length === 0
+                ? 'None'
+                : start.arguments.map((argument, index) => (
+                    <code key={index} className={styles.word} data-selectable>
+                      {argument}
+                    </code>
+                  ))}
+            </dd>
+            <dt>Variables it is handed</dt>
+            <dd>
+              {start.variables.length === 0
+                ? 'None'
+                : start.variables.map((variable) => (
+                    <code key={variable} className={styles.word} data-selectable>
+                      {variable}
+                    </code>
+                  ))}
+            </dd>
+          </>
+        ) : (
+          <>
+            <dt>Address</dt>
+            <dd>
+              <code className={styles.word} data-selectable>
+                {start.url}
+              </code>
+            </dd>
+            <dt>Headers</dt>
+            <dd>
+              {start.headers.length === 0
+                ? 'None'
+                : start.headers.map((header) => (
+                    <span key={header.name} className={styles.headerLine}>
+                      <code className={styles.word}>{header.name}</code>
+                      {header.bearer ? ' Bearer and the secret in ' : ' the secret in '}
+                      <code className={styles.word}>{header.variable}</code>
+                    </span>
+                  ))}
+            </dd>
+          </>
+        )}
+        <dt>Tools</dt>
+        <dd>
+          {connector.tools.map((tool) => (
+            <code key={tool} className={styles.word}>
+              {tool}
+            </code>
+          ))}
+        </dd>
+      </dl>
+      <div className={styles.actions}>
+        <Button
+          variant="primary"
+          icon={<Check />}
+          onClick={() => {
+            void onConfirm();
+          }}
+        >
+          Confirm on this computer
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+interface WaitingKitsProps {
+  library: Library;
+  onConfirm: LibraryCommands['confirmKit'];
+}
+
+/** The tools given to specialists on another computer, which wait to be confirmed here. */
+function WaitingKits({ library, onConfirm }: WaitingKitsProps) {
+  const members = useTeamMembers();
+  const memberIds = [...new Set(library.waitingTools.map((waiting) => waiting.memberId))];
+  return (
+    <section className={styles.section}>
+      <h3 className="label">Given on another computer</h3>
+      <p className={styles.note}>
+        These tools were given to a specialist on another computer. No specialist on this computer
+        uses them until you confirm them here.
+      </p>
+      <ul className={styles.list}>
+        {memberIds.map((memberId) => {
+          const waiting = library.waitingTools.filter((entry) => entry.memberId === memberId);
+          const name =
+            members.find((member) => member.id === memberId)?.name ?? 'A former specialist';
+          return (
+            <li key={memberId} className={styles.item}>
+              <div className={styles.words}>
+                <span className={styles.name}>{name}</span>
+                {waiting.map((entry) => {
+                  const connector = library.connectors.find(
+                    (known) => known.id === entry.connectorId,
+                  );
+                  return (
+                    <span key={entry.connectorId} className={styles.detail}>
+                      {connector?.name ?? 'A removed connector'}: {entry.tools.join(', ')}
+                      {connector?.confirmed === false &&
+                        '. The connector itself waits for you too, above.'}
+                    </span>
+                  );
+                })}
+              </div>
+              <Button
+                variant="secondary"
+                icon={<Check />}
+                onClick={() => {
+                  void onConfirm(memberId, confirmationOf(waiting));
+                }}
+              >
+                Confirm
+              </Button>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
   );
 }
 

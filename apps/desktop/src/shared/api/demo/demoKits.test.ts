@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import type { Member, NewConnector, Project } from '../types';
 import { DemoBackend } from './demoBackend';
+import { sampleWorkspace } from './sampleWorkspace';
 import { refusal, testEnvironment } from './testing';
 
 /*
@@ -107,5 +108,58 @@ describe('the library of skills and connectors in the DemoBackend', () => {
 
     const after = await backend.removeConnector(project.id, connectorId);
     expect(after.kits[0]?.connectors).toEqual([]);
+  });
+
+  it('confirms here what is added and given here, and nothing that changed unseen', async () => {
+    const added = await backend.addConnector(project.id, parts);
+    const connector = added.connectors[0];
+    expect(connector?.confirmed).toBe(true);
+    const given = await backend.setMemberKit(project.id, specialist.id, {
+      skills: [],
+      connectors: [{ connectorId: connector?.id ?? '', tools: ['search'] }],
+    });
+    expect(given.waitingTools).toEqual([]);
+
+    const stale = await refusal(
+      backend.confirmConnector(project.id, connector?.id ?? '', 'not what was shown'),
+    );
+    expect(stale.message).toContain('changed since you looked at it');
+  });
+});
+
+describe('the sample library of the DemoBackend', () => {
+  it('holds a connector and a tool that came from another computer and wait here', async () => {
+    const backend = new DemoBackend(
+      sampleWorkspace(new Date('2026-11-21T09:00:00.000Z')),
+      testEnvironment(),
+    );
+    const projects = await backend.listProjects();
+    const libraries = await Promise.all(
+      projects.map((project) => backend.projectLibrary(project.id)),
+    );
+    const index = libraries.findIndex((library) =>
+      library.connectors.some((connector) => !connector.confirmed),
+    );
+    const library = libraries[index];
+    const project = projects[index];
+    if (!library || !project) throw new Error('the sample library has no waiting connector');
+    const waiting = library.connectors.find((connector) => !connector.confirmed);
+    expect(waiting?.name).toBe('drawings');
+    expect(library.waitingTools).toEqual([
+      expect.objectContaining({ connectorId: waiting?.id, tools: ['find_drawing'] }),
+    ]);
+
+    const confirmed = await backend.confirmConnector(
+      project.id,
+      waiting?.id ?? '',
+      waiting?.fingerprint ?? '',
+    );
+    expect(confirmed.connectors.every((connector) => connector.confirmed)).toBe(true);
+    const entry = confirmed.waitingTools[0];
+    const kits = await backend.confirmMemberKit(project.id, entry?.memberId ?? '', {
+      skills: [],
+      connectors: [{ connectorId: entry?.connectorId ?? '', tools: entry?.tools ?? [] }],
+    });
+    expect(kits.waitingTools).toEqual([]);
   });
 });

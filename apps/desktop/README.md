@@ -517,8 +517,17 @@ in a fresh empty folder of its own inside `connectors/starts` of the data
 folder, their secrets for one turn in `connectors/secrets` (`state.rs`);
 both are cleared of left-overs at start-up. The commands in
 `commands/kits.rs` (`project_library`, `add_skill`, `remove_skill`,
-`add_connector`, `remove_connector`, `set_member_kit`) answer with the whole
-library. In the interface, the Team place has "Skills and connectors"
+`add_connector`, `remove_connector`, `set_member_kit`, `confirm_connector`,
+`confirm_member_kit`) answer with the whole library. A connector that
+arrived or changed through the sync folder comes with `confirmed: false`
+and the `fingerprint` of its definition; the library shows exactly what it
+would start (the program and each argument apart, the variables, or the
+address and headers, and the tools) and "Confirm on this computer" sends
+the fingerprint back. Tools given to a specialist on another computer are
+listed under "Given on another computer" (`waitingTools`) with a Confirm of
+their own, and marked in the specialist's dialog. The sample library of the
+demo has one such connector, `drawings`, and one such tool (decision 0039,
+note of 22 November 2026). In the interface, the Team place has "Skills and connectors"
 (`features/team/LibraryDialog.tsx`), the dialog of a specialist gives
 skills and each tool of a connector (`KitField.tsx`), and a specialist's
 row says what it has. The demo keeps a sample library in

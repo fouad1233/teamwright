@@ -3821,6 +3821,19 @@ pub struct LibraryDto {
     skills: Vec<LibrarySkillDto>,
     connectors: Vec<LibraryConnectorDto>,
     kits: Vec<MemberKitDto>,
+    /// The tools of the kits that wait for the manager's confirmation on
+    /// this computer (decision 0039, note of 22 November 2026).
+    waiting_tools: Vec<WaitingToolsDto>,
+}
+
+/// Tools a specialist was given of one connector that the manager has not
+/// confirmed on this computer. No turn here is given them until then.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WaitingToolsDto {
+    member_id: String,
+    connector_id: String,
+    tools: Vec<String>,
 }
 
 /// A skill of a library.
@@ -3885,6 +3898,12 @@ pub struct LibraryConnectorDto {
     /// Why no turn is given it any more, in words, if it breaks a rule
     /// newer than it.
     problem: Option<String>,
+    /// The fingerprint of its definition as it is now, which the interface
+    /// sends back to confirm exactly what the manager was shown.
+    fingerprint: String,
+    /// Whether the manager confirmed exactly this definition on this
+    /// computer. Until then no turn here is given it.
+    confirmed: bool,
 }
 
 /// What a specialist was given.
@@ -3995,6 +4014,17 @@ impl From<&teamwright_domain::MemberKit> for MemberKitDto {
 }
 
 impl MemberKitDto {
+    /// The tools of each connector the manager was shown, read from what
+    /// the interface sent to confirm them.
+    pub fn into_seen_tools(
+        self,
+    ) -> Result<Vec<(teamwright_domain::ConnectorId, Vec<String>)>, CommandError> {
+        self.connectors
+            .into_iter()
+            .map(|given| Ok((parse_id(&given.connector_id)?, given.tools)))
+            .collect()
+    }
+
     /// What the manager chose, read from what the interface sent.
     pub fn into_choice(self) -> Result<teamwright_application::KitChoice, CommandError> {
         Ok(teamwright_application::KitChoice {
@@ -4047,9 +4077,20 @@ impl From<&teamwright_application::Library> for LibraryDto {
                         .map(ToString::to_string)
                         .collect(),
                     problem: entry.problem.clone(),
+                    fingerprint: entry.fingerprint.clone(),
+                    confirmed: entry.confirmed,
                 })
                 .collect(),
             kits: library.kits.iter().map(MemberKitDto::from).collect(),
+            waiting_tools: library
+                .waiting_tools
+                .iter()
+                .map(|waiting| WaitingToolsDto {
+                    member_id: waiting.member_id.to_string(),
+                    connector_id: waiting.connector_id.to_string(),
+                    tools: waiting.tools.iter().map(ToString::to_string).collect(),
+                })
+                .collect(),
         }
     }
 }

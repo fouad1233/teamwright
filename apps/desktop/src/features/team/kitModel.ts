@@ -5,6 +5,7 @@ import type {
   Library,
   LibraryConnector,
   MemberKit,
+  WaitingTools,
 } from '@/shared/api/types';
 
 /** What a specialist is given, by its member, or nothing. */
@@ -24,7 +25,59 @@ export function kitInWords(library: Library | undefined, memberId: Id): string |
     return connector ? [`${connector.name} (${toolsInWords(given.tools.length)})`] : [];
   });
   const parts = [...skills, ...connectors];
-  return parts.length === 0 ? null : parts.join(' · ');
+  if (parts.length === 0) return null;
+  const words = parts.join(' · ');
+  return waitsOnThisComputer(library, memberId)
+    ? `${words}, part of it waiting for your confirmation on this computer`
+    : words;
+}
+
+/** The tools given to a specialist that wait for confirmation on this computer. */
+export function waitingToolsOf(library: Library | undefined, memberId: Id): WaitingTools[] {
+  return library?.waitingTools.filter((waiting) => waiting.memberId === memberId) ?? [];
+}
+
+/** Whether a tool given to a specialist waits for confirmation on this computer. */
+export function isToolWaiting(
+  library: Library,
+  memberId: Id | undefined,
+  connectorId: Id,
+  tool: string,
+): boolean {
+  return library.waitingTools.some(
+    (waiting) =>
+      waiting.memberId === memberId &&
+      waiting.connectorId === connectorId &&
+      waiting.tools.includes(tool),
+  );
+}
+
+/**
+ * Whether something a specialist was given waits for the manager on this
+ * computer: a tool given elsewhere, or a connector whose definition came
+ * from elsewhere.
+ */
+export function waitsOnThisComputer(library: Library, memberId: Id): boolean {
+  const kit = kitOf(library, memberId);
+  return (
+    waitingToolsOf(library, memberId).length > 0 ||
+    (kit?.connectors ?? []).some(
+      (given) =>
+        library.connectors.find((connector) => connector.id === given.connectorId)?.confirmed ===
+        false,
+    )
+  );
+}
+
+/** The waiting tools of a specialist, as the choice that confirms exactly them. */
+export function confirmationOf(waiting: readonly WaitingTools[]): KitChoice {
+  return {
+    skills: [],
+    connectors: waiting.map((entry) => ({
+      connectorId: entry.connectorId,
+      tools: [...entry.tools],
+    })),
+  };
 }
 
 function toolsInWords(count: number): string {

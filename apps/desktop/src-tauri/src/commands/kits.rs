@@ -88,3 +88,40 @@ pub async fn set_member_kit(
         .set_kit(parse_id(&member_id)?, kit.into_choice()?)?;
     Ok(LibraryDto::from(&state.kits.library(project_id)?))
 }
+
+/// Confirms, on this computer, the definition of a connector that arrived
+/// or changed through the sync folder, exactly as the manager was shown it
+/// (`fingerprint`), and answers with the library. A definition that
+/// changed since is not confirmed (decision 0039, note of 22 November
+/// 2026).
+#[tauri::command]
+pub async fn confirm_connector(
+    state: State<'_, AppState>,
+    project_id: String,
+    connector_id: String,
+    fingerprint: String,
+) -> Result<LibraryDto, CommandError> {
+    let project_id = parse_id(&project_id)?;
+    state
+        .kits
+        .confirm_connector(project_id, parse_id(&connector_id)?, &fingerprint)?;
+    Ok(LibraryDto::from(&state.kits.library(project_id)?))
+}
+
+/// Confirms, on this computer, the tools a specialist was given on another
+/// computer that the manager was shown (`kit`), and answers with the
+/// library. Tools the kit no longer gives, or gained since, are not
+/// confirmed.
+#[tauri::command]
+pub async fn confirm_member_kit(
+    state: State<'_, AppState>,
+    project_id: String,
+    member_id: String,
+    kit: MemberKitDto,
+) -> Result<LibraryDto, CommandError> {
+    let project_id = parse_id(&project_id)?;
+    state
+        .kits
+        .confirm_kit(parse_id(&member_id)?, &kit.into_seen_tools()?)?;
+    Ok(LibraryDto::from(&state.kits.library(project_id)?))
+}

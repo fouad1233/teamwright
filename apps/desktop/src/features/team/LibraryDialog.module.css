@@ -63,6 +63,72 @@
   font-family: var(--font-mono);
 }
 
+/* Waits for the manager: brass, as a member that waits does in the Team
+   place, with the same hollow block. */
+.waiting {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: var(--space-2);
+  color: var(--brass-text);
+  font-weight: 400;
+  vertical-align: middle;
+}
+
+.waiting::before {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border: 1.5px solid var(--brass);
+  border-radius: 1.5px;
+  content: '';
+}
+
+.confirm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--brass);
+  border-radius: var(--radius-card);
+}
+
+.definition {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--space-1) var(--space-3);
+  margin: 0;
+  font-size: var(--text-small);
+  line-height: 1.5;
+}
+
+.definition dt {
+  color: var(--ink-soft);
+}
+
+.definition dd {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  min-width: 0;
+  margin: 0;
+}
+
+/* One argument, variable or tool each, so that a space inside one shows. */
+.word {
+  padding: 0 4px;
+  border: 1px solid var(--rule-strong);
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.headerLine {
+  display: inline;
+}
+
 .missing {
   color: var(--ink-faint);
   font-size: var(--text-small);

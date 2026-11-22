@@ -1423,6 +1423,20 @@ export class DemoBackend implements Backend {
     });
   }
 
+  confirmConnector(projectId: Id, connectorId: Id, fingerprint: string): Promise<Library> {
+    return this.answer(() => {
+      this.library.confirmConnector(this.requireProject(projectId).id, connectorId, fingerprint);
+      return this.library.library(projectId, this.teamOf(projectId));
+    });
+  }
+
+  confirmMemberKit(projectId: Id, memberId: Id, kit: KitChoice): Promise<Library> {
+    return this.answer(() => {
+      this.library.confirmKit(this.requireMember(memberId), kit);
+      return this.library.library(this.requireProject(projectId).id, this.teamOf(projectId));
+    });
+  }
+
   addReadyMadeMember(projectId: Id, key: string): Promise<Member> {
     return this.answer(() => {
       const specialist = requireReadyMade(key);

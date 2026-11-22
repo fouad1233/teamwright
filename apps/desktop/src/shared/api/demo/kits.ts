@@ -17,6 +17,11 @@ import type {
  * rules are a short copy of those of the domain crate, enough for the demo
  * to refuse what the program refuses. The simulated specialist ignores
  * what it is given.
+ *
+ * Like the program, the demo keeps what the manager confirmed "on this
+ * computer" (note of 22 November 2026): a connector added here, or a kit
+ * set here, is confirmed; the sample library holds one connector and one
+ * tool that pretend to have arrived from another computer and wait.
  */
 
 /** The folders the demo pretends the manager can choose as skills. */
@@ -116,6 +121,20 @@ function isBareNameOrFullPath(program: string): boolean {
   return program !== '.' && program !== '..' && !/[/\\:]/.test(program);
 }
 
+/**
+ * The fingerprint of the whole definition of a connector. The program uses
+ * the SHA-256 of a canonical form; the demo only needs a text that changes
+ * whenever the definition does.
+ */
+export function fingerprintOf(connector: LibraryConnector): string {
+  return JSON.stringify([connector.id, connector.name, connector.start, connector.tools]);
+}
+
+/** The key of a tool of a connector given to a specialist. */
+function toolKey(connectorId: Id, tool: string): string {
+  return `${connectorId} ${tool}`;
+}
+
 /** The variables a connector needs. */
 function variablesOf(start: ConnectorStart): string[] {
   return start.kind === 'program'
@@ -129,7 +148,11 @@ export class PretendedLibrary {
   private readonly connectors = new Map<Id, LibraryConnector[]>();
   private readonly kits = new Map<Id, MemberKit>();
   /** The variables the browser pretends are set. */
-  private readonly variables = new Set(['PARTS_TOKEN']);
+  private readonly variables = new Set(['PARTS_TOKEN', 'DRAWINGS_TOKEN']);
+  /** The fingerprint of each connector the manager confirmed "on this computer". */
+  private readonly confirmedDefinitions = new Map<Id, string>();
+  /** The tools the manager confirmed "on this computer" as given to each specialist. */
+  private readonly confirmedTools = new Map<Id, Set<string>>();
 
   constructor(
     private readonly newId: () => Id,
@@ -161,6 +184,8 @@ export class PretendedLibrary {
       addedAt: this.now(),
       missingVariables: [],
       problem: null,
+      fingerprint: '',
+      confirmed: true,
     };
     const tickets: LibraryConnector = {
       id: this.newId(),
@@ -174,15 +199,45 @@ export class PretendedLibrary {
       addedAt: this.now(),
       missingVariables: ['TICKETS_TOKEN'],
       problem: null,
+      fingerprint: '',
+      confirmed: true,
+    };
+    // Added on another computer and taken in through the sync folder: it
+    // waits until the manager confirms it here.
+    const drawings: LibraryConnector = {
+      id: this.newId(),
+      name: 'drawings',
+      start: {
+        kind: 'program',
+        program: 'uvx',
+        arguments: ['drawings-mcp', '--read-only', '--root', 'C:\\Drawings'],
+        variables: ['DRAWINGS_TOKEN'],
+      },
+      tools: ['find_drawing', 'read_drawing'],
+      addedAt: this.now(),
+      missingVariables: [],
+      problem: null,
+      fingerprint: '',
+      confirmed: false,
     };
     this.skills.set(projectId, [skill]);
-    this.connectors.set(projectId, [parts, tickets]);
+    this.connectors.set(projectId, [parts, tickets, drawings]);
+    this.confirmedDefinitions.set(parts.id, fingerprintOf(parts));
+    this.confirmedDefinitions.set(tickets.id, fingerprintOf(tickets));
     if (specialist) {
       this.kits.set(specialist.id, {
         memberId: specialist.id,
         skills: [skill.id],
-        connectors: [{ connectorId: parts.id, tools: ['search_parts', 'get_part'] }],
+        connectors: [
+          { connectorId: parts.id, tools: ['search_parts', 'get_part'] },
+          // Given on the other computer.
+          { connectorId: drawings.id, tools: ['find_drawing'] },
+        ],
       });
+      this.confirmedTools.set(
+        specialist.id,
+        new Set([toolKey(parts.id, 'search_parts'), toolKey(parts.id, 'get_part')]),
+      );
     }
   }
 
@@ -192,10 +247,17 @@ export class PretendedLibrary {
     );
     const connectors = [...(this.connectors.get(projectId) ?? [])]
       .sort((a, b) => a.name.localeCompare(b.name))
-      .map((connector) => ({
-        ...connector,
-        missingVariables: variablesOf(connector.start).filter((name) => !this.variables.has(name)),
-      }));
+      .map((connector) => {
+        const fingerprint = fingerprintOf(connector);
+        return {
+          ...connector,
+          missingVariables: variablesOf(connector.start).filter(
+            (name) => !this.variables.has(name),
+          ),
+          fingerprint,
+          confirmed: this.confirmedDefinitions.get(connector.id) === fingerprint,
+        };
+      });
     const kits = members.flatMap((member) => {
       const kit = this.kits.get(member.id);
       if (!kit) return [];
@@ -209,7 +271,18 @@ export class PretendedLibrary {
         },
       ];
     });
-    return structuredClone({ skills, connectors, kits });
+    const waitingTools = kits.flatMap((kit) => {
+      const confirmed = this.confirmedTools.get(kit.memberId) ?? new Set<string>();
+      return kit.connectors.flatMap((given) => {
+        const tools = given.tools.filter(
+          (tool) => !confirmed.has(toolKey(given.connectorId, tool)),
+        );
+        return tools.length > 0
+          ? [{ memberId: kit.memberId, connectorId: given.connectorId, tools }]
+          : [];
+      });
+    });
+    return structuredClone({ skills, connectors, kits, waitingTools });
   }
 
   addSkill(projectId: Id, folder: string): void {
@@ -249,7 +322,7 @@ export class PretendedLibrary {
     if (connectors.some((known) => known.name === name)) {
       rule(`the library already has a connector called ${name}`);
     }
-    connectors.push({
+    const added: LibraryConnector = {
       id: this.newId(),
       name,
       start: structuredClone(connector.start),
@@ -257,8 +330,13 @@ export class PretendedLibrary {
       addedAt: this.now(),
       missingVariables: [],
       problem: null,
-    });
+      fingerprint: '',
+      confirmed: true,
+    };
+    connectors.push(added);
     this.connectors.set(projectId, connectors);
+    // Added here, through the interface: confirmed here as it is.
+    this.confirmedDefinitions.set(added.id, fingerprintOf(added));
   }
 
   removeConnector(projectId: Id, connectorId: Id): void {
@@ -276,6 +354,43 @@ export class PretendedLibrary {
     for (const kit of this.kits.values()) {
       kit.connectors = kit.connectors.filter((given) => given.connectorId !== connectorId);
     }
+    this.confirmedDefinitions.delete(connectorId);
+  }
+
+  /**
+   * Confirms "on this computer" a connector that arrived from another one,
+   * exactly as the manager was shown it.
+   */
+  confirmConnector(projectId: Id, connectorId: Id, fingerprint: string): void {
+    const connector = (this.connectors.get(projectId) ?? []).find(
+      (known) => known.id === connectorId,
+    );
+    if (!connector) {
+      throw new BackendError(
+        'not_found',
+        `there is no connector with the identifier ${connectorId}`,
+      );
+    }
+    if (fingerprintOf(connector) !== fingerprint) {
+      rule(
+        `the connector ${connector.name} changed since you looked at it; look at it again before you confirm it`,
+      );
+    }
+    this.confirmedDefinitions.set(connectorId, fingerprint);
+  }
+
+  /** Confirms "on this computer" the tools of a kit the manager was shown. */
+  confirmKit(member: Member, seen: KitChoice): void {
+    const kit = this.kits.get(member.id);
+    if (!kit) return;
+    const confirmed = this.confirmedTools.get(member.id) ?? new Set<string>();
+    for (const given of kit.connectors) {
+      const shown = seen.connectors.find((entry) => entry.connectorId === given.connectorId);
+      for (const tool of given.tools) {
+        if (shown?.tools.includes(tool)) confirmed.add(toolKey(given.connectorId, tool));
+      }
+    }
+    this.confirmedTools.set(member.id, confirmed);
   }
 
   setKit(member: Member, choice: KitChoice): void {
@@ -306,6 +421,15 @@ export class PretendedLibrary {
       }
     }
     this.kits.set(member.id, { memberId: member.id, ...structuredClone(choice) });
+    // Chosen here: what the kit gives is confirmed here, and nothing else.
+    this.confirmedTools.set(
+      member.id,
+      new Set(
+        choice.connectors.flatMap((given) =>
+          given.tools.map((tool) => toolKey(given.connectorId, tool)),
+        ),
+      ),
+    );
   }
 
   /**

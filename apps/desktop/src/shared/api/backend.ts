@@ -583,6 +583,16 @@ export interface Backend {
   removeConnector(projectId: Id, connectorId: Id): Promise<Library>;
   /** Gives a specialist these skills and connectors, tool by tool, and nothing else. */
   setMemberKit(projectId: Id, memberId: Id, kit: KitChoice): Promise<Library>;
+  /**
+   * Confirms on this computer a connector that arrived or changed through the sync folder,
+   * exactly as the manager was shown it (`fingerprint`). One that changed since is refused.
+   */
+  confirmConnector(projectId: Id, connectorId: Id, fingerprint: string): Promise<Library>;
+  /**
+   * Confirms on this computer the tools a specialist was given on another computer that the
+   * manager was shown. Tools the kit gained since are not confirmed.
+   */
+  confirmMemberKit(projectId: Id, memberId: Id, kit: KitChoice): Promise<Library>;
 
   /** Says whether the program that runs the AI specialists is installed and signed in. */
   agentProgram(): Promise<AgentProgram>;

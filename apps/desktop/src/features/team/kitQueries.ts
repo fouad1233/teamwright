@@ -26,6 +26,10 @@ export interface LibraryCommands {
   addConnector(connector: NewConnector): Promise<void>;
   removeConnector(connectorId: Id): Promise<void>;
   setKit(memberId: Id, kit: KitChoice): Promise<void>;
+  /** Confirms on this computer a connector exactly as the manager was shown it. */
+  confirmConnector(connectorId: Id, fingerprint: string): Promise<void>;
+  /** Confirms on this computer the tools of a specialist the manager was shown. */
+  confirmKit(memberId: Id, shown: KitChoice): Promise<void>;
 }
 
 /** The commands for the library of a project. */
@@ -55,6 +59,12 @@ export function useLibraryCommands(projectId: Id): LibraryCommands {
       },
       setKit: async (memberId, kit) => {
         show(await backend.setMemberKit(projectId, memberId, kit));
+      },
+      confirmConnector: async (connectorId, fingerprint) => {
+        show(await backend.confirmConnector(projectId, connectorId, fingerprint));
+      },
+      confirmKit: async (memberId, shown) => {
+        show(await backend.confirmMemberKit(projectId, memberId, shown));
       },
     };
   }, [backend, queryClient, projectId]);

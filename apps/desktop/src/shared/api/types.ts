@@ -2106,6 +2106,23 @@ export interface LibraryConnector {
    * program named by a relative path.
    */
   problem: string | null;
+  /**
+   * The fingerprint of its definition as it is now. Confirming sends it back, so that a
+   * definition that changed in between is not confirmed unseen.
+   */
+  fingerprint: string;
+  /**
+   * Whether the manager confirmed exactly this definition on this computer. A connector that
+   * arrived or changed through the sync folder waits until then, and no turn here is given it.
+   */
+  confirmed: boolean;
+}
+
+/** Tools a specialist was given of one connector that wait for confirmation on this computer. */
+export interface WaitingTools {
+  memberId: Id;
+  connectorId: Id;
+  tools: string[];
 }
 
 /** A connector as a specialist is given it: only the tools named. */
@@ -2135,6 +2152,8 @@ export interface Library {
   connectors: LibraryConnector[];
   /** A specialist that was given nothing may have none. */
   kits: MemberKit[];
+  /** The tools of the kits given on another computer that wait for confirmation here. */
+  waitingTools: WaitingTools[];
 }
 
 /** A connector the manager describes, to add to a library. */

@@ -191,7 +191,12 @@ function MemberForm({ project, member, onDone }: MemberFormProps) {
       )}
 
       {member && kind === 'agent' && library.data && (
-        <KitField library={library.data} choice={kitChoice} onChange={setKit} />
+        <KitField
+          library={library.data}
+          memberId={member?.id}
+          choice={kitChoice}
+          onChange={setKit}
+        />
       )}
 
       {kind === 'agent' && (

@@ -173,6 +173,8 @@ fn main() -> ExitCode {
             commands::kits::add_connector,
             commands::kits::remove_connector,
             commands::kits::set_member_kit,
+            commands::kits::confirm_connector,
+            commands::kits::confirm_member_kit,
             commands::work::agent_program,
             commands::work::list_conversations,
             commands::work::project_usage,

@@ -575,6 +575,14 @@ export class TauriBackend implements Backend {
     return call('set_member_kit', { projectId, memberId, kit });
   }
 
+  confirmConnector(projectId: Id, connectorId: Id, fingerprint: string): Promise<Library> {
+    return call('confirm_connector', { projectId, connectorId, fingerprint });
+  }
+
+  confirmMemberKit(projectId: Id, memberId: Id, kit: KitChoice): Promise<Library> {
+    return call('confirm_member_kit', { projectId, memberId, kit });
+  }
+
   agentProgram(): Promise<AgentProgram> {
     return call('agent_program');
   }

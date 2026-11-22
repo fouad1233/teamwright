@@ -11,6 +11,12 @@
   line-height: 1.5;
 }
 
+.waiting {
+  color: var(--brass-text);
+  font-size: var(--text-small);
+  line-height: 1.5;
+}
+
 .connector {
   display: flex;
   flex-direction: column;
