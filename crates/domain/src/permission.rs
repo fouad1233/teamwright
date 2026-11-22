@@ -52,20 +52,68 @@ const NEVER_PROGRAMS: &[&str] = &[
 /// Programs that change files. A specialist changes files with the file
 /// tools, which stay inside the folder of its project; with a shell, the
 /// agent program would approve some of these on its own in that folder
-/// and in the folders it may only read. So a command never starts with
-/// one, and a turn that may run commands is denied them by name as well.
+/// and in the folders it may only read (in the mode a specialist works in,
+/// it approves `mkdir`, `touch`, `rm`, `rmdir`, `mv`, `cp` and `sed`). So a
+/// command never starts with one, and a turn that may run commands is
+/// denied them by name as well.
 pub const FILE_CHANGING_PROGRAMS: &[&str] = &[
     "rm", "rmdir", "mv", "cp", "mkdir", "touch", "ln", "chmod", "chown", "chgrp", "dd", "tee",
-    "truncate", "shred", "install",
+    "truncate", "shred", "install", "sed",
 ];
 
-/// Programs that only start the program named after them. The agent program
+/// Programs and words of the shell that only start the program named after
+/// them, or run a file as part of the shell itself. The agent program
 /// looks past some of them when it matches a command against a rule, and
 /// every check here would be about the wrong program, so a command never
 /// starts with one: the manager reads the program that really runs.
+///
+/// The shell's own words are here too: `.` and `source` run a file in the
+/// shell itself, `noglob` and `nocorrect` (zsh), `exec`, `command`,
+/// `builtin` and `eval` start what follows. `busybox` and `toybox` are many
+/// small programs in one, and the others start a program with other
+/// limits, rights, a lock, a trace or a recording around it.
 const WRAPPERS: &[&str] = &[
-    "env", "xargs", "eval", "exec", "nohup", "timeout", "time", "nice", "ionice", "watch",
-    "stdbuf", "setsid", "command", "builtin",
+    "env",
+    "xargs",
+    "eval",
+    "exec",
+    "nohup",
+    "timeout",
+    "time",
+    "nice",
+    "ionice",
+    "watch",
+    "stdbuf",
+    "setsid",
+    "command",
+    "builtin",
+    "noglob",
+    "nocorrect",
+    "flock",
+    "busybox",
+    "toybox",
+    "chrt",
+    "taskset",
+    "setpriv",
+    "unshare",
+    "sg",
+    "script",
+    ".",
+    "source",
+    "strace",
+    "ltrace",
+    "nsenter",
+    "chroot",
+    "prlimit",
+    "numactl",
+    "setarch",
+    "runuser",
+    "systemd-run",
+    "fakeroot",
+    "faketime",
+    "unbuffer",
+    "rlwrap",
+    "caffeinate",
 ];
 
 /// Characters a command may not contain. They join commands, redirect
@@ -96,9 +144,9 @@ const FORBIDDEN_IN_COMMANDS: &[char] = &[
 ///   rights (`sudo` and the like), it does not start with a program that
 ///   changes files, and it does not start with a program that only starts
 ///   another (`env`, `nohup`, …).
-/// - A web domain is a host name with at least two parts, such as
-///   `docs.rs`, or all the hosts under one (`*.example.com`). It is not an
-///   address of the computer itself or of a local network.
+/// - A web domain is one host name with at least two parts, such as
+///   `docs.rs`, never all the hosts under a name (`*.example.com`). It is
+///   not an address of the computer itself or of a local network.
 ///
 /// These checks narrow what a specialist can ask for; they are not a
 /// boundary around a program that runs. Most programs worth allowing run
@@ -268,6 +316,14 @@ fn check_word(word: &str) -> Result<(), DomainError> {
              no drive and no home folder, also not after = or an option",
         )
     };
+    // zsh reads a word that starts with = as the full path of the program
+    // named after it: `cat =python3` reads the file of python3.
+    if word.starts_with('=') {
+        return Err(not_possible(
+            "a word of a command may not start with =, which some shells turn into the full \
+             path of a program",
+        ));
+    }
     if word.contains("..") {
         return Err(not_possible(
             "a command may not contain .., which reaches into a folder above the folder of the \
@@ -337,10 +393,23 @@ fn program_name(word: &str) -> String {
 }
 
 /// Checks a web domain, and returns it in small letters.
+///
+/// A permission names one host. All the hosts under a name (`*.example.com`)
+/// could be allowed for one day; they are refused since the second review
+/// (22 November 2026): under a name that many people share, such as
+/// `*.co.uk`, `*.github.io` or `*.s3.amazonaws.com`, a wildcard opens hosts
+/// anybody can make, and a domain allowed always also opens the network of
+/// the sandbox to commands. Knowing which names are shared needs the public
+/// list of suffixes, which Teamwright does not carry.
 fn checked_domain(text: &str) -> Result<String, DomainError> {
     let domain = text.to_lowercase();
-    let host = domain.strip_prefix("*.").unwrap_or(&domain);
-    let labels: Vec<&str> = host.split('.').collect();
+    if domain.contains('*') {
+        return Err(not_possible(
+            "a permission names one host, such as docs.rs or api.example.com, not all the hosts \
+             under a name; ask for each host on its own",
+        ));
+    }
+    let labels: Vec<&str> = domain.split('.').collect();
     let well_formed = labels.iter().all(|label| {
         !label.is_empty()
             && !label.starts_with('-')
@@ -349,8 +418,7 @@ fn checked_domain(text: &str) -> Result<String, DomainError> {
     });
     if !well_formed {
         return Err(not_possible(
-            "a web domain is a host name such as docs.rs or *.example.com, without \
-             \"https://\" or a path",
+            "a web domain is a host name such as docs.rs, without \"https://\" or a path",
         ));
     }
     if labels.len() < 2 {
@@ -856,10 +924,6 @@ mod tests {
             "WebFetch(domain:docs.rs)"
         );
         assert_eq!(
-            domain("*.example.com").unwrap().tool_rule(),
-            "WebFetch(domain:*.example.com)"
-        );
-        assert_eq!(
             command("echo hello").unwrap().in_words(),
             "run the command `echo hello`"
         );
@@ -991,6 +1055,89 @@ mod tests {
             "xargs grep x",
             "NODE_ENV=production npm test",
         ]);
+    }
+
+    // The second review (22 November 2026): each of these passed.
+
+    #[test]
+    fn sed_is_a_program_that_changes_files() {
+        refused(&["sed -i s/a/b/ notes.md", "sed -n 1p notes.md"]);
+        assert!(FILE_CHANGING_PROGRAMS.contains(&"sed"));
+    }
+
+    #[test]
+    fn nocorrect_and_noglob_of_zsh_do_not_start_a_command() {
+        refused(&["nocorrect rm -rf src", "noglob rm -rf src"]);
+    }
+
+    #[test]
+    fn busybox_and_toybox_do_not_start_a_command() {
+        refused(&["busybox rm -rf src", "toybox rm -rf src"]);
+    }
+
+    #[test]
+    fn flock_does_not_start_a_command() {
+        refused(&["flock x rm -rf src"]);
+    }
+
+    #[test]
+    fn a_file_run_by_the_shell_itself_is_refused() {
+        refused(&[". x.sh", "source x.sh"]);
+    }
+
+    #[test]
+    fn programs_that_start_another_with_other_limits_do_not_start_a_command() {
+        refused(&[
+            "chrt 1 make",
+            "taskset 1 make",
+            "setpriv make",
+            "unshare make",
+            "sg users make",
+            "script out.txt",
+            "strace make",
+            "ltrace make",
+            "nsenter make",
+            "chroot jail make",
+            "fakeroot make",
+        ]);
+    }
+
+    #[test]
+    fn the_wrappers_the_review_named_do_not_start_a_command() {
+        refused(&[
+            "time make",
+            "nice make",
+            "ionice make",
+            "stdbuf -o0 make",
+            "watch make",
+            "exec make",
+            "command make",
+            "builtin make",
+            "eval make",
+        ]);
+    }
+
+    #[test]
+    fn a_word_that_starts_with_an_equals_sign_is_refused() {
+        refused(&["cat =python3", "make =x", "python3 =claude"]);
+        assert!(command("make CFLAGS=-O2").is_ok());
+    }
+
+    #[test]
+    fn a_wildcard_domain_is_refused_also_over_a_shared_name() {
+        for text in [
+            "*.co.uk",
+            "*.github.io",
+            "*.s3.amazonaws.com",
+            "*.example.com",
+            "docs.*.com",
+        ] {
+            assert!(
+                matches!(domain(text), Err(DomainError::PermissionNotPossible { .. })),
+                "{text} was allowed"
+            );
+        }
+        assert!(domain("api.example.com").is_ok());
     }
 
     #[test]

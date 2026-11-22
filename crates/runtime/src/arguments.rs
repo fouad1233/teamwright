@@ -630,6 +630,7 @@ mod tests {
                 "Bash(truncate *)",
                 "Bash(shred *)",
                 "Bash(install *)",
+                "Bash(sed *)",
             ]
         );
     }
@@ -782,7 +783,7 @@ mod tests {
         for rules in [
             vec![(PermissionKind::Command, "echo hello")],
             vec![(PermissionKind::Command, "npm run build")],
-            vec![(PermissionKind::WebDomain, "*.example.com")],
+            vec![(PermissionKind::WebDomain, "api.example.com")],
         ] {
             let arguments = text(&turn_arguments(&granted(&rules), &[], None).unwrap());
             for kept in ["--restricted", "--strict-mcp-config"] {

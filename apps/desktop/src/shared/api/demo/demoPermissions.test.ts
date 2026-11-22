@@ -220,6 +220,18 @@ describe('the rules of a permission in the demo', () => {
       ['command_prefix' as 'command', 'npm run'],
       ['web_domain', 'localhost'],
       ['web_domain', 'https://docs.rs'],
+      // The second review, 22 November 2026.
+      ['command', 'sed -i s/a/b/ notes.md'],
+      ['command', 'nocorrect rm -rf src'],
+      ['command', 'noglob rm -rf src'],
+      ['command', 'busybox rm -rf src'],
+      ['command', 'flock x rm -rf src'],
+      ['command', '. x.sh'],
+      ['command', 'source x.sh'],
+      ['command', 'cat =python3'],
+      ['web_domain', '*.co.uk'],
+      ['web_domain', '*.github.io'],
+      ['web_domain', '*.s3.amazonaws.com'],
     ] as const) {
       expect(() => checkedRule(kind, what)).toThrow();
     }

@@ -54,9 +54,13 @@ const FILE_CHANGING_PROGRAMS = new Set([
   'truncate',
   'shred',
   'install',
+  'sed',
 ]);
 
-/** Programs that only start another: a command never starts with one. */
+/**
+ * Programs and words of the shell that only start another, or run a file in
+ * the shell itself: a command never starts with one.
+ */
 const WRAPPERS = new Set([
   'env',
   'xargs',
@@ -72,6 +76,33 @@ const WRAPPERS = new Set([
   'setsid',
   'command',
   'builtin',
+  'noglob',
+  'nocorrect',
+  'flock',
+  'busybox',
+  'toybox',
+  'chrt',
+  'taskset',
+  'setpriv',
+  'unshare',
+  'sg',
+  'script',
+  '.',
+  'source',
+  'strace',
+  'ltrace',
+  'nsenter',
+  'chroot',
+  'prlimit',
+  'numactl',
+  'setarch',
+  'runuser',
+  'systemd-run',
+  'fakeroot',
+  'faketime',
+  'unbuffer',
+  'rlwrap',
+  'caffeinate',
 ]);
 
 /** The name of a program as it is compared. */
@@ -118,8 +149,12 @@ export function checkedRule(kind: PermissionKind, what: string): string {
   }
   if (kind === 'web_domain') {
     const domain = text.toLowerCase();
-    const host = domain.startsWith('*.') ? domain.slice(2) : domain;
-    const labels = host.split('.');
+    if (domain.includes('*')) {
+      throw notPossible(
+        'a permission names one host, such as docs.rs or api.example.com, not all the hosts under a name; ask for each host on its own',
+      );
+    }
+    const labels = domain.split('.');
     if (!labels.every((label) => /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/.test(label))) {
       throw notPossible('a web domain is a host name such as docs.rs, without "https://"');
     }
@@ -146,6 +181,11 @@ export function checkedRule(kind: PermissionKind, what: string): string {
   const first = words[0] ?? '';
   if (first.includes('=')) {
     throw notPossible('a command may not start by setting a variable');
+  }
+  if (words.some((word) => word.startsWith('='))) {
+    throw notPossible(
+      'a word of a command may not start with =, which some shells turn into the full path of a program',
+    );
   }
   if (words.some((word) => word.includes('..'))) {
     throw notPossible('a command may not contain .., which reaches into a folder above');
