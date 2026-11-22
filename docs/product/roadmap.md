@@ -387,7 +387,7 @@ Several specialists working together with the manager in the loop.
   was tried against a listener on the same computer only. No real Slack
   channel and no real listener on the internet has received anything,
   and no real issue was opened
-- ✅ Ten themes, chosen on the page Computers and kept for that computer
+- ✅ Thirteen themes, chosen on the page Computers and kept for that computer
   ([decision 0028](../decisions/0028-themes.md),
   [the reasoning](../design/themes.md)). Lamplight, the look the program
   had, stays the default and follows the system. Five palettes are built
@@ -397,7 +397,11 @@ Several specialists working together with the manager in the loop.
   Fern and Tide. The window crosses from one theme to the next in 400
   milliseconds. Seen in a browser on demo data; not seen in the built
   program, where the crossing and the script that sets the theme before
-  the first paint were never tried
+  the first paint were never tried. Three of one colour on white were
+  added on 22 November 2026, Rose, Delft and Poppy: light only, with no
+  pattern, their contrast measured by tests, and in Poppy trouble keeps
+  a darker red of its own. Seen in a browser on the demo; not tried in
+  the built program
 - ✅ Areas: a project cut into the jobs inside it, shown at the side
   under the project, each showing only its tasks in every view
   ([decision 0022](../decisions/0022-areas-inside-a-project.md)).
