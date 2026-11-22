@@ -7,11 +7,11 @@ their own.
 
 Open *Computers* at the foot of the sidebar.
 
-<img alt="The page Computers: choosing a folder to sync, the ten themes, and the switches for notifications" src="pictures/computers.png">
+<img alt="The page Computers: choosing a folder to sync, the themes, and the switches for notifications" src="pictures/computers.png">
 
 ## Themes
 
-*Theme* offers ten palettes. Press one to use it. The window changes to it in
+*Theme* offers thirteen palettes. Press one to use it. The window changes to it in
 a moment.
 
 - **Lamplight** is the look the program had, and the default. It follows the
@@ -20,6 +20,11 @@ a moment.
   highest contrast) and **Even** (dark, with statuses that differ in
   lightness as well as hue, so they part without color vision) are made for
   the eyes and for long work.
+- **Rose** (pink), **Delft** (blue) and **Poppy** (red) are light, each a
+  white ground with one color. The color marks what is chosen, what has the
+  focus and the head of the window. In Poppy, trouble (a late date, a limit
+  that is passed, a refusal) is a darker, cooler red than the color of the
+  theme, so the two are not taken for each other.
 - **Blossom**, **Wing**, **Fern** and **Tide** are special palettes that carry
   a pattern.
 

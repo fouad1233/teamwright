@@ -69,3 +69,48 @@ than another set of values for the same names.
   are text and compress well; nothing is loaded from elsewhere.
 - Lamplight's two modes keep following the system. A manager who wants
   Lamplight's night in a light room has Dusk or Slate.
+
+## Note of 22 November 2026: three themes of one colour and white
+
+The founder asked for three more: "pink and white, blue and white, red and
+white". They are Rose, Delft and Poppy, and they make thirteen themes. The
+decision above stands; this is what was added and why.
+
+1. **Light, and only light.** A theme of "colour and white" has a white
+   ground, so each is one mode, light, in `themes.css` like the others. The
+   ground is white or a breath of the colour (never above a few per cent),
+   the surfaces are pure white, and no pattern is drawn. They are a third
+   kind in the chooser, `colour`, with a group of their own, "One colour and
+   white", between the plain and the special palettes.
+2. **The colour carries the marks, not the ground.** The colour is the
+   gold of the other themes (`--brass`: focus ring, marks, the count of what
+   waits), and also three new tokens in `tokens.css`, left bare in
+   Lamplight and the plain and special palettes: `--head-wash` and `--head-edge` give the header of a project
+   a wash of the colour and a line under it, and `--tab-line` makes the line
+   under the active tab the colour instead of ink. The hover and the pressed
+   state are washes of the colour (a neutral one in Poppy, see 4), so the
+   chosen item of the sidebar and the chosen switch of a pair are tinted. The
+   sunken ground, which is the sidebar, is a faint tint of the colour. The main button stays ink, which is a very
+   dark shade of the colour's own family; it needs no colour to be seen.
+3. **Statuses do not depend on the theme's colour.** The eight status tints
+   are the same in all three, as in Paper, with the same ratios, so a blue
+   status in Delft is still told from the blue of the theme by its place and
+   its mark (a status is a mark and a word, never a colour alone). A test
+   checks that no tint equals the theme's colour.
+4. **Trouble in the red theme.** The interface uses red for late dates,
+   limits that are exceeded and refusals. In Poppy the theme's red is a warm
+   vermilion and used only for marks, lines and washes; trouble is a darker,
+   cooler crimson (a hue at least 20 degrees apart and at least 1.2 times
+   darker in luminance, so the two part in grey as well), and it was already a word or
+   a mark with a word, never a colour alone. The hover is a neutral wash in
+   Poppy, so that the weekends of the Gantt chart and the rows under the
+   pointer do not turn pink-red. In all three, trouble is a red at least 20
+   degrees of hue from the colour of the theme; a test checks it.
+5. **Names.** Rose, Delft (the blue of the glazed tiles of that town) and
+   Poppy: one plain word each, like the others.
+
+The ratios are in [the themes](../design/themes.md). Looked at in a browser
+on the demo (the board, the dashboard, the Gantt chart, the office and the
+page Computers in all three; a task panel and a dialog in Delft and Poppy). Not
+tried in the installed program.
+
