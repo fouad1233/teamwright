@@ -771,6 +771,9 @@ mod tests {
         assert!(environment.get("UNRELATED").is_some());
     }
 
+    // The base set differs by system, and no command is ever allowed on
+    // Windows, so the names are checked where commands can run.
+    #[cfg(unix)]
     #[test]
     fn a_turn_that_may_run_a_command_is_started_with_the_base_set_only() {
         let base = Environment::empty()
