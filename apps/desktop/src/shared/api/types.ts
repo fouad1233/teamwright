@@ -1100,6 +1100,22 @@ export interface PermissionAnswer {
 }
 
 /**
+ * Whether command permissions are switched on, on this computer, and what
+ * holds commands back here even then (decision 0038, note of 22 November
+ * 2026). A choice of this computer, never synced, off until switched on.
+ */
+export interface CommandPermissions {
+  /** Whether the manager switched them on. */
+  switchedOn: boolean;
+  /**
+   * Why no command can run on this computer even when they are switched
+   * on, in the application's words: no sandbox, or a sign-in with a
+   * variable. Null if nothing holds them back.
+   */
+  heldBack: string | null;
+}
+
+/**
  * A specialist's request to do something it may not do on its own: run a
  * command or fetch from a web domain, with why (decision 0038).
  */

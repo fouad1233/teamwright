@@ -13,6 +13,7 @@ import type {
   CalendarDate,
   Color,
   Computer,
+  CommandPermissions,
   Conversation,
   ConversationsOfFolder,
   Coordinator,
@@ -114,6 +115,7 @@ import { PretendedMemory, shorten } from './memory';
 import { PretendedEarlierConversations, type PretendedConversation } from './earlierConversations';
 import {
   PretendedPermissions,
+  COMMANDS_SWITCHED_OFF,
   SECRET_IN_REACH,
   checkedRule,
   checkedScope,
@@ -295,6 +297,12 @@ export interface DemoWorkspace {
   earlierConversations?: PretendedConversation[];
   /** The permission requests of the specialists. Left out, there are none. */
   permissions?: PermissionRequest[];
+  /**
+   * Whether command permissions are switched on, on the pretended computer.
+   * Left out, they are off, as in the program until the manager switches
+   * them on.
+   */
+  commandPermissionsOn?: boolean;
 }
 
 const browserEnvironment: DemoEnvironment = {
@@ -401,6 +409,11 @@ export class DemoBackend implements Backend {
     lastLookFailed: false,
     newer: null,
   };
+  /**
+   * Whether command permissions are switched on. The demo has a sandbox
+   * and no sign-in with a variable, so nothing else holds commands back.
+   */
+  private commandsOn: boolean;
   /** What the manager chose about notifications; off until allowed, as in the program. */
   private notifications: NotificationChoice = {
     permission: 'not_asked',
@@ -497,6 +510,7 @@ export class DemoBackend implements Backend {
       }),
     );
     this.permissions = new PretendedPermissions(workspace?.permissions ?? []);
+    this.commandsOn = workspace?.commandPermissionsOn ?? false;
     this.memory = new PretendedMemory(
       Object.entries(workspace?.memory ?? {}).flatMap(([projectId, entries]) =>
         entries.map((entry) => ({ projectId, entry })),
@@ -1557,6 +1571,9 @@ export class DemoBackend implements Backend {
             'this permission cannot be given: the conversation is not about a task; allow it once',
           );
         }
+        if (answer.kind === 'command' && !this.commandsOn) {
+          throw new BackendError('rule_broken', COMMANDS_SWITCHED_OFF);
+        }
         if (answer.kind === 'command' && this.library.namesASecret(member)) {
           throw new BackendError('rule_broken', SECRET_IN_REACH);
         }
@@ -1582,6 +1599,17 @@ export class DemoBackend implements Backend {
 
   withdrawPermission(requestId: Id): Promise<PermissionRequest> {
     return this.answer(() => this.permissions.withdraw(requestId, this.nowAsText()));
+  }
+
+  commandPermissions(): Promise<CommandPermissions> {
+    return this.answer(() => ({ switchedOn: this.commandsOn, heldBack: null }));
+  }
+
+  switchCommandPermissions(on: boolean): Promise<CommandPermissions> {
+    return this.answer(() => {
+      this.commandsOn = on;
+      return { switchedOn: on, heldBack: null };
+    });
   }
 
   startWork(taskId: Id): Promise<Conversation> {
@@ -2983,7 +3011,13 @@ export class DemoBackend implements Backend {
     turn.proposal = script.proposes
       ? { ...structuredClone(script.proposes), approvedAt: null }
       : null;
-    if (script.asksPermission && conversation.memberId !== null) {
+    // A request for a command does not reach the manager while command
+    // permissions are switched off: the team bus refuses it.
+    const asksPermission =
+      script.asksPermission && (script.asksPermission.kind !== 'command' || this.commandsOn)
+        ? script.asksPermission
+        : undefined;
+    if (asksPermission && conversation.memberId !== null) {
       this.permissions.record({
         id: this.environment.newId(),
         projectId: conversation.projectId,
@@ -2991,9 +3025,9 @@ export class DemoBackend implements Backend {
         conversationId: conversation.id,
         turnId: turn.id,
         taskId: conversation.taskId,
-        kind: script.asksPermission.kind,
-        what: script.asksPermission.what,
-        reason: script.asksPermission.reason,
+        kind: asksPermission.kind,
+        what: asksPermission.what,
+        reason: asksPermission.reason,
         askedAt: turn.endedAt,
         answer: null,
       });
@@ -3003,12 +3037,7 @@ export class DemoBackend implements Backend {
     // stays in work until the manager has decided and the specialist has
     // gone on.
     const task = conversation.taskId === null ? undefined : this.tasks.get(conversation.taskId);
-    if (
-      task &&
-      turn.decision === null &&
-      !script.asksPermission &&
-      this.categoryOf(task) === 'active'
-    ) {
+    if (task && turn.decision === null && !asksPermission && this.categoryOf(task) === 'active') {
       this.moveToFirst(task, 'review');
     }
     this.noteVersions();

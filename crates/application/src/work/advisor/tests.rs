@@ -108,6 +108,7 @@ fn planning() -> Planning {
         memory: Arc::new(crate::in_memory::InMemoryMemoryRepository::default()),
         digests: digests.clone(),
         permissions: Arc::new(crate::in_memory::InMemoryPermissionRepository::default()),
+        command_choice: Arc::new(crate::in_memory::InMemoryCommandChoice::default()),
         folders: Arc::new(FixedProjectFolders::inside("projects")),
         places,
         file_system: Arc::new(PretendFileSystem::default()),

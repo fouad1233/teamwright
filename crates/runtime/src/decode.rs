@@ -63,6 +63,10 @@ pub struct Decoder {
     team: Vec<String>,
     /// The names of the teammates a message may go to.
     teammates: Vec<String>,
+    /// Whether a command may be asked for with `ask_permission`, as the
+    /// bus was told. Where it may not, a request for one is an ordinary use
+    /// of a tool, which the bus refuses.
+    commands_askable: bool,
     /// The handoffs and messages whose calls passed the check and wait for
     /// the answer of the team bus, by the identifier of the use. Only the
     /// bus knows whether the files of a handoff are there, so what it
@@ -132,6 +136,16 @@ impl Decoder {
     #[must_use]
     pub fn with_teammates(self, teammates: Vec<String>) -> Self {
         Self { teammates, ..self }
+    }
+
+    /// The same decoder, for a session in which a command may be asked
+    /// for, or not. A new decoder takes none.
+    #[must_use]
+    pub fn with_commands_askable(self, commands_askable: bool) -> Self {
+        Self {
+            commands_askable,
+            ..self
+        }
     }
 
     /// Reads one line of output and returns the events it holds, often none.
@@ -495,9 +509,9 @@ impl Decoder {
             PROPOSE_PLAN_IN_SESSION => proposal_from(input, &self.team)
                 .ok()
                 .map(AgentEvent::PlanProposed),
-            ASK_PERMISSION_IN_SESSION => {
-                permission_from(input).ok().map(AgentEvent::PermissionAsked)
-            }
+            ASK_PERMISSION_IN_SESSION => permission_from(input, self.commands_askable)
+                .ok()
+                .map(AgentEvent::PermissionAsked),
             _ => None,
         }
     }
@@ -1504,7 +1518,7 @@ mod tests {
 
     #[test]
     fn a_request_for_a_permission_is_reported_as_such_and_not_as_a_tool_use() {
-        let mut decoder = Decoder::new();
+        let mut decoder = Decoder::new().with_commands_askable(true);
         let input = serde_json::json!({
             "kind": "command",
             "what": "echo hello",
@@ -1539,8 +1553,28 @@ mod tests {
     }
 
     #[test]
-    fn a_request_that_could_never_be_allowed_is_an_ordinary_tool_use() {
+    fn a_request_for_a_command_where_none_may_be_asked_for_is_an_ordinary_tool_use() {
         let mut decoder = Decoder::new();
+        let events = decoder.decode_line(&call_line(
+            "toolu_1",
+            crate::team_bus::ASK_PERMISSION_IN_SESSION,
+            &serde_json::json!({ "kind": "command", "what": "npm test", "reason": "Tests." }),
+        ));
+        assert!(matches!(events.as_slice(), [AgentEvent::ToolUse { .. }]));
+        let domain = decoder.decode_line(&call_line(
+            "toolu_2",
+            crate::team_bus::ASK_PERMISSION_IN_SESSION,
+            &serde_json::json!({ "kind": "web_domain", "what": "docs.rs", "reason": "Docs." }),
+        ));
+        assert!(matches!(
+            domain.as_slice(),
+            [AgentEvent::PermissionAsked(_)]
+        ));
+    }
+
+    #[test]
+    fn a_request_that_could_never_be_allowed_is_an_ordinary_tool_use() {
+        let mut decoder = Decoder::new().with_commands_askable(true);
         let events = decoder.decode_line(&call_line(
             "toolu_1",
             crate::team_bus::ASK_PERMISSION_IN_SESSION,

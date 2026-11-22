@@ -241,6 +241,10 @@ export function checkedScope(kind: PermissionKind, scope: PermissionScope): void
   }
 }
 
+/** Why no command can be allowed while switched off, in the application's words. */
+export const COMMANDS_SWITCHED_OFF =
+  'this permission cannot be given: command permissions are switched off on this computer; the manager can switch them on in Computers, and only a web domain can be asked for until then';
+
 /** Why a specialist can be given no command, in the application's words. */
 export const SECRET_IN_REACH =
   'this permission cannot be given: this specialist has a connector that is given a secret in an environment variable, and a command could read it; take that connector from the specialist first';

@@ -1,0 +1,33 @@
+/* A part of the page of this computer: a label over a hairline, then its
+   lines, as the parts about notifications and versions are. */
+.part {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-width: 680px;
+  padding-top: var(--space-4);
+}
+
+.part > h2 {
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--rule);
+}
+
+/* What the switch allows and what has not been proven: read before it is
+   switched on, with the brass edge of the card that allows a command. */
+.words {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding-left: var(--space-3);
+  border-left: 2px solid var(--brass);
+  color: var(--ink-soft);
+  font-size: var(--text-small);
+  line-height: 1.55;
+}
+
+.heldBack {
+  color: var(--ink-soft);
+  font-size: var(--text-small);
+  line-height: 1.55;
+}

@@ -8,12 +8,23 @@ import { TextInput } from '@/shared/ui/Field';
 import { OptionList } from '../work/OptionList';
 import { appearsAt, waitsForManager } from '../work/waitsForManager';
 import styles from './PermissionCard.module.css';
-import { WHAT_A_COMMAND_MEANS, choicesFor, kindInWords, runsCommands } from './permissionModel';
+import {
+  COMMANDS_SWITCHED_OFF,
+  WHAT_A_COMMAND_MEANS,
+  choicesFor,
+  kindInWords,
+  runsCommands,
+} from './permissionModel';
 
 interface PermissionCardProps {
   request: PermissionRequest;
   /** The name of the specialist that asks. */
   askedBy: string;
+  /**
+   * Whether command permissions are switched on, on this computer. Off, a
+   * request for a command can only be refused.
+   */
+  commandsSwitchedOn: boolean;
   /** Sends the answer. Resolves to whether it was taken. */
   onAnswer: (answer: NewPermissionAnswer) => Promise<boolean>;
 }
@@ -29,8 +40,13 @@ interface PermissionCardProps {
  * it again. Like a question, it is the manager's to do, so it carries the
  * gold.
  */
-export function PermissionCard({ request, askedBy, onAnswer }: PermissionCardProps) {
-  const choices = choicesFor(request, askedBy);
+export function PermissionCard({
+  request,
+  askedBy,
+  commandsSwitchedOn,
+  onAnswer,
+}: PermissionCardProps) {
+  const choices = choicesFor(request, askedBy, commandsSwitchedOn);
   const [pick, setPick] = useState<number | undefined>(undefined);
   const [what, setWhat] = useState(request.what);
   const [note, setNote] = useState('');
@@ -84,9 +100,11 @@ export function PermissionCard({ request, askedBy, onAnswer }: PermissionCardPro
           style={appearsAt(2)}
           role="note"
         >
-          {WHAT_A_COMMAND_MEANS.map((sentence) => (
-            <p key={sentence}>{sentence}</p>
-          ))}
+          {commandsSwitchedOn ? (
+            WHAT_A_COMMAND_MEANS.map((sentence) => <p key={sentence}>{sentence}</p>)
+          ) : (
+            <p>{COMMANDS_SWITCHED_OFF}</p>
+          )}
         </div>
       )}
 

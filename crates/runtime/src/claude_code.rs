@@ -299,10 +299,16 @@ impl AgentRuntime for ClaudeCode {
                 _ => None,
             })
             .unwrap_or_default();
+        let commands_askable = request
+            .team_tools
+            .iter()
+            .any(|tool| matches!(tool, TeamTool::AskPermission { commands: true }));
         let turn = start_turn(
             command(&program, &arguments, Some(&working_folder), &environment),
             request.prompt,
-            Decoder::for_team(team).with_teammates(teammates),
+            Decoder::for_team(team)
+                .with_teammates(teammates)
+                .with_commands_askable(commands_askable),
             listener,
         )?;
         Ok(if memory.is_none() && secrets.is_empty() {

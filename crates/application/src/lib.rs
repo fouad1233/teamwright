@@ -114,7 +114,7 @@ pub use notifications::{
     Notification, NotificationChoice, NotificationChoiceStore, NotificationKind,
     NotificationPermission, NotificationService, notification_for, notification_of,
 };
-pub use permissions::PermissionService;
+pub use permissions::{CommandChoiceStore, CommandPermissions, PermissionService};
 pub use places::{ChosenPlaces, PlacesService, ProjectPlaces, REFERENCES_FOLDER};
 pub use plan_limit::{
     PlanLimitChange, PlanLimitService, PlanLimitState, PlanLimitStore, PlanReport, ReachedLimit,

@@ -17,6 +17,7 @@ describe('permission requests in the DemoBackend', () => {
   beforeEach(async () => {
     environment = testEnvironment();
     backend = new DemoBackend(undefined, environment);
+    await backend.switchCommandPermissions(true);
     project = await backend.createProject({ name: 'Smart sensor node', workflow: 'engineering' });
     engineer = await backend.addMember({
       projectId: project.id,
@@ -39,6 +40,36 @@ describe('permission requests in the DemoBackend', () => {
     }
     return request;
   }
+
+  it('starts with command permissions off, as a new computer does', async () => {
+    const fresh = new DemoBackend(undefined, testEnvironment());
+    expect(await fresh.commandPermissions()).toEqual({ switchedOn: false, heldBack: null });
+  });
+
+  it('while command permissions are off, nothing about a command reaches the inbox', async () => {
+    await backend.switchCommandPermissions(false);
+    await backend.startWork(check.id);
+    environment.passAll();
+    expect(await backend.openPermissionRequests()).toEqual([]);
+  });
+
+  it('a request asked while on cannot be allowed once they are off, only refused', async () => {
+    const request = await asked();
+    await backend.switchCommandPermissions(false);
+    const refused = await refusal(
+      backend.answerPermission(request.id, {
+        decision: 'allow',
+        scope: 'once',
+        kind: 'command',
+        what: request.what,
+        note: '',
+      }),
+    );
+    expect(refused.code).toBe('rule_broken');
+    expect(refused.message).toMatch(/switched off/);
+    await backend.answerPermission(request.id, { decision: 'refuse', note: '' });
+    expect(await backend.openPermissionRequests()).toEqual([]);
+  });
 
   it('a specialist that has to check something asks to run a command, and waits', async () => {
     const request = await asked();

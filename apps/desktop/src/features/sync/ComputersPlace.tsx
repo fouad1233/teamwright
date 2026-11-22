@@ -10,6 +10,7 @@ import { describeFailure } from '@/shared/ui/Toast';
 
 import { ThemeChooser } from '../appearance/ThemeChooser';
 import { NotificationSettings } from '../notifications/NotificationSettings';
+import { CommandSettings } from '../permissions/CommandSettings';
 import { VersionSettings } from '../updates/VersionSettings';
 import { waitsForManager } from '../work/waitsForManager';
 import styles from './ComputersPlace.module.css';
@@ -54,6 +55,7 @@ export function ComputersPlace({ projects }: ComputersPlaceProps) {
 
       <ThemeChooser />
       <NotificationSettings />
+      <CommandSettings />
       <VersionSettings />
     </section>
   );

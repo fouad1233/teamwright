@@ -54,6 +54,26 @@ export const WHAT_A_COMMAND_MEANS = [
   'With any allowed command the specialist can also read, list and search files inside the folders of the project with the shell.',
 ] as const;
 
+/**
+ * What the manager reads beside the switch of command permissions on the
+ * page of this computer (decision 0038, note of 22 November 2026): what it
+ * allows, that a specialist can change what a command runs, that the
+ * sandbox has not been proven, and when to leave it off.
+ */
+export const COMMAND_SWITCH_WORDS = [
+  'Switched on, a specialist can ask you to run one exact command, such as npm test, and you can allow it once or for a task. Switched off, a specialist can ask only to fetch pages from a web domain, and no command runs, whatever you allowed before.',
+  'A specialist can change the files a command runs: scripts, build files, tests. Allowing a command lets the specialist run any program as you.',
+  'Commands are meant to run in a sandbox that keeps them inside the folders of the project. That sandbox has not been proven in this version of Teamwright.',
+  'Keep this off unless you trust the files of your projects.',
+] as const;
+
+/**
+ * What the card of a request for a command says while command permissions
+ * are switched off: it can only be refused here.
+ */
+export const COMMANDS_SWITCHED_OFF =
+  'Command permissions are switched off on this computer, so this can only be refused. To allow it, switch them on in Computers first.';
+
 /** One of the answers to a request: allowed for a while, or refused. */
 export type PermissionChoice = PermissionScope | 'refuse';
 
@@ -61,12 +81,24 @@ export type PermissionChoice = PermissionScope | 'refuse';
  * The answers the manager can give, in order, as options with what each
  * leads to. Allowing for the task is offered only when the conversation is
  * about one; allowing always only for a web domain, as a command is never
- * allowed always.
+ * allowed always. While command permissions are switched off, a command
+ * can only be refused.
  */
 export function choicesFor(
   request: PermissionRequest,
   specialist: string,
+  commandsSwitchedOn = true,
 ): { choice: PermissionChoice; option: DecisionOption }[] {
+  const refuse = {
+    choice: 'refuse' as const,
+    option: {
+      label: 'Refuse',
+      consequence: `${specialist} goes on without it, and says what could not be done.`,
+    },
+  };
+  if (runsCommands(request.kind) && !commandsSwitchedOn) {
+    return [refuse];
+  }
   const choices: { choice: PermissionChoice; option: DecisionOption }[] = [
     {
       choice: 'once',
@@ -97,13 +129,7 @@ export function choicesFor(
       },
     });
   }
-  choices.push({
-    choice: 'refuse',
-    option: {
-      label: 'Refuse',
-      consequence: `${specialist} goes on without it, and says what could not be done.`,
-    },
-  });
+  choices.push(refuse);
   return choices;
 }
 

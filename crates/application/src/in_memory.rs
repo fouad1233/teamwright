@@ -124,6 +124,34 @@ impl UpdateChoiceStore for InMemoryUpdateChoice {
     }
 }
 
+/// Keeps in memory whether command permissions are switched on. Off unless
+/// made with [`InMemoryCommandChoice::switched_on`].
+#[derive(Debug, Default)]
+pub struct InMemoryCommandChoice {
+    on: AtomicBool,
+}
+
+impl InMemoryCommandChoice {
+    /// A choice that starts switched on, for tests of what a command does.
+    #[must_use]
+    pub fn switched_on() -> Self {
+        Self {
+            on: AtomicBool::new(true),
+        }
+    }
+}
+
+impl crate::permissions::CommandChoiceStore for InMemoryCommandChoice {
+    fn commands_switched_on(&self) -> Result<bool, StorageError> {
+        Ok(self.on.load(Ordering::SeqCst))
+    }
+
+    fn switch_commands(&self, on: bool) -> Result<(), StorageError> {
+        self.on.store(on, Ordering::SeqCst);
+        Ok(())
+    }
+}
+
 /// Keeps projects in memory.
 #[derive(Debug, Default)]
 pub struct InMemoryProjectRepository {

@@ -8,6 +8,7 @@ import type {
   BudgetScope,
   CalendarDate,
   Color,
+  CommandPermissions,
   Conversation,
   ConversationsOfFolder,
   Coordinator,
@@ -661,6 +662,15 @@ export interface Backend {
    * (`rule_broken`).
    */
   withdrawPermission(requestId: Id): Promise<PermissionRequest>;
+  /**
+   * Whether command permissions are switched on, on this computer, and what
+   * holds commands back here even then. Off until the manager switches them
+   * on; while off, no turn runs a command and a specialist can ask only for
+   * a web domain (decision 0038, note of 22 November 2026).
+   */
+  commandPermissions(): Promise<CommandPermissions>;
+  /** Switches command permissions on or off, on this computer only. */
+  switchCommandPermissions(on: boolean): Promise<CommandPermissions>;
   /**
    * What the specialists and the Advisor of a project have spent, in tokens
    * of every kind, and how full the context of each is. Worked out from the

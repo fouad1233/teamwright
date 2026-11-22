@@ -4534,6 +4534,28 @@ impl PermissionRequestDto {
     }
 }
 
+/// Whether command permissions are switched on, on this computer, and what
+/// holds commands back here even then (decision 0038, note of 22 November
+/// 2026).
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CommandPermissionsDto {
+    /// Whether the manager switched them on. Off until switched on.
+    pub switched_on: bool,
+    /// Why no command can run on this computer even when switched on, in
+    /// the application's words, if none can.
+    pub held_back: Option<String>,
+}
+
+impl From<teamwright_application::CommandPermissions> for CommandPermissionsDto {
+    fn from(state: teamwright_application::CommandPermissions) -> Self {
+        Self {
+            switched_on: state.switched_on,
+            held_back: state.held_back.map(|no| no.reason().to_owned()),
+        }
+    }
+}
+
 /// What the interface sends to answer a permission request: allow, with
 /// how long and the rule as the manager saw and perhaps edited it; or
 /// refuse. Both may carry words of the manager's.

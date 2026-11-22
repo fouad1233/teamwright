@@ -532,7 +532,13 @@ pub enum TeamTool {
     /// `ask_permission`: a specialist asks the manager for permission to
     /// run a command or to fetch from a web domain. It is reported as
     /// [`AgentEvent::PermissionAsked`] (decision 0038).
-    AskPermission,
+    AskPermission {
+        /// Whether a command may be asked for. Where none could be allowed
+        /// (command permissions switched off, no sandbox, a secret in
+        /// reach), only a web domain can be asked for, and a request for a
+        /// command is refused by the bus with the reason in words.
+        commands: bool,
+    },
     /// `search_memory`: a specialist searches the memory of the project
     /// with a few words. The answer is data, read from the entries that
     /// are current when the turn starts (decision 0036).

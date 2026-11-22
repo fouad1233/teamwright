@@ -23,6 +23,7 @@
 mod apply;
 mod areas;
 mod codec;
+mod command_choice;
 mod conversations;
 mod coordinator;
 mod database;
@@ -55,6 +56,7 @@ mod update_choice;
 mod views;
 
 pub use areas::SqliteAreaRepository;
+pub use command_choice::SqliteCommandChoice;
 pub use conversations::SqliteConversationRepository;
 pub use coordinator::SqliteCoordinatorRepository;
 pub use database::Database;

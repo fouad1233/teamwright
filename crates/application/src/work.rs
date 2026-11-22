@@ -177,6 +177,9 @@ pub struct WorkPorts {
     /// Where the permission requests of the specialists are kept, with the
     /// manager's answers (decision 0038).
     pub permissions: Arc<dyn PermissionRepository>,
+    /// Whether the manager switched command permissions on, on this
+    /// computer. Off, no turn runs a command and none can be asked for.
+    pub command_choice: Arc<dyn crate::permissions::CommandChoiceStore>,
     /// The folder Teamwright gives each project.
     pub folders: Arc<dyn ProjectFolders>,
     /// Where the folders the manager chose for each project are stored.
@@ -663,6 +666,38 @@ impl WorkService {
         )
     }
 
+    /// Whether command permissions are switched on, on this computer, and
+    /// what holds commands back here even then (decision 0038, note of 22
+    /// November 2026).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if storage fails.
+    pub fn command_permissions(
+        &self,
+    ) -> Result<crate::permissions::CommandPermissions, ApplicationError> {
+        Ok(crate::permissions::CommandPermissions {
+            switched_on: self.inner.ports.command_choice.commands_switched_on()?,
+            held_back: self.inner.ports.runtime.why_no_commands(),
+        })
+    }
+
+    /// Switches command permissions on or off, on this computer. Off, no
+    /// turn that starts from now on runs a command, whatever was allowed,
+    /// and a specialist can ask only for a web domain. A turn that runs
+    /// keeps what it was started with.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if storage fails.
+    pub fn switch_command_permissions(
+        &self,
+        on: bool,
+    ) -> Result<crate::permissions::CommandPermissions, ApplicationError> {
+        self.inner.ports.command_choice.switch_commands(on)?;
+        self.command_permissions()
+    }
+
     /// Lists the conversations that wait for the manager, in every project
     /// that is not archived: a specialist waits for a decision, or the
     /// Advisor waits for the answers to its questions or for a word about
@@ -948,7 +983,16 @@ impl WorkService {
                     prompt = Some(format!("{request}\n\n{words}"));
                 }
                 let teammates = teammates_of(member, &team);
-                let mut tools = specialist_tools(&conversation, &working_folder, teammates);
+                // A command can be asked for only where one could be
+                // allowed: switched on, with a sandbox, and no secret in
+                // reach (decision 0038).
+                let no_commands = self.inner.no_commands_for(member)?;
+                let mut tools = specialist_tools(
+                    &conversation,
+                    &working_folder,
+                    teammates,
+                    no_commands.is_none(),
+                );
                 // The memory as it is when the turn starts: the team bus
                 // searches it (decision 0036).
                 tools.extend([
@@ -977,12 +1021,16 @@ impl WorkService {
                     turn_id: turn.id(),
                     computer: ports.this_computer,
                     started_by,
-                    no_commands: self.inner.no_commands_for(member)?,
+                    no_commands,
                 };
                 let mut requests = ports.permissions.requests_of_project(project.id())?;
                 requests.extend(answered_permission.iter().cloned());
                 let granted = granted_rules(&requests, &about);
                 let mut instructions = instructions_for(member, project, &readable_folders);
+                if let Some(no) = no_commands {
+                    instructions.push_str("\n\n");
+                    instructions.push_str(&no_commands_in_words(no));
+                }
                 if let Some(words) = granted_in_words(&granted) {
                     instructions.push_str("\n\n");
                     instructions.push_str(&words);
@@ -1127,6 +1175,9 @@ impl Inner {
     /// computer, or cannot be started without a secret in its environment,
     /// or the specialist has a connector handed a secret (decision 0038).
     fn no_commands_for(&self, member: &Member) -> Result<Option<NoCommands>, ApplicationError> {
+        if !self.ports.command_choice.commands_switched_on()? {
+            return Ok(Some(NoCommands::SwitchedOff));
+        }
         if let Some(no) = self.ports.runtime.why_no_commands() {
             return Ok(Some(no));
         }
@@ -1524,6 +1575,17 @@ impl Inner {
         if !turn.is_running() {
             return Ok(Err(DomainError::TurnStillRunning));
         }
+        // A command that could not be allowed here does not reach the
+        // manager: the team bus refused it with the reason already
+        // (decision 0038, note of 22 November 2026).
+        if asked.rule.runs_commands() {
+            let Some(member) = self.ports.members.find(member_id)? else {
+                return Ok(Err(DomainError::NothingAsked));
+            };
+            if let Some(no) = self.no_commands_for(&member)? {
+                return Ok(Err(no.as_error()));
+            }
+        }
         let request = match PermissionRequest::ask(
             conversation.project_id(),
             SaidIn {
@@ -1751,6 +1813,17 @@ fn permission_answer_in_words(request: &PermissionRequest, answer: &PermissionRe
     }
 }
 
+/// Why a specialist cannot even ask for a command on this computer, in
+/// words for it.
+fn no_commands_in_words(no: NoCommands) -> String {
+    format!(
+        "On this computer you cannot ask for a command at all: {}. You may still ask with \
+         ask_permission for one web domain. Do not ask the manager to run a command for you; \
+         say in your report what could not be checked.",
+        no.reason()
+    )
+}
+
 /// What a turn is allowed beyond its profile, in words for the specialist,
 /// or nothing if it is allowed nothing more.
 fn granted_in_words(granted: &[PermissionRule]) -> Option<String> {
@@ -1769,15 +1842,17 @@ fn granted_in_words(granted: &[PermissionRule]) -> Option<String> {
 }
 
 /// The tools of the team bus a specialist is given for a turn: it may
-/// always ask the manager, to decide or for a permission; it may hand over a result when the conversation
-/// is about a task; it may write to the other AI specialists of its team,
-/// if there are any.
+/// always ask the manager, to decide or for a permission (for a command
+/// only where one could be allowed); it may hand over a result when the
+/// conversation is about a task; it may write to the other AI specialists
+/// of its team, if there are any.
 fn specialist_tools(
     conversation: &Conversation,
     working_folder: &std::path::Path,
     teammates: Vec<String>,
+    commands: bool,
 ) -> Vec<TeamTool> {
-    let mut tools = vec![TeamTool::AskManager, TeamTool::AskPermission];
+    let mut tools = vec![TeamTool::AskManager, TeamTool::AskPermission { commands }];
     if conversation.task_id().is_some() {
         tools.push(TeamTool::PublishHandoff {
             folder: working_folder.to_path_buf(),
@@ -2388,6 +2463,7 @@ mod tests {
         teamwork: Arc<crate::in_memory::InMemoryTeamworkRepository>,
         memory: Arc<crate::in_memory::InMemoryMemoryRepository>,
         permissions: Arc<crate::in_memory::InMemoryPermissionRepository>,
+        command_choice: Arc<crate::in_memory::InMemoryCommandChoice>,
         places: Arc<InMemoryPlacesRepository>,
         file_system: Arc<PretendFileSystem>,
         kits: Arc<crate::kits::InMemoryKitRepository>,
@@ -2416,6 +2492,7 @@ mod tests {
                 memory: self.memory.clone(),
                 digests: Arc::new(crate::in_memory::InMemoryDigestRepository::default()),
                 permissions: self.permissions.clone(),
+                command_choice: self.command_choice.clone(),
                 folders: Arc::new(FixedProjectFolders::inside("projects")),
                 places: self.places.clone(),
                 file_system: self.file_system.clone(),
@@ -2455,6 +2532,9 @@ mod tests {
             teamwork: Arc::new(crate::in_memory::InMemoryTeamworkRepository::default()),
             memory: Arc::new(crate::in_memory::InMemoryMemoryRepository::default()),
             permissions: Arc::new(crate::in_memory::InMemoryPermissionRepository::default()),
+            // Switched on, so that what a command does can be tested; a
+            // test switches it off where that is what it is about.
+            command_choice: Arc::new(crate::in_memory::InMemoryCommandChoice::switched_on()),
             places: Arc::new(InMemoryPlacesRepository::default()),
             file_system: Arc::new(PretendFileSystem::default()),
             kits: Arc::new(crate::kits::InMemoryKitRepository::default()),
@@ -2844,7 +2924,7 @@ mod tests {
             request.team_tools,
             [
                 TeamTool::AskManager,
-                TeamTool::AskPermission,
+                TeamTool::AskPermission { commands: true },
                 TeamTool::PublishHandoff {
                     folder: PathBuf::from("projects").join("SSN")
                 },
@@ -4700,7 +4780,7 @@ mod tests {
             workspace.ports.runtime.requests()[0].team_tools,
             [
                 TeamTool::AskManager,
-                TeamTool::AskPermission,
+                TeamTool::AskPermission { commands: true },
                 TeamTool::SendMessage {
                     teammates: vec!["Firmware engineer".to_owned(), "Tester".to_owned()]
                 },
@@ -5101,7 +5181,11 @@ mod tests {
         workspace.asked_permission();
         let first = &workspace.ports.runtime.requests()[0];
         assert_eq!(first.permissions, PermissionProfile::specialist());
-        assert!(first.team_tools.contains(&TeamTool::AskPermission));
+        assert!(
+            first
+                .team_tools
+                .contains(&TeamTool::AskPermission { commands: true })
+        );
     }
 
     #[test]
@@ -5204,6 +5288,144 @@ mod tests {
         ));
         assert_eq!(workspace.ports.runtime.requests().len(), 1);
         assert!(workspace.stored_request(&request).is_open());
+    }
+
+    // The switch of command permissions (decision 0038, note of 22
+    // November 2026).
+
+    use crate::permissions::CommandChoiceStore as _;
+
+    #[test]
+    fn command_permissions_are_off_until_switched_on() {
+        let workspace = workspace();
+        workspace
+            .ports
+            .command_choice
+            .switch_commands(false)
+            .unwrap();
+        let state = workspace.work.command_permissions().unwrap();
+        assert!(!state.switched_on);
+        assert_eq!(state.held_back, None);
+        assert!(
+            !crate::in_memory::InMemoryCommandChoice::default()
+                .commands_switched_on()
+                .unwrap(),
+            "a new computer starts with them off"
+        );
+        let on = workspace.work.switch_command_permissions(true).unwrap();
+        assert!(on.switched_on);
+        workspace.ports.runtime.take_away_the_sandbox();
+        assert_eq!(
+            workspace.work.command_permissions().unwrap().held_back,
+            Some(NoCommands::NoSandbox)
+        );
+    }
+
+    #[test]
+    fn switched_off_a_specialist_can_ask_only_for_a_web_domain() {
+        let workspace = workspace();
+        workspace.work.switch_command_permissions(false).unwrap();
+        workspace.work.start_work(workspace.schematic.id()).unwrap();
+        let request = &workspace.ports.runtime.requests()[0];
+        assert!(
+            request
+                .team_tools
+                .contains(&TeamTool::AskPermission { commands: false })
+        );
+        assert!(
+            request
+                .extra_instructions
+                .as_deref()
+                .unwrap()
+                .contains(NoCommands::SwitchedOff.reason())
+        );
+
+        // A request for a command does not reach the manager; one for a
+        // web domain does.
+        workspace.deliver(0, session_started());
+        workspace.deliver(0, echo_asked());
+        assert!(
+            workspace
+                .ports
+                .permissions
+                .requests_of_project(workspace.project.id())
+                .unwrap()
+                .is_empty()
+        );
+        workspace.deliver(
+            0,
+            AgentEvent::PermissionAsked(PermissionAsk {
+                rule: PermissionRule::new(PermissionKind::WebDomain, "docs.rs").unwrap(),
+                reason: "The manual.".to_owned(),
+            }),
+        );
+        let requests = workspace
+            .ports
+            .permissions
+            .requests_of_project(workspace.project.id())
+            .unwrap();
+        assert_eq!(requests.len(), 1);
+        assert_eq!(requests[0].asked().kind(), PermissionKind::WebDomain);
+    }
+
+    #[test]
+    fn switched_off_no_turn_runs_a_command_and_none_can_be_allowed() {
+        let workspace = workspace();
+        let (conversation, request) = workspace.asked_permission();
+        workspace.allow(&request, PermissionScope::Task);
+        workspace.play_whole_turn(1);
+        workspace.work.switch_command_permissions(false).unwrap();
+
+        // What was allowed for the task is not given while switched off.
+        workspace
+            .work
+            .reply(conversation.conversation.id(), "Again.")
+            .unwrap();
+        assert_eq!(
+            workspace.ports.runtime.requests()[2].permissions,
+            PermissionProfile::specialist()
+        );
+        workspace.play_whole_turn(2);
+
+        // A request asked while switched on cannot be allowed once it is
+        // off, only refused.
+        let other = self::workspace();
+        let (_, asked) = other.asked_permission();
+        other.work.switch_command_permissions(false).unwrap();
+        let refused = other.work.answer_permission(
+            asked.id(),
+            PermissionReply::Allow {
+                scope: PermissionScope::Once,
+                kind: PermissionKind::Command,
+                text: "echo hello".to_owned(),
+                note: String::new(),
+            },
+        );
+        let Err(ApplicationError::Rule(DomainError::PermissionNotPossible { reason })) = refused
+        else {
+            panic!("{refused:?}");
+        };
+        assert_eq!(reason, NoCommands::SwitchedOff.reason());
+        other
+            .work
+            .answer_permission(
+                asked.id(),
+                PermissionReply::Refuse {
+                    note: String::new(),
+                },
+            )
+            .unwrap();
+
+        // Switched on again, the permission for the task holds again.
+        workspace.work.switch_command_permissions(true).unwrap();
+        workspace
+            .work
+            .reply(conversation.conversation.id(), "Now.")
+            .unwrap();
+        assert_eq!(
+            workspace.ports.runtime.requests()[3].permissions,
+            PermissionProfile::specialist().with_granted(&[echo_rule()])
+        );
     }
 
     #[test]
@@ -5338,12 +5560,6 @@ mod tests {
         );
     }
 
-    fn workspace_without_sandbox() -> Workspace {
-        let workspace = workspace();
-        workspace.ports.runtime.take_away_the_sandbox();
-        workspace
-    }
-
     #[test]
     fn without_a_sandbox_no_command_is_allowed_or_given() {
         let workspace = workspace();
@@ -5362,8 +5578,10 @@ mod tests {
         );
         workspace.play_whole_turn(2);
 
-        let other = workspace_without_sandbox();
+        // Asked while the sandbox was there; answered after it went.
+        let other = self::workspace();
         let (_, asked) = other.asked_permission();
+        other.ports.runtime.take_away_the_sandbox();
         let refused = other.work.answer_permission(
             asked.id(),
             PermissionReply::Allow {
@@ -5399,8 +5617,8 @@ mod tests {
         workspace.play_whole_turn(2);
 
         let other = self::workspace();
-        other.ports.runtime.sign_in_with_a_variable();
         let (_, asked) = other.asked_permission();
+        other.ports.runtime.sign_in_with_a_variable();
         let refused = other.work.answer_permission(
             asked.id(),
             PermissionReply::Allow {

@@ -82,6 +82,23 @@ describe('the answers to a request', () => {
       choicesFor(request({ ...domain, taskId: null }), 'Tester').map(({ choice }) => choice),
     ).toEqual(['once', 'always', 'refuse']);
   });
+
+  it('offers only to refuse a command while command permissions are switched off', () => {
+    expect(choicesFor(request(), 'Tester', false).map(({ choice }) => choice)).toEqual(['refuse']);
+    const domain = { kind: 'web_domain' as const, what: 'docs.rs' };
+    expect(choicesFor(request(domain), 'Tester', false).map(({ choice }) => choice)).toEqual([
+      'once',
+      'task',
+      'always',
+      'refuse',
+    ]);
+  });
+
+  it('says for a command allowed for a task that only turns the manager starts get it', () => {
+    const task = choicesFor(request(), 'Tester').find(({ choice }) => choice === 'task');
+    expect(task?.option.consequence).toMatch(/that you start yourself/);
+    expect(task?.option.consequence).toMatch(/Never in a turn the coordinator starts/);
+  });
 });
 
 describe('the standing permissions of a specialist', () => {

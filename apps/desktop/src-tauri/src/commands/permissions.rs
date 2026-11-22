@@ -3,7 +3,9 @@
 
 use tauri::State;
 
-use crate::dto::{ConversationDto, PermissionAnswerInput, PermissionRequestDto, parse_id};
+use crate::dto::{
+    CommandPermissionsDto, ConversationDto, PermissionAnswerInput, PermissionRequestDto, parse_id,
+};
 use crate::error::CommandError;
 use crate::state::AppState;
 
@@ -58,4 +60,23 @@ pub fn withdraw_permission(
 ) -> Result<PermissionRequestDto, CommandError> {
     let request = state.permissions.withdraw(parse_id(&request_id)?)?;
     Ok(PermissionRequestDto::of(&request, state.this_computer))
+}
+
+/// Whether command permissions are switched on, on this computer, and what
+/// holds commands back here even then. Asking may try the sandbox once,
+/// so it runs off the main thread.
+#[tauri::command(async)]
+pub fn command_permissions(
+    state: State<'_, AppState>,
+) -> Result<CommandPermissionsDto, CommandError> {
+    Ok(state.work.command_permissions()?.into())
+}
+
+/// Switches command permissions on or off, on this computer. Never synced.
+#[tauri::command(async)]
+pub fn switch_command_permissions(
+    state: State<'_, AppState>,
+    on: bool,
+) -> Result<CommandPermissionsDto, CommandError> {
+    Ok(state.work.switch_command_permissions(on)?.into())
 }

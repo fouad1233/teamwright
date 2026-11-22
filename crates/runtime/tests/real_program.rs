@@ -679,7 +679,7 @@ fn a_real_session_asks_to_run_a_command_and_runs_it_once_allowed() {
          teamwright-was-here\" and a reason, then end your turn.",
         SessionChoice::NewWithId(id.clone()),
     );
-    first.team_tools = vec![TeamTool::AskPermission];
+    first.team_tools = vec![TeamTool::AskPermission { commands: true }];
     let events = Arc::new(Mutex::new(Vec::new()));
     let collected = Arc::clone(&events);
     let outcome = runtime()

@@ -4,6 +4,7 @@ import { taskReference } from '@/shared/lib/format';
 import { Button } from '@/shared/ui/Button';
 
 import { useTeamMembers } from '../team/TeamContext';
+import { useCommandsSwitchedOn } from './commandQueries';
 import { usePermissionCommands, usePermissionRequests } from './permissionQueries';
 import { kindInWords, scopeInWords, standingPermissionsOf } from './permissionModel';
 import styles from './StandingPermissions.module.css';
@@ -22,6 +23,7 @@ interface StandingPermissionsProps {
 export function StandingPermissions({ project, tasks }: StandingPermissionsProps) {
   const requests = usePermissionRequests(project.id);
   const commands = usePermissionCommands(project.id);
+  const commandsSwitchedOn = useCommandsSwitchedOn();
   const members = useTeamMembers();
   const specialists = members.filter((member) => member.kind === 'agent');
   const standing = specialists.flatMap((member) =>
@@ -40,10 +42,9 @@ export function StandingPermissions({ project, tasks }: StandingPermissionsProps
       </header>
       {standing.length === 0 ? (
         <p className={styles.empty}>
-          The specialists read and write in the folder of the project, and do nothing else on their
-          own. When one needs to run a command or fetch from the web, it asks, and the request waits
-          in the Inbox. What you allow for a task, or a web domain you allow always, is listed here,
-          and can be taken back.
+          {commandsSwitchedOn
+            ? 'The specialists read and write in the folder of the project, and do nothing else on their own. When one needs to run a command or fetch from the web, it asks, and the request waits in the Inbox. What you allow for a task, or a web domain you allow always, is listed here, and can be taken back.'
+            : 'The specialists read and write in the folder of the project, and do nothing else on their own. When one needs to fetch from the web, it asks, and the request waits in the Inbox. A web domain you allow for a task or always is listed here, and can be taken back. Commands are switched off on this computer (Computers).'}
         </p>
       ) : (
         <ol className={styles.list}>
@@ -58,6 +59,9 @@ export function StandingPermissions({ project, tasks }: StandingPermissionsProps
                 scope={request.answer?.scope ?? null}
                 isHere={request.answer?.onThisComputer ?? true}
                 isNoLongerValid={request.answer?.noLongerValid ?? false}
+                isSwitchedOff={
+                  !commandsSwitchedOn && (request.answer?.kind ?? request.kind) === 'command'
+                }
                 onWithdraw={() => commands.withdraw(request.id)}
               />
             </li>
@@ -79,6 +83,8 @@ interface StandingProps {
   isHere: boolean;
   /** Whether it grants nothing any more, and can only be taken back. */
   isNoLongerValid: boolean;
+  /** Whether it is a command while command permissions are switched off. */
+  isSwitchedOff: boolean;
   onWithdraw: () => Promise<void>;
 }
 
@@ -91,6 +97,7 @@ function Standing({
   scope,
   isHere,
   isNoLongerValid,
+  isSwitchedOff,
   onWithdraw,
 }: StandingProps) {
   return (
@@ -113,10 +120,15 @@ function Standing({
             No longer valid: a command is allowed once or for a task, never always. It grants
             nothing; take it back.
           </p>
+        ) : !isHere ? (
+          <p className={styles.elsewhere}>
+            Allowed on another computer. It grants nothing on this one.
+          </p>
         ) : (
-          !isHere && (
+          isSwitchedOff && (
             <p className={styles.elsewhere}>
-              Allowed on another computer. It grants nothing on this one.
+              Command permissions are switched off on this computer. It grants nothing until they
+              are switched on again in Computers.
             </p>
           )
         )}

@@ -524,6 +524,7 @@ mod tests {
                 memory: Arc::new(crate::in_memory::InMemoryMemoryRepository::default()),
                 digests: Arc::new(crate::in_memory::InMemoryDigestRepository::default()),
                 permissions: Arc::new(crate::in_memory::InMemoryPermissionRepository::default()),
+                command_choice: Arc::new(crate::in_memory::InMemoryCommandChoice::default()),
                 planning: Arc::new(InMemoryPlanningRepository::new(
                     projects.clone(),
                     members.clone(),

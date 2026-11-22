@@ -832,6 +832,10 @@ export function sampleWorkspace(today: Date = new Date()): DemoWorkspace {
     versions,
     earlierConversations: sampleEarlierConversations(today),
     permissions: samplePermissions(today),
+    // Switched on in the sample, so that a request for a command and its
+    // card can be seen; a new computer, and the empty demo, start with it
+    // off (decision 0038, note of 22 November 2026).
+    commandPermissionsOn: true,
   };
 }
 

@@ -9,6 +9,7 @@ import { advisorWaitsFor } from '../advisor/advisorModel';
 import { BudgetQuestions } from '../coordinator/BudgetQuestions';
 import { useBudgetQuestions } from '../coordinator/coordinatorQueries';
 import { AskToNotify } from '../notifications/AskToNotify';
+import { useCommandsSwitchedOn } from '../permissions/commandQueries';
 import { PermissionCard } from '../permissions/PermissionCard';
 import { useOpenPermissionRequests, usePermissionCommands } from '../permissions/permissionQueries';
 import { useComputerOf } from '../sync/RunsElsewhere';
@@ -212,6 +213,7 @@ function Permission({ project, request }: PermissionProps) {
   const tasks = useTasks(project.id);
   const team = useTeam(project.id);
   const commands = usePermissionCommands(project.id);
+  const commandsSwitchedOn = useCommandsSwitchedOn();
   const task = tasks.data?.find((known) => known.id === request.taskId);
   const member = team.data?.find((known) => known.id === request.memberId);
 
@@ -239,6 +241,7 @@ function Permission({ project, request }: PermissionProps) {
       <PermissionCard
         request={request}
         askedBy={member?.name ?? 'A specialist'}
+        commandsSwitchedOn={commandsSwitchedOn}
         onAnswer={(answer) => commands.answer(request.id, answer)}
       />
     </article>

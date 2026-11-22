@@ -8,10 +8,41 @@
 
 use std::sync::Arc;
 
-use teamwright_domain::{PermissionRequest, PermissionRequestId, ProjectId};
+use teamwright_domain::{NoCommands, PermissionRequest, PermissionRequestId, ProjectId};
 
 use crate::error::ApplicationError;
-use crate::ports::{Clock, PermissionRepository, ProjectRepository};
+use crate::ports::{Clock, PermissionRepository, ProjectRepository, StorageError};
+
+/// Where this computer keeps whether the manager switched command
+/// permissions on (decision 0038, note of 22 November 2026). It is a fact
+/// about this computer, like the choice about notifications: not logged,
+/// so never synced. Off until the manager switches it on.
+pub trait CommandChoiceStore: Send + Sync {
+    /// Whether command permissions are switched on, on this computer.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if storage fails.
+    fn commands_switched_on(&self) -> Result<bool, StorageError>;
+
+    /// Switches command permissions on or off, on this computer.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if storage fails.
+    fn switch_commands(&self, on: bool) -> Result<(), StorageError>;
+}
+
+/// Whether a specialist can be allowed a command on this computer, as the
+/// manager sees it on the page of this computer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CommandPermissions {
+    /// Whether the manager switched command permissions on, here.
+    pub switched_on: bool,
+    /// Why no command can run on this computer even when they are switched
+    /// on, if none can: no sandbox, or a sign-in with a variable.
+    pub held_back: Option<NoCommands>,
+}
 
 /// The use cases of the permission requests.
 #[derive(Clone)]

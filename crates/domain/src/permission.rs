@@ -441,6 +441,11 @@ fn checked_domain(text: &str) -> Result<String, DomainError> {
 /// [`StartedBy`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum NoCommands {
+    /// The manager has not switched command permissions on, on this
+    /// computer. They are off until switched on (decision 0038, note of 22
+    /// November 2026): the sandbox they rely on has never been seen
+    /// working.
+    SwitchedOff,
     /// The computer has no sandbox for commands. Claude Code has none on
     /// Windows, and a command outside one can do anything the manager can.
     NoSandbox,
@@ -459,6 +464,10 @@ impl NoCommands {
     #[must_use]
     pub const fn reason(self) -> &'static str {
         match self {
+            Self::SwitchedOff => {
+                "command permissions are switched off on this computer; the manager can switch \
+                 them on in Computers, and only a web domain can be asked for until then"
+            }
             Self::NoSandbox => {
                 "a command is allowed only where it runs in a sandbox, and Claude Code cannot \
                  make one on this computer: it has none on Windows, and on Linux it needs \
@@ -1203,6 +1212,7 @@ mod tests {
     #[test]
     fn why_no_command_is_said_in_words() {
         for no in [
+            NoCommands::SwitchedOff,
             NoCommands::NoSandbox,
             NoCommands::SignedInWithVariable,
             NoCommands::SecretInReach,
@@ -1457,6 +1467,7 @@ mod tests {
         )
         .unwrap();
         for no in [
+            NoCommands::SwitchedOff,
             NoCommands::SecretInReach,
             NoCommands::NoSandbox,
             NoCommands::SignedInWithVariable,

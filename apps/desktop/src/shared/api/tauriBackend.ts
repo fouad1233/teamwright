@@ -13,6 +13,7 @@ import type {
   BudgetScope,
   CalendarDate,
   Color,
+  CommandPermissions,
   Conversation,
   ConversationsOfFolder,
   Coordinator,
@@ -633,6 +634,14 @@ export class TauriBackend implements Backend {
 
   withdrawPermission(requestId: Id): Promise<PermissionRequest> {
     return call('withdraw_permission', { requestId });
+  }
+
+  commandPermissions(): Promise<CommandPermissions> {
+    return call('command_permissions');
+  }
+
+  switchCommandPermissions(on: boolean): Promise<CommandPermissions> {
+    return call('switch_command_permissions', { on });
   }
 
   startWork(taskId: Id): Promise<Conversation> {

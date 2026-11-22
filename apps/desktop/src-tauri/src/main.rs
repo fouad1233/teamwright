@@ -203,6 +203,8 @@ fn main() -> ExitCode {
             commands::permissions::open_permission_requests,
             commands::permissions::answer_permission,
             commands::permissions::withdraw_permission,
+            commands::permissions::command_permissions,
+            commands::permissions::switch_command_permissions,
             commands::sync::sync_state,
             commands::sync::choose_sync_folder,
             commands::sync::stop_syncing,

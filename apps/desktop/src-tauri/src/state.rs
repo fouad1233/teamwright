@@ -25,12 +25,13 @@ use teamwright_integrations::{GhCommandLine, GhLocator, GitHubReleases, HttpsSen
 use teamwright_runtime::connector_launcher::LAUNCHER_ARGUMENT;
 use teamwright_runtime::{ClaudeCode, EarlierConversationsOnDisk};
 use teamwright_storage::{
-    Database, FolderOfComputers, SqliteAreaRepository, SqliteConversationRepository,
-    SqliteCoordinatorRepository, SqliteDigestRepository, SqliteFieldRepository,
-    SqliteIntegrationStore, SqliteMemberRepository, SqliteNotificationChoice,
-    SqlitePlacesRepository, SqlitePlanLimitStore, SqlitePlanningRepository,
-    SqliteProjectRepository, SqliteSprintRepository, SqliteSyncLedger, SqliteTagRepository,
-    SqliteTaskRepository, SqliteThemeStore, SqliteUpdateChoice, SqliteViewRepository,
+    Database, FolderOfComputers, SqliteAreaRepository, SqliteCommandChoice,
+    SqliteConversationRepository, SqliteCoordinatorRepository, SqliteDigestRepository,
+    SqliteFieldRepository, SqliteIntegrationStore, SqliteMemberRepository,
+    SqliteNotificationChoice, SqlitePlacesRepository, SqlitePlanLimitStore,
+    SqlitePlanningRepository, SqliteProjectRepository, SqliteSprintRepository, SqliteSyncLedger,
+    SqliteTagRepository, SqliteTaskRepository, SqliteThemeStore, SqliteUpdateChoice,
+    SqliteViewRepository,
 };
 
 use crate::coordinating::{CoordinatorNudge, start_coordinating};
@@ -273,6 +274,7 @@ impl AppState {
         });
         let file_system: Arc<dyn FileSystem> = Arc::new(LocalFileSystem);
         let appearance = AppearanceService::new(Arc::new(SqliteThemeStore::new(database.clone())));
+        let command_choice = Arc::new(SqliteCommandChoice::new(database.clone()));
         let notifications =
             NotificationService::new(Arc::new(SqliteNotificationChoice::new(database.clone())));
         let updates = UpdateService::new(
@@ -331,6 +333,7 @@ impl AppState {
             memory: memory_repository.clone(),
             digests: digest_repository.clone(),
             permissions: permission_repository.clone(),
+            command_choice,
             folders: folders.clone(),
             places: places_repository.clone(),
             file_system: file_system.clone(),
