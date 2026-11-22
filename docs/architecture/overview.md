@@ -244,13 +244,16 @@ them.
   ([decision 0011](../decisions/0011-what-a-specialist-may-do.md)).
 - Risky tool use by a team member is not approved by Teamwright on the
   manager's behalf. It is forwarded to the manager: a specialist asks with
-  the tool `ask_permission` for one command, a prefix of commands or a web
-  domain, the request waits in the inbox, and the manager's answer starts
-  the next turn with exactly that rule added to what it may do, once, for
-  the task or always, on the computer where it was allowed. Some things can
-  never be allowed: running the agent program or Teamwright, anything with
-  other rights, the programs that change files, paths outside the folder of
-  the project, and the computer itself or the local network
+  the tool `ask_permission` for one exact command or a web domain, the
+  request waits in the inbox, and the manager's answer starts the next turn
+  with exactly that rule added to what it may do, once or for the task (a
+  web domain also always), on the computer whose own log holds the answer.
+  A command runs in Claude Code's sandbox, which fails closed; there is no
+  command on Windows, next to a secret of a connector, or in a turn the
+  coordinator starts to answer teammates. Some things can never be allowed:
+  running the agent program or Teamwright, anything with other rights, the
+  programs that change files, quotes, paths outside the folder of the
+  project, and the computer itself or the local network
   ([decision 0038](../decisions/0038-permission-requests-routed-to-the-manager.md)).
 - Nothing is sent anywhere except to Claude Code and, if the user sets it up,
   to the user's own sync folder. Teamwright makes no network connection to

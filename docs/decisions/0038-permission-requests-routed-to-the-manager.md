@@ -241,3 +241,109 @@ goes with its project.
 - **A permission for every computer.** A command differs between computers
   and can be harmless on one and not on another; the manager allows it where
   it runs.
+
+## Note of 21 November 2026, after a review
+
+A review of this feature, on the night it was built and before any project
+of a user had used it, found that what the manager allowed was much wider
+than what the manager read.
+
+### What the review found
+
+1. **One allowed command was any program, as the manager, with no
+   sandbox.** A specialist can write every file in its folder, and most
+   commands worth allowing run files of the project: `npm test` and
+   `npm run` (package.json), `cargo build` and `cargo test` (build.rs),
+   `make`, `pytest` (conftest), `python3 tools/check.py`. So allowing
+   `npm test` let the specialist run anything as the manager: read `~/.ssh`,
+   Teamwright's database and the sync folder, write `~/.bashrc`, use the
+   network. `blockReadsOutsideWorkingDirectories` does not stop a child
+   process. The whole environment reached such a command, with the value of
+   every variable a connector names. And it could happen with nobody
+   looking: a standing permission was used by a turn the coordinator starts
+   to answer a teammate. The sentence the manager read ("runs … with your
+   rights, like a command you type yourself") did not say that the
+   specialist can change what the command does.
+2. **A prefix constrained nothing after it.** `git log` allowed
+   `git log --output=/home/u/.bashrc`; `git -c` allowed `core.sshCommand`;
+   `cargo test` allowed `--config 'target.*.runner=…'`; `npm run` allowed
+   `--script-shell`; `npm exec` is `npx`. The list of programs that run
+   anything missed `pnpm dlx`, `yarn dlx`, `uv run`, `poetry run`,
+   `cargo run`, `go run`, `make`, `python3.12`, `wsl`, `docker`, `awk`,
+   `sed`, `tar`, `rsync` and `git`. A list of what is refused cannot win
+   here.
+3. **Quotes passed every check of a program.** The check did not remove
+   quotes and the shell does, so `"claude" --dangerously-skip-permissions`,
+   `'sudo' …`, `"rm" -r src`, `"bash" -c`, `py""thon3 -c` and `.cla""ude`
+   passed.
+4. **Absolute paths were looked for only at the start of a word.**
+   `git log -1 --output=/home/u/x`, `-o/home/u/x` and `--out=C:/x` passed.
+5. **Grants trusted the sync folder.** A turn trusted the computer an
+   answer names, which anybody who can write in the sync folder can write,
+   so an "always" for this computer could be forged.
+
+### What changed
+
+- **No prefixes.** A command permission is one exact command line. The kind
+  `command_prefix` is gone from the tool, the domain, the interface and the
+  demo; a stored request of that kind is not read back, and one that
+  arrives from a computer that still knew it is not kept. Prefixes come
+  back only with an allow-list of (program, subcommand) pairs known to run
+  nothing of the project, and with the sandbox below proven in a run.
+- **Exact commands, checked as the shell reads them.** No quote, backtick
+  or backslash anywhere; no absolute path, drive, `~` or `..` anywhere in a
+  word, also after `=` or a comma and glued to an option (`-o/…`); no
+  newline, tab, control character or character outside plain ASCII. A
+  command does not start with a program that only starts another (`env`,
+  `nohup`, `timeout`, `xargs`, …), and `claude`, `sudo` and the others are
+  refused in any word, also as the value of an option. The earlier refusals
+  stay. Each bypass above is a test by name.
+- **No standing permission for a command.** A command is allowed once or
+  for the task, never always; web domains keep all three. A command allowed
+  always that is already stored grants nothing, is shown in Team as no
+  longer valid, and can be taken back.
+- **Never in a turn nobody asked for.** A turn the coordinator starts to
+  answer a teammate's message gets no command permission at all
+  (`reply_to_teammates`, `ask_to_answer_teammates`). A permission for the
+  task holds only in turns about that task, as before.
+- **Not next to a secret.** A specialist whose kit has a connector that
+  names an environment variable gets no command, and allowing one is
+  refused with that reason in words.
+- **Only this computer's answers.** A permission holds only if the
+  operation that wrote its answer was made on this computer, as its own log
+  of operations shows; this computer never reads its own folder in the sync
+  folder. An answer that arrives through the sync folder is shown as
+  answered and grants nothing here.
+- **The sandbox, failing closed.** A turn with a command has, in its one
+  settings object, beside the block on reads: `"sandbox": {"enabled":
+  true, "failIfUnavailable": true, "autoAllowBashIfSandboxed": false,
+  "allowUnsandboxedCommands": false, "network": {"strictAllowlist": true},
+  "filesystem": {"denyWrite": [the folders it may only read]}}`. Each key
+  was read in the documentation (`settings-reference`, `sandboxing`) and
+  found in the installed program, 2.1.289, where `autoAllowBashIfSandboxed`
+  still defaults to true and would approve every sandboxed command. With
+  the sandbox on, the block on reads also denies sandboxed commands the
+  home folder and the other roots of user files, and opens again the
+  working folders (and, says the documentation, the manager's git
+  settings). Writes go only to the working folders and the temporary
+  folder; `denyWrite` takes the folders given only for reading back out of
+  them. The network reaches only the web domains the manager allowed,
+  which Claude Code adds to the sandbox itself; with `strictAllowlist`
+  every other host is refused at once instead of asked about. The sandbox
+  does not hide environment variables; the rule above keeps commands away
+  from the secrets Teamwright hands to connectors, and nothing hides the
+  manager's own variables yet. Claude Code has no sandbox on Windows, so
+  on Windows no command is allowed: the answer is refused with the reason
+  in words.
+- **Honest words.** Where the manager allows a command, the card says:
+  "This specialist can change the files this command runs (scripts, build
+  files, tests). Allowing it lets the specialist run any program as you."
+  and what the sandbox holds it to.
+
+**The sandbox has never been seen working.** Claude Code was not signed in
+on the night this was written, so no turn ran. The exact settings object is
+tested, and the ignored test
+`a_real_allowed_command_runs_in_a_sandbox_that_keeps_it_inside_the_folders`
+in `crates/runtime/tests/real_program.rs` would prove that a sandboxed
+command cannot read a file in the home folder. Until it has passed, the
+sandbox is a promise of the documentation.

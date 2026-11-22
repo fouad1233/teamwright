@@ -272,7 +272,14 @@ involved.
   computer, the turn it started) is one field, and `withdrawn_at` another.
   Only the project is a reference the database enforces; deleting a project
   deletes and logs its requests. A stored rule is checked again when it is
-  read, so a rule that could never be allowed is not read back as allowed.
+  read, so a rule that could never be allowed is not read back as allowed;
+  a request whose rule can no longer be made (a prefix of commands, or a
+  command the stricter rules of 21 November 2026 refuse) is not read back
+  at all, and one that arrives from a computer that still knew it is not
+  kept. Whether the answer was written here is read from the log: only if
+  every state of the request that carries an answer was made by this
+  computer (`answered_here`). An answer taken in from the sync folder is
+  shown and grants nothing here, whatever computer it names.
 - **An approved plan is one transaction.** `SqlitePlanningRepository`
   writes the project (with its next task number), every new member, every
   new task with what it waits for, and the turn with its approved proposal,

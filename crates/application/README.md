@@ -434,13 +434,21 @@ question; every request to the specialist is a turn of it.
   edited and checked again; or refused, each with a word), starts a turn of
   origin `Decision` whose request says it in words, and stores the answer
   only if the turn starts. Allowing for the task in a conversation that is
-  not about one is refused (`rule_broken`). Every turn of a specialist is
-  started with `PermissionProfile::specialist().with_granted(rules)`, the
-  rules its requests give it on this computer (`granted_rules`), which the
-  instructions of the turn also list. `with_granted` adds exactly those
-  rules: the shell or the fetching tool, the rules, the programs that change
-  files denied by name, and reads blocked outside the folders for commands;
-  nothing else of the profile changes.
+  not about one is refused (`rule_broken`), and so is allowing a command
+  always, allowing a command where the runtime has no sandbox
+  (`AgentRuntime::sandboxes_commands`, false on Windows), and allowing a
+  command to a specialist whose kit has a connector handed a secret in an
+  environment variable (`kit_names_a_secret`); each says why in words
+  (`NoCommands`). Every turn of a specialist is started with
+  `PermissionProfile::specialist().with_granted(rules)`, the rules its
+  requests give it on this computer (`granted_rules`), which the
+  instructions of the turn also list. A turn the coordinator starts to
+  answer teammates (`reply_to_teammates`, `ask_to_answer_teammates`) is
+  given no command, nor is a turn with a secret in reach or without a
+  sandbox. `with_granted` adds exactly those rules: the shell or the
+  fetching tool, the rules, the programs that change files denied by name,
+  reads blocked outside the folders for commands, and the sandbox
+  (`commands_in_sandbox`); nothing else of the profile changes.
 - `waiting_for_manager` lists the conversations with an open question, an
   open interview or an open proposal in every project that is not archived,
   the one that has waited longest first. Those whose home is another

@@ -226,15 +226,19 @@ The shell is where the work of an AI specialist meets the outside world
   on in, and taking a standing one back (`withdraw_permission`). The inbox
   shows an open request beside the questions, the oldest first
   (`features/permissions/PermissionCard`): who asks, the task, exactly the
-  command or the domain in the type of code, why, and for a command one
-  plain sentence that it runs with the manager's rights; the manager picks
-  once, for the task, always or refuse, may narrow a command to its program
-  and subcommand or edit it, and answers. Team lists the standing
-  permissions of the specialists, each with "Take back"
-  (`StandingPermissions`). The demo backend keeps requests in
-  `shared/api/demo/permissions.ts`; its simulated specialist asks to run a
-  script on a task whose title starts with "Check", "Test", "Measure" or
-  "Run", and the sample project has one standing permission.
+  command or the domain in the type of code, why, and for a command what
+  allowing it means (the specialist can change the files it runs, so it can
+  run any program as the manager) and the sandbox it runs in
+  (`WHAT_A_COMMAND_MEANS`); the manager picks once, for the task, always
+  (only for a web domain) or refuse, may edit the rule, and answers. Team
+  lists the standing permissions of the specialists, each with "Take back"
+  (`StandingPermissions`); one that is no longer valid (`noLongerValid`)
+  or was answered on another computer says so. The demo backend keeps
+  requests in `shared/api/demo/permissions.ts` and checks them by the same
+  rules; its simulated specialist asks to run a script on a task whose
+  title starts with "Check", "Test", "Measure" or "Run", and the sample
+  project has two standing permissions: `cargo build` for a task and
+  `docs.espressif.com` always.
 - **What the agents spent.** `project_usage` answers with what every member,
   the Advisor and those who left have spent (`ProjectUsageDto`: the tokens
   by kind and in all, the turns that ended, the model of the latest turn,

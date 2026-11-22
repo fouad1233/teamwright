@@ -53,7 +53,7 @@ was considered.
 | [0035](0035-custom-fields.md) | Custom fields of a project in six kinds that never change, one value a field on each task, each value and choice merging on its own | Accepted |
 | [0036](0036-project-memory.md) | Project memory: decisions, facts and contracts that are replaced, never changed; a plain search; the bus reads memory from a file of the turn | Accepted |
 | [0037](0037-the-coordinator.md) | The coordinator: a pure rule that starts ready work, run when something happens, with budgets in tokens and on the one computer it was switched on on | Accepted |
-| [0038](0038-permission-requests-routed-to-the-manager.md) | A specialist asks the manager for a precise permission (a command, a prefix, a web domain) with a tool; the answer starts the next turn with exactly that rule | Accepted |
+| [0038](0038-permission-requests-routed-to-the-manager.md) | A specialist asks the manager for a precise permission (one exact command, a web domain) with a tool; the answer starts the next turn with exactly that rule, a command in a sandbox (note after a review, 21 November 2026) | Accepted |
 | [0039](0039-skills-and-connectors-chosen-by-the-manager.md) | Give a specialist only the skills and connectors the manager chose, tool by tool | Accepted |
 | [0040](0040-the-limit-of-the-plan.md) | The limit of the Claude plan is its own ending of a turn, known per computer, said once, and never guessed | Accepted |
 | [0041](0041-earlier-conversations-as-digests.md) | Import earlier Claude Code conversations as digests made by rules, kept by the manager, read by the Advisor only | Accepted |

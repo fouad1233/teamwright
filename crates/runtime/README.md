@@ -126,6 +126,17 @@ prints its folder and environment). The ignored test
 `a_real_connector_starts_through_the_launcher_and_sees_only_its_own_variable`
 needs a signed-in Claude Code, `python3` and the built program; it has never
 run.
+
+A turn that may run a command (decision 0038) has, in the same one
+`--settings` object, `permissions.blockReadsOutsideWorkingDirectories` and
+`sandbox` with `enabled`, `failIfUnavailable`, `autoAllowBashIfSandboxed:
+false`, `allowUnsandboxedCommands: false`, `network.strictAllowlist` and
+`filesystem.denyWrite` with the folders it may only read
+(`command_settings` in `arguments.rs`). The keys were read in the
+documentation and found in Claude Code 2.1.289; none has been seen working.
+The ignored test
+`a_real_allowed_command_runs_in_a_sandbox_that_keeps_it_inside_the_folders`
+would prove that a sandboxed command cannot read a file in the home folder.
 The ignored test
 `a_real_session_gets_its_chosen_skill_and_connector_and_nothing_of_the_users_own`
 in `tests/real_program.rs` has never run (needs the built program:
@@ -183,9 +194,8 @@ arguments):
   ([decision 0036](../../docs/decisions/0036-project-memory.md)).
 
 - `ask_permission`: a specialist asks the manager for permission to do
-  something it may not do on its own: a `kind` (`command`,
-  `command_prefix` or `web_domain`), `what` (the command line, the prefix
-  or the domain) and a `reason`, checked by the rules of a permission of
+  something it may not do on its own: a `kind` (`command` or
+  `web_domain`), `what` (the command line or the domain) and a `reason`, checked by the rules of a permission of
   the domain (`permission_from`). Like a question, it ends the turn: the
   server answers that nothing is allowed yet and that the answer comes as
   the next message, and the decoder reports `PermissionAsked`
