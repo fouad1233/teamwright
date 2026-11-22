@@ -42,8 +42,11 @@
   line-height: 1.5;
 }
 
-/* The one plain sentence about what a command is. */
+/* What allowing a command really means, and what holds it in. */
 .warning {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
   padding-left: var(--space-3);
   border-left: 2px solid var(--brass);
   color: var(--ink);
@@ -51,7 +54,7 @@
   line-height: 1.5;
 }
 
-/* What is allowed, which the manager can narrow or edit before allowing. */
+/* What is allowed, which the manager can edit before allowing. */
 .rule {
   display: flex;
   flex-direction: column;
@@ -66,18 +69,6 @@
 
 .ruleInput {
   font-family: var(--font-mono);
-}
-
-.narrow {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-}
-
-/* The way of allowing that is chosen is outlined in gold. */
-.narrow [aria-pressed='true'] {
-  border-color: var(--brass);
-  background: var(--brass-soft);
 }
 
 .note {

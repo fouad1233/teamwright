@@ -17,8 +17,6 @@ export function permissionInWords(kind: PermissionKind, what: string): string {
   switch (kind) {
     case 'command':
       return `Run the command ${what}`;
-    case 'command_prefix':
-      return `Run commands that start with ${what}`;
     case 'web_domain':
       return `Fetch web pages from ${what}`;
   }
@@ -29,8 +27,6 @@ export function kindInWords(kind: PermissionKind): string {
   switch (kind) {
     case 'command':
       return 'Command';
-    case 'command_prefix':
-      return 'Commands that start with';
     case 'web_domain':
       return 'Web domain';
   }
@@ -38,25 +34,21 @@ export function kindInWords(kind: PermissionKind): string {
 
 /** Whether a kind of permission lets commands run on this computer. */
 export function runsCommands(kind: PermissionKind): boolean {
-  return kind === 'command' || kind === 'command_prefix';
+  return kind === 'command';
 }
 
 /**
- * What the manager reads before allowing a command: one plain sentence
- * about what it means.
+ * What the manager reads before allowing a command: what it really means,
+ * and what holds it in. The sandbox is the one every turn with a command is
+ * started in: it lets the command change files only in the folder of the
+ * project, keeps it out of the rest of the home folder (Claude Code opens
+ * the git settings again), and lets it reach only the web domains the
+ * manager allowed.
  */
-export const COMMANDS_RUN_AS_YOU =
-  'A command runs on this computer with your rights, like a command you type yourself. Allow only what you would run.';
-
-/**
- * The first two words of a command: the program and what it is asked to do,
- * which is the narrowest prefix that names a family of commands. Nothing
- * for a command of one word.
- */
-export function prefixOf(command: string): string | null {
-  const words = command.trim().split(/\s+/);
-  return words.length >= 2 ? words.slice(0, 2).join(' ') : null;
-}
+export const WHAT_A_COMMAND_MEANS = [
+  'This specialist can change the files this command runs (scripts, build files, tests). Allowing it lets the specialist run any program as you.',
+  'It runs in a sandbox: it can change files only in the folder of the project, cannot read the rest of your home folder except your git settings, and reaches no web domain you have not allowed.',
+] as const;
 
 /** One of the answers to a request: allowed for a while, or refused. */
 export type PermissionChoice = PermissionScope | 'refuse';
@@ -64,7 +56,8 @@ export type PermissionChoice = PermissionScope | 'refuse';
 /**
  * The answers the manager can give, in order, as options with what each
  * leads to. Allowing for the task is offered only when the conversation is
- * about one.
+ * about one; allowing always only for a web domain, as a command is never
+ * allowed always.
  */
 export function choicesFor(
   request: PermissionRequest,
@@ -84,34 +77,37 @@ export function choicesFor(
       choice: 'task',
       option: {
         label: 'Allow for this task',
-        consequence: `For every turn of ${specialist} on this task.`,
+        consequence: runsCommands(request.kind)
+          ? `For every turn of ${specialist} about this task, except a turn that only answers its teammates.`
+          : `For every turn of ${specialist} about this task.`,
       },
     });
   }
-  choices.push(
-    {
+  if (!runsCommands(request.kind)) {
+    choices.push({
       choice: 'always',
       option: {
         label: `Always allow ${specialist}`,
         consequence:
           'For every turn in this project, on this computer, until you take it back in Team.',
       },
+    });
+  }
+  choices.push({
+    choice: 'refuse',
+    option: {
+      label: 'Refuse',
+      consequence: `${specialist} goes on without it, and says what could not be done.`,
     },
-    {
-      choice: 'refuse',
-      option: {
-        label: 'Refuse',
-        consequence: `${specialist} goes on without it, and says what could not be done.`,
-      },
-    },
-  );
+  });
   return choices;
 }
 
 /**
  * The permissions that stand for a specialist: allowed for a task or for
  * always, and not taken back. They are what its later turns are started
- * with, on the computer they were allowed on.
+ * with, on the computer they were allowed on. One that is no longer valid
+ * is among them, so that it can be taken back.
  */
 export function standingPermissionsOf(
   requests: readonly PermissionRequest[],

@@ -18,11 +18,24 @@ import type {
  * says them, though less thoroughly: the application is the judge.
  */
 
-/** Characters a command may not contain: they would join, redirect or widen it. */
-const FORBIDDEN_IN_COMMANDS = /[;&|<>`$*?(){}[\]\\~!#%^\n\r]/;
+/**
+ * Characters a command may not contain: they would join, redirect, quote,
+ * escape or widen it, so that the shell would read another command than the
+ * one checked.
+ */
+const FORBIDDEN_IN_COMMANDS = /[;&|<>`$*?(){}[\]\\~!#%^"']/;
 
-/** Programs that are never allowed. */
-const NEVER_PROGRAMS = new Set(['claude', 'teamwright', 'sudo', 'su', 'doas', 'pkexec', 'runas']);
+/** Programs that are never allowed, anywhere in a command. */
+const NEVER_PROGRAMS = new Set([
+  'claude',
+  'teamwright',
+  'sudo',
+  'su',
+  'doas',
+  'pkexec',
+  'runas',
+  'gsudo',
+]);
 
 /** Programs that change files, which a specialist does with its file tools. */
 const FILE_CHANGING_PROGRAMS = new Set([
@@ -35,41 +48,74 @@ const FILE_CHANGING_PROGRAMS = new Set([
   'ln',
   'chmod',
   'chown',
+  'chgrp',
   'dd',
   'tee',
+  'truncate',
+  'shred',
+  'install',
 ]);
 
-/** Programs that run whatever follows them: never a prefix. */
-const RUNS_ANYTHING = new Set([
-  'sh',
-  'bash',
-  'zsh',
-  'pwsh',
-  'powershell',
-  'cmd',
-  'python',
-  'python3',
-  'node',
+/** Programs that only start another: a command never starts with one. */
+const WRAPPERS = new Set([
   'env',
   'xargs',
-  'npx',
-  'curl',
-  'wget',
-  'ssh',
-  'find',
+  'eval',
+  'exec',
+  'nohup',
+  'timeout',
+  'time',
+  'nice',
+  'ionice',
+  'watch',
+  'stdbuf',
+  'setsid',
+  'command',
+  'builtin',
 ]);
+
+/** The name of a program as it is compared. */
+function programName(word: string): string {
+  const name = (word.split('/').at(-1) ?? word).toLowerCase();
+  return name.endsWith('.exe') ? name.slice(0, -4) : name;
+}
+
+/** Whether a word names a path outside the folder of the project. */
+function leavesTheFolder(word: string): boolean {
+  // A slash only right after a letter, a digit or . _ - of a name.
+  for (let place = 0; place < word.length; place += 1) {
+    if (word[place] === '/' && (place === 0 || !/[A-Za-z0-9._-]/.test(word[place - 1] ?? ''))) {
+      return true;
+    }
+  }
+  // An option glued to a path: -o/etc/x.
+  const beforeSlash = word.split('/')[0] ?? '';
+  if (word.includes('/') && beforeSlash.startsWith('-') && /^[A-Za-z-]+$/.test(beforeSlash)) {
+    return true;
+  }
+  // A drive, at the start, after = or a comma, or glued to a one-letter option.
+  if (/(^|[=,])[A-Za-z]:/.test(word) || /^-[A-Za-z][A-Za-z]:/.test(word)) {
+    return true;
+  }
+  return word.includes(':/');
+}
 
 /**
  * Checks a rule as the manager would allow it, and returns its text
- * tidied: single spaces in a command, small letters in a domain.
+ * tidied: single spaces in a command, small letters in a domain. The same
+ * rules as the application's, in the same words, though the application is
+ * the judge.
  */
 export function checkedRule(kind: PermissionKind, what: string): string {
-  const text = what.trim();
+  const text = what.replace(/^ +| +$/g, '');
   if (text === '') {
     throw new BackendError('rule_broken', 'the permission must not be empty');
   }
   const notPossible = (reason: string) =>
     new BackendError('rule_broken', `this permission cannot be given: ${reason}`);
+  if ((kind as string) !== 'command' && kind !== 'web_domain') {
+    throw new BackendError('invalid_request', `"${kind}" is not a kind of permission`);
+  }
   if (kind === 'web_domain') {
     const domain = text.toLowerCase();
     const host = domain.startsWith('*.') ? domain.slice(2) : domain;
@@ -86,33 +132,48 @@ export function checkedRule(kind: PermissionKind, what: string): string {
     }
     return domain;
   }
+  if (/[^\x20-\x7e]/.test(text)) {
+    throw notPossible(
+      'a command is one line of plain keyboard characters, with spaces between its words',
+    );
+  }
   if (FORBIDDEN_IN_COMMANDS.test(text)) {
-    throw notPossible('a command may not join, redirect or widen commands');
+    throw notPossible(
+      'a command may not quote, join, redirect or widen commands, so that what runs is not what you read',
+    );
   }
-  const words = text.split(/\s+/);
+  const words = text.split(' ').filter((word) => word !== '');
+  const first = words[0] ?? '';
+  if (first.includes('=')) {
+    throw notPossible('a command may not start by setting a variable');
+  }
+  if (words.some((word) => word.includes('..'))) {
+    throw notPossible('a command may not contain .., which reaches into a folder above');
+  }
+  if (words.some(leavesTheFolder)) {
+    throw notPossible(
+      'a command may name only paths inside the folder of the project: no absolute path, no drive and no home folder, also not after = or an option',
+    );
+  }
   const lower = text.toLowerCase();
-  if (words.some((word) => word.startsWith('/') || word.split('/').includes('..'))) {
-    throw notPossible('a command may name only paths inside the folder of the project');
-  }
   if (lower.includes('.claude') || lower.includes('teamwright')) {
     throw notPossible(
       "a command may not touch the settings of the agent program or Teamwright's own data",
     );
   }
-  const program = (words[0] ?? '').toLowerCase();
-  if (NEVER_PROGRAMS.has(program)) {
-    throw notPossible(`"${program}" can never be allowed`);
+  const program = programName(first);
+  if (WRAPPERS.has(program)) {
+    throw notPossible(`a command may not start with ${program}, which only starts another program`);
   }
   if (FILE_CHANGING_PROGRAMS.has(program)) {
-    throw notPossible(`"${program}" changes files; a specialist changes files with its file tools`);
+    throw notPossible(`${program} changes files; a specialist changes files with its file tools`);
   }
-  if (kind === 'command_prefix') {
-    if (words.length < 2) {
-      throw notPossible('a prefix names the program and what it is asked to do, such as "npm run"');
-    }
-    if (RUNS_ANYTHING.has(program)) {
-      throw notPossible(`"${program}" runs whatever follows it, so it is allowed only exactly`);
-    }
+  const never = words
+    .flatMap((word) => word.split(/[=,:]/))
+    .map(programName)
+    .find((name) => NEVER_PROGRAMS.has(name));
+  if (never !== undefined) {
+    throw notPossible(`${never} can never be allowed`);
   }
   return words.join(' ');
 }
@@ -122,12 +183,27 @@ export function permissionInWords(kind: PermissionKind, what: string): string {
   switch (kind) {
     case 'command':
       return `run the command \`${what}\``;
-    case 'command_prefix':
-      return `run commands that start with \`${what}\``;
     case 'web_domain':
       return `fetch web pages from ${what}`;
   }
 }
+
+/**
+ * Checks how long a rule is to hold: a command once or for a task, never
+ * always.
+ */
+export function checkedScope(kind: PermissionKind, scope: PermissionScope): void {
+  if (kind === 'command' && scope === 'always') {
+    throw new BackendError(
+      'rule_broken',
+      'this permission cannot be given: a command can be allowed once or for this task, never always',
+    );
+  }
+}
+
+/** Why a specialist can be given no command, in the application's words. */
+export const SECRET_IN_REACH =
+  'this permission cannot be given: this specialist has a connector that is given a secret in an environment variable, and a command could read it; take that connector from the specialist first';
 
 /** The answer as the specialist reads it, the request of its next turn. */
 export function permissionAnswerInWords(
@@ -207,6 +283,7 @@ export class PretendedPermissions {
             answeredAt: at,
             onThisComputer: true,
             withdrawnAt: null,
+            noLongerValid: false,
           }
         : {
             decision: 'refused',
@@ -217,6 +294,7 @@ export class PretendedPermissions {
             answeredAt: at,
             onThisComputer: true,
             withdrawnAt: null,
+            noLongerValid: false,
           };
     return structuredClone(request);
   }
@@ -232,6 +310,7 @@ export class PretendedPermissions {
       throw new BackendError('rule_broken', 'there is no allowed permission to take back');
     }
     answer.withdrawnAt = at;
+    answer.noLongerValid = false;
     return structuredClone(request);
   }
 }

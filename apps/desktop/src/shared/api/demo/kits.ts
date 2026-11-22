@@ -308,6 +308,20 @@ export class PretendedLibrary {
     this.kits.set(member.id, { memberId: member.id, ...structuredClone(choice) });
   }
 
+  /**
+   * Whether a specialist was given a connector that is handed a secret in
+   * an environment variable. Such a specialist is given no command
+   * (decision 0038): a command could read the secret.
+   */
+  namesASecret(member: Member): boolean {
+    const kit = this.kits.get(member.id);
+    const connectors = this.connectors.get(member.projectId) ?? [];
+    return (kit?.connectors ?? []).some((given) => {
+      const connector = connectors.find((known) => known.id === given.connectorId);
+      return connector !== undefined && variablesOf(connector.start).length > 0;
+    });
+  }
+
   /** Forgets everything of a project that is deleted. */
   forgetProject(projectId: Id): void {
     this.skills.delete(projectId);

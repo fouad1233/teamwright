@@ -42,7 +42,8 @@ export function StandingPermissions({ project, tasks }: StandingPermissionsProps
         <p className={styles.empty}>
           The specialists read and write in the folder of the project, and do nothing else on their
           own. When one needs to run a command or fetch from the web, it asks, and the request waits
-          in the Inbox. What you allow for a task or always is listed here, and can be taken back.
+          in the Inbox. What you allow for a task, or a web domain you allow always, is listed here,
+          and can be taken back.
         </p>
       ) : (
         <ol className={styles.list}>
@@ -56,6 +57,7 @@ export function StandingPermissions({ project, tasks }: StandingPermissionsProps
                 what={request.answer?.what ?? request.what}
                 scope={request.answer?.scope ?? null}
                 isHere={request.answer?.onThisComputer ?? true}
+                isNoLongerValid={request.answer?.noLongerValid ?? false}
                 onWithdraw={() => commands.withdraw(request.id)}
               />
             </li>
@@ -75,10 +77,22 @@ interface StandingProps {
   scope: 'once' | 'task' | 'always' | null;
   /** Whether it was allowed on this computer, the only one where it holds. */
   isHere: boolean;
+  /** Whether it grants nothing any more, and can only be taken back. */
+  isNoLongerValid: boolean;
   onWithdraw: () => Promise<void>;
 }
 
-function Standing({ member, project, task, kind, what, scope, isHere, onWithdraw }: StandingProps) {
+function Standing({
+  member,
+  project,
+  task,
+  kind,
+  what,
+  scope,
+  isHere,
+  isNoLongerValid,
+  onWithdraw,
+}: StandingProps) {
   return (
     <>
       <div className={styles.words}>
@@ -94,8 +108,17 @@ function Standing({ member, project, task, kind, what, scope, isHere, onWithdraw
             {what}
           </code>
         </p>
-        {!isHere && (
-          <p className={styles.elsewhere}>Allowed on another computer, and holds only there.</p>
+        {isNoLongerValid ? (
+          <p className={styles.elsewhere}>
+            No longer valid: a command is allowed once or for a task, never always. It grants
+            nothing; take it back.
+          </p>
+        ) : (
+          !isHere && (
+            <p className={styles.elsewhere}>
+              Allowed on another computer. It grants nothing on this one.
+            </p>
+          )
         )}
       </div>
       <Button

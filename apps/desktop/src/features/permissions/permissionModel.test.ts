@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import type { PermissionRequest } from '@/shared/api/types';
-import { choicesFor, permissionInWords, prefixOf, standingPermissionsOf } from './permissionModel';
+import {
+  WHAT_A_COMMAND_MEANS,
+  choicesFor,
+  permissionInWords,
+  standingPermissionsOf,
+} from './permissionModel';
 
 function request(change: Partial<PermissionRequest> = {}): PermissionRequest {
   return {
@@ -30,37 +35,48 @@ function allowed(scope: 'once' | 'task' | 'always', withdrawnAt: string | null =
     answeredAt: '2026-11-21T22:05:00.000Z',
     onThisComputer: true,
     withdrawnAt,
+    noLongerValid: false,
   };
 }
 
 describe('permissions in words', () => {
   it('says what each kind allows', () => {
     expect(permissionInWords('command', 'npm test')).toBe('Run the command npm test');
-    expect(permissionInWords('command_prefix', 'npm run')).toBe(
-      'Run commands that start with npm run',
-    );
     expect(permissionInWords('web_domain', 'docs.rs')).toBe('Fetch web pages from docs.rs');
   });
 
-  it('offers the program and its subcommand as the narrowest prefix', () => {
-    expect(prefixOf('npm run test -- --watch')).toBe('npm run');
-    expect(prefixOf('make')).toBeNull();
+  it('says plainly what allowing a command means, and what holds it in', () => {
+    expect(WHAT_A_COMMAND_MEANS[0]).toBe(
+      'This specialist can change the files this command runs (scripts, build files, tests). Allowing it lets the specialist run any program as you.',
+    );
+    expect(WHAT_A_COMMAND_MEANS[1]).toMatch(/^It runs in a sandbox/);
   });
 });
 
 describe('the answers to a request', () => {
-  it('offers allowing for the task only when the conversation is about one', () => {
+  it('never offers to allow a command always', () => {
     expect(choicesFor(request(), 'Tester').map(({ choice }) => choice)).toEqual([
+      'once',
+      'task',
+      'refuse',
+    ]);
+    expect(choicesFor(request({ taskId: null }), 'Tester').map(({ choice }) => choice)).toEqual([
+      'once',
+      'refuse',
+    ]);
+  });
+
+  it('offers allowing a web domain always, and for the task only when there is one', () => {
+    const domain = { kind: 'web_domain' as const, what: 'docs.rs' };
+    expect(choicesFor(request(domain), 'Tester').map(({ choice }) => choice)).toEqual([
       'once',
       'task',
       'always',
       'refuse',
     ]);
-    expect(choicesFor(request({ taskId: null }), 'Tester').map(({ choice }) => choice)).toEqual([
-      'once',
-      'always',
-      'refuse',
-    ]);
+    expect(
+      choicesFor(request({ ...domain, taskId: null }), 'Tester').map(({ choice }) => choice),
+    ).toEqual(['once', 'always', 'refuse']);
   });
 });
 

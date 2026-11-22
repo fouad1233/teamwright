@@ -837,9 +837,10 @@ export function sampleWorkspace(today: Date = new Date()): DemoWorkspace {
 
 /**
  * What the manager has allowed in the sample project (decision 0038): the
- * firmware engineer may build the firmware with `cargo build` while it
- * works, as it asked when it set the firmware project up. The conversation
- * it asked in is not part of the sample.
+ * firmware engineer may build the firmware with `cargo build` for the task
+ * of setting the firmware project up, and may always read the reference
+ * manual of its chip on docs.espressif.com. A command is never allowed
+ * always. The conversation it asked in is not part of the sample.
  */
 function samplePermissions(today: Date): PermissionRequest[] {
   const askedAt = shiftedByDays(today, -3).toISOString();
@@ -852,20 +853,46 @@ function samplePermissions(today: Date): PermissionRequest[] {
       conversationId: 'demo-conversation-firmware-setup',
       turnId: 'demo-turn-firmware-setup',
       taskId: taskId(19),
-      kind: 'command_prefix',
+      kind: 'command',
       what: 'cargo build',
+
       reason:
         'Building the firmware is the only way to know that the project is set up right; reading the files does not show it.',
       askedAt,
       answer: {
         decision: 'allowed',
-        scope: 'always',
-        kind: 'command_prefix',
+        scope: 'task',
+        kind: 'command',
         what: 'cargo build',
         note: '',
         answeredAt,
         onThisComputer: true,
         withdrawnAt: null,
+        noLongerValid: false,
+      },
+    },
+    {
+      id: 'demo-permission-2',
+      projectId: SAMPLE_PROJECT_ID,
+      memberId: 'demo-member-firmware',
+      conversationId: 'demo-conversation-firmware-setup',
+      turnId: 'demo-turn-firmware-setup',
+      taskId: taskId(19),
+      kind: 'web_domain',
+      what: 'docs.espressif.com',
+      reason:
+        'The reference manual of the ESP32-C3 says which pins the bootloader needs; the datasheet in the folder leaves it out.',
+      askedAt,
+      answer: {
+        decision: 'allowed',
+        scope: 'always',
+        kind: 'web_domain',
+        what: 'docs.espressif.com',
+        note: '',
+        answeredAt,
+        onThisComputer: true,
+        withdrawnAt: null,
+        noLongerValid: false,
       },
     },
   ];

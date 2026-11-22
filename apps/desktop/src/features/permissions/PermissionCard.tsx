@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 
-import type { NewPermissionAnswer, PermissionKind, PermissionRequest } from '@/shared/api/types';
+import type { NewPermissionAnswer, PermissionRequest } from '@/shared/api/types';
 import { classNames } from '@/shared/lib/classNames';
 import { Button } from '@/shared/ui/Button';
 import { TextInput } from '@/shared/ui/Field';
@@ -8,13 +8,7 @@ import { TextInput } from '@/shared/ui/Field';
 import { OptionList } from '../work/OptionList';
 import { appearsAt, waitsForManager } from '../work/waitsForManager';
 import styles from './PermissionCard.module.css';
-import {
-  COMMANDS_RUN_AS_YOU,
-  choicesFor,
-  kindInWords,
-  prefixOf,
-  runsCommands,
-} from './permissionModel';
+import { WHAT_A_COMMAND_MEANS, choicesFor, kindInWords, runsCommands } from './permissionModel';
 
 interface PermissionCardProps {
   request: PermissionRequest;
@@ -27,24 +21,23 @@ interface PermissionCardProps {
 /**
  * A request of a specialist to do something it may not do on its own
  * (decision 0038): exactly what it wants to run or fetch, and why. The
- * manager allows it once, for the task or always, or refuses it.
+ * manager allows it once or for the task (a web domain also always), or
+ * refuses it. For a command, the card says what allowing it really means.
  *
- * What is allowed is what the card shows, and nothing more: the command can
- * be narrowed to the commands of its program and subcommand, or edited
- * before it is allowed, and the application checks it again. Like a
- * question, it is the manager's to do, so it carries the gold.
+ * What is allowed is what the card shows, and nothing more: the command or
+ * the domain can be edited before it is allowed, and the application checks
+ * it again. Like a question, it is the manager's to do, so it carries the
+ * gold.
  */
 export function PermissionCard({ request, askedBy, onAnswer }: PermissionCardProps) {
   const choices = choicesFor(request, askedBy);
   const [pick, setPick] = useState<number | undefined>(undefined);
-  const [kind, setKind] = useState<PermissionKind>(request.kind);
   const [what, setWhat] = useState(request.what);
   const [note, setNote] = useState('');
   const [isSending, setIsSending] = useState(false);
   const choice = pick === undefined ? undefined : choices[pick]?.choice;
   const allows = choice !== undefined && choice !== 'refuse';
   const canAnswer = !isSending && choice !== undefined && (!allows || what.trim() !== '');
-  const prefix = prefixOf(request.what);
   const isCommand = runsCommands(request.kind);
   const afterTheChoices = appearsAt(choices.length + 3);
 
@@ -56,7 +49,7 @@ export function PermissionCard({ request, askedBy, onAnswer }: PermissionCardPro
     const answer: NewPermissionAnswer =
       choice === 'refuse'
         ? { decision: 'refuse', note }
-        : { decision: 'allow', scope: choice, kind, what, note };
+        : { decision: 'allow', scope: choice, kind: request.kind, what, note };
     if (!(await onAnswer(answer))) {
       setIsSending(false);
     }
@@ -86,13 +79,15 @@ export function PermissionCard({ request, askedBy, onAnswer }: PermissionCardPro
         {request.reason}
       </p>
       {isCommand && (
-        <p
+        <div
           className={classNames(waitsForManager.part, styles.warning)}
           style={appearsAt(2)}
           role="note"
         >
-          {COMMANDS_RUN_AS_YOU}
-        </p>
+          {WHAT_A_COMMAND_MEANS.map((sentence) => (
+            <p key={sentence}>{sentence}</p>
+          ))}
+        </div>
       )}
 
       <OptionList
@@ -122,28 +117,6 @@ export function PermissionCard({ request, askedBy, onAnswer }: PermissionCardPro
               }}
             />
           </label>
-          {isCommand && prefix !== null && prefix !== request.what && (
-            <div className={styles.narrow} role="group" aria-label="How much of it">
-              <Button
-                aria-pressed={kind === 'command'}
-                onClick={() => {
-                  setKind('command');
-                  setWhat(request.what);
-                }}
-              >
-                This command only
-              </Button>
-              <Button
-                aria-pressed={kind === 'command_prefix'}
-                onClick={() => {
-                  setKind('command_prefix');
-                  setWhat(prefix);
-                }}
-              >
-                Every {prefix} command
-              </Button>
-            </div>
-          )}
         </div>
       )}
 

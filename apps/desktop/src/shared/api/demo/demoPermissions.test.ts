@@ -103,13 +103,63 @@ describe('permission requests in the DemoBackend', () => {
     const refused = await refusal(
       backend.answerPermission(request.id, {
         decision: 'allow',
-        scope: 'always',
-        kind: 'command_prefix',
-        what: 'bash -c',
+        scope: 'once',
+        kind: 'command',
+        what: '"claude" -p x',
         note: '',
       }),
     );
     expect(refused.code).toBe('rule_broken');
+    expect(await backend.openPermissionRequests()).toHaveLength(1);
+  });
+
+  it('never allows a command always', async () => {
+    const request = await asked();
+
+    const refused = await refusal(
+      backend.answerPermission(request.id, {
+        decision: 'allow',
+        scope: 'always',
+        kind: 'command',
+        what: request.what,
+        note: '',
+      }),
+    );
+    expect(refused.message).toMatch(/never always/);
+    expect(await backend.openPermissionRequests()).toHaveLength(1);
+  });
+
+  it('gives no command to a specialist with a secret in reach', async () => {
+    const request = await asked();
+    const library = await backend.addConnector(project.id, {
+      name: 'parts-catalog',
+      start: {
+        kind: 'program',
+        program: 'parts-catalog-server',
+        arguments: [],
+        variables: ['PARTS_TOKEN'],
+      },
+      tools: ['search_parts'],
+    });
+    const parts = library.connectors.find((connector) => connector.name === 'parts-catalog');
+    if (!parts) {
+      throw new Error('the connector was not added');
+    }
+    await backend.setMemberKit(project.id, engineer.id, {
+      skills: [],
+      connectors: [{ connectorId: parts.id, tools: ['search_parts'] }],
+    });
+
+    const refused = await refusal(
+      backend.answerPermission(request.id, {
+        decision: 'allow',
+        scope: 'once',
+        kind: 'command',
+        what: request.what,
+        note: '',
+      }),
+    );
+    expect(refused.message).toMatch(/secret in an environment variable/);
     expect(await backend.openPermissionRequests()).toHaveLength(1);
   });
 
@@ -130,11 +180,14 @@ describe('permission requests in the DemoBackend', () => {
     expect((await refusal(backend.withdrawPermission(request.id))).code).toBe('rule_broken');
   });
 
-  it('the sample project has a standing permission to show', async () => {
+  it('the sample project has standing permissions to show, and no command allowed always', async () => {
     const sample = new DemoBackend(sampleWorkspace(), testEnvironment());
     const [project] = await sample.listProjects();
     const requests = await sample.permissionRequests(project?.id ?? '');
-    expect(requests.map((request) => request.answer?.scope)).toEqual(['always']);
+    expect(requests.map((request) => [request.kind, request.answer?.scope])).toEqual([
+      ['command', 'task'],
+      ['web_domain', 'always'],
+    ]);
   });
 });
 
@@ -150,8 +203,21 @@ describe('the rules of a permission in the demo', () => {
       ['command', 'cat /etc/passwd'],
       ['command', 'sudo ls'],
       ['command', 'rm -rf build'],
-      ['command_prefix', 'npm'],
-      ['command_prefix', 'bash -c'],
+      ['command', '"claude" --dangerously-skip-permissions -p x'],
+      ['command', "'sudo' ls"],
+      ['command', '"rm" -r src'],
+      ['command', 'py""thon3 -c x'],
+      ['command', 'cat .cla""ude/settings.json'],
+      ['command', 'git log -1 --output=/home/u/x'],
+      ['command', 'gcc -o/home/u/x main.c'],
+      ['command', 'tool --out=C:/x'],
+      ['command', 'npm test\nls'],
+      ['command', 'npm\ttest'],
+      ['command', 'npm t\u0435st'],
+      ['command', 'env FOO=1 npm test'],
+      ['command', 'git -c core.editor=claude commit'],
+      ['command', 'git log main..HEAD'],
+      ['command_prefix' as 'command', 'npm run'],
       ['web_domain', 'localhost'],
       ['web_domain', 'https://docs.rs'],
     ] as const) {

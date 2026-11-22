@@ -112,7 +112,13 @@ import { groupTasks } from './groups';
 import { PretendedTeamTalk } from './teamwork';
 import { PretendedMemory, shorten } from './memory';
 import { PretendedEarlierConversations, type PretendedConversation } from './earlierConversations';
-import { PretendedPermissions, checkedRule, permissionAnswerInWords } from './permissions';
+import {
+  PretendedPermissions,
+  SECRET_IN_REACH,
+  checkedRule,
+  checkedScope,
+  permissionAnswerInWords,
+} from './permissions';
 import { PretendedGitHub } from './gitHub';
 import { PretendedIntegrations } from './integrations';
 import { freeName, isInside, isSameFolder, nameOf } from './places';
@@ -1544,11 +1550,15 @@ export class DemoBackend implements Backend {
       }
       if (answer.decision === 'allow') {
         checkedRule(answer.kind, answer.what);
+        checkedScope(answer.kind, answer.scope);
         if (answer.scope === 'task' && conversation.taskId === null) {
           throw new BackendError(
             'rule_broken',
-            'this permission cannot be given: the conversation is not about a task; allow it once or always',
+            'this permission cannot be given: the conversation is not about a task; allow it once',
           );
+        }
+        if (answer.kind === 'command' && this.library.namesASecret(member)) {
+          throw new BackendError('rule_broken', SECRET_IN_REACH);
         }
       }
       this.refuseWhileBusy(member);

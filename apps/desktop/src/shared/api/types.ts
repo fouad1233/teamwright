@@ -1060,15 +1060,16 @@ export interface MemoryEntry {
 }
 
 /**
- * What a permission is about (decision 0038): one exact command, the
- * commands that start with a program and its subcommand, or one web domain.
+ * What a permission is about (decision 0038): one exact command, or one web
+ * domain. There is no prefix of commands.
  */
-export type PermissionKind = 'command' | 'command_prefix' | 'web_domain';
+export type PermissionKind = 'command' | 'web_domain';
 
 /**
  * How long an allowed permission holds: for the turn the answer starts, for
  * every turn of the specialist on the task, or for every turn of the
- * specialist in the project until the manager takes it back.
+ * specialist in the project until the manager takes it back. A command is
+ * never allowed always; only a web domain is.
  */
 export type PermissionScope = 'once' | 'task' | 'always';
 
@@ -1084,12 +1085,18 @@ export interface PermissionAnswer {
   note: string;
   answeredAt: Moment;
   /**
-   * Whether it was answered on this computer. An allowed permission holds
-   * only on the computer it was allowed on.
+   * Whether it was answered on this computer, as this computer's own record
+   * shows. An allowed permission holds only on the computer it was allowed
+   * on; an answer that came through the sync folder holds nothing here.
    */
   onThisComputer: boolean;
   /** When an allowed permission was taken back, or null. */
   withdrawnAt: Moment | null;
+  /**
+   * Whether it stands but grants nothing any more: a command allowed always,
+   * from before that was refused. It can only be taken back.
+   */
+  noLongerValid: boolean;
 }
 
 /**
@@ -1106,7 +1113,7 @@ export interface PermissionRequest {
   /** The task the conversation is about, or null. */
   taskId: Id | null;
   kind: PermissionKind;
-  /** The command, the prefix or the domain, exactly as it would be allowed. */
+  /** The command or the domain, exactly as it would be allowed. */
   what: string;
   /** Why, in the specialist's words. */
   reason: string;
@@ -1120,7 +1127,7 @@ export type NewPermissionAnswer =
   | {
       decision: 'allow';
       scope: PermissionScope;
-      /** The rule as the manager saw it, perhaps narrowed or edited. */
+      /** The rule as the manager saw it, perhaps edited. */
       kind: PermissionKind;
       what: string;
       note: string;

@@ -4484,6 +4484,9 @@ pub struct PermissionAnswerDto {
     on_this_computer: bool,
     /// When an allowed permission was taken back, or null.
     withdrawn_at: Option<String>,
+    /// Whether it stands but grants nothing any more: a command allowed
+    /// always, from before that was refused. It can only be taken back.
+    no_longer_valid: bool,
 }
 
 impl PermissionRequestDto {
@@ -4524,6 +4527,7 @@ impl PermissionRequestDto {
                     answered_at: moment_to_text(answer.at),
                     on_this_computer: answer.given_on(this_computer),
                     withdrawn_at: answer.withdrawn_at.map(moment_to_text),
+                    no_longer_valid: request.is_no_longer_valid(),
                 }
             }),
         }
@@ -4620,5 +4624,71 @@ mod permission_tests {
         }))
         .unwrap();
         assert!(prefix.into_reply().is_err());
+    }
+
+    /// A stored answer, as storage gives it back.
+    fn stored(
+        scope: teamwright_domain::PermissionScope,
+        computer: teamwright_domain::ComputerId,
+        answered_here: bool,
+    ) -> teamwright_domain::PermissionRequest {
+        use teamwright_domain::{
+            ConversationId, MemberId, PermissionAnswer, PermissionDecision, PermissionKind,
+            PermissionRequest, PermissionRequestId, PermissionRequestSnapshot, PermissionRule,
+            ProjectId, SaidIn, TurnId,
+        };
+        let rule = PermissionRule::new(PermissionKind::Command, "npm test").unwrap();
+        let at = chrono::Utc::now();
+        PermissionRequest::restore(PermissionRequestSnapshot {
+            id: PermissionRequestId::generate(),
+            project_id: ProjectId::generate(),
+            said_in: SaidIn {
+                member_id: MemberId::generate(),
+                conversation_id: ConversationId::generate(),
+                turn_id: TurnId::generate(),
+            },
+            task_id: None,
+            asked: rule.clone(),
+            reason: "Tests.".to_owned(),
+            asked_at: at,
+            answer: Some(PermissionAnswer {
+                decision: PermissionDecision::Allowed { scope, rule },
+                note: String::new(),
+                at,
+                computer,
+                next_turn: TurnId::generate(),
+                withdrawn_at: None,
+                answered_here,
+            }),
+        })
+    }
+
+    #[test]
+    fn a_command_allowed_always_is_sent_as_no_longer_valid() {
+        let here = teamwright_domain::ComputerId::generate();
+        let always = serde_json::to_value(PermissionRequestDto::of(
+            &stored(teamwright_domain::PermissionScope::Always, here, true),
+            here,
+        ))
+        .unwrap();
+        assert_eq!(always["answer"]["noLongerValid"], true);
+        let for_task = serde_json::to_value(PermissionRequestDto::of(
+            &stored(teamwright_domain::PermissionScope::Task, here, true),
+            here,
+        ))
+        .unwrap();
+        assert_eq!(for_task["answer"]["noLongerValid"], false);
+        assert_eq!(for_task["answer"]["onThisComputer"], true);
+    }
+
+    #[test]
+    fn an_answer_naming_this_computer_that_came_through_the_sync_folder_is_not_here() {
+        let here = teamwright_domain::ComputerId::generate();
+        let synced = serde_json::to_value(PermissionRequestDto::of(
+            &stored(teamwright_domain::PermissionScope::Task, here, false),
+            here,
+        ))
+        .unwrap();
+        assert_eq!(synced["answer"]["onThisComputer"], false);
     }
 }
