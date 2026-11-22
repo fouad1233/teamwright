@@ -10,8 +10,11 @@ export interface ThemeEntry {
   name: ThemeName;
   /** The name the chooser shows. */
   label: string;
-  /** A palette is plain; a special palette has a pattern drawn on its ground. */
-  kind: 'palette' | 'special';
+  /**
+   * A palette is plain; a colour-and-white theme is a white ground with one
+   * colour; a special palette has a pattern drawn on its ground.
+   */
+  kind: 'palette' | 'colour' | 'special';
   /** One honest line: what the palette does and on what ground. */
   line: string;
 }
@@ -79,6 +82,24 @@ export const THEMES: readonly ThemeEntry[] = [
     label: 'Tide',
     kind: 'special',
     line: 'Dark. Rings of waves, laid row over row, on deep sea water.',
+  },
+  {
+    name: 'rose',
+    label: 'Rose',
+    kind: 'colour',
+    line: 'Light. A white ground with pink for what is chosen, focused or pressed.',
+  },
+  {
+    name: 'delft',
+    label: 'Delft',
+    kind: 'colour',
+    line: 'Light. A white ground with the blue of glazed tiles for what is chosen, focused or pressed.',
+  },
+  {
+    name: 'poppy',
+    label: 'Poppy',
+    kind: 'colour',
+    line: 'Light. A white ground with red for what is chosen, focused or pressed; trouble keeps a darker red.',
   },
 ];
 

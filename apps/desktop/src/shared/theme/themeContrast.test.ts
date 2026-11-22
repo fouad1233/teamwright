@@ -66,6 +66,28 @@ function ratio(theme: string, upper: string, lower: string): number {
   return contrastRatio(over(colourOf(theme, upper), below), below);
 }
 
+/** The three themes of one colour and white. */
+const COLOUR_AND_WHITE = THEMES.filter((entry) => entry.kind === 'colour').map(
+  (entry) => entry.name,
+);
+
+/** The hue of a colour in degrees, 0 to 360. */
+function hue({ red, green, blue }: Colour): number {
+  const [r, g, b] = [red / 255, green / 255, blue / 255];
+  const high = Math.max(r, g, b);
+  const spread = high - Math.min(r, g, b);
+  if (spread === 0) return 0;
+  const sector =
+    high === r ? ((g - b) / spread) % 6 : high === g ? (b - r) / spread + 2 : (r - g) / spread + 4;
+  return (sector * 60 + 360) % 360;
+}
+
+/** The distance of two hues round the circle. */
+function hueGap(a: number, b: number): number {
+  const apart = Math.abs(a - b) % 360;
+  return apart > 180 ? 360 - apart : apart;
+}
+
 const FIXED = THEMES.filter((entry) => entry.name !== 'lamplight').map((entry) => entry.name);
 
 describe('the contrast of colours', () => {
@@ -198,6 +220,78 @@ describe('the themes', () => {
       expect(pattern?.startsWith('url("data:image/svg+xml,') ?? false, name).toBe(
         specials.includes(name),
       );
+    }
+  });
+});
+
+describe('the themes of one colour and white', () => {
+  it('are Rose, Delft and Poppy, and each is light', () => {
+    expect(COLOUR_AND_WHITE).toEqual(['rose', 'delft', 'poppy']);
+    for (const theme of COLOUR_AND_WHITE) {
+      expect(themes.get(theme)?.get('color-scheme'), theme).toBe('light');
+    }
+  });
+
+  it.each(COLOUR_AND_WHITE)('%s has a white or near-white ground, and no pattern', (theme) => {
+    // White is 1; the ground may hold a breath of the colour, never more.
+    expect(luminance(colourOf(theme, '--ground')), theme).toBeGreaterThan(0.95);
+    expect(luminance(colourOf(theme, '--surface')), theme).toBeGreaterThan(0.99);
+    expect(luminance(colourOf(theme, '--ground-sunken')), theme).toBeGreaterThan(0.85);
+    expect(themes.get(theme)?.get('--pattern')).toBeUndefined();
+  });
+
+  it.each(COLOUR_AND_WHITE)(
+    '%s keeps its colour for marks, and its words read on the head',
+    (theme) => {
+      // The focus ring and the line under the active tab are the colour itself.
+      expect(themes.get(theme)?.get('--tab-line')).toBe('var(--brass)');
+      for (const lower of ['--ground', '--surface', '--ground-sunken']) {
+        expect(ratio(theme, '--brass', lower), lower).toBeGreaterThanOrEqual(3);
+      }
+      // The head and the pressed state are washes of the colour; words on
+      // them keep the level AA.
+      for (const wash of ['--head-wash', '--pressed', '--hover']) {
+        const ground = colourOf(theme, '--ground');
+        const washed = over(colourOf(theme, wash), ground);
+        for (const word of ['--ink', '--ink-soft', '--ink-faint', '--brass-text']) {
+          expect(
+            contrastRatio(colourOf(theme, word), washed),
+            `${word} on ${wash}`,
+          ).toBeGreaterThanOrEqual(4.5);
+        }
+      }
+      for (const word of ['--ink', '--ink-soft', '--ink-faint', '--brass-text', '--danger']) {
+        expect(ratio(theme, word, '--ground-sunken'), word).toBeGreaterThanOrEqual(4.5);
+      }
+    },
+  );
+
+  it.each(COLOUR_AND_WHITE)('%s keeps the red of trouble apart from its own colour', (theme) => {
+    // Trouble is told from the theme's colour by hue, by at least 20
+    // degrees, and is always a red: between 330 and 20 degrees.
+    const trouble = hue(colourOf(theme, '--danger'));
+    expect(trouble > 330 || trouble < 20, `hue ${trouble}`).toBe(true);
+    expect(hueGap(trouble, hue(colourOf(theme, '--brass'))), theme).toBeGreaterThanOrEqual(20);
+  });
+
+  it('Poppy tells its red from trouble by lightness as well as hue', () => {
+    // The theme's red is warm and light; trouble is cooler and darker, so
+    // that the two part in grey too.
+    const mark = luminance(colourOf('poppy', '--brass-text'));
+    const trouble = luminance(colourOf('poppy', '--danger'));
+    expect(trouble).toBeLessThan(mark);
+    expect((mark + 0.05) / (trouble + 0.05)).toBeGreaterThanOrEqual(1.2);
+  });
+
+  it('statuses part by more than the colour of the theme: each tint is as distinct as in Paper', () => {
+    // The status tints are the same in the three, so no status is lost
+    // to the theme's own colour: the pigments of a theme never equal its brass.
+    for (const theme of COLOUR_AND_WHITE) {
+      const brass = colourOf(theme, '--brass');
+      for (const pigment of PIGMENTS) {
+        const tint = colourOf(theme, `--pigment-${pigment}`);
+        expect(JSON.stringify(tint), `${theme} ${pigment}`).not.toBe(JSON.stringify(brass));
+      }
     }
   });
 });

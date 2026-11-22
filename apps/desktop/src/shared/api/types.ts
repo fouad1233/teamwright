@@ -1544,7 +1544,10 @@ export type ThemeName =
   | 'blossom'
   | 'wing'
   | 'fern'
-  | 'tide';
+  | 'tide'
+  | 'rose'
+  | 'delft'
+  | 'poppy';
 
 /** A newer version of the program that is out (decision 0043). */
 export interface NewerVersion {

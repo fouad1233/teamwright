@@ -119,6 +119,15 @@
   box-shadow: 1px 0 0 var(--rule);
 }
 
+/* The theme's colour as a band along the top, as in the head of the window
+   in the themes of one colour and white. */
+.head {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 5px;
+  background: var(--brass);
+}
+
 /* A sheet of surface, set in from the ground, with lines of ink on it. */
 .sheet {
   display: flex;

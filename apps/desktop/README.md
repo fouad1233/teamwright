@@ -788,10 +788,14 @@ The interface follows the design philosophy in
 - Every color, size and radius is a token in `shared/styles/tokens.css`.
   Components never use raw values. Lamplight, the default theme, is those
   tokens: a dark and a light set that follow the operating system.
-- **Themes** (decision 0028). `shared/styles/themes.css` gives the nine
+- **Themes** (decision 0028). `shared/styles/themes.css` gives the twelve
   other themes, one fixed mode each, as sets of the same tokens under
   `data-theme` on the root; `shared/theme/themeContrast.test.ts` measures
   their contrast with the pure functions of `shared/theme/contrast.ts`.
+  Rose, Delft and Poppy are one colour on white: besides the usual tokens
+  they set `--head-wash` and `--head-edge` (the header of a project),
+  `--tab-line` (the line under the active tab), and a hover and a pressed
+  state in the colour; Lamplight and the plain palettes leave those bare.
   The four special palettes draw a pattern (`--pattern`, from
   `tools/design/theme-patterns.mjs`) on the ground of the window, a little
   stronger above the foot of the sidebar and in the band of an empty state

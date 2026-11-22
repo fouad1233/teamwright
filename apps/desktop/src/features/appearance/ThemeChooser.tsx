@@ -8,6 +8,7 @@ import styles from './ThemeChooser.module.css';
 import { useTheme } from './themeQueries';
 
 const PALETTES = THEMES.filter((entry) => entry.kind === 'palette');
+const COLOURS = THEMES.filter((entry) => entry.kind === 'colour');
 const SPECIALS = THEMES.filter((entry) => entry.kind === 'special');
 
 /** The theme an arrow key leads to from another, round the end of the list. */
@@ -27,10 +28,11 @@ function themeAfter(name: ThemeName, key: string): ThemeName | null {
 }
 
 /**
- * The theme of the window on this computer: ten sets of colours, five
- * plain and four with a pattern, besides Lamplight. Each is shown by a
- * small swatch drawn with its own tokens. One group of radio buttons: the
- * arrow keys go from one to the next and choose it.
+ * The theme of the window on this computer: thirteen sets of colours, in
+ * three groups besides Lamplight's place among the palettes: six plain
+ * palettes, three of one colour on white, and four with a pattern. Each is
+ * shown by a small swatch drawn with its own tokens. One group of radio
+ * buttons: the arrow keys go from one to the next and choose it.
  */
 export function ThemeChooser() {
   const { theme, choose } = useTheme();
@@ -71,6 +73,12 @@ export function ThemeChooser() {
             Palettes
           </h3>
           <div className={styles.options}>{PALETTES.map(option)}</div>
+        </div>
+        <div role="group" aria-labelledby="themes-colour" className={styles.group}>
+          <h3 id="themes-colour" className={styles.heading}>
+            One colour and white
+          </h3>
+          <div className={styles.options}>{COLOURS.map(option)}</div>
         </div>
         <div role="group" aria-labelledby="themes-special" className={styles.group}>
           <h3 id="themes-special" className={styles.heading}>
@@ -128,6 +136,7 @@ function Swatch({ entry }: { entry: ThemeEntry }) {
     <span className={styles.frame} aria-hidden="true">
       <span className={styles.swatch} data-theme-preview={entry.name}>
         {entry.kind === 'special' && <span className={styles.strip} />}
+        {entry.kind === 'colour' && <span className={styles.head} />}
         <span className={styles.sheet}>
           <span className={styles.ink} />
           <span className={styles.inkSoft} />

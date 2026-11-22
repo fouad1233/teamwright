@@ -9,7 +9,9 @@
  * The chooser draws each swatch inside `data-theme-preview`, so a swatch
  * shows the theme's own tokens whichever theme the window has.
  *
- * The patterns of the four special palettes are drawn by
+ * Rose, Delft and Poppy are one colour on white: the ground is white or
+ * a breath of the colour, and the colour carries what is chosen, focused
+ * or pressed. The patterns of the four special palettes are drawn by
  * tools/design/theme-patterns.mjs. They lie on the ground of the window
  * at a very low contrast (`--pattern`), and a little stronger in the foot
  * of the sidebar and under an empty state (`--pattern-strong`).
@@ -666,4 +668,223 @@
   --pattern-size: 68px 34px;
   --pattern-swatch-size: 41px 20px;
   --pattern-band: 112px;
+}
+
+/* Rose. Light, a white ground with pink for what is chosen, focused or pressed. */
+:root[data-theme='rose'],
+[data-theme-preview='rose'] {
+  color-scheme: light;
+  --mark-black: inline-block;
+  --mark-white: none;
+
+  --ground: #fffbfc;
+  --ground-sunken: #fbeff3;
+  --surface: #ffffff;
+  --surface-raised: #ffffff;
+  --rule: rgb(43 20 32 / 11%);
+  --rule-strong: rgb(43 20 32 / 22%);
+  --hover: rgb(208 56 111 / 4%);
+  --pressed: rgb(208 56 111 / 10%);
+  --backdrop: rgb(43 20 32 / 36%);
+
+  --ink: #2b1420;
+  --ink-soft: #5b4350;
+  --ink-faint: #75606b;
+  --ink-inverse: #fff5f8;
+
+  --brass: #d0386f;
+  --brass-text: #ad2257;
+  --brass-rgb: 208 56 111;
+  --brass-soft: rgb(208 56 111 / 12%);
+  --umber: #8f1b49;
+  --primary-hover: var(--umber);
+  --danger: #b3261e;
+  --danger-soft: rgb(179 38 30 / 10%);
+
+  --head-wash: rgb(208 56 111 / 7%);
+  --head-edge: rgb(208 56 111 / 28%);
+  --tab-line: var(--brass);
+
+  --glow-strength: 0.2;
+  --lamp-on-ink: rgb(var(--brass-rgb) / 30%);
+  --sun-at-work: 0.14;
+  --office-lamp-pool: 0.32;
+  --sun-peak: 0.32;
+  --sun-from: #fdeaf1;
+  --sun-to: #ffffff;
+  --grain-strength: 0.03;
+
+  --pigment-gray: #8a8a90;
+  --pigment-gray-text: #5a5a62;
+  --pigment-gray-wash: rgb(43 20 32 / 5%);
+  --pigment-blue: #3f73c4;
+  --pigment-blue-text: #2f5fa8;
+  --pigment-blue-wash: rgb(63 115 196 / 11%);
+  --pigment-purple: #7a5ac0;
+  --pigment-purple-text: #6447a6;
+  --pigment-purple-wash: rgb(122 90 192 / 11%);
+  --pigment-amber: #b86a14;
+  --pigment-amber-text: #8c500e;
+  --pigment-amber-wash: rgb(184 106 20 / 11%);
+  --pigment-green: #2f8f63;
+  --pigment-green-text: #23724e;
+  --pigment-green-wash: rgb(47 143 99 / 11%);
+  --pigment-red: #c8452f;
+  --pigment-red-text: #a63522;
+  --pigment-red-wash: rgb(200 69 47 / 11%);
+  --pigment-pink: #bf4d83;
+  --pigment-pink-text: #9e3b6a;
+  --pigment-pink-wash: rgb(191 77 131 / 11%);
+  --pigment-teal: #23877f;
+  --pigment-teal-text: #186c65;
+  --pigment-teal-wash: rgb(35 135 127 / 11%);
+
+  --shadow-overlay: 0 16px 40px rgb(43 20 32 / 16%);
+  --shadow-lifted: 0 12px 28px rgb(43 20 32 / 18%), 0 2px 6px rgb(43 20 32 / 10%);
+}
+
+/* Delft. Light, a white ground with the blue of glazed tiles for what is chosen, focused or pressed. */
+:root[data-theme='delft'],
+[data-theme-preview='delft'] {
+  color-scheme: light;
+  --mark-black: inline-block;
+  --mark-white: none;
+
+  --ground: #fbfcff;
+  --ground-sunken: #edf2fb;
+  --surface: #ffffff;
+  --surface-raised: #ffffff;
+  --rule: rgb(20 34 58 / 11%);
+  --rule-strong: rgb(20 34 58 / 22%);
+  --hover: rgb(47 111 208 / 4%);
+  --pressed: rgb(47 111 208 / 10%);
+  --backdrop: rgb(20 34 58 / 36%);
+
+  --ink: #14223a;
+  --ink-soft: #425571;
+  --ink-faint: #5b6c87;
+  --ink-inverse: #f4f7fd;
+
+  --brass: #2f6fd0;
+  --brass-text: #1d56b0;
+  --brass-rgb: 47 111 208;
+  --brass-soft: rgb(47 111 208 / 12%);
+  --umber: #1d4a94;
+  --primary-hover: var(--umber);
+  --danger: #b3261e;
+  --danger-soft: rgb(179 38 30 / 10%);
+
+  --head-wash: rgb(47 111 208 / 7%);
+  --head-edge: rgb(47 111 208 / 28%);
+  --tab-line: var(--brass);
+
+  --glow-strength: 0.2;
+  --lamp-on-ink: rgb(var(--brass-rgb) / 30%);
+  --sun-at-work: 0.14;
+  --office-lamp-pool: 0.32;
+  --sun-peak: 0.32;
+  --sun-from: #e8f0fc;
+  --sun-to: #ffffff;
+  --grain-strength: 0.03;
+
+  --pigment-gray: #8a8a90;
+  --pigment-gray-text: #5a5a62;
+  --pigment-gray-wash: rgb(20 34 58 / 5%);
+  --pigment-blue: #3f73c4;
+  --pigment-blue-text: #2f5fa8;
+  --pigment-blue-wash: rgb(63 115 196 / 11%);
+  --pigment-purple: #7a5ac0;
+  --pigment-purple-text: #6447a6;
+  --pigment-purple-wash: rgb(122 90 192 / 11%);
+  --pigment-amber: #b86a14;
+  --pigment-amber-text: #8c500e;
+  --pigment-amber-wash: rgb(184 106 20 / 11%);
+  --pigment-green: #2f8f63;
+  --pigment-green-text: #23724e;
+  --pigment-green-wash: rgb(47 143 99 / 11%);
+  --pigment-red: #c8452f;
+  --pigment-red-text: #a63522;
+  --pigment-red-wash: rgb(200 69 47 / 11%);
+  --pigment-pink: #bf4d83;
+  --pigment-pink-text: #9e3b6a;
+  --pigment-pink-wash: rgb(191 77 131 / 11%);
+  --pigment-teal: #23877f;
+  --pigment-teal-text: #186c65;
+  --pigment-teal-wash: rgb(35 135 127 / 11%);
+
+  --shadow-overlay: 0 16px 40px rgb(20 34 58 / 16%);
+  --shadow-lifted: 0 12px 28px rgb(20 34 58 / 18%), 0 2px 6px rgb(20 34 58 / 10%);
+}
+
+/* Poppy. Light, a white ground with red for what is chosen, focused or pressed. Trouble keeps a darker red (`--danger`). */
+:root[data-theme='poppy'],
+[data-theme-preview='poppy'] {
+  color-scheme: light;
+  --mark-black: inline-block;
+  --mark-white: none;
+
+  --ground: #fffcfb;
+  --ground-sunken: #fbeeec;
+  --surface: #ffffff;
+  --surface-raised: #ffffff;
+  --rule: rgb(38 27 26 / 11%);
+  --rule-strong: rgb(38 27 26 / 22%);
+  --hover: rgb(38 27 26 / 4%);
+  --pressed: rgb(214 54 31 / 9%);
+  --backdrop: rgb(38 27 26 / 36%);
+
+  --ink: #261b1a;
+  --ink-soft: #5a413e;
+  --ink-faint: #75605c;
+  --ink-inverse: #fff6f4;
+
+  --brass: #d6361f;
+  --brass-text: #b02914;
+  --brass-rgb: 214 54 31;
+  --brass-soft: rgb(214 54 31 / 12%);
+  --umber: #8a1c10;
+  --primary-hover: var(--umber);
+  --danger: #960a2e;
+  --danger-soft: rgb(150 10 46 / 10%);
+
+  --head-wash: rgb(214 54 31 / 7%);
+  --head-edge: rgb(214 54 31 / 28%);
+  --tab-line: var(--brass);
+
+  --glow-strength: 0.2;
+  --lamp-on-ink: rgb(var(--brass-rgb) / 30%);
+  --sun-at-work: 0.14;
+  --office-lamp-pool: 0.32;
+  --sun-peak: 0.32;
+  --sun-from: #fdeae6;
+  --sun-to: #ffffff;
+  --grain-strength: 0.03;
+
+  --pigment-gray: #8a8a90;
+  --pigment-gray-text: #5a5a62;
+  --pigment-gray-wash: rgb(38 27 26 / 5%);
+  --pigment-blue: #3f73c4;
+  --pigment-blue-text: #2f5fa8;
+  --pigment-blue-wash: rgb(63 115 196 / 11%);
+  --pigment-purple: #7a5ac0;
+  --pigment-purple-text: #6447a6;
+  --pigment-purple-wash: rgb(122 90 192 / 11%);
+  --pigment-amber: #b86a14;
+  --pigment-amber-text: #8c500e;
+  --pigment-amber-wash: rgb(184 106 20 / 11%);
+  --pigment-green: #2f8f63;
+  --pigment-green-text: #23724e;
+  --pigment-green-wash: rgb(47 143 99 / 11%);
+  --pigment-red: #c8452f;
+  --pigment-red-text: #a63522;
+  --pigment-red-wash: rgb(200 69 47 / 11%);
+  --pigment-pink: #bf4d83;
+  --pigment-pink-text: #9e3b6a;
+  --pigment-pink-wash: rgb(191 77 131 / 11%);
+  --pigment-teal: #23877f;
+  --pigment-teal-text: #186c65;
+  --pigment-teal-wash: rgb(35 135 127 / 11%);
+
+  --shadow-overlay: 0 16px 40px rgb(38 27 26 / 16%);
+  --shadow-lifted: 0 12px 28px rgb(38 27 26 / 18%), 0 2px 6px rgb(38 27 26 / 10%);
 }

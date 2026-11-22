@@ -3,11 +3,16 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_THEME, THEMES, isThemeName, themeOrDefault } from './themes';
 
 describe('the catalogue of themes', () => {
-  it('has ten themes, Lamplight first, five palettes and four special ones besides it', () => {
-    expect(THEMES).toHaveLength(10);
+  it('has thirteen themes, Lamplight first: six palettes, three of one colour and white, four special', () => {
+    expect(THEMES).toHaveLength(13);
     expect(THEMES[0]?.name).toBe(DEFAULT_THEME);
-    expect(new Set(THEMES.map((theme) => theme.name)).size).toBe(10);
+    expect(new Set(THEMES.map((theme) => theme.name)).size).toBe(13);
     expect(THEMES.filter((theme) => theme.kind === 'palette')).toHaveLength(6);
+    expect(THEMES.filter((theme) => theme.kind === 'colour').map((theme) => theme.name)).toEqual([
+      'rose',
+      'delft',
+      'poppy',
+    ]);
     expect(THEMES.filter((theme) => theme.kind === 'special')).toHaveLength(4);
   });
 
