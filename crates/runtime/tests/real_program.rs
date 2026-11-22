@@ -677,8 +677,9 @@ fn a_real_session_gets_its_chosen_skill_and_connector_and_nothing_of_the_users_o
 /// to run `echo`, and its first attempt is refused; the turn the manager's
 /// answer starts is given the rule, and runs it.
 ///
-/// This test has never passed: the program was not signed in on the night
-/// it was written. It is the proof the feature waits for.
+/// The command must not name Teamwright: a rule that does is refused, as a
+/// command that could touch Teamwright's own data (the first run of this test
+/// used such a word and was refused by `PermissionRule::new`, rightly).
 #[test]
 #[ignore = "needs the real Claude Code, signed in, the built program, and spends two turns"]
 fn a_real_session_asks_to_run_a_command_and_runs_it_once_allowed() {
@@ -692,9 +693,9 @@ fn a_real_session_asks_to_run_a_command_and_runs_it_once_allowed() {
     // The first turn: no command may run; the session asks.
     let mut first = request(
         &folder,
-        "This is a test of permissions. Run the shell command `echo teamwright-was-here`. If you \
+        "This is a test of permissions. Run the shell command `echo permission-test-ok`. If you \
          cannot, call the tool ask_permission with kind \"command\", what \"echo \
-         teamwright-was-here\" and a reason, then end your turn.",
+         permission-test-ok\" and a reason, then end your turn.",
         SessionChoice::NewWithId(id.clone()),
     );
     first.team_tools = vec![TeamTool::AskPermission { commands: true }];
@@ -724,7 +725,7 @@ fn a_real_session_asks_to_run_a_command_and_runs_it_once_allowed() {
     let [asked] = asked.as_slice() else {
         panic!("one request was expected: {events:?}");
     };
-    assert_eq!(asked.rule.tool_rule(), "Bash(echo teamwright-was-here)");
+    assert_eq!(asked.rule.tool_rule(), "Bash(echo permission-test-ok)");
     assert!(
         !tool_uses(&events)
             .iter()
@@ -733,10 +734,10 @@ fn a_real_session_asks_to_run_a_command_and_runs_it_once_allowed() {
     );
 
     // The manager allowed it once: the next turn has exactly that rule.
-    let rule = PermissionRule::new(PermissionKind::Command, "echo teamwright-was-here").unwrap();
+    let rule = PermissionRule::new(PermissionKind::Command, "echo permission-test-ok").unwrap();
     let mut second = request(
         &folder,
-        "The manager allowed you to run the command `echo teamwright-was-here`. Run it now, and \
+        "The manager allowed you to run the command `echo permission-test-ok`. Run it now, and \
          answer with what it printed.",
         SessionChoice::Resume(id),
     );
@@ -763,7 +764,7 @@ fn a_real_session_asks_to_run_a_command_and_runs_it_once_allowed() {
             .any(|(tool, _, failed)| tool == "Bash" && !failed),
         "the command was expected to run: {events:?}"
     );
-    assert!(outcome.final_text.contains("teamwright-was-here"));
+    assert!(outcome.final_text.contains("permission-test-ok"));
 }
 
 /// A tool server of a few lines, in Python, with one tool that tells the
