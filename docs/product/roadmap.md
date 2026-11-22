@@ -71,10 +71,20 @@ A single specialist that really works through Claude Code.
   for a project in which nobody had worked. Not yet seen with a real
   specialist in the built program
 - ✅ A specialist reads and writes files in the folder of its project and
-  can do nothing else
+  can do nothing else.
+  With a real session of Claude Code 2.1.330 on 22 November 2026: a
+  session was refused every read and write outside its folders
 - ✅ The folders of a project: a work folder the manager chooses, folders
   the specialists may read and not change, and single files copied in for
-  reference
+  reference.
+  The first real run on Linux, on 22 November 2026, found that a session
+  could write into a folder it was given to read only: the rule that
+  forbids it began with one slash, which Claude Code reads as a path
+  inside the working folder, so it protected nothing on Linux and macOS.
+  It had passed on Windows, and version 0.1.0 has the fault on the other
+  two. The rule is now written as an absolute path, and a real session was
+  refused in fourteen read-only folders with spaces, parentheses, brackets
+  and stars in their names. Not run on macOS, and not run again on Windows
 - 🚧 Open the session of a specialist in the Claude desktop app: built, not
   yet run against the real app
 - ⬜ Run a Claude Code that npm installed. On Windows that is a script,
@@ -87,7 +97,10 @@ A single specialist that really works through Claude Code.
   foot of the navigation says so until it has reset. Tested on streams
   built from the program's own schema and from the words of a real
   limit met on 21 November 2026; never seen with a real run, and a reset
-  time in a time zone other than this computer's or UTC stays unknown
+  time in a time zone other than this computer's or UTC stays unknown.
+  With a real session of Claude Code 2.1.330 on 22 November 2026: the five
+  hours and the week were reported by every turn and decoded as expected.
+  A turn that really ends at the limit has still not been recorded
 - ✅ The model and the effort of a specialist
 - ✅ Instructions of a specialist's own, and a set of ready-made specialists
   ([decision 0031](../decisions/0031-instructions-and-ready-made-specialists.md)).
@@ -102,7 +115,9 @@ A single specialist that really works through Claude Code.
   signed in.
   Since then, in the built program on Linux (22 November 2026): a
   ready-made specialist was added, its instructions were changed, and
-  both were there after a restart
+  both were there after a restart.
+  With a real session of Claude Code 2.1.330 on 22 November 2026: a
+  session that was given instructions of its own followed them
 - 🚧 Skills and connectors for a specialist, chosen by the manager
   ([decision 0039](../decisions/0039-skills-and-connectors-chosen-by-the-manager.md)). A project
   keeps a library of skills (checked, and copied on each computer) and of
@@ -129,7 +144,11 @@ A single specialist that really works through Claude Code.
   Since then, in the built program on Linux (22 November 2026): the
   library opened, a connector whose program is a bare name was added and
   kept after a restart, and one with a relative path was refused; no skill
-  was added there
+  was added there.
+  With a real session of Claude Code 2.1.330 on 22 November 2026: a
+  session got exactly its chosen skill and connector and nothing of the
+  user's own setup, and a connector started through the launcher ran in a
+  fresh empty folder and saw only the variable it was given
 
 ## M3 · The Advisor 🚧
 
@@ -186,7 +205,11 @@ Several specialists working together with the manager in the loop.
   panel of the task, the messages in the Team place. Tested with recorded
   tool calls and seen in a browser on demo data. Not yet seen with a real
   specialist (the test against the real Claude Code could not run: it
-  was not signed in) or in the built program
+  was not signed in) or in the built program.
+  With a real session of Claude Code 2.1.330 on 22 November 2026: a
+  session published a handoff through the team bus and the decoder found
+  it with its summary, contract and files. A message between two real
+  specialists was not tried
 - 🚧 Project memory: decisions, facts and interface contracts
   ([decision 0036](../decisions/0036-project-memory.md)). Answered
   decisions and the contracts of handoffs become entries by themselves,
@@ -198,7 +221,10 @@ Several specialists working together with the manager in the loop.
   with a real session of Claude Code.
   Since then, in the built program on Linux (22 November 2026): a fact was
   added by hand, found by search, shown in the place Memory and kept after
-  a restart
+  a restart.
+  With a real session of Claude Code 2.1.330 on 22 November 2026: a
+  session searched the memory, answered from what it found, and remembered
+  a fact
 - 🚧 Coordinator: dependency-driven start, concurrency limit, token budgets
   ([decision 0037](../decisions/0037-the-coordinator.md)). Off until the
   manager switches it on for a project; then it starts a task when what
@@ -243,7 +269,15 @@ Several specialists working together with the manager in the loop.
   No real specialist has asked, the shape of the events was read from
   the documentation, and no command has run in the built program: the
   sandbox and the cleared environment have never been seen working, and
-  until a signed-in run has shown them the switch should stay off
+  until a signed-in run has shown them the switch should stay off.
+  With a real session of Claude Code 2.1.330 on 22 November 2026: a
+  session asked for a command and the request arrived exactly as it wrote
+  it, with nothing run. The command, once allowed, did not run: the
+  sandbox could not start on that computer, an Ubuntu 24.04 as installed,
+  which refuses a user namespace inside another. Nothing ran outside a
+  sandbox, so it failed closed, and the page Computers now says that such
+  a computer cannot run commands. That the sandbox holds a command in has
+  still never been seen
 
 ## M5 · Seeing the work 🚧
 

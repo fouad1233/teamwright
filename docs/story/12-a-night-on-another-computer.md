@@ -132,6 +132,34 @@ format 17 to 29. No command and no part of the wire contract was wrong.
 One sentence on the first screen was: it still said that a team that
 works together was to come.
 
+### The first real session
+
+The founder came back in the morning, looked, and signed in to Claude
+Code. Thirteen tests that had waited all night ran for the first time.
+
+Ten passed at once or after a wrong expectation of the test was put
+right: the instructions reached a session, a handoff came through the
+bus, the memory was searched, a session got its own skill and connector
+and nothing of the founder's, the launcher handed a connector one
+variable and no other.
+
+Two could not be answered. The sandbox for commands, which two reviews
+and a switch had been built around, did not start: Ubuntu as installed
+refuses one user namespace inside another. Nothing ran outside it. The
+tests of it had passed in the first run, because they checked that
+nothing leaked and nothing had run at all; they now fail when the
+command did not run.
+
+One failed, and it was not about anything built that night. A session
+wrote a file into a folder it was given to read only, and Claude Code
+answered "File created successfully". The rule that forbids it had
+begun with one slash since the first week of the project, and one slash
+means a path inside the working folder. On Windows, where a folder
+begins with a letter, it had always held, and Windows was where it had
+been tried. A reviewer had written the night before: this predates
+tonight, a real run once passed with it, verify before changing. It was
+in the released version. It took two slashes.
+
 ## Why it went this way
 
 **A draft, not the main branch.** The lab computer cannot build for
@@ -172,3 +200,6 @@ written by the one who built it.
    wall, and left off.
 7. First light. For the first time that night somebody opens the real
    door of the workshop and walks through every room.
+8. Morning. The founder turns a key. The oldest lock in the building,
+   the one nobody had looked at all night, turns out to have been
+   fitted for another country's doors.
