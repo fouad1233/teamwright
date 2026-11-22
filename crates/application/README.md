@@ -544,9 +544,16 @@ ports live in `kits.rs`: `KitRepository` (logged storage) and `SkillShelf`
 (this computer: reads a chosen folder, keeps a copy of a skill, says
 whether an environment variable is set; it never reads a value).
 `turn_kit_of` gives a turn of a specialist only what this computer has: a
-kept copy that still passes `SkillFile::check`, a connector whose variables
-are all set. The result is `TurnRequest::kit` (`TurnKit`); the Advisor gets
-none. `InMemoryKitRepository` and `PretendShelf` stand in for tests.
+kept copy that still passes the check, a connector whose variables are all
+set and that breaks no newer rule (`ConnectorStart::problem`: a program named
+by a relative path, stored before the rule). The check of a copy, before
+every turn, is `check_kept_layout` on the `KeptLayout` the shelf reports
+(exactly `.claude-plugin/plugin.json` and `skills/<name>/`, no link, within
+the limits) and then `SkillFile::check` of its `SKILL.md`; a copy that fails
+says why in `LibrarySkill::problem`. The result is `TurnRequest::kit`
+(`TurnKit`); the Advisor gets none. For every turn, the Advisor's too,
+`variables_of_the_library` fills `TurnKit::withheld_variables`, the
+variables the runtime keeps out of the turn. `InMemoryKitRepository` and `PretendShelf` stand in for tests.
 
 ## The agent runtime
 

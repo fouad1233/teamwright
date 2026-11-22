@@ -127,11 +127,22 @@ and give it:
 
 1. A name, in lower-case letters, digits and hyphens.
 2. Either a program on this computer, with its arguments, or a web address.
+   The program is a name found on the search path, such as `npx`, or a full
+   path, such as `/usr/local/bin/parts-server`; a relative path such as
+   `./server` is refused. Teamwright starts it in an empty folder of its
+   own, never in the folder of the project, with only the variables you
+   name and the few every program needs (the search path, the home folder,
+   the language). A connector that needs a proxy names its variable too.
+   Give a script by its full path, and never one inside the folder of the
+   project, which the specialists write.
 3. The names of the environment variables that hold its secrets. Never type
    the secrets themselves: Teamwright keeps no secret. It reads the variables
    from the environment Teamwright was started in. A connector whose
    variables are not set on this computer says so, and no specialist here is
-   given it until they are.
+   given it until they are. The sessions of the specialists start without
+   these variables, so that a specialist allowed a command cannot read them;
+   only a connector at a web address needs its own in the session, because
+   Claude Code sends the header itself.
 4. The names of the tools it offers that you may give out, separated by commas.
 
 **Giving them to a specialist.** Open *Change* on the member. Under *Skills

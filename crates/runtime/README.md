@@ -88,10 +88,44 @@ A confined turn always gets `--setting-sources=` and `--settings` with
 `disableClaudeAiConnectors` (`kit::SESSION_SETTINGS`). Each skill of
 `TurnRequest::kit` is a `--plugin-dir`, readable through `--add-dir` and
 denied for writing, allowed as `Skill(<name>:<name>)`. Each connector is an
-entry of the one `--mcp-config`, beside the team bus: a program with `env`
-`{NAME: "${NAME}"}`, or `{"type": "http", url, headers}`; Claude Code fills
-`${NAME}` from its own environment. Its tools are allowed one by one as
-`mcp__<name>__<tool>`. The exact command line is tested in `arguments.rs`.
+entry of the one `--mcp-config`, beside the team bus. Its tools are allowed
+one by one as `mcp__<name>__<tool>`. The exact command line is tested in
+`arguments.rs` and `kit.rs`.
+
+A connector at an address is `{"type": "http", url, headers}`; Claude Code
+fills `${NAME}` in a header from its own environment, so those variables stay
+in the environment of a turn that is given that connector.
+
+A connector that is a program is never given to Claude Code as it is
+(note of 21 November 2026 in decision 0039). Claude Code would start it in
+the folder of the project, which the specialist writes, with the whole
+environment. Its entry is Teamwright's own program in the mode of
+`connector_launcher.rs`:
+`teamwright --connector --folder <data>/connectors/start-here [--secrets
+<file>] [--pass NAME]... -- <program> <arguments>`. The launcher refuses a
+folder that is not empty or not a full path, clears the environment, sets
+`BASE_VARIABLES` (PATH, HOME, user, locale, temporary folder on Unix; the
+system folders on Windows) and the named variables, finds a bare program
+name only in folders of the search path that are full paths, changes to the
+folder, and execs the program (on Windows it waits and passes the exit code
+back). It writes nothing to standard output. The values of the variables
+are written by `ClaudeCode::start_turn` to a file of
+`<data>/connectors/secrets` (0600, folder 0700), one per connector, removed
+when the turn ends (`SecretsFile`); left-over files are removed at start-up.
+`ClaudeCode::with_connector_launcher` sets this up; without it a turn given
+a program connector is refused.
+
+Every turn starts without the variables in `TurnKit::withheld_variables`
+(all those named by the library of the project) and those of its program
+connectors, except header variables of its address connectors, the base
+variables, and proxies and certificates (`KEPT_FOR_THE_PROGRAM`), which
+Claude Code needs.
+
+The launcher is started for real in `tests/process.rs` (a connector that
+prints its folder and environment). The ignored test
+`a_real_connector_starts_through_the_launcher_and_sees_only_its_own_variable`
+needs a signed-in Claude Code, `python3` and the built program; it has never
+run.
 The ignored test
 `a_real_session_gets_its_chosen_skill_and_connector_and_nothing_of_the_users_own`
 in `tests/real_program.rs` has never run (needs the built program:

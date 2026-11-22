@@ -102,3 +102,55 @@ tools for the turn that uses it.
   a tool added to the server later would be allowed without the manager.
 - **Keep the library on one computer only.** The kits would name things
   another computer does not know; the library is the team's.
+
+## Note of 21 November 2026: after a review
+
+A review the same night found three defects. Nothing could be run against
+Claude Code, which was not signed in; the first was found by reading.
+
+1. **A program connector started in the folder of the project.** Claude Code
+   starts a tool server in the working folder of the session, which the
+   specialist writes. `python3 -m parts_server` would import a
+   `parts_server.py` the specialist wrote; `node server.js` or `./server`
+   would run its file, at the next turn, as the manager, unasked.
+   Claude Code is now given Teamwright's own program instead, in a launcher
+   mode beside the team bus mode: `teamwright --connector --folder <empty
+   folder> [--secrets <file>] [--pass NAME]... -- <program> <arguments>`. It
+   starts the program in `connectors/start-here` of the data folder, an
+   empty folder no session is given, and refuses a folder that is not
+   empty. A program is named by a bare name, looked for only in folders of
+   the search path that are full paths, or by a full path; a relative path
+   is refused by the rule of the domain. A relative path among the
+   arguments cannot be told from an ordinary word, so it is not checked:
+   the empty folder is the defence. A connector stored before the rule is
+   still read, shown with its problem, and never given to a turn.
+2. **A connector got the whole environment, and so did the turn.** The
+   launcher clears the environment and sets only the few variables every
+   program needs to start (the search path, the home folder, the user, the
+   locale, the temporary folder; on Windows the system folders) and those
+   the connector names. Their values are no longer `${NAME}` for Claude Code
+   to fill in: Teamwright writes them, for one turn, to a file of the data
+   folder that only the user may read, outside every folder a session
+   reads, removed when the turn ends, as the file of memory of
+   [decision 0036](0036-project-memory.md). Every turn of a project, the
+   Advisor's too, starts without the variables named by any connector of
+   its library. Kept are those Claude Code itself needs: the base set,
+   proxies and certificates, and the variables of the headers of the
+   address connectors the turn is given, which Claude Code fills in from
+   its own environment. That last case remains: a specialist given such a
+   connector and allowed a command could read that variable. A proxy is not
+   handed to a connector unless it names it.
+3. **The shelf was checked too little.** Before every turn the whole copy is
+   now checked: exactly `.claude-plugin/plugin.json` and `skills/<name>/`,
+   no link anywhere, no more than a skill may hold. A copy that fails is not
+   given, and the library says why in words. The limits of size are counted
+   while the copy is made.
+
+What remains unproven: the launcher was started for real only by tests
+and by hand on Linux, never by Claude Code; the ignored test
+`a_real_connector_starts_through_the_launcher_and_sees_only_its_own_variable`
+is the proof still to be had. On Windows the launcher waits for the program
+instead of replacing itself, and a program it started is not stopped if the
+launcher is killed; that was never run. Teamwright's own program, started
+by Claude Code as the team bus or the launcher, still starts in the folder
+of the project, where Windows also looks for libraries.

@@ -131,6 +131,14 @@ connector reaches. For that reason:
 - A program connector runs on your computer as you, like any program you
   start yourself. The tool rules limit what the session may call, not what
   the program can do. Add only connectors you trust.
+- A program connector starts in an empty folder of Teamwright's own, not in
+  the folder of the project, and sees only the variables you named, so a
+  file a specialist writes cannot take its place. The secrets of the
+  connectors are kept out of the specialists' sessions, except the one of a
+  web address connector given to that specialist.
+- A skill is checked again before every turn: its copy must hold exactly
+  what Teamwright wrote. A copy that changed is not given, and the library
+  says why.
 
 ## Who decides
 
