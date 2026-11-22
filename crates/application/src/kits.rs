@@ -8,6 +8,14 @@
 //! the environment variables a connector needs, which come from the
 //! environment Teamwright was started in. A turn is given only what this
 //! computer has; the rest is shown to the manager as missing here.
+//!
+//! Nor is what the manager confirmed on this computer
+//! ([`ConnectorTrust`]). A connector and what a specialist is given of it
+//! arrive from other computers through the sync folder, which others may
+//! write; so a connector is started here only if the manager confirmed, on
+//! this computer, exactly its definition, and a specialist is given here
+//! only the tools that were confirmed here (decision 0039, note of 22
+//! November 2026).
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
@@ -275,11 +283,97 @@ pub struct LibrarySkill {
     pub problem: Option<String>,
 }
 
+/// What the manager confirmed on this computer, kept on this computer
+/// alone: never logged, never written to the sync folder, so that nobody
+/// who can write there can confirm anything (decision 0039, note of 22
+/// November 2026).
+///
+/// - A connector is confirmed by the fingerprint of its whole definition
+///   ([`Connector::fingerprint`]). Any later change, from anywhere, makes
+///   it differ, and the connector waits for the manager again.
+/// - What a specialist is given is confirmed tool by tool: the pairs of a
+///   connector and one of its tools.
+pub trait ConnectorTrust: Send + Sync {
+    /// The fingerprint of the definition of a connector the manager
+    /// confirmed on this computer, if any.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if it could not be read.
+    fn confirmed_definition(&self, connector: ConnectorId) -> Result<Option<String>, StorageError>;
+
+    /// Keeps the fingerprint of the definition of a connector as the one
+    /// the manager confirmed on this computer.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if it could not be written.
+    fn confirm_definition(
+        &self,
+        connector: ConnectorId,
+        fingerprint: &str,
+    ) -> Result<(), StorageError>;
+
+    /// Forgets what was confirmed of a connector that left the library.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if it could not be written.
+    fn forget_definition(&self, connector: ConnectorId) -> Result<(), StorageError>;
+
+    /// The tools of connectors the manager confirmed, on this computer, as
+    /// given to a specialist.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if they could not be read.
+    fn confirmed_tools(
+        &self,
+        member: MemberId,
+    ) -> Result<BTreeSet<(ConnectorId, ToolName)>, StorageError>;
+
+    /// Keeps these tools, and no others, as the ones the manager confirmed
+    /// on this computer as given to a specialist.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if they could not be written.
+    fn confirm_tools(
+        &self,
+        member: MemberId,
+        tools: &BTreeSet<(ConnectorId, ToolName)>,
+    ) -> Result<(), StorageError>;
+}
+
+/// The tools a specialist was given of one connector that the manager has
+/// not confirmed on this computer: given on another computer, or before
+/// confirmations existed. No turn here is given them until the manager
+/// confirms them here.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WaitingTools {
+    /// The specialist.
+    pub member_id: MemberId,
+    /// The connector.
+    pub connector_id: ConnectorId,
+    /// The tools that wait, in the order of the kit.
+    pub tools: Vec<ToolName>,
+}
+
 /// A connector of the library, with what this computer lacks of it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LibraryConnector {
     /// The connector.
     pub connector: Connector,
+    /// The fingerprint of its definition as it is now
+    /// ([`Connector::fingerprint`]). The manager confirms it by sending it
+    /// back, so that a definition that changed in between is not confirmed
+    /// unseen.
+    pub fingerprint: String,
+    /// Whether the manager confirmed exactly this definition on this
+    /// computer. Until then no turn here is given it: it arrived or
+    /// changed through the sync folder, or was added before confirmations
+    /// existed.
+    pub confirmed: bool,
     /// The environment variables it needs that are not set here. While one
     /// is missing, no turn on this computer is given it.
     pub missing_variables: Vec<VariableName>,
@@ -299,6 +393,9 @@ pub struct Library {
     /// What each specialist of the project was given, naming only skills
     /// and connectors the library has.
     pub kits: Vec<MemberKit>,
+    /// The tools of the kits that wait for the manager's confirmation on
+    /// this computer, by specialist and connector.
+    pub waiting_tools: Vec<WaitingTools>,
 }
 
 /// A connector the manager describes, before it is checked.
@@ -359,6 +456,7 @@ pub struct KitChoice {
 pub struct KitService {
     kits: Arc<dyn KitRepository>,
     shelf: Arc<dyn SkillShelf>,
+    trust: Arc<dyn ConnectorTrust>,
     projects: Arc<dyn ProjectRepository>,
     members: Arc<dyn MemberRepository>,
     clock: Arc<dyn Clock>,
@@ -370,6 +468,7 @@ impl KitService {
     pub fn new(
         kits: Arc<dyn KitRepository>,
         shelf: Arc<dyn SkillShelf>,
+        trust: Arc<dyn ConnectorTrust>,
         projects: Arc<dyn ProjectRepository>,
         members: Arc<dyn MemberRepository>,
         clock: Arc<dyn Clock>,
@@ -377,6 +476,7 @@ impl KitService {
         Self {
             kits,
             shelf,
+            trust,
             projects,
             members,
             clock,
@@ -401,13 +501,44 @@ impl KitService {
             .iter()
             .map(Member::id)
             .collect();
-        let kits = self
+        let kits: Vec<MemberKit> = self
             .kits
             .kits_of_project(project_id)?
             .into_iter()
             .filter(|kit| members.contains(&kit.member_id()))
             .map(|kit| known_part(&kit, &skills, &connectors))
             .collect();
+        let mut waiting_tools = Vec::new();
+        for kit in &kits {
+            let confirmed = self.trust.confirmed_tools(kit.member_id())?;
+            for given in kit.connectors() {
+                let tools: Vec<ToolName> = given
+                    .tools()
+                    .iter()
+                    .filter(|tool| !confirmed.contains(&(given.connector_id(), (*tool).clone())))
+                    .cloned()
+                    .collect();
+                if !tools.is_empty() {
+                    waiting_tools.push(WaitingTools {
+                        member_id: kit.member_id(),
+                        connector_id: given.connector_id(),
+                        tools,
+                    });
+                }
+            }
+        }
+        let mut library_connectors = Vec::with_capacity(connectors.len());
+        for connector in connectors {
+            let fingerprint = connector.fingerprint();
+            library_connectors.push(LibraryConnector {
+                confirmed: self.trust.confirmed_definition(connector.id())?.as_deref()
+                    == Some(fingerprint.as_str()),
+                fingerprint,
+                missing_variables: missing_variables(self.shelf.as_ref(), &connector),
+                problem: connector.start().problem(),
+                connector,
+            });
+        }
         Ok(Library {
             skills: skills
                 .into_iter()
@@ -424,15 +555,9 @@ impl KitService {
                     }
                 })
                 .collect(),
-            connectors: connectors
-                .into_iter()
-                .map(|connector| LibraryConnector {
-                    missing_variables: missing_variables(self.shelf.as_ref(), &connector),
-                    problem: connector.start().problem(),
-                    connector,
-                })
-                .collect(),
+            connectors: library_connectors,
             kits,
+            waiting_tools,
         })
     }
 
@@ -533,7 +658,8 @@ impl KitService {
         Ok(())
     }
 
-    /// Adds a connector to the library of a project.
+    /// Adds a connector to the library of a project. Added here, through
+    /// the interface, it is confirmed on this computer as it is.
     ///
     /// # Errors
     ///
@@ -585,6 +711,8 @@ impl KitService {
         }
         let connector = Connector::add(project_id, name, start, tools, self.clock.now())?;
         self.kits.save_connector(&connector)?;
+        self.trust
+            .confirm_definition(connector.id(), &connector.fingerprint())?;
         Ok(connector)
     }
 
@@ -613,6 +741,91 @@ impl KitService {
             .filter_map(|mut kit| kit.without_connector(id).then_some(kit))
             .collect();
         self.kits.remove_connector(id, &kits)?;
+        // Removing needs no confirmation; what was confirmed goes with it.
+        self.trust.forget_definition(id)?;
+        Ok(())
+    }
+
+    /// Confirms, on this computer, the definition of a connector that
+    /// arrived or changed through the sync folder, so that turns here may
+    /// be given it. `fingerprint` is the one the manager was shown
+    /// ([`LibraryConnector::fingerprint`]): if the definition changed since,
+    /// nothing is confirmed.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if there is no such connector, if it breaks a rule
+    /// newer than it, if it changed since the manager looked at it, or if
+    /// storage fails.
+    pub fn confirm_connector(
+        &self,
+        project_id: ProjectId,
+        id: ConnectorId,
+        fingerprint: &str,
+    ) -> Result<(), ApplicationError> {
+        let connector = self
+            .kits
+            .connectors_of_project(project_id)?
+            .into_iter()
+            .find(|connector| connector.id() == id)
+            .ok_or_else(|| ApplicationError::NotFound {
+                kind: "connector",
+                id: id.to_string(),
+            })?;
+        if let Some(problem) = connector.start().problem() {
+            return Err(DomainError::InvalidConnector { reason: problem }.into());
+        }
+        if connector.fingerprint() != fingerprint {
+            return Err(DomainError::InvalidConnector {
+                reason: format!(
+                    "the connector {} changed since you looked at it; look at it again before \
+                     you confirm it",
+                    connector.name()
+                ),
+            }
+            .into());
+        }
+        self.trust.confirm_definition(id, fingerprint)?;
+        Ok(())
+    }
+
+    /// Confirms, on this computer, tools a specialist was given on another
+    /// computer: of `seen`, the tools the manager was shown, those its kit
+    /// still gives. What the kit gained since is not confirmed.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if there is no such member or storage fails.
+    pub fn confirm_kit(
+        &self,
+        member_id: MemberId,
+        seen: &[(ConnectorId, Vec<String>)],
+    ) -> Result<(), ApplicationError> {
+        let member = self
+            .members
+            .find(member_id)?
+            .ok_or_else(|| ApplicationError::NotFound {
+                kind: "member",
+                id: member_id.to_string(),
+            })?;
+        let Some(kit) = self.kits.kit_of(member.id())? else {
+            return Ok(());
+        };
+        let mut confirmed = self.trust.confirmed_tools(member_id)?;
+        for given in kit.connectors() {
+            let Some((_, tools)) = seen
+                .iter()
+                .find(|(connector_id, _)| *connector_id == given.connector_id())
+            else {
+                continue;
+            };
+            for tool in given.tools() {
+                if tools.iter().any(|seen| seen == tool.as_str()) {
+                    confirmed.insert((given.connector_id(), tool.clone()));
+                }
+            }
+        }
+        self.trust.confirm_tools(member_id, &confirmed)?;
         Ok(())
     }
 
@@ -679,6 +892,19 @@ impl KitService {
         }
         let kit = MemberKit::new(member_id, project_id, choice.skills, given)?;
         self.kits.save_kit(&kit)?;
+        // Chosen here, through the interface: what the kit gives is
+        // confirmed on this computer, and nothing else.
+        let confirmed = kit
+            .connectors()
+            .iter()
+            .flat_map(|given| {
+                given
+                    .tools()
+                    .iter()
+                    .map(move |tool| (given.connector_id(), tool.clone()))
+            })
+            .collect();
+        self.trust.confirm_tools(member_id, &confirmed)?;
         Ok(kit)
     }
 
@@ -696,8 +922,10 @@ impl KitService {
 /// The skills and connectors a turn of a specialist is given: what it was
 /// given of the library, as far as this computer has it. A skill whose
 /// copy is missing here or no longer passes the check, a connector whose
-/// variables are not all set here, and a connector that breaks a rule
-/// newer than it, are left out.
+/// variables are not all set here, a connector that breaks a rule newer
+/// than it, a connector whose definition the manager has not confirmed on
+/// this computer exactly as it is now, and a tool the manager has not
+/// confirmed here as given to this specialist, are left out.
 ///
 /// # Errors
 ///
@@ -705,6 +933,7 @@ impl KitService {
 pub fn turn_kit_of(
     kits: &dyn KitRepository,
     shelf: &dyn SkillShelf,
+    trust: &dyn ConnectorTrust,
     member: &Member,
 ) -> Result<TurnKit, ApplicationError> {
     let Some(kit) = kits.kit_of(member.id())? else {
@@ -715,6 +944,11 @@ pub fn turn_kit_of(
     }
     let skills = kits.skills_of_project(member.project_id())?;
     let connectors = kits.connectors_of_project(member.project_id())?;
+    let confirmed_tools = if kit.connectors().is_empty() {
+        BTreeSet::new()
+    } else {
+        trust.confirmed_tools(member.id())?
+    };
     let mut turn = TurnKit::default();
     for id in kit.skills() {
         let Some(skill) = skills.iter().find(|skill| skill.id() == *id) else {
@@ -738,10 +972,17 @@ pub fn turn_kit_of(
         {
             continue;
         }
+        // Started only as the manager confirmed it here, to the byte.
+        if trust.confirmed_definition(connector.id())?.as_deref()
+            != Some(connector.fingerprint().as_str())
+        {
+            continue;
+        }
         let tools: Vec<String> = given
             .tools()
             .iter()
             .filter(|tool| connector.tools().contains(tool))
+            .filter(|tool| confirmed_tools.contains(&(connector.id(), (*tool).clone())))
             .map(ToString::to_string)
             .collect();
         if tools.is_empty() {
@@ -973,6 +1214,49 @@ impl KitRepository for InMemoryKitRepository {
             self.save_kit(kit)?;
         }
         lock(&self.connectors).remove(&id);
+        Ok(())
+    }
+}
+
+/// Keeps what the manager confirmed in memory, for tests.
+#[derive(Debug, Default)]
+pub struct InMemoryConnectorTrust {
+    definitions: Mutex<BTreeMap<ConnectorId, String>>,
+    tools: Mutex<BTreeMap<MemberId, BTreeSet<(ConnectorId, ToolName)>>>,
+}
+
+impl ConnectorTrust for InMemoryConnectorTrust {
+    fn confirmed_definition(&self, connector: ConnectorId) -> Result<Option<String>, StorageError> {
+        Ok(lock(&self.definitions).get(&connector).cloned())
+    }
+
+    fn confirm_definition(
+        &self,
+        connector: ConnectorId,
+        fingerprint: &str,
+    ) -> Result<(), StorageError> {
+        lock(&self.definitions).insert(connector, fingerprint.to_owned());
+        Ok(())
+    }
+
+    fn forget_definition(&self, connector: ConnectorId) -> Result<(), StorageError> {
+        lock(&self.definitions).remove(&connector);
+        Ok(())
+    }
+
+    fn confirmed_tools(
+        &self,
+        member: MemberId,
+    ) -> Result<BTreeSet<(ConnectorId, ToolName)>, StorageError> {
+        Ok(lock(&self.tools).get(&member).cloned().unwrap_or_default())
+    }
+
+    fn confirm_tools(
+        &self,
+        member: MemberId,
+        tools: &BTreeSet<(ConnectorId, ToolName)>,
+    ) -> Result<(), StorageError> {
+        lock(&self.tools).insert(member, tools.clone());
         Ok(())
     }
 }

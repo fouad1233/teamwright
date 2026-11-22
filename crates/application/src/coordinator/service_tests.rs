@@ -150,6 +150,7 @@ fn office_on(this_computer: ComputerId) -> Office {
         kits: Arc::new(crate::kits::InMemoryKitRepository::default()),
         shelf: Arc::new(crate::kits::PretendShelf::default()),
         marks: Arc::new(crate::marks::FixedMark::for_tests()),
+        trust: Arc::new(crate::kits::InMemoryConnectorTrust::default()),
         runtime: runtime.clone(),
         listener: Arc::new(PlanLimitListener {
             plan_limit: plan_limit.clone(),

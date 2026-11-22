@@ -29,6 +29,9 @@ rusqlite = { version = "0.42", features = ["bundled"] }
 # Writes Excel workbooks in pure Rust, so no Excel is needed to make one.
 rust_xlsxwriter = "0.102"
 serde = { version = "1", features = ["derive"] }
+# SHA-256, for the fingerprint of a connector that the manager confirmed on
+# a computer. The program already carried it, through Tauri.
+sha2 = "0.10"
 serde_json = "1"
 # A small blocking HTTPS client, for the events sent to a Slack channel and
 # to web addresses. No async runtime is needed for it.

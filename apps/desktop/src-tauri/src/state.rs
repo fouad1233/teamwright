@@ -275,6 +275,11 @@ impl AppState {
         let kit_repository = Arc::new(teamwright_storage::SqliteKitRepository::new(
             database.clone(),
         ));
+        // What the manager confirmed of the connectors on this computer,
+        // never synced (decision 0039, note of 22 November 2026).
+        let trust: Arc<dyn teamwright_application::ConnectorTrust> = Arc::new(
+            teamwright_storage::SqliteConnectorTrust::new(database.clone()),
+        );
         let shelf = Arc::new(LocalSkillShelf::new(
             data_directory.join(SKILL_SHELF_FOLDER),
         ));
@@ -349,6 +354,7 @@ impl AppState {
             file_system: file_system.clone(),
             kits: kit_repository.clone(),
             shelf: shelf.clone(),
+            trust: trust.clone(),
             marks: Arc::new(teamwright_application::RandomMarks),
             runtime,
             listener: Arc::new(EventToInterface {
@@ -493,6 +499,7 @@ impl AppState {
             kits: teamwright_application::KitService::new(
                 kit_repository,
                 shelf,
+                trust,
                 project_repository.clone(),
                 member_repository.clone(),
                 clock.clone(),

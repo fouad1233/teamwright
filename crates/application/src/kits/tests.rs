@@ -21,6 +21,7 @@ const REVIEW: &str = "---\nname: pcb-review\ndescription: Reviews a board layout
 struct Workspace {
     kits: Arc<InMemoryKitRepository>,
     shelf: Arc<PretendShelf>,
+    trust: Arc<InMemoryConnectorTrust>,
     members: Arc<InMemoryMemberRepository>,
     service: KitService,
     project: Project,
@@ -34,6 +35,7 @@ fn workspace() -> Workspace {
     let members = Arc::new(InMemoryMemberRepository::default());
     let kits = Arc::new(InMemoryKitRepository::default());
     let shelf = Arc::new(PretendShelf::default());
+    let trust = Arc::new(InMemoryConnectorTrust::default());
     let project = Project::create(
         ProjectName::parse("Smart sensor node").unwrap(),
         ProjectKey::parse("SSN").unwrap(),
@@ -59,6 +61,7 @@ fn workspace() -> Workspace {
     let service = KitService::new(
         kits.clone(),
         shelf.clone(),
+        trust.clone(),
         projects,
         members.clone(),
         Arc::new(ManualClock::starting_at(now)),
@@ -66,6 +69,7 @@ fn workspace() -> Workspace {
     Workspace {
         kits,
         shelf,
+        trust,
         members,
         service,
         project,
@@ -382,7 +386,13 @@ fn a_turn_gets_only_what_this_computer_has_and_still_passes_the_check() {
         .unwrap();
     let member = space.members.find(space.specialist.id()).unwrap().unwrap();
 
-    let turn = turn_kit_of(space.kits.as_ref(), space.shelf.as_ref(), &member).unwrap();
+    let turn = turn_kit_of(
+        space.kits.as_ref(),
+        space.shelf.as_ref(),
+        space.trust.as_ref(),
+        &member,
+    )
+    .unwrap();
     assert_eq!(turn.skills.len(), 1);
     assert_eq!(turn.skills[0].name, "pcb-review");
     assert_eq!(
@@ -399,7 +409,13 @@ fn a_turn_gets_only_what_this_computer_has_and_still_passes_the_check() {
     ));
 
     space.shelf.set_variable("CATALOG_TOKEN");
-    let turn = turn_kit_of(space.kits.as_ref(), space.shelf.as_ref(), &member).unwrap();
+    let turn = turn_kit_of(
+        space.kits.as_ref(),
+        space.shelf.as_ref(),
+        space.trust.as_ref(),
+        &member,
+    )
+    .unwrap();
     assert_eq!(turn.connectors.len(), 2);
 
     // A copy changed on the disk so that it would run commands is no
@@ -408,7 +424,13 @@ fn a_turn_gets_only_what_this_computer_has_and_still_passes_the_check() {
         skill.id(),
         "---\nname: pcb-review\ndescription: x\nhooks:\n  Stop: []\n---\n",
     );
-    let turn = turn_kit_of(space.kits.as_ref(), space.shelf.as_ref(), &member).unwrap();
+    let turn = turn_kit_of(
+        space.kits.as_ref(),
+        space.shelf.as_ref(),
+        space.trust.as_ref(),
+        &member,
+    )
+    .unwrap();
     assert!(turn.skills.is_empty());
     let library = space.service.library(space.project.id()).unwrap();
     assert!(!library.skills[0].here);
@@ -417,7 +439,13 @@ fn a_turn_gets_only_what_this_computer_has_and_still_passes_the_check() {
 #[test]
 fn a_specialist_without_a_kit_gets_nothing() {
     let space = workspace();
-    let turn = turn_kit_of(space.kits.as_ref(), space.shelf.as_ref(), &space.specialist).unwrap();
+    let turn = turn_kit_of(
+        space.kits.as_ref(),
+        space.shelf.as_ref(),
+        space.trust.as_ref(),
+        &space.specialist,
+    )
+    .unwrap();
     assert!(turn.is_empty());
 }
 
@@ -441,10 +469,15 @@ fn a_copy_that_holds_more_than_teamwright_wrote_is_not_given_and_says_why() {
         .unwrap();
     let member = space.members.find(space.specialist.id()).unwrap().unwrap();
     let given = || {
-        turn_kit_of(space.kits.as_ref(), space.shelf.as_ref(), &member)
-            .unwrap()
-            .skills
-            .len()
+        turn_kit_of(
+            space.kits.as_ref(),
+            space.shelf.as_ref(),
+            space.trust.as_ref(),
+            &member,
+        )
+        .unwrap()
+        .skills
+        .len()
     };
     let problem = || {
         space.service.library(space.project.id()).unwrap().skills[0]
@@ -575,6 +608,12 @@ fn a_program_named_by_a_relative_path_is_refused_and_a_stored_one_is_never_given
             .is_some_and(|problem| problem.contains("relative path"))
     );
     let member = space.members.find(space.specialist.id()).unwrap().unwrap();
-    let turn = turn_kit_of(space.kits.as_ref(), space.shelf.as_ref(), &member).unwrap();
+    let turn = turn_kit_of(
+        space.kits.as_ref(),
+        space.shelf.as_ref(),
+        space.trust.as_ref(),
+        &member,
+    )
+    .unwrap();
     assert!(turn.connectors.is_empty());
 }

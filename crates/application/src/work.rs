@@ -34,7 +34,8 @@ use crate::agent_runtime::{
 };
 use crate::error::ApplicationError;
 use crate::kits::{
-    KitRepository, SkillShelf, kit_names_a_secret, turn_kit_of, variables_of_the_library,
+    ConnectorTrust, KitRepository, SkillShelf, kit_names_a_secret, turn_kit_of,
+    variables_of_the_library,
 };
 use crate::marks::MarkSource;
 use crate::memory::{
@@ -192,6 +193,10 @@ pub struct WorkPorts {
     pub kits: Arc<dyn KitRepository>,
     /// The copies of skills on this computer, and its environment.
     pub shelf: Arc<dyn SkillShelf>,
+    /// What the manager confirmed on this computer of the connectors and
+    /// of what each specialist is given of them (decision 0039, note of 22
+    /// November 2026).
+    pub trust: Arc<dyn ConnectorTrust>,
     /// Where the mark of the blocks of teammate words of each turn comes
     /// from (decision 0029, note of 22 November 2026).
     pub marks: Arc<dyn MarkSource>,
@@ -1024,7 +1029,12 @@ impl WorkService {
                 ]);
                 // What the manager gave the specialist, as far as this
                 // computer has it (decision 0039).
-                kit = turn_kit_of(ports.kits.as_ref(), ports.shelf.as_ref(), member)?;
+                kit = turn_kit_of(
+                    ports.kits.as_ref(),
+                    ports.shelf.as_ref(),
+                    ports.trust.as_ref(),
+                    member,
+                )?;
                 // What the manager allowed this specialist, for this turn
                 // (decision 0038): the standing permissions, those of the
                 // task, and the one the answer that starts it allows. No
@@ -2505,6 +2515,7 @@ mod tests {
         file_system: Arc<PretendFileSystem>,
         kits: Arc<crate::kits::InMemoryKitRepository>,
         shelf: Arc<crate::kits::PretendShelf>,
+        trust: Arc<crate::kits::InMemoryConnectorTrust>,
         runtime: Arc<ScriptedRuntime>,
         listener: Arc<RecordingWorkListener>,
         clock: Arc<ManualClock>,
@@ -2535,6 +2546,7 @@ mod tests {
                 file_system: self.file_system.clone(),
                 kits: self.kits.clone(),
                 shelf: self.shelf.clone(),
+                trust: self.trust.clone(),
                 marks: Arc::new(crate::marks::FixedMark::for_tests()),
                 runtime: self.runtime.clone(),
                 listener: self.listener.clone(),
@@ -2577,6 +2589,7 @@ mod tests {
             file_system: Arc::new(PretendFileSystem::default()),
             kits: Arc::new(crate::kits::InMemoryKitRepository::default()),
             shelf: Arc::new(crate::kits::PretendShelf::default()),
+            trust: Arc::new(crate::kits::InMemoryConnectorTrust::default()),
             runtime: Arc::new(ScriptedRuntime::new()),
             listener: Arc::new(RecordingWorkListener::default()),
             clock: Arc::new(ManualClock::starting_at(start_of_day())),
@@ -3005,6 +3018,7 @@ mod tests {
         let kits = KitService::new(
             ports.kits.clone(),
             ports.shelf.clone(),
+            ports.trust.clone(),
             ports.projects.clone(),
             ports.members.clone(),
             ports.clock.clone(),
@@ -5550,6 +5564,7 @@ mod tests {
         let kits = KitService::new(
             ports.kits.clone(),
             ports.shelf.clone(),
+            ports.trust.clone(),
             ports.projects.clone(),
             ports.members.clone(),
             ports.clock.clone(),
