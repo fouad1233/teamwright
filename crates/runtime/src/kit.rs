@@ -11,8 +11,8 @@
 //!   `--mcp-config`.
 //! - A connector started as a program is started through Teamwright's own
 //!   program, as the [`connector_launcher`](crate::connector_launcher):
-//!   in an empty folder of Teamwright's own, never the folder of the
-//!   project, with only the variables it names. Their values are in a file
+//!   in a fresh empty folder of Teamwright's own made for it alone, never
+//!   the folder of the project, with only the variables it names. Their values are in a file
 //!   of Teamwright's own for the one turn, never on a command line.
 //! - A connector at an address is sent its secret in a header: Claude Code
 //!   replaces `${NAME}` in the `headers` with the variable of its own
@@ -37,7 +37,9 @@ pub struct ConnectorLauncher {
     pub program: PathBuf,
     /// The arguments that start it as the launcher, before what it starts.
     pub arguments: Vec<String>,
-    /// The empty folder of Teamwright's own every connector starts in.
+    /// The folder of Teamwright's own in which each connector of a turn is
+    /// given a fresh, empty folder of its own to start in
+    /// ([`StartFolder`](crate::connector_launcher::StartFolder)).
     pub folder: PathBuf,
     /// The folder of Teamwright's own that holds the values of the
     /// variables of the connectors of a turn while it runs.
@@ -45,8 +47,9 @@ pub struct ConnectorLauncher {
 }
 
 /// How the connectors of one turn are started: the launcher, if this
-/// computer has one, and for each program connector that is handed
-/// variables, the file that holds their values for this turn.
+/// computer has one; for each program connector, the fresh empty folder it
+/// starts in; and for each that is handed variables, the file that holds
+/// their values for this turn.
 #[derive(Debug, Clone, Default)]
 pub struct ConnectorStarts<'a> {
     /// The launcher. Without it, no connector started as a program can be
@@ -54,6 +57,9 @@ pub struct ConnectorStarts<'a> {
     pub launcher: Option<&'a ConnectorLauncher>,
     /// The file of secrets of each connector, by its name.
     pub secrets: BTreeMap<String, PathBuf>,
+    /// The folder each connector that is a program starts in, by its name.
+    /// No two connectors share one.
+    pub folders: BTreeMap<String, PathBuf>,
 }
 
 /// The settings every confined session is started with, through
@@ -90,9 +96,9 @@ pub fn tool_in_session(connector: &str, tool: &str) -> String {
 ///
 /// Returns [`AgentRuntimeError::InvalidRequest`] if the name or a tool
 /// breaks a rule, or if no tool is given; for a program, also if there is
-/// no launcher, if the program is named by a relative path, if a variable
-/// has no file of secrets, or if a path of the launcher holds `$`, which
-/// Claude Code could replace.
+/// no launcher, if the program is named by a relative path, if it has no
+/// folder of its own to start in, if a variable has no file of secrets, or
+/// if a path of the launcher holds `$`, which Claude Code could replace.
 pub fn connector_entry(
     connector: &KitConnector,
     starts: &ConnectorStarts<'_>,
@@ -127,6 +133,11 @@ pub fn connector_entry(
                      folder of its own"
                 ))
             })?;
+            let folder = starts.folders.get(name.as_str()).ok_or_else(|| {
+                invalid(format!(
+                    "the connector {name} has no folder of its own to start in"
+                ))
+            })?;
             let secrets = if variables.is_empty() {
                 None
             } else {
@@ -136,14 +147,11 @@ pub fn connector_entry(
                     ))
                 })?)
             };
-            for path in [&launcher.program, &launcher.folder]
-                .into_iter()
-                .chain(secrets)
-            {
+            for path in [&launcher.program, folder].into_iter().chain(secrets) {
                 refuse_a_dollar(path)?;
             }
             let launch = Launch {
-                folder: launcher.folder.clone(),
+                folder: folder.clone(),
                 secrets: secrets.cloned(),
                 variables: variables.iter().map(ToString::to_string).collect(),
                 program: program.clone(),
@@ -210,9 +218,16 @@ mod tests {
         ConnectorLauncher {
             program: PathBuf::from("/opt/teamwright/teamwright"),
             arguments: vec!["--connector".to_owned()],
-            folder: PathBuf::from("/data/connectors/start-here"),
+            folder: PathBuf::from("/data/connectors/starts"),
             secrets_folder: PathBuf::from("/data/connectors/secrets"),
         }
+    }
+
+    fn start_folders() -> BTreeMap<String, PathBuf> {
+        BTreeMap::from([(
+            "parts".to_owned(),
+            PathBuf::from("/data/connectors/starts/parts-1"),
+        )])
     }
 
     fn parts() -> KitConnector {
@@ -237,6 +252,7 @@ mod tests {
                 "parts".to_owned(),
                 PathBuf::from("/data/connectors/secrets/turn-1.json"),
             )]),
+            folders: start_folders(),
         };
 
         let (entry, tools) = connector_entry(&parts(), &starts).unwrap();
@@ -247,7 +263,7 @@ mod tests {
                 "command": "/opt/teamwright/teamwright",
                 "args": [
                     "--connector",
-                    "--folder", "/data/connectors/start-here",
+                    "--folder", "/data/connectors/starts/parts-1",
                     "--secrets", "/data/connectors/secrets/turn-1.json",
                     "--pass", "PARTS_TOKEN",
                     "--", "npx", "-y", "parts-server"
@@ -267,6 +283,7 @@ mod tests {
         let starts = ConnectorStarts {
             launcher: Some(&launcher),
             secrets: BTreeMap::new(),
+            folders: start_folders(),
         };
         let mut plain = parts();
         plain.start =
@@ -279,7 +296,7 @@ mod tests {
             json!([
                 "--connector",
                 "--folder",
-                "/data/connectors/start-here",
+                "/data/connectors/starts/parts-1",
                 "--",
                 "/usr/local/bin/parts"
             ])
@@ -296,6 +313,7 @@ mod tests {
         let starts = ConnectorStarts {
             launcher: Some(&launcher),
             secrets: BTreeMap::new(),
+            folders: start_folders(),
         };
         assert!(connector_entry(&parts(), &starts).is_err());
         // A program stored before the rule about relative paths.
@@ -304,14 +322,23 @@ mod tests {
             ConnectorStart::program_as_stored("./server", Vec::new(), Vec::new()).unwrap();
         assert!(connector_entry(&relative, &starts).is_err());
         // A path Claude Code could fill in from its environment.
-        let mut dollar = launcher.clone();
-        dollar.folder = PathBuf::from("/data/${HOME}/start-here");
         let starts = ConnectorStarts {
-            launcher: Some(&dollar),
+            launcher: Some(&launcher),
             secrets: BTreeMap::new(),
+            folders: BTreeMap::from([(
+                "parts".to_owned(),
+                PathBuf::from("/data/${HOME}/starts/parts-1"),
+            )]),
         };
         let mut plain = parts();
         plain.start = ConnectorStart::program("npx", Vec::new(), Vec::new()).unwrap();
+        assert!(connector_entry(&plain, &starts).is_err());
+        // No folder of its own: it is not started in a shared one.
+        let starts = ConnectorStarts {
+            launcher: Some(&launcher),
+            secrets: BTreeMap::new(),
+            folders: BTreeMap::new(),
+        };
         assert!(connector_entry(&plain, &starts).is_err());
     }
 
@@ -355,6 +382,7 @@ mod tests {
         let starts = ConnectorStarts {
             launcher: Some(&launcher),
             secrets: BTreeMap::new(),
+            folders: start_folders(),
         };
         let start = ConnectorStart::program("server", Vec::new(), Vec::new()).unwrap();
         let mut connector = KitConnector {

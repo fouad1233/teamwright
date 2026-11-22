@@ -512,9 +512,10 @@ in the browser the demo is `window.teamwrightDemo`.
 of the data folder, in the form of a plugin, links refused, the limits of
 size counted while the copy is made; `kept` reports what a copy holds for the
 check before every turn. Program connectors start through this program with
-`--connector` (`main.rs`, `teamwright_runtime::connector_launcher`), in
-`connectors/start-here` of the data folder, their secrets for one turn in
-`connectors/secrets` (`state.rs`). The commands in
+`--connector` (`main.rs`, `teamwright_runtime::connector_launcher`), each
+in a fresh empty folder of its own inside `connectors/starts` of the data
+folder, their secrets for one turn in `connectors/secrets` (`state.rs`);
+both are cleared of left-overs at start-up. The commands in
 `commands/kits.rs` (`project_library`, `add_skill`, `remove_skill`,
 `add_connector`, `remove_connector`, `set_member_kit`) answer with the whole
 library. In the interface, the Team place has "Skills and connectors"

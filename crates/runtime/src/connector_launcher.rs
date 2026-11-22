@@ -279,6 +279,89 @@ pub fn remove_left_over_secrets(folder: &Path) {
     }
 }
 
+/// The beginning of the name of every folder a connector starts in.
+const START_FOLDER_PREFIX: &str = "teamwright-start-";
+
+/// Counts the folders to start in this program makes, so that two that are
+/// made in the same instant get names of their own.
+static MADE: AtomicU64 = AtomicU64::new(0);
+
+/// A fresh, empty folder of Teamwright's own that one connector of one turn
+/// starts in, which only the user may enter (decision 0039, note of 22
+/// November 2026). No other connector is started in it: a connector that
+/// writes a file into its working folder cannot plant it for another one
+/// (Python's `-m`, for one, looks there first). The folder is removed, with
+/// whatever the connector wrote into it, when this is dropped, at the end
+/// of the turn; one left by a turn that never ended properly is removed
+/// when Teamwright next starts ([`remove_left_over_start_folders`]).
+#[derive(Debug)]
+pub struct StartFolder {
+    path: PathBuf,
+}
+
+impl StartFolder {
+    /// Makes a new empty folder inside `parent`, which is made if it is
+    /// missing. Both may be entered by the user alone, on Unix.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if a folder cannot be made.
+    pub fn make_in(parent: &Path) -> io::Result<Self> {
+        make_private_folder(parent)?;
+        let started = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_or(0, |since| since.as_nanos());
+        loop {
+            let number = MADE.fetch_add(1, Ordering::Relaxed);
+            let path = parent.join(format!(
+                "{START_FOLDER_PREFIX}{}-{started}-{number}",
+                std::process::id()
+            ));
+            match fs::create_dir(&path) {
+                Ok(()) => {
+                    let folder = Self { path };
+                    make_private_folder(&folder.path)?;
+                    return Ok(folder);
+                }
+                Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {}
+                Err(error) => return Err(error),
+            }
+        }
+    }
+
+    /// Where the folder is.
+    #[must_use]
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+}
+
+impl Drop for StartFolder {
+    fn drop(&mut self) {
+        // A failure here has nobody to be told to; what is left is removed
+        // when Teamwright next starts. Links inside are removed, not
+        // followed.
+        let _ = fs::remove_dir_all(&self.path);
+    }
+}
+
+/// Removes the folders to start in that a turn which never ended properly
+/// left in `parent`. Called when Teamwright starts, before any turn.
+pub fn remove_left_over_start_folders(parent: &Path) {
+    let Ok(entries) = fs::read_dir(parent) else {
+        return;
+    };
+    for entry in entries.filter_map(Result::ok) {
+        if entry
+            .file_name()
+            .to_string_lossy()
+            .starts_with(START_FOLDER_PREFIX)
+        {
+            let _ = fs::remove_dir_all(entry.path());
+        }
+    }
+}
+
 /// Makes a folder, and on Unix lets only the user enter it.
 ///
 /// # Errors
@@ -662,6 +745,43 @@ mod tests {
         std::mem::forget(left);
         remove_left_over_secrets(&folder);
         assert!(!left_path.exists());
+    }
+
+    #[test]
+    fn each_start_gets_a_fresh_empty_folder_of_its_own_gone_with_the_turn() {
+        let ground = tempfile::tempdir().unwrap();
+        let parent = ground.path().join("starts");
+
+        let first = StartFolder::make_in(&parent).unwrap();
+        let second = StartFolder::make_in(&parent).unwrap();
+
+        assert_ne!(first.path(), second.path());
+        assert!(first.path().starts_with(&parent) && second.path().starts_with(&parent));
+        assert!(is_empty_folder(first.path()) && is_empty_folder(second.path()));
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            for folder in [&parent, &first.path().to_owned()] {
+                let mode = fs::metadata(folder).unwrap().permissions().mode();
+                assert_eq!(mode & 0o777, 0o700);
+            }
+        }
+        // What one connector writes stays in its folder and goes with it.
+        fs::write(first.path().join("parts_server.py"), "planted").unwrap();
+        assert!(is_empty_folder(second.path()));
+        let first_path = first.path().to_owned();
+        drop(first);
+        assert!(!first_path.exists());
+
+        // A folder a turn that never ended left behind goes at the next
+        // start, and nothing else in the parent does.
+        let left = second.path().to_owned();
+        fs::write(left.join("module.py"), "x").unwrap();
+        std::mem::forget(second);
+        fs::write(parent.join("kept.txt"), "kept").unwrap();
+        remove_left_over_start_folders(&parent);
+        assert!(!left.exists());
+        assert!(parent.join("kept.txt").exists());
     }
 
     fn make_program(path: &Path) {

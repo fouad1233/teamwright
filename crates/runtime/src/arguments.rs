@@ -975,7 +975,7 @@ mod tests {
         crate::kit::ConnectorLauncher {
             program: PathBuf::from(r"C:\Program Files\Teamwright\teamwright.exe"),
             arguments: vec!["--connector".to_owned()],
-            folder: PathBuf::from(r"C:\Users\sample\AppData\Teamwright\connectors\start-here"),
+            folder: PathBuf::from(r"C:\Users\sample\AppData\Teamwright\connectors\starts"),
             secrets_folder: PathBuf::from(r"C:\Users\sample\AppData\Teamwright\connectors\secrets"),
         }
     }
@@ -992,6 +992,10 @@ mod tests {
             secrets: std::collections::BTreeMap::from([(
                 "parts".to_owned(),
                 PathBuf::from(r"C:\Users\sample\AppData\Teamwright\connectors\secrets\t.json"),
+            )]),
+            folders: std::collections::BTreeMap::from([(
+                "parts".to_owned(),
+                PathBuf::from(r"C:\Users\sample\AppData\Teamwright\connectors\starts\s1"),
             )]),
         };
         turn_arguments_with(request, &[], team_bus, &starts)
@@ -1015,7 +1019,7 @@ mod tests {
                     "args": [
                         "--connector",
                         "--folder",
-                        r"C:\Users\sample\AppData\Teamwright\connectors\start-here",
+                        r"C:\Users\sample\AppData\Teamwright\connectors\starts\s1",
                         "--secrets",
                         r"C:\Users\sample\AppData\Teamwright\connectors\secrets\t.json",
                         "--pass",

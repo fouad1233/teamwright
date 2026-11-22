@@ -102,8 +102,14 @@ A connector that is a program is never given to Claude Code as it is
 the folder of the project, which the specialist writes, with the whole
 environment. Its entry is Teamwright's own program in the mode of
 `connector_launcher.rs`:
-`teamwright --connector --folder <data>/connectors/start-here [--secrets
-<file>] [--pass NAME]... -- <program> <arguments>`. The launcher refuses a
+`teamwright --connector --folder <data>/connectors/starts/teamwright-start-…
+[--secrets <file>] [--pass NAME]... -- <program> <arguments>`. Each
+connector of each turn starts in a fresh empty folder of its own
+(`StartFolder`, 0700), made by `ClaudeCode::start_turn` and removed with
+whatever the connector wrote there when the turn ends, so that no connector
+can plant a module for another one; left-over folders are removed at
+start-up (`remove_left_over_start_folders`; note of 22 November 2026 in
+decision 0039). The launcher refuses a
 folder that is not empty or not a full path, clears the environment, sets
 `BASE_VARIABLES` (PATH, HOME, user, locale, temporary folder on Unix; the
 system folders on Windows) and the named variables, finds a bare program

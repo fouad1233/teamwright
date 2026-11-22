@@ -368,12 +368,12 @@ fn the_own_instructions_of_a_specialist_reach_a_real_session() {
 /// `cargo build -p teamwright-desktop`, or named in
 /// `TEAMWRIGHT_BUS_PROGRAM`.
 /// The runtime with Teamwright's program as the launcher of connectors,
-/// starting them in an empty folder under `ground`.
+/// starting each in a fresh empty folder of its own under `ground`.
 fn with_launcher(runtime: ClaudeCode, ground: &Path) -> ClaudeCode {
     runtime.with_connector_launcher(
         bus_program(),
         vec!["--connector".to_owned()],
-        ground.join("connectors").join("start-here"),
+        ground.join("connectors").join("starts"),
         ground.join("connectors").join("secrets"),
     )
 }
@@ -863,11 +863,16 @@ fn a_real_connector_starts_through_the_launcher_and_sees_only_its_own_variable()
 
     assert_eq!(outcome.failure, None);
     let told = &outcome.final_text;
-    let start_here = ground.join("connectors").join("start-here");
+    // A folder of its own under the folder of starts, gone with the turn.
+    let starts = ground.join("connectors").join("starts");
     assert!(
-        told.contains(&format!("folder={}", start_here.display())),
+        told.contains(&format!(
+            "folder={}",
+            starts.join("teamwright-start-").display()
+        )),
         "{told}"
     );
+    assert_eq!(std::fs::read_dir(&starts).unwrap().count(), 0);
     assert!(told.contains("given=apricot-42"), "{told}");
     assert!(!told.contains("TEAMWRIGHT_PROBE_HIDDEN"), "{told}");
     // The value never reached a file the session could read: its file of

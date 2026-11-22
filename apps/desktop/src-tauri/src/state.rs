@@ -49,14 +49,19 @@ const DATABASE_FILE_NAME: &str = "teamwright.db";
 const SKILL_SHELF_FOLDER: &str = "skills";
 
 /// The folder inside the application's data directory for the connectors
-/// started as programs (decision 0039, note of 21 November 2026): the empty
-/// folder they start in, and the files that hold the values of their
+/// started as programs (decision 0039, notes of 21 and 22 November 2026):
+/// the folders they start in, and the files that hold the values of their
 /// variables while a turn runs. No session is given it to read; it is not
 /// inside the shelf of skills, whose folders sessions read.
 const CONNECTORS_FOLDER: &str = "connectors";
 
-/// The empty folder inside [`CONNECTORS_FOLDER`] every connector starts in.
-const CONNECTOR_START_FOLDER: &str = "start-here";
+/// The folder inside [`CONNECTORS_FOLDER`] in which each connector of a
+/// turn is given a fresh, empty folder of its own to start in.
+const CONNECTOR_START_FOLDER: &str = "starts";
+
+/// The one empty folder every connector started in before the note of 22
+/// November 2026 in decision 0039; removed at start-up if it is empty.
+const FORMER_CONNECTOR_START_FOLDER: &str = "start-here";
 
 /// The folder inside [`CONNECTORS_FOLDER`] for the values of variables.
 const CONNECTOR_SECRETS_FOLDER: &str = "secrets";
@@ -255,12 +260,17 @@ impl AppState {
         let permission_repository = Arc::new(teamwright_storage::SqlitePermissionRepository::new(
             database.clone(),
         ));
-        // Values of variables a turn that never ended properly left behind.
+        // Values of variables, and folders connectors started in, that a
+        // turn which never ended properly left behind.
+        let connectors_folder = data_directory.join(CONNECTORS_FOLDER);
         teamwright_runtime::connector_launcher::remove_left_over_secrets(
-            &data_directory
-                .join(CONNECTORS_FOLDER)
-                .join(CONNECTOR_SECRETS_FOLDER),
+            &connectors_folder.join(CONNECTOR_SECRETS_FOLDER),
         );
+        teamwright_runtime::connector_launcher::remove_left_over_start_folders(
+            &connectors_folder.join(CONNECTOR_START_FOLDER),
+        );
+        // Only removed if empty; a folder that is not is left to the user.
+        let _ = std::fs::remove_dir(connectors_folder.join(FORMER_CONNECTOR_START_FOLDER));
         let runtime: Arc<dyn AgentRuntime> = Arc::new(agent_program(&data_directory));
         let kit_repository = Arc::new(teamwright_storage::SqliteKitRepository::new(
             database.clone(),

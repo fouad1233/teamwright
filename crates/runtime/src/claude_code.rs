@@ -14,7 +14,7 @@ use crate::arguments::{
     version_arguments,
 };
 use crate::commands::environment_for_commands;
-use crate::connector_launcher::{SecretsFile, is_base_variable, make_private_folder};
+use crate::connector_launcher::{SecretsFile, StartFolder, is_base_variable};
 use crate::decode::Decoder;
 use crate::environment::Environment;
 use crate::kit::{ConnectorLauncher, ConnectorStarts};
@@ -104,10 +104,10 @@ impl ClaudeCode {
 
     /// Says how the programs of connectors are started: through this
     /// program and these arguments, in the mode of the
-    /// [`connector_launcher`](crate::connector_launcher), in `folder`, an
-    /// empty folder of Teamwright's own, with the values of their variables
-    /// in a file of `secrets_folder` while the turn runs. Neither folder may
-    /// be one a session reads. Without it, a turn given a connector that is
+    /// [`connector_launcher`](crate::connector_launcher), each in a fresh
+    /// empty folder of its own made inside `folder` for the turn, with the
+    /// values of their variables in a file of `secrets_folder` while the
+    /// turn runs. Neither folder may be one a session reads. Without it, a turn given a connector that is
     /// a program is refused.
     #[must_use]
     pub fn with_connector_launcher(
@@ -126,34 +126,27 @@ impl ClaudeCode {
         self
     }
 
-    /// Writes, for each connector of the turn that is a program and is
-    /// handed variables, their values to a file of its own, and makes the
-    /// empty folder connectors start in. Nothing without a launcher: such
-    /// a connector is then refused.
-    fn prepare_connectors(
-        &self,
-        kit: &TurnKit,
-    ) -> Result<Vec<(String, SecretsFile)>, AgentRuntimeError> {
+    /// Makes, for each connector of the turn that is a program, a fresh
+    /// empty folder of its own to start in, and writes the values of the
+    /// variables it is handed to a file of its own. Nothing without a
+    /// launcher: such a connector is then refused.
+    fn prepare_connectors(&self, kit: &TurnKit) -> Result<PreparedConnectors, AgentRuntimeError> {
+        let mut prepared = PreparedConnectors::default();
         let Some(launcher) = &self.connector_launcher else {
-            return Ok(Vec::new());
+            return Ok(prepared);
         };
         let could_not = |message: String| AgentRuntimeError::CouldNotRun { message };
-        let has_programs = kit
-            .connectors
-            .iter()
-            .any(|connector| matches!(connector.start, ConnectorStart::Program { .. }));
-        if has_programs {
-            make_private_folder(&launcher.folder).map_err(|error| {
-                could_not(format!(
-                    "the folder connectors start in could not be made: {error}"
-                ))
-            })?;
-        }
-        let mut files = Vec::new();
         for connector in &kit.connectors {
             let ConnectorStart::Program { variables, .. } = &connector.start else {
                 continue;
             };
+            let folder = StartFolder::make_in(&launcher.folder).map_err(|error| {
+                could_not(format!(
+                    "the folder the connector {} starts in could not be made: {error}",
+                    connector.name
+                ))
+            })?;
+            prepared.folders.push((connector.name.clone(), folder));
             if variables.is_empty() {
                 continue;
             }
@@ -180,9 +173,9 @@ impl ClaudeCode {
                         connector.name
                     ))
                 })?;
-            files.push((connector.name.clone(), file));
+            prepared.secrets.push((connector.name.clone(), file));
         }
-        Ok(files)
+        Ok(prepared)
     }
 
     /// The team bus a turn is given: the one this runtime knows, if the
@@ -267,12 +260,18 @@ impl AgentRuntime for ClaudeCode {
         // The connectors that are programs are started through the launcher,
         // with the values of their variables in files that live as long as
         // the turn (decision 0039, note of 21 November 2026).
-        let secrets = self.prepare_connectors(&request.kit)?;
+        let prepared = self.prepare_connectors(&request.kit)?;
         let starts = ConnectorStarts {
             launcher: self.connector_launcher.as_ref(),
-            secrets: secrets
+            secrets: prepared
+                .secrets
                 .iter()
                 .map(|(name, file)| (name.clone(), file.path().to_owned()))
+                .collect(),
+            folders: prepared
+                .folders
+                .iter()
+                .map(|(name, folder)| (name.clone(), folder.path().to_owned()))
                 .collect(),
         };
         let arguments =
@@ -311,15 +310,17 @@ impl AgentRuntime for ClaudeCode {
                 .with_commands_askable(commands_askable),
             listener,
         )?;
-        Ok(if memory.is_none() && secrets.is_empty() {
-            Box::new(turn)
-        } else {
-            Box::new(TurnWithFiles {
-                turn: Box::new(turn),
-                _memory: memory,
-                _secrets: secrets,
-            })
-        })
+        Ok(
+            if memory.is_none() && prepared.secrets.is_empty() && prepared.folders.is_empty() {
+                Box::new(turn)
+            } else {
+                Box::new(TurnWithFiles {
+                    turn: Box::new(turn),
+                    _memory: memory,
+                    _connectors: prepared,
+                })
+            },
+        )
     }
 
     fn why_no_commands(&self) -> Option<teamwright_domain::NoCommands> {
@@ -441,13 +442,24 @@ fn turn_environment(base: &Environment, kit: &TurnKit) -> Environment {
     environment
 }
 
-/// A turn with files of its own: the memory its team bus reads, and the
-/// values of the variables of its connectors. They are removed when the
-/// turn is dropped, after it has ended.
+/// The files and folders of Teamwright's own that the connectors of one
+/// turn are started with, each by the name of its connector. They are
+/// removed when this is dropped.
+#[derive(Debug, Default)]
+struct PreparedConnectors {
+    /// The values of the variables of each connector that is handed some.
+    secrets: Vec<(String, SecretsFile)>,
+    /// The fresh empty folder each connector that is a program starts in.
+    folders: Vec<(String, StartFolder)>,
+}
+
+/// A turn with files of its own: the memory its team bus reads, the values
+/// of the variables of its connectors, and the folders they start in. They
+/// are removed when the turn is dropped, after it has ended.
 struct TurnWithFiles {
     turn: Box<dyn RunningTurn>,
     _memory: Option<MemoryFile>,
-    _secrets: Vec<(String, SecretsFile)>,
+    _connectors: PreparedConnectors,
 }
 
 impl RunningTurn for TurnWithFiles {
@@ -463,7 +475,7 @@ impl RunningTurn for TurnWithFiles {
         let Self {
             turn,
             _memory,
-            _secrets,
+            _connectors,
         } = *self;
         turn.wait()
     }
@@ -832,14 +844,14 @@ mod tests {
     }
 
     #[test]
-    fn the_values_of_a_programs_variables_are_written_for_the_turn_and_gone_after_it() {
+    fn the_values_and_the_folders_of_programs_are_made_for_the_turn_and_gone_after_it() {
         let ground = tempfile::tempdir().unwrap();
         let runtime = ClaudeCode::new()
             .with_environment(Environment::empty().with("PARTS_TOKEN", "t0ken"))
             .with_connector_launcher(
                 "/opt/teamwright/teamwright",
                 vec!["--connector".to_owned()],
-                ground.path().join("start-here"),
+                ground.path().join("starts"),
                 ground.path().join("secrets"),
             );
         let mut kit = TurnKit::default();
@@ -852,18 +864,29 @@ mod tests {
             ConnectorStart::program("npx", Vec::new(), Vec::new()).unwrap(),
         ));
 
-        let files = runtime.prepare_connectors(&kit).unwrap();
+        let prepared = runtime.prepare_connectors(&kit).unwrap();
 
-        assert!(ground.path().join("start-here").is_dir());
-        let [(name, file)] = files.as_slice() else {
+        let [(name, file)] = prepared.secrets.as_slice() else {
             panic!("one file was expected");
         };
         assert_eq!(name, "parts");
         let path = file.path().to_owned();
         assert!(path.starts_with(ground.path().join("secrets")));
         assert!(std::fs::read_to_string(&path).unwrap().contains("t0ken"));
-        drop(files);
+        // Each program starts in a fresh empty folder of its own.
+        let [(first, parts), (second, plain)] = prepared.folders.as_slice() else {
+            panic!("two folders were expected");
+        };
+        assert_eq!((first.as_str(), second.as_str()), ("parts", "plain"));
+        assert_ne!(parts.path(), plain.path());
+        let folders = [parts.path().to_owned(), plain.path().to_owned()];
+        for folder in &folders {
+            assert!(folder.starts_with(ground.path().join("starts")));
+            assert_eq!(std::fs::read_dir(folder).unwrap().count(), 0);
+        }
+        drop(prepared);
         assert!(!path.exists());
+        assert!(folders.iter().all(|folder| !folder.exists()));
 
         // A variable that is not set is not started with an empty value.
         let unset = ClaudeCode::new()
@@ -871,7 +894,7 @@ mod tests {
             .with_connector_launcher(
                 "/opt/teamwright/teamwright",
                 vec!["--connector".to_owned()],
-                ground.path().join("start-here"),
+                ground.path().join("starts"),
                 ground.path().join("secrets"),
             );
         assert!(unset.prepare_connectors(&kit).is_err());
