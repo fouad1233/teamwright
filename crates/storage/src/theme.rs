@@ -67,6 +67,8 @@ mod tests {
         assert_eq!(store.theme().unwrap(), Theme::Tide);
         store.set_theme(Theme::Paper).unwrap();
         assert_eq!(store.theme().unwrap(), Theme::Paper);
+        store.set_theme(Theme::Poppy).unwrap();
+        assert_eq!(store.theme().unwrap(), Theme::Poppy);
         assert!(database.operations_to_send(0).unwrap().is_empty());
     }
 }

@@ -32,11 +32,17 @@ pub enum Theme {
     Fern,
     /// Dark, with a pattern of waves.
     Tide,
+    /// Light, a white ground with pink for the accents.
+    Rose,
+    /// Light, a white ground with blue for the accents.
+    Delft,
+    /// Light, a white ground with red for the accents.
+    Poppy,
 }
 
 impl Theme {
     /// Every theme, the default first.
-    pub const ALL: [Self; 10] = [
+    pub const ALL: [Self; 13] = [
         Self::Lamplight,
         Self::Paper,
         Self::Dusk,
@@ -47,6 +53,9 @@ impl Theme {
         Self::Wing,
         Self::Fern,
         Self::Tide,
+        Self::Rose,
+        Self::Delft,
+        Self::Poppy,
     ];
 
     /// The name the interface and the store use.
@@ -63,6 +72,9 @@ impl Theme {
             Self::Wing => "wing",
             Self::Fern => "fern",
             Self::Tide => "tide",
+            Self::Rose => "rose",
+            Self::Delft => "delft",
+            Self::Poppy => "poppy",
         }
     }
 
@@ -140,6 +152,14 @@ mod tests {
         for theme in Theme::ALL {
             assert_eq!(Theme::parse(theme.name()), Some(theme));
         }
+    }
+
+    #[test]
+    fn the_three_colour_and_white_themes_have_their_names() {
+        assert_eq!(Theme::ALL.len(), 13);
+        assert_eq!(Theme::parse("rose"), Some(Theme::Rose));
+        assert_eq!(Theme::parse("delft"), Some(Theme::Delft));
+        assert_eq!(Theme::parse("poppy"), Some(Theme::Poppy));
     }
 
     #[test]
