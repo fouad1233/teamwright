@@ -12,9 +12,9 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use chrono::TimeDelta;
 use teamwright_domain::{
     Area, AreaId, Conversation, ConversationId, Digest, DigestId, EarlierConversation, Field,
-    FieldId, Handoff, HandoffId, Member, MemberId, MemoryEntry, MemoryEntryId, PermissionRequest,
-    PermissionRequestId, Project, ProjectId, Release, Sprint, SprintId, Tag, TagId, Task, TaskId,
-    TeamMessage, TeamMessageId, Timestamp, Turn, TurnId, View, ViewId,
+    FieldId, Handoff, HandoffId, Member, MemberId, MemoryEntry, MemoryEntryId, NoCommands,
+    PermissionRequest, PermissionRequestId, Project, ProjectId, Release, Sprint, SprintId, Tag,
+    TagId, Task, TaskId, TeamMessage, TeamMessageId, Timestamp, Turn, TurnId, View, ViewId,
 };
 
 use crate::agent_runtime::{
@@ -952,9 +952,9 @@ pub struct ScriptedRuntime {
     refusal: Mutex<Option<AgentRuntimeError>>,
     turns: Mutex<Vec<ScriptedTurn>>,
     opened: Mutex<Vec<(SessionId, PathBuf)>>,
-    /// Whether the runtime pretends to be on a computer without a sandbox
-    /// for commands, as on Windows.
-    without_sandbox: AtomicBool,
+    /// Why the runtime pretends this computer can run no command, if it
+    /// pretends so: no sandbox, as on Windows, or a sign-in with a variable.
+    no_commands: Mutex<Option<NoCommands>>,
 }
 
 /// A turn the scripted runtime has started.
@@ -990,14 +990,20 @@ impl ScriptedRuntime {
             refusal: Mutex::new(None),
             turns: Mutex::new(Vec::new()),
             opened: Mutex::new(Vec::new()),
-            without_sandbox: AtomicBool::new(false),
+            no_commands: Mutex::new(None),
         }
     }
 
     /// Makes the runtime pretend to be on a computer without a sandbox for
     /// commands, as on Windows.
     pub fn take_away_the_sandbox(&self) {
-        self.without_sandbox.store(true, Ordering::SeqCst);
+        *lock(&self.no_commands) = Some(NoCommands::NoSandbox);
+    }
+
+    /// Makes the runtime pretend that the manager signs in to the program
+    /// with an environment variable.
+    pub fn sign_in_with_a_variable(&self) {
+        *lock(&self.no_commands) = Some(NoCommands::SignedInWithVariable);
     }
 
     /// Decides what the runtime says about the installed program.
@@ -1089,8 +1095,8 @@ impl AgentRuntime for ScriptedRuntime {
         Ok(())
     }
 
-    fn sandboxes_commands(&self) -> bool {
-        !self.without_sandbox.load(Ordering::SeqCst)
+    fn why_no_commands(&self) -> Option<NoCommands> {
+        *lock(&self.no_commands)
     }
 }
 

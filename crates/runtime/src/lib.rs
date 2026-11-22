@@ -31,6 +31,7 @@
 
 mod arguments;
 mod claude_code;
+mod commands;
 pub mod connector_launcher;
 mod decode;
 mod earlier;

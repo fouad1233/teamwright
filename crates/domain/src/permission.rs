@@ -444,6 +444,11 @@ pub enum NoCommands {
     /// The computer has no sandbox for commands. Claude Code has none on
     /// Windows, and a command outside one can do anything the manager can.
     NoSandbox,
+    /// The manager signs in to Claude Code with an environment variable (an
+    /// API key, a token). A turn with a command is started with a cleared
+    /// environment, which would lose it; keeping it would hand it to the
+    /// command.
+    SignedInWithVariable,
     /// The specialist has a connector that is handed a secret in an
     /// environment variable. A command could read it.
     SecretInReach,
@@ -455,8 +460,14 @@ impl NoCommands {
     pub const fn reason(self) -> &'static str {
         match self {
             Self::NoSandbox => {
-                "a command is allowed only where it runs in a sandbox, and Claude Code has no \
-                 sandbox on Windows"
+                "a command is allowed only where it runs in a sandbox, and Claude Code cannot \
+                 make one on this computer: it has none on Windows, and on Linux it needs \
+                 bubblewrap and socat, and bubblewrap must be able to start"
+            }
+            Self::SignedInWithVariable => {
+                "Claude Code is signed in on this computer with an environment variable (an API \
+                 key or a token), and a command could read it; a command is allowed only where \
+                 Claude Code uses its own sign-in"
             }
             Self::SecretInReach => {
                 "this specialist has a connector that is given a secret in an environment \
@@ -1191,7 +1202,11 @@ mod tests {
 
     #[test]
     fn why_no_command_is_said_in_words() {
-        for no in [NoCommands::NoSandbox, NoCommands::SecretInReach] {
+        for no in [
+            NoCommands::NoSandbox,
+            NoCommands::SignedInWithVariable,
+            NoCommands::SecretInReach,
+        ] {
             assert!(matches!(
                 no.as_error(),
                 DomainError::PermissionNotPossible { reason } if reason == no.reason()
@@ -1441,7 +1456,11 @@ mod tests {
             answered(&setting),
         )
         .unwrap();
-        for no in [NoCommands::SecretInReach, NoCommands::NoSandbox] {
+        for no in [
+            NoCommands::SecretInReach,
+            NoCommands::NoSandbox,
+            NoCommands::SignedInWithVariable,
+        ] {
             let mut about = turn(&setting, Some(setting.task), TurnId::generate());
             about.no_commands = Some(no);
             assert!(for_task.grants(&about).is_none(), "{no:?}");

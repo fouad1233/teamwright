@@ -16,7 +16,9 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use teamwright_domain::{FILE_CHANGING_PROGRAMS, PermissionKind, PermissionRule, Timestamp};
+use teamwright_domain::{
+    FILE_CHANGING_PROGRAMS, NoCommands, PermissionKind, PermissionRule, Timestamp,
+};
 
 /// Runs the sessions of team members on an agent program.
 pub trait AgentRuntime: Send + Sync {
@@ -72,12 +74,13 @@ pub trait AgentRuntime: Send + Sync {
         working_folder: &Path,
     ) -> Result<(), AgentRuntimeError>;
 
-    /// Whether the program can run the commands of a turn in a sandbox on
-    /// this computer. A command is allowed only where it can (decision
-    /// 0038). Claude Code has a sandbox on macOS, Linux and WSL2, and none
-    /// on Windows.
-    fn sandboxes_commands(&self) -> bool {
-        !cfg!(windows)
+    /// Why the program can run no command of a turn on this computer, or
+    /// nothing if it can: a command is allowed only where it runs in a
+    /// sandbox, with an environment that holds no secret (decision 0038,
+    /// notes of 21 and 22 November 2026). Claude Code has a sandbox on
+    /// macOS, Linux and WSL2, and none on Windows.
+    fn why_no_commands(&self) -> Option<NoCommands> {
+        cfg!(windows).then_some(NoCommands::NoSandbox)
     }
 }
 

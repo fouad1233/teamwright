@@ -13,6 +13,7 @@ use crate::arguments::{
     FIRST_VERSION_WITH_DESKTOP, desktop_arguments, sign_in_arguments, turn_arguments_with,
     version_arguments,
 };
+use crate::commands::environment_for_commands;
 use crate::connector_launcher::{SecretsFile, is_base_variable, make_private_folder};
 use crate::decode::Decoder;
 use crate::environment::Environment;
@@ -276,7 +277,7 @@ impl AgentRuntime for ClaudeCode {
         };
         let arguments =
             turn_arguments_with(&request, &readable_folders, team_bus.as_ref(), &starts)?;
-        let environment = turn_environment(&self.environment, &request.kit);
+        let environment = environment_of_turn(&self.environment, &request)?;
         let working_folder = full_folder(&request.working_folder)?;
         let program = self.program()?;
         refuse_a_script(&program)?;
@@ -313,6 +314,10 @@ impl AgentRuntime for ClaudeCode {
                 _secrets: secrets,
             })
         })
+    }
+
+    fn why_no_commands(&self) -> Option<teamwright_domain::NoCommands> {
+        crate::commands::why_no_commands(&self.environment)
     }
 
     fn open_in_desktop_app(
@@ -365,6 +370,29 @@ fn memory_file_for(request: &TurnRequest) -> Result<Option<MemoryFile>, AgentRun
         .map_err(|error| AgentRuntimeError::CouldNotRun {
             message: format!("the memory of the project could not be written for it: {error}"),
         })
+}
+
+/// The environment a turn is started with. A turn that may run a command
+/// gets the base set and nothing else, because a sandboxed command inherits
+/// the environment of Claude Code (decision 0038, note of 22 November 2026);
+/// it is refused if the manager signs in with a variable, which the turn
+/// would lose or the command could read. Any other turn gets
+/// [`turn_environment`].
+fn environment_of_turn(
+    base: &Environment,
+    request: &TurnRequest,
+) -> Result<Environment, AgentRuntimeError> {
+    if !request.permissions.commands_in_sandbox {
+        return Ok(turn_environment(base, &request.kit));
+    }
+    if crate::commands::sign_in_variable(base).is_some() {
+        return Err(AgentRuntimeError::InvalidRequest {
+            message: teamwright_domain::NoCommands::SignedInWithVariable
+                .reason()
+                .to_owned(),
+        });
+    }
+    Ok(environment_for_commands(base))
 }
 
 /// The environment a turn is started with: Teamwright's own, without the
@@ -513,6 +541,8 @@ fn without_verbatim_prefix(path: PathBuf) -> PathBuf {
 
 #[cfg(test)]
 mod tests {
+    use teamwright_application::PermissionProfile;
+
     use super::*;
 
     #[test]
@@ -719,6 +749,78 @@ mod tests {
         assert!(environment.get("HTTPS_PROXY").is_some());
         // What no connector names is not touched by this rule.
         assert!(environment.get("UNRELATED").is_some());
+    }
+
+    #[test]
+    fn a_turn_that_may_run_a_command_is_started_with_the_base_set_only() {
+        let base = Environment::empty()
+            .with("PATH", "/usr/bin")
+            .with("HOME", "/home/manager")
+            .with("GH_TOKEN", "secret")
+            .with("UNRELATED", "dropped")
+            .with("CLAUDECODE", "1");
+        let mut request = TurnRequest {
+            working_folder: PathBuf::from("work"),
+            prompt: "Run the tests.".to_owned(),
+            session: teamwright_application::SessionChoice::New,
+            model: None,
+            effort: None,
+            extra_instructions: None,
+            permissions: PermissionProfile::specialist(),
+            team_tools: Vec::new(),
+            readable_folders: Vec::new(),
+            kit: TurnKit::default(),
+        };
+        request.permissions = PermissionProfile::specialist().with_granted(&[
+            teamwright_domain::PermissionRule::new(
+                teamwright_domain::PermissionKind::Command,
+                "npm test",
+            )
+            .unwrap(),
+        ]);
+        let environment = environment_of_turn(&base, &request).unwrap();
+        let names: Vec<String> = environment
+            .iter()
+            .map(|(name, _)| name.to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(names, ["HOME", "PATH"]);
+
+        // A turn without a command keeps what no connector names.
+        request.permissions = PermissionProfile::specialist();
+        let environment = environment_of_turn(&base, &request).unwrap();
+        assert!(environment.get("UNRELATED").is_some());
+    }
+
+    #[test]
+    fn a_turn_that_may_run_a_command_is_refused_when_signed_in_with_a_variable() {
+        let base = Environment::empty()
+            .with("PATH", "/usr/bin")
+            .with("ANTHROPIC_API_KEY", "secret");
+        let mut request = TurnRequest {
+            working_folder: PathBuf::from("work"),
+            prompt: "Run the tests.".to_owned(),
+            session: teamwright_application::SessionChoice::New,
+            model: None,
+            effort: None,
+            extra_instructions: None,
+            permissions: PermissionProfile::specialist(),
+            team_tools: Vec::new(),
+            readable_folders: Vec::new(),
+            kit: TurnKit::default(),
+        };
+        request.permissions = PermissionProfile::specialist().with_granted(&[
+            teamwright_domain::PermissionRule::new(
+                teamwright_domain::PermissionKind::Command,
+                "npm test",
+            )
+            .unwrap(),
+        ]);
+        assert!(matches!(
+            environment_of_turn(&base, &request),
+            Err(AgentRuntimeError::InvalidRequest { .. })
+        ));
+        request.permissions = PermissionProfile::specialist();
+        assert!(environment_of_turn(&base, &request).is_ok());
     }
 
     #[test]

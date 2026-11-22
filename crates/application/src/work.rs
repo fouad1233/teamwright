@@ -1124,11 +1124,11 @@ struct NewTurn {
 impl Inner {
     /// Why a specialist can be given no command now, whatever the manager
     /// allowed, if it can be given none: the program has no sandbox on this
-    /// computer, or the specialist has a connector handed a secret
-    /// (decision 0038).
+    /// computer, or cannot be started without a secret in its environment,
+    /// or the specialist has a connector handed a secret (decision 0038).
     fn no_commands_for(&self, member: &Member) -> Result<Option<NoCommands>, ApplicationError> {
-        if !self.ports.runtime.sandboxes_commands() {
-            return Ok(Some(NoCommands::NoSandbox));
+        if let Some(no) = self.ports.runtime.why_no_commands() {
+            return Ok(Some(no));
         }
         if kit_names_a_secret(self.ports.kits.as_ref(), member)? {
             return Ok(Some(NoCommands::SecretInReach));
@@ -5378,6 +5378,43 @@ mod tests {
             panic!("{refused:?}");
         };
         assert_eq!(reason, NoCommands::NoSandbox.reason());
+    }
+
+    #[test]
+    fn signed_in_with_a_variable_no_command_is_allowed_or_given() {
+        let workspace = workspace();
+        let (conversation, request) = workspace.asked_permission();
+        workspace.allow(&request, PermissionScope::Task);
+        workspace.play_whole_turn(1);
+        workspace.ports.runtime.sign_in_with_a_variable();
+
+        workspace
+            .work
+            .reply(conversation.conversation.id(), "Again.")
+            .unwrap();
+        assert_eq!(
+            workspace.ports.runtime.requests()[2].permissions,
+            PermissionProfile::specialist()
+        );
+        workspace.play_whole_turn(2);
+
+        let other = self::workspace();
+        other.ports.runtime.sign_in_with_a_variable();
+        let (_, asked) = other.asked_permission();
+        let refused = other.work.answer_permission(
+            asked.id(),
+            PermissionReply::Allow {
+                scope: PermissionScope::Once,
+                kind: PermissionKind::Command,
+                text: "echo hello".to_owned(),
+                note: String::new(),
+            },
+        );
+        let Err(ApplicationError::Rule(DomainError::PermissionNotPossible { reason })) = refused
+        else {
+            panic!("{refused:?}");
+        };
+        assert_eq!(reason, NoCommands::SignedInWithVariable.reason());
     }
 
     #[test]

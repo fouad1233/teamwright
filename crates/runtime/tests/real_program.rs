@@ -941,3 +941,59 @@ fn a_real_allowed_command_runs_in_a_sandbox_that_keeps_it_inside_the_folders() {
         "a sandboxed command read a file outside the folders"
     );
 }
+
+/// An allowed command does not see the manager's environment: a turn that
+/// may run a command is started with the base set only (decision 0038,
+/// note of 22 November 2026). The script prints the whole environment it
+/// was started with, and a variable set for Teamwright must not be in it.
+///
+/// This test has never passed: the program was not signed in on the night
+/// it was written. It needs `bubblewrap` and `socat` on Linux, and the
+/// program signed in with its own sign-in, not with a variable.
+#[test]
+#[ignore = "needs the real Claude Code, signed in, a sandbox, and spends one turn"]
+fn a_real_allowed_command_sees_none_of_the_managers_secrets() {
+    use teamwright_domain::{PermissionKind, PermissionRule};
+
+    let folder = tempfile::tempdir().unwrap();
+    let folder = teamwright_runtime::full_form(folder.path()).unwrap();
+    let secret = format!("teamwright-secret-{}", uuid::Uuid::now_v7());
+    std::fs::write(folder.join("check.sh"), "env\necho done-checking\n").unwrap();
+
+    let rule = PermissionRule::new(PermissionKind::Command, "sh check.sh").unwrap();
+    let mut turn = request(
+        &folder,
+        "Run the shell command `sh check.sh` exactly once and answer with what it printed, \
+         word for word.",
+        SessionChoice::New,
+    );
+    turn.permissions = PermissionProfile::specialist().with_granted(&[rule]);
+    let events = Arc::new(Mutex::new(Vec::new()));
+    let collected = Arc::clone(&events);
+    let outcome = ClaudeCode::new()
+        .with_environment(
+            Environment::inherited_without_claude_variables()
+                .with("TEAMWRIGHT_TEST_TOKEN", &secret),
+        )
+        .start_turn(
+            turn,
+            Box::new(move |event| collected.lock().unwrap().push(event)),
+        )
+        .unwrap()
+        .wait()
+        .unwrap();
+    let events = events.lock().unwrap().clone();
+    for event in &events {
+        println!("{event:?}");
+    }
+    print_usage(&outcome);
+    assert_eq!(outcome.failure, None, "the sandbox may be missing");
+    assert!(
+        tool_uses(&events).iter().any(|(tool, _, _)| tool == "Bash"),
+        "the command was expected to run: {events:?}"
+    );
+    assert!(
+        !format!("{events:?}").contains(&secret) && !outcome.final_text.contains(&secret),
+        "an allowed command saw a variable of the manager's environment"
+    );
+}
