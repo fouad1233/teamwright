@@ -109,12 +109,57 @@ cargo clippy --all-targets -- -D warnings
 cargo test
 ```
 
+## The smoke test
+
+[The smoke test on Linux](README.md#smoke-test-of-the-real-application-on-linux)
+drives the built program through WebDriver. It needs three programs.
+
+**Xvfb**, the virtual display, is part of a desktop Ubuntu
+(`/usr/bin/Xvfb`).
+
+**tauri-driver**, Tauri's WebDriver server, is built with Cargo into
+`~/.cargo/bin`:
+
+```bash
+cargo install tauri-driver --locked
+```
+
+**WebKitWebDriver** comes with Ubuntu's package `webkit2gtk-driver`, which
+is not installed on a desktop. Fetch it and unpack it into the same folder
+as the development packages. Its version must be the version of the
+WebKitGTK that is installed; `apt-get download` takes the one that goes
+with it:
+
+```bash
+cd "$SYSROOT/debs"
+apt-get download webkit2gtk-driver
+dpkg -x webkit2gtk-driver_*.deb "$SYSROOT"
+"$SYSROOT/usr/bin/WebKitWebDriver" --help
+```
+
+The smoke test finds it there by itself, and finds `tauri-driver` in
+`~/.cargo/bin`. Name others in `WEBKIT_WEBDRIVER` and `TAURI_DRIVER`. Then:
+
+```bash
+. ~/.local/opt/tauri-sysroot/env.sh
+npm run tauri --workspace @teamwright/desktop -- build --debug --no-bundle
+node tools/smoke/desktop-smoke-linux.mjs target/debug/teamwright-desktop /tmp/teamwright-pictures
+```
+
+The program writes two warnings about DRI3 on the virtual display; they
+mean only that it draws without the graphics card.
+
 ## What was tried
 
 On 21 November 2026, on Ubuntu 24.04 with Rust 1.100: the four checks of
 [the development page](README.md) pass with this setup, the desktop crate
 included. The folder takes 54 MB. The built program was not started from
 this setup on that day.
+
+On 22 November 2026, on the same computer, with WebKitGTK 2.52.6,
+`webkit2gtk-driver` 2.52.6 and `tauri-driver` 2.1.0: the built debug
+program started under Xvfb, and the smoke test on Linux and the test of an
+old database passed against it.
 
 When Ubuntu updates WebKitGTK, the links above may point at a file that is
 gone. Run the two loops again.

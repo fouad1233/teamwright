@@ -68,6 +68,76 @@ application at a stand-in (`tools/shared/stand-in-agent.cmd`) that says it is
 installed and signed in and cannot do any work. That is enough to check how
 work is started and how a turn that fails is shown.
 
+## Smoke test of the real application on Linux
+
+```bash
+npm run tauri --workspace @teamwright/desktop -- build --debug --no-bundle
+node tools/smoke/desktop-smoke-linux.mjs target/debug/teamwright-desktop /tmp/teamwright-pictures
+```
+
+The window of the application on Linux is WebKitGTK, which does not speak
+the debugging protocol the Windows test uses. It speaks WebDriver instead.
+The test starts a virtual display of its own (`Xvfb`), so nothing appears on
+the screen, starts `tauri-driver` in front of `WebKitWebDriver` on it, and
+drives the real window with plain WebDriver requests
+(`tools/shared/linux-desktop-application.mjs`). It needs those three
+programs; [Linux without administrator rights](linux-without-admin.md#the-smoke-test)
+says how to get them without `sudo`.
+
+It covers what the Windows test does not: a project from each of the five
+templates (the Kanban one made in the dialog, typed and clicked), the limits
+on a Kanban board, a task with a tag made in place, a checklist, a value of
+each kind of custom field and a dependency, and its history; a Table view
+with the columns of the fields, a board grouped by assignee and one by tag,
+the Gantt chart with the Actual switch, the Dashboard with the latest
+activity, the report of the whole project saved as Markdown into the work
+folder; a ready-made specialist with changed instructions, the library of
+skills and connectors, a connector whose program is a bare name and one
+whose program is a relative path, which is refused; a fact in the Memory
+place found by search; the coordinator switched on with a budget, watched
+for a minute with a specialist that cannot work; the list of earlier
+conversations and a digest of one; a theme, and "Look now" for a newer
+version. Then it starts the application again on the same data folder and
+checks that all of it is still there. With a folder for pictures, it takes
+one at every station.
+
+Two stations reach outside the test. "Look now" asks GitHub's public list
+of releases once. The list of earlier conversations reads the conversations
+of Claude Code on the computer it runs on, and a digest of the smallest of
+them is made and kept in the temporary database; the test prints only how
+many it found. The picture of that list shows them: keep it out of the
+repository.
+
+On Linux, Teamwright starts a turn on the stand-in
+(`tools/shared/stand-in-agent.sh`), which ends it at once with a failure.
+That is what the coordinator is watched with: it must start the task once,
+say why the turn failed, and not start it again. The window of the
+operating system for saving a file cannot be driven; the test calls the two
+commands the interface calls around it.
+
+```bash
+node tools/smoke/old-database-linux.mjs <older-program> target/debug/teamwright-desktop
+```
+
+This one checks that a database made by an older build opens in a newer
+one. It makes a project with the older program (tasks, a dependency, a
+member, a running sprint, a filtered view, a second area, a finished task),
+opens the same data folder with the newer one, and checks that the format
+version went up, that the project is as it was left, that the commands of
+the newer features answer on it, and that it can be changed with them. The
+older program is usually the main branch, built in a worktree of its own
+with its own target folder:
+
+```bash
+git worktree add --detach /tmp/teamwright-main main
+cd /tmp/teamwright-main && npm ci && npm run build
+CARGO_TARGET_DIR=/tmp/teamwright-main/target \
+  npm run tauri --workspace @teamwright/desktop -- build --debug --no-bundle
+```
+
+A debug build takes about 4 GB. Remove it afterwards with `cargo clean` and
+`git worktree remove --force /tmp/teamwright-main`.
+
 ## A real specialist at work
 
 ```bash
@@ -193,8 +263,9 @@ is signed in.
 What the interface remembers about itself, such as the project and the view
 that were open, is not in the database. The web view keeps it in a folder of
 its own. The tools above give every run a fresh one through
-`WEBVIEW2_USER_DATA_FOLDER`, so that a run never sees what an earlier run or
-the installed application left behind.
+`WEBVIEW2_USER_DATA_FOLDER` on Windows, and through `XDG_DATA_HOME`,
+`XDG_CACHE_HOME` and `XDG_CONFIG_HOME` on Linux, so that a run never sees
+what an earlier run or the installed application left behind.
 
 ## The layout of the repository
 
