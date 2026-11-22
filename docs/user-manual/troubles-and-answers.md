@@ -57,6 +57,12 @@ in
 switched off on this computer. Switch them on under *Commands* on the page
 *Computers*, after reading what it says, or refuse the request.
 
+**The part *Commands* says no command can run, and mentions a protected
+space inside another one.** The system of this computer, Ubuntu 24.04 as
+installed, does not allow the sandbox of Claude Code to start. That is a
+setting of the system that only an administrator can change, and Teamwright
+does not change it. Files and web domains still work; only commands do not.
+
 **A command I allowed for a task did not run.** It runs only in turns you
 start yourself: *Start work*, a reply, *Try again*, an answer. A turn the
 coordinator starts on its own runs no command. It also runs in no turn while

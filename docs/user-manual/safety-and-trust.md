@@ -77,8 +77,12 @@ the folder of the project, keep it from reading the rest of your home folder
 domain you have not allowed. If the sandbox cannot start, the turn does not
 start. Claude Code has no sandbox on Windows, so on Windows no command can be
 allowed; on Linux it needs the programs `bubblewrap` and `socat`, and
-Teamwright tries `bubblewrap` once before it allows a command. Some of what
-the sandbox needs on Linux can only be seen in a run. The sandbox has not
+Teamwright tries `bubblewrap` before it allows a command: an empty sandbox,
+and then a second one inside it, which the sandbox of Claude Code needs for
+its own helper. Ubuntu 24.04 as installed refuses the second, so there the
+part *Commands* says no command can run, and only an administrator of the
+computer could change that. Some of what the sandbox needs on Linux can only
+be seen in a run. The sandbox has not
 been seen working yet (see the note below).
 
 **A command does not see your secrets.** The sandbox does not hide
@@ -170,7 +174,8 @@ boundary around it, which is why the sandbox is there.
 Note: permissions were tested at every layer and seen in the demo. They have
 never been tried with a real specialist, no command has run on a permission
 in the installed program, and the sandbox has never been seen working: Claude
-Code was not signed in when it was built. That is why command permissions
+Code was not signed in when it was built, and when it was, the computer it
+was tried on (Ubuntu 24.04) could not start the sandbox. That is why command permissions
 are off until you switch them on. Until a real run has shown it, allow a
 command only as if there were no sandbox.
 

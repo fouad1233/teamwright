@@ -158,12 +158,15 @@ decision 0038). A manager signed in with a variable (`ANTHROPIC_…`,
 computer. `why_no_commands` answers the application: never on Windows or
 the first WSL; on macOS `/usr/bin/sandbox-exec` must be there; on Linux
 `bwrap` and `socat` must be on the search path and `bwrap` must make and
-leave an empty sandbox. `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB` is not set: in
+leave an empty sandbox, and then one more user namespace inside it, as the
+sandbox of Claude Code does (`NoCommands::NoNestedNamespaces` when only that
+fails: Ubuntu 24.04 as installed). `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB` is not set: in
 2.1.289 it forces the permission mode back to `default`. The ignored test
 `a_real_allowed_command_sees_none_of_the_managers_secrets` would prove that
 an allowed command sees none of the manager's variables, and
 `this_computer_can_make_the_sandbox` (in `commands.rs`) passes on a Linux
-computer with `bwrap` and `socat`.
+computer with `bwrap` and `socat` that allows nested user namespaces, and
+fails on Ubuntu 24.04 as installed, as it should.
 The ignored test
 `a_real_session_gets_its_chosen_skill_and_connector_and_nothing_of_the_users_own`
 in `tests/real_program.rs` has never run (needs the built program:

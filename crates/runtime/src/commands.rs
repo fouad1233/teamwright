@@ -13,7 +13,8 @@
 //! Whether the sandbox works can only be proven by a turn that runs. What
 //! is checked here is what can be checked from outside without running
 //! Claude Code: on Linux, that bubblewrap and socat are on the search path
-//! and that bubblewrap can make a sandbox on this computer; on macOS, that
+//! and that bubblewrap can make a sandbox, and a user namespace inside it,
+//! on this computer; on macOS, that
 //! the system's sandbox program is there; and that this is not Windows or
 //! the first version of WSL, where Claude Code has no sandbox at all.
 
@@ -103,19 +104,17 @@ pub fn why_no_commands(environment: &Environment) -> Option<NoCommands> {
     if sign_in_variable(environment).is_some() {
         return Some(NoCommands::SignedInWithVariable);
     }
-    if !sandbox_can_start(environment) {
-        return Some(NoCommands::NoSandbox);
-    }
-    None
+    sandbox_cannot_start(environment)
 }
 
-/// Whether the sandbox of Claude Code can start on this computer.
-fn sandbox_can_start(environment: &Environment) -> bool {
+/// Why the sandbox of Claude Code cannot start on this computer, or nothing
+/// if it can, as far as can be seen from outside.
+fn sandbox_cannot_start(environment: &Environment) -> Option<NoCommands> {
     if cfg!(windows) {
-        return false;
+        return Some(NoCommands::NoSandbox);
     }
     if cfg!(target_os = "macos") {
-        return Path::new("/usr/bin/sandbox-exec").is_file();
+        return (!Path::new("/usr/bin/sandbox-exec").is_file()).then_some(NoCommands::NoSandbox);
     }
     if cfg!(target_os = "linux") {
         // The first version of WSL has no sandbox; WSL2 is a Linux.
@@ -123,24 +122,37 @@ fn sandbox_can_start(environment: &Environment) -> bool {
             && version.contains("Microsoft")
             && !version.contains("WSL2")
         {
-            return false;
+            return Some(NoCommands::NoSandbox);
         }
         let (Some(bubblewrap), Some(_)) = (
             on_search_path(environment, "bwrap"),
             on_search_path(environment, "socat"),
         ) else {
-            return false;
+            return Some(NoCommands::NoSandbox);
         };
-        return bubblewrap_works(&bubblewrap, environment);
+        return match bubblewrap_works(&bubblewrap, environment) {
+            Trial::Works => None,
+            Trial::NoSandbox => Some(NoCommands::NoSandbox),
+            Trial::NoNestedNamespaces => Some(NoCommands::NoNestedNamespaces),
+        };
     }
-    false
+    Some(NoCommands::NoSandbox)
 }
 
-/// Whether bubblewrap can make an empty sandbox with every namespace of its
-/// own and leave it again: unprivileged namespaces may be switched off, or
-/// held back by the system's own rules.
-fn bubblewrap_works(bubblewrap: &Path, environment: &Environment) -> bool {
-    let arguments: Vec<std::ffi::OsString> = [
+/// What the trial of bubblewrap showed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Trial {
+    Works,
+    /// Not even an empty sandbox can be made.
+    NoSandbox,
+    /// An empty sandbox can be made, and a second one inside it cannot.
+    NoNestedNamespaces,
+}
+
+/// The arguments of one trial sandbox: an empty one with every namespace of
+/// its own, which runs `inside` and leaves again.
+fn trial_arguments(inside: &[std::ffi::OsString]) -> Vec<std::ffi::OsString> {
+    let mut arguments: Vec<std::ffi::OsString> = [
         "--ro-bind",
         "/",
         "/",
@@ -152,19 +164,56 @@ fn bubblewrap_works(bubblewrap: &Path, environment: &Environment) -> bool {
         "--new-session",
         "--die-with-parent",
         "--",
-        "true",
     ]
     .iter()
     .map(Into::into)
     .collect();
-    matches!(
-        run_briefly(
-            command(bubblewrap, &arguments, None, &environment_for_commands(environment)),
-            SANDBOX_TRIAL_LIMIT,
-            true,
-        ),
-        Ok(Some(finished)) if finished.code == Some(0)
-    )
+    arguments.extend(inside.iter().cloned());
+    arguments
+}
+
+/// Whether bubblewrap can make an empty sandbox with every namespace of its
+/// own and leave it again, and then also a user namespace inside that one.
+///
+/// The second step is what the sandbox of Claude Code needs: inside its
+/// sandbox it starts a helper that makes another user namespace, and fails
+/// with "nested userns is capability-restricted" where the system refuses
+/// that. Ubuntu 24.04 refuses it as installed
+/// (`kernel.apparmor_restrict_unprivileged_userns = 1`), while the first
+/// step alone passes there. The setting itself is not read: it is only a
+/// hint, and other systems can refuse in other ways.
+fn bubblewrap_works(bubblewrap: &Path, environment: &Environment) -> Trial {
+    let environment = environment_for_commands(environment);
+    let passes = |inside: &[std::ffi::OsString]| {
+        matches!(
+            run_briefly(
+                command(bubblewrap, &trial_arguments(inside), None, &environment),
+                SANDBOX_TRIAL_LIMIT,
+                true,
+            ),
+            Ok(Some(finished)) if finished.code == Some(0)
+        )
+    };
+    if !passes(&["true".into()]) {
+        return Trial::NoSandbox;
+    }
+    let nested: Vec<std::ffi::OsString> = [
+        bubblewrap.as_os_str(),
+        "--ro-bind".as_ref(),
+        "/".as_ref(),
+        "/".as_ref(),
+        "--unshare-user".as_ref(),
+        "--".as_ref(),
+        "true".as_ref(),
+    ]
+    .iter()
+    .map(Into::into)
+    .collect();
+    if passes(&nested) {
+        Trial::Works
+    } else {
+        Trial::NoNestedNamespaces
+    }
 }
 
 /// The first file with this name in the folders of the search path of
@@ -300,8 +349,34 @@ mod tests {
         assert_eq!(why_no_commands(&nowhere), Some(NoCommands::NoSandbox));
     }
 
+    /// A stand-in for bubblewrap that passes the first trial and refuses a
+    /// user namespace inside it, as Ubuntu 24.04 does, or refuses both.
+    #[cfg(unix)]
+    fn fake_bubblewrap(folder: &Path, refuses: &str) -> PathBuf {
+        use std::os::unix::fs::PermissionsExt;
+        let path = folder.join("bwrap");
+        let script = format!("#!/bin/sh\ncase \"$*\" in {refuses}) exit 1;; esac\nexit 0\n");
+        std::fs::write(&path, script).unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        path
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_sandbox_that_cannot_hold_a_second_user_namespace_is_told_apart() {
+        let folder = tempfile::tempdir().unwrap();
+        let environment = Environment::empty().with("PATH", "/usr/bin:/bin");
+        let trial = |refuses: &str| {
+            bubblewrap_works(&fake_bubblewrap(folder.path(), refuses), &environment)
+        };
+        assert_eq!(trial("*--no-such-word*"), Trial::Works);
+        assert_eq!(trial("*--unshare-user*"), Trial::NoNestedNamespaces);
+        assert_eq!(trial("*"), Trial::NoSandbox);
+    }
+
     /// Run on a Linux computer with bubblewrap and socat, where unprivileged
-    /// namespaces are allowed: `cargo test -p teamwright-runtime
+    /// and nested namespaces are allowed (it fails on Ubuntu 24.04 as
+    /// installed, with `NoNestedNamespaces`, as it should): `cargo test -p teamwright-runtime
     /// this_computer_can_make_the_sandbox -- --ignored`.
     #[cfg(target_os = "linux")]
     #[test]

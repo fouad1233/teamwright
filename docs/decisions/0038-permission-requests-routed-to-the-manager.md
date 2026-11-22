@@ -476,3 +476,33 @@ and `a_real_allowed_command_sees_none_of_the_managers_secrets` in
 cleared environment; neither has passed. The trial of `bwrap`
 (`this_computer_can_make_the_sandbox`) passed on the Linux computer this
 was written on.
+
+## Note of 22 November 2026, after the first real run
+
+The first real run was on Ubuntu 24.04 with `bubblewrap` 0.9 and `socat`
+installed. The sandbox did not start: Claude Code's helper stopped with
+`apply-seccomp: write /proc/self/setgroups (nested userns is
+capability-restricted; caller must provide CAP_SYS_ADMIN): Permission
+denied`, also when run outside every other sandbox. Ubuntu 24.04 sets
+`kernel.apparmor_restrict_unprivileged_userns = 1` by default, which refuses
+a user namespace made inside another one. The command did not run, so
+nothing leaked, but the page *Computers* had said commands were possible,
+because the trial made one empty sandbox, which passes there.
+
+**What changed.** The trial now makes a second `bwrap --unshare-user`
+inside the first, which is what the helper does. On this computer the first
+passes and the second fails with "No permissions to create new namespace".
+The answer is a new reason, `NoCommands::NoNestedNamespaces`, in words for
+the manager: the system does not allow one protected space inside another,
+it is a setting only an administrator can change, and Teamwright does not
+change it. The setting is not read as the test, because other systems can
+refuse the same way for other reasons. The reason travels as text, so the
+wire contract and the demo backend did not change. The documentation of
+Claude Code offers an AppArmor profile for `bwrap` and
+`sandbox.allowNestedUserNamespaces`, which turns off a boundary; Teamwright
+offers neither and changes no setting of the system.
+
+**What is true now.** On Ubuntu 24.04 as installed, commands cannot run. The
+sandbox has still never been seen holding a command in, because this
+computer cannot start it. The three ignored tests of the sandbox have not
+passed. Everything else of this decision stands.

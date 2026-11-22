@@ -66,8 +66,17 @@ lets it run any program as you. Commands are meant to run in a sandbox that
 keeps them inside the folders of the project, and that sandbox has not been
 proven in this version of Teamwright. Keep it off unless you trust the files
 of your projects. If this computer can run no command even when it is on
-(Windows, a Linux without `bubblewrap` and `socat`, or Claude Code signed in
-with an environment variable), the part says why.
+(Windows, a Linux without `bubblewrap` and `socat`, a Linux that does not
+allow the sandbox to start a protected space inside another one, or Claude
+Code signed in with an environment variable), the part says why.
+
+On Ubuntu 24.04 as it is installed the part says *Even switched on, no
+command can run on this computer*, and that the system does not allow one
+protected space inside another. That is a setting of the system, and only an
+administrator of the computer can change it; Teamwright never changes it, and
+you should not weaken it only for Teamwright. Everything else works: the
+specialists read and write files in their folders and reach the web domains
+you allow. Only commands are missing.
 
 Web domains do not depend on this switch. The switch was tested and seen in
 the demo, in a dark and a light theme; no command has run with it in the

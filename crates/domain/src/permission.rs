@@ -449,6 +449,12 @@ pub enum NoCommands {
     /// The computer has no sandbox for commands. Claude Code has none on
     /// Windows, and a command outside one can do anything the manager can.
     NoSandbox,
+    /// The computer can make a sandbox, and not a second one inside it,
+    /// which the sandbox of Claude Code needs for its own helper. Ubuntu
+    /// 24.04 refuses it as installed. Only an administrator of the computer
+    /// can change that, and Teamwright never does (decision 0038, note of
+    /// 22 November 2026).
+    NoNestedNamespaces,
     /// The manager signs in to Claude Code with an environment variable (an
     /// API key, a token). A turn with a command is started with a cleared
     /// environment, which would lose it; keeping it would hand it to the
@@ -472,6 +478,13 @@ impl NoCommands {
                 "a command is allowed only where it runs in a sandbox, and Claude Code cannot \
                  make one on this computer: it has none on Windows, and on Linux it needs \
                  bubblewrap and socat, and bubblewrap must be able to start"
+            }
+            Self::NoNestedNamespaces => {
+                "the sandbox for commands needs to start one protected space inside another, \
+                 and the system of this computer does not allow that; Ubuntu 24.04 does not \
+                 as installed. It is a setting of the system that only an administrator of \
+                 this computer can change, and Teamwright does not change it. Until then the \
+                 specialists can read and write files and reach the web, and not run commands"
             }
             Self::SignedInWithVariable => {
                 "Claude Code is signed in on this computer with an environment variable (an API \
@@ -1214,6 +1227,7 @@ mod tests {
         for no in [
             NoCommands::SwitchedOff,
             NoCommands::NoSandbox,
+            NoCommands::NoNestedNamespaces,
             NoCommands::SignedInWithVariable,
             NoCommands::SecretInReach,
         ] {
@@ -1224,6 +1238,10 @@ mod tests {
         }
         assert!(NoCommands::SecretInReach.reason().contains("secret"));
         assert!(NoCommands::NoSandbox.reason().contains("Windows"));
+        let nested = NoCommands::NoNestedNamespaces.reason();
+        assert!(nested.contains("administrator") && nested.contains("Ubuntu"));
+        // The manager is never told to weaken the system.
+        assert!(!nested.contains("sysctl") && !nested.contains("disable"));
     }
 
     fn said_in() -> SaidIn {
@@ -1470,6 +1488,7 @@ mod tests {
             NoCommands::SwitchedOff,
             NoCommands::SecretInReach,
             NoCommands::NoSandbox,
+            NoCommands::NoNestedNamespaces,
             NoCommands::SignedInWithVariable,
         ] {
             let mut about = turn(&setting, Some(setting.task), TurnId::generate());
