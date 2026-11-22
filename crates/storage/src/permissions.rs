@@ -348,12 +348,20 @@ pub(crate) fn write_request_state(
 }
 
 /// Whether the answer to a request was written by this computer itself, as
-/// its own log of operations shows: every state of the request that
-/// carries an answer was made here. An answer is written once, by the
-/// computer the manager answered on; one that came through the sync folder
-/// was made by another computer, whatever computer it names. Anybody who
-/// can write in the sync folder can write such an answer, though never in
-/// the folder of this computer, which this computer does not read.
+/// its own log of operations shows: the request has an answer, and EVERY
+/// state of the request the log keeps was made here, also those that do not
+/// carry the answer, and also those that wait to be applied.
+///
+/// A request is asked and answered on the computer that runs its
+/// conversation, so all its states are made there. The manager may take a
+/// permission back on another computer; such a state also makes it grant
+/// nothing here, which is what taking it back means anyway. A request merges field by field (decision 0038), so a
+/// state that came through the sync folder without the answer could still
+/// move an answer written here to another specialist or task, or bring a
+/// taken-back permission back (second review, 22 November 2026). Anybody
+/// who can write in the sync folder can write such a state, though never in
+/// the folder of this computer, which this computer does not read. So one
+/// state from anywhere else is enough for the request to grant nothing here.
 fn answered_here(
     connection: &Connection,
     id: &str,
@@ -361,8 +369,7 @@ fn answered_here(
 ) -> Result<bool, DatabaseError> {
     let mut statement = connection.prepare(
         "SELECT payload, device_id FROM operations
-         WHERE entity = :entity AND entity_id = :id AND payload IS NOT NULL
-           AND waiting IS NULL",
+         WHERE entity = :entity AND entity_id = :id AND payload IS NOT NULL",
     )?;
     let states = statement
         .query_map(
@@ -373,6 +380,9 @@ fn answered_here(
     let here = this_computer.to_string();
     let mut answered = false;
     for (payload, computer) in states {
+        if computer != here {
+            return Ok(false);
+        }
         let state: Value = serde_json::from_str(&payload).map_err(|error| {
             DatabaseError::Damaged(format!(
                 "a state of the permission request {id} cannot be read: {error}"
@@ -382,9 +392,6 @@ fn answered_here(
             .get("decision")
             .is_some_and(|decision| !decision.is_null())
         {
-            if computer != here {
-                return Ok(false);
-            }
             answered = true;
         }
     }

@@ -341,3 +341,159 @@ fn a_prefix_of_commands_from_a_computer_that_still_knew_it_is_not_kept() {
         .unwrap();
     assert!(desk.requests(&project).is_empty());
 }
+
+/// Takes in, on `computer`, one state of a request written by another
+/// computer, later than anything else, with only the fields given.
+fn take_in_foreign_state(computer: &Computer, id: &str, state: &serde_json::Value) {
+    let elsewhere = ComputerId::generate();
+    computer
+        .database
+        .take_in(&[ExchangedOperation {
+            computer: elsewhere,
+            sequence: 1,
+            stamp: format!("1999999999999-00000-{elsewhere}"),
+            entity: "permission_request".to_owned(),
+            entity_id: id.to_owned(),
+            change: ExchangedChange::Upsert {
+                state: state.to_string(),
+                field_stamps: None,
+            },
+        }])
+        .unwrap();
+}
+
+/// A permission allowed on the desk with this rule and scope, asked in a
+/// conversation about a task, and taken back.
+fn taken_back_on_the_desk(
+    desk: &Computer,
+    project: &Project,
+    rule: PermissionRule,
+    scope: PermissionScope,
+) -> PermissionRequest {
+    let mut asked = PermissionRequest::ask(
+        project.id(),
+        SaidIn {
+            member_id: MemberId::generate(),
+            conversation_id: ConversationId::generate(),
+            turn_id: TurnId::generate(),
+        },
+        Some(TaskId::generate()),
+        rule.clone(),
+        "To finish the task.",
+        moment(1),
+    )
+    .unwrap();
+    asked
+        .allow(
+            scope,
+            rule,
+            "",
+            Answered {
+                at: moment(2),
+                computer: desk.database.device_id(),
+                next_turn: TurnId::generate(),
+            },
+        )
+        .unwrap();
+    desk.permissions.save_request(&asked).unwrap();
+    asked.withdraw(moment(3)).unwrap();
+    desk.permissions.save_request(&asked).unwrap();
+    asked
+}
+
+/// The second review (22 November 2026): a state without an answer, from
+/// the sync folder, that brings a taken-back permission back and moves it
+/// to another specialist and task, must not make it grant anything here.
+fn a_foreign_state_without_an_answer_cannot_revive_or_move(
+    rule: PermissionRule,
+    scope: PermissionScope,
+) {
+    let desk = Computer::new();
+    let project = project_on(&desk);
+    let asked = taken_back_on_the_desk(&desk, &project, rule, scope);
+    assert!(granted_rules(&desk.requests(&project), &turn_on(&desk, &asked)).is_empty());
+
+    let other_member = MemberId::generate();
+    let other_task = TaskId::generate();
+    take_in_foreign_state(
+        &desk,
+        &asked.id().to_string(),
+        &serde_json::json!({
+            "withdrawn_at": null,
+            "member_id": other_member.to_string(),
+            "task_id": other_task.to_string(),
+        }),
+    );
+
+    let on_the_desk = desk.requests(&project);
+    assert_eq!(on_the_desk.len(), 1, "it is still shown");
+    let moved = &on_the_desk[0];
+    // The state was taken in: the request now names the other specialist
+    // and task, and is no longer taken back.
+    assert_eq!(moved.member_id(), other_member);
+    assert_eq!(moved.task_id(), Some(other_task));
+    assert!(moved.answer().unwrap().withdrawn_at.is_none());
+    // But not all of it was written here, so it grants nothing to anybody.
+    assert!(!moved.answer().unwrap().answered_here);
+    let for_the_other = TurnAbout {
+        member_id: other_member,
+        task_id: Some(other_task),
+        ..turn_on(&desk, &asked)
+    };
+    assert!(granted_rules(&on_the_desk, &for_the_other).is_empty());
+    assert!(granted_rules(&on_the_desk, &turn_on(&desk, &asked)).is_empty());
+}
+
+#[test]
+fn a_foreign_state_cannot_revive_or_move_a_command_allowed_for_a_task() {
+    a_foreign_state_without_an_answer_cannot_revive_or_move(
+        PermissionRule::new(PermissionKind::Command, "npm test").unwrap(),
+        PermissionScope::Task,
+    );
+}
+
+#[test]
+fn a_foreign_state_cannot_revive_or_move_a_web_domain_allowed_always() {
+    a_foreign_state_without_an_answer_cannot_revive_or_move(
+        PermissionRule::new(PermissionKind::WebDomain, "docs.rs").unwrap(),
+        PermissionScope::Always,
+    );
+}
+
+#[test]
+fn a_foreign_state_that_only_moves_a_standing_permission_ends_it_here() {
+    let desk = Computer::new();
+    let project = project_on(&desk);
+    let mut asked = request(&project, 1);
+    asked
+        .allow(
+            PermissionScope::Task,
+            PermissionRule::new(PermissionKind::Command, "npm test").unwrap(),
+            "",
+            Answered {
+                at: moment(2),
+                computer: desk.database.device_id(),
+                next_turn: TurnId::generate(),
+            },
+        )
+        .unwrap();
+    desk.permissions.save_request(&asked).unwrap();
+    assert_eq!(
+        granted_rules(&desk.requests(&project), &turn_on(&desk, &asked)).len(),
+        1
+    );
+
+    let other_member = MemberId::generate();
+    take_in_foreign_state(
+        &desk,
+        &asked.id().to_string(),
+        &serde_json::json!({ "member_id": other_member.to_string() }),
+    );
+    let on_the_desk = desk.requests(&project);
+    let for_the_other = TurnAbout {
+        member_id: other_member,
+        ..turn_on(&desk, &asked)
+    };
+    assert!(granted_rules(&on_the_desk, &for_the_other).is_empty());
+    assert!(granted_rules(&on_the_desk, &turn_on(&desk, &asked)).is_empty());
+}
