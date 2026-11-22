@@ -146,6 +146,7 @@ export class PretendedLibrary {
       }),
       addedAt: this.now(),
       here: true,
+      problem: null,
     };
     const parts: LibraryConnector = {
       id: this.newId(),
@@ -223,7 +224,7 @@ export class PretendedLibrary {
         `this cannot be a skill: the library already has the skill "${found.name}"; remove it first to add it again`,
       );
     }
-    skills.push({ id: this.newId(), ...found, addedAt: this.now(), here: true });
+    skills.push({ id: this.newId(), ...found, addedAt: this.now(), here: true, problem: null });
     this.skills.set(projectId, skills);
   }
 

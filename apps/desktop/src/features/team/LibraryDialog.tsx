@@ -81,9 +81,15 @@ function LibraryContent({ project }: { project: Project }) {
                 <div className={styles.words}>
                   <span className={styles.name}>{skill.name}</span>
                   <span className={styles.detail}>{skill.description}</span>
-                  {!skill.here && (
+                  {!skill.here && skill.problem === null && (
                     <span className={styles.missing}>
                       Not on this computer: add its folder here again to use it here.
+                    </span>
+                  )}
+                  {skill.problem !== null && (
+                    <span className={styles.missing}>
+                      No specialist is given it on this computer: {skill.problem}. Add its folder
+                      again to replace the copy.
                     </span>
                   )}
                 </div>

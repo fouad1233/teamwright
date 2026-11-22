@@ -15,8 +15,8 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use teamwright_domain::{
     Connector, ConnectorId, ConnectorName, ConnectorStart, DomainError, GivenConnector, Member,
-    MemberId, MemberKind, MemberKit, ProjectId, SecretHeader, Skill, SkillFile, SkillId, ToolName,
-    VariableName,
+    MemberId, MemberKind, MemberKit, ProjectId, SecretHeader, Skill, SkillFile, SkillId, SkillName,
+    ToolName, VariableName,
 };
 
 use crate::agent_runtime::{KitConnector, KitSkill, TurnKit};
@@ -120,16 +120,110 @@ pub struct SkillFolder {
     pub has_links: bool,
 }
 
+/// The folder in which the agent program finds the manifest of a plugin.
+pub const MANIFEST_FOLDER: &str = ".claude-plugin";
+
+/// The manifest of a plugin, inside [`MANIFEST_FOLDER`].
+pub const MANIFEST_FILE: &str = "plugin.json";
+
+/// The folder of the skills of a plugin.
+pub const SKILLS_FOLDER: &str = "skills";
+
 /// A skill whose folder this computer keeps.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KeptSkill {
     /// The folder the agent program is given: the manifest and
     /// `skills/<name>/`.
     pub folder: PathBuf,
-    /// The name of the folder of the skill inside it.
+    /// The name of the folder of the skill inside it, or empty if
+    /// `skills/` does not hold exactly one entry.
     pub skill_folder_name: String,
-    /// The text of the kept `SKILL.md`, read again for every turn.
+    /// The text of the kept `SKILL.md`, read again for every turn; empty if
+    /// it cannot be read.
     pub skill_text: String,
+    /// What the copy holds, read again for every turn.
+    pub layout: KeptLayout,
+}
+
+/// What the copy of a skill holds, as far as the check before a turn needs
+/// it. The agent program loads more than skills from a plugin folder
+/// (commands, agents, hooks, tool servers), so the copy must hold exactly
+/// what Teamwright wrote and nothing else.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct KeptLayout {
+    /// The names at the top of the copy.
+    pub top: Vec<String>,
+    /// The names inside [`MANIFEST_FOLDER`].
+    pub manifest: Vec<String>,
+    /// The names inside [`SKILLS_FOLDER`].
+    pub skills: Vec<String>,
+    /// How many files the folder of the skill holds. Counting stops a
+    /// little past [`MAX_SKILL_FILES`].
+    pub files: usize,
+    /// How many bytes they have together.
+    pub bytes: u64,
+    /// Whether the copy holds a link anywhere, or is one.
+    pub has_links: bool,
+}
+
+/// Checks that the copy of a skill holds exactly what Teamwright wrote:
+/// the manifest and the folder of the skill, no link anywhere, and no more
+/// than a skill may hold.
+///
+/// # Errors
+///
+/// Returns why not, in words.
+pub fn check_kept_layout(layout: &KeptLayout, skill: &SkillName) -> Result<(), String> {
+    if layout.has_links {
+        return Err("its copy holds a link, which could lead outside it".to_owned());
+    }
+    let mut top = layout.top.clone();
+    top.sort();
+    if top != [MANIFEST_FOLDER, SKILLS_FOLDER] {
+        let extra: Vec<&str> = top
+            .iter()
+            .map(String::as_str)
+            .filter(|name| ![MANIFEST_FOLDER, SKILLS_FOLDER].contains(name))
+            .collect();
+        return Err(if extra.is_empty() {
+            "its copy lacks the manifest or the folder of the skill".to_owned()
+        } else {
+            format!(
+                "its copy holds more than Teamwright wrote: {}",
+                shortened_list(&extra)
+            )
+        });
+    }
+    if layout.manifest != [MANIFEST_FILE] {
+        return Err(format!(
+            "the folder {MANIFEST_FOLDER} of its copy holds more or less than {MANIFEST_FILE}"
+        ));
+    }
+    if layout.skills != [skill.as_str()] {
+        return Err(format!(
+            "the folder {SKILLS_FOLDER} of its copy holds more or less than the skill {skill}"
+        ));
+    }
+    if layout.files > MAX_SKILL_FILES || layout.bytes > MAX_SKILL_BYTES {
+        return Err(format!(
+            "its copy is larger than a skill may be: at most {MAX_SKILL_FILES} files and {} MiB",
+            MAX_SKILL_BYTES / 1024 / 1024
+        ));
+    }
+    Ok(())
+}
+
+/// A few names, joined, for a message.
+fn shortened_list(names: &[&str]) -> String {
+    let mut shown: Vec<String> = names
+        .iter()
+        .take(3)
+        .map(|name| name.chars().take(40).collect())
+        .collect();
+    if names.len() > 3 {
+        shown.push(format!("and {} more", names.len() - 3));
+    }
+    shown.join(", ")
 }
 
 /// The disk and the environment of this computer, as far as skills and
@@ -175,6 +269,10 @@ pub struct LibrarySkill {
     /// Whether this computer keeps a copy of its folder that still passes
     /// the check. Without one, no turn on this computer is given it.
     pub here: bool,
+    /// Why the copy this computer keeps is not given to any turn, if it is
+    /// there and fails the check: changed on the disk, holding more than
+    /// Teamwright wrote, a link, or too much.
+    pub problem: Option<String>,
 }
 
 /// A connector of the library, with what this computer lacks of it.
@@ -313,9 +411,17 @@ impl KitService {
         Ok(Library {
             skills: skills
                 .into_iter()
-                .map(|skill| LibrarySkill {
-                    here: usable_here(self.shelf.as_ref(), &skill).is_some(),
-                    skill,
+                .map(|skill| {
+                    let (here, problem) = match copy_here(self.shelf.as_ref(), &skill) {
+                        CopyHere::Usable(_) => (true, None),
+                        CopyHere::Missing => (false, None),
+                        CopyHere::Refused(problem) => (false, Some(problem)),
+                    };
+                    LibrarySkill {
+                        here,
+                        problem,
+                        skill,
+                    }
                 })
                 .collect(),
             connectors: connectors
@@ -375,7 +481,9 @@ impl KitService {
             .into_iter()
             .find(|skill| skill.name() == file.name());
         let skill = match existing {
-            Some(skill) if self.shelf.kept(skill.id()).is_some() => {
+            Some(skill)
+                if matches!(copy_here(self.shelf.as_ref(), &skill), CopyHere::Usable(_)) =>
+            {
                 return Err(not_a_skill(&format!(
                     "the library already has the skill \"{}\"; remove it first to add it again",
                     skill.name()
@@ -612,7 +720,7 @@ pub fn turn_kit_of(
         let Some(skill) = skills.iter().find(|skill| skill.id() == *id) else {
             continue;
         };
-        if let Some(kept) = usable_here(shelf, skill) {
+        if let CopyHere::Usable(kept) = copy_here(shelf, skill) {
             turn.skills.push(KitSkill {
                 name: skill.name().to_string(),
                 folder: kept.folder,
@@ -669,13 +777,39 @@ pub fn variables_of_the_library(
     Ok(named.into_iter().collect())
 }
 
-/// The copy of a skill this computer keeps, if it is there and still the
-/// same skill, passing the check. The copy is read again for every turn,
-/// so that a copy changed on the disk is checked again.
-fn usable_here(shelf: &dyn SkillShelf, skill: &Skill) -> Option<KeptSkill> {
-    let kept = shelf.kept(skill.id())?;
-    let file = SkillFile::check(&kept.skill_text, &kept.skill_folder_name).ok()?;
-    (file.name() == skill.name() && kept.skill_folder_name == skill.name().as_str()).then_some(kept)
+/// What this computer has of a skill.
+enum CopyHere {
+    /// No copy.
+    Missing,
+    /// A copy that fails the check, and why.
+    Refused(String),
+    /// A copy that passes it.
+    Usable(KeptSkill),
+}
+
+/// The copy of a skill this computer keeps, checked: it must hold exactly
+/// what Teamwright wrote, no link and no more than a skill may hold, and
+/// its `SKILL.md` must still pass the check and name the same skill. The
+/// copy is read again for every turn, so that a copy changed on the disk
+/// is checked again.
+fn copy_here(shelf: &dyn SkillShelf, skill: &Skill) -> CopyHere {
+    let Some(kept) = shelf.kept(skill.id()) else {
+        return CopyHere::Missing;
+    };
+    if let Err(problem) = check_kept_layout(&kept.layout, skill.name()) {
+        return CopyHere::Refused(problem);
+    }
+    let file = match SkillFile::check(&kept.skill_text, &kept.skill_folder_name) {
+        Ok(file) => file,
+        Err(DomainError::NotASkill { reason }) => {
+            return CopyHere::Refused(format!("its copy changed: {reason}"));
+        }
+        Err(other) => return CopyHere::Refused(other.to_string()),
+    };
+    if file.name() != skill.name() || kept.skill_folder_name != skill.name().as_str() {
+        return CopyHere::Refused(format!("its copy is of another skill, {}", file.name()));
+    }
+    CopyHere::Usable(kept)
 }
 
 /// The variables of a connector that are not set on this computer.
@@ -861,6 +995,14 @@ impl PretendShelf {
         }
     }
 
+    /// Changes what the kept copy of a skill holds, as a change on the disk
+    /// would.
+    pub fn change_kept_layout(&self, skill: SkillId, change: impl FnOnce(&mut KeptLayout)) {
+        if let Some(kept) = lock(&self.kept).get_mut(&skill) {
+            change(&mut kept.layout);
+        }
+    }
+
     /// Forgets every copy, as another computer that never kept them.
     pub fn clear_kept(&self) {
         lock(&self.kept).clear();
@@ -882,6 +1024,14 @@ impl SkillShelf for PretendShelf {
             KeptSkill {
                 folder: PathBuf::from("shelf").join(skill.id().to_string()),
                 skill_folder_name: skill.name().to_string(),
+                layout: KeptLayout {
+                    top: vec![MANIFEST_FOLDER.to_owned(), SKILLS_FOLDER.to_owned()],
+                    manifest: vec![MANIFEST_FILE.to_owned()],
+                    skills: vec![skill.name().to_string()],
+                    files: found.files,
+                    bytes: found.bytes,
+                    has_links: found.has_links,
+                },
                 skill_text: found.skill_text.unwrap_or_default(),
             },
         );

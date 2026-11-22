@@ -7,21 +7,23 @@
 //! `skills/<name>/`, the folder of the skill. Nothing else is ever put
 //! there, so that a session loads nothing but the skill. The folder the
 //! manager chose is only read; links in it are refused, never followed.
+//!
+//! Before every turn the copy is read again: what lies at its top, in the
+//! folder of the manifest and in the folder of skills, whether it holds a
+//! link, and how large it is. The application decides from that whether
+//! the copy is still exactly what Teamwright wrote. The limits of size
+//! hold while the copy is made, not only when the folder is measured
+//! before.
 
-use std::fs;
-use std::io;
+use std::fs::{self, File, Metadata};
+use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 
 use teamwright_application::{
-    KeptSkill, MAX_SKILL_BYTES, MAX_SKILL_FILES, SKILL_FILE, SkillFolder, SkillShelf, StorageError,
+    KeptLayout, KeptSkill, MANIFEST_FILE, MANIFEST_FOLDER, MAX_SKILL_BYTES, MAX_SKILL_FILES,
+    SKILL_FILE, SKILLS_FOLDER, SkillFolder, SkillShelf, StorageError,
 };
 use teamwright_domain::{Skill, SkillId, VariableName};
-
-/// The folder with the manifest of a plugin, as Claude Code expects it.
-const MANIFEST_FOLDER: &str = ".claude-plugin";
-
-/// The folder of the skills of a plugin.
-const SKILLS_FOLDER: &str = "skills";
 
 /// The largest `SKILL.md` that is read: 1 MiB.
 const MAX_SKILL_FILE_BYTES: u64 = 1024 * 1024;
@@ -78,8 +80,77 @@ fn measure(folder: &Path, found: &mut SkillFolder) -> Result<(), StorageError> {
     Ok(())
 }
 
-/// Copies a folder, its files and its folders, refusing a link.
-fn copy_folder(from: &Path, to: &Path) -> Result<(), StorageError> {
+/// What a copy may still take: files and bytes.
+struct Allowance {
+    files: usize,
+    bytes: u64,
+}
+
+impl Allowance {
+    const fn of_a_skill() -> Self {
+        Self {
+            files: MAX_SKILL_FILES,
+            bytes: MAX_SKILL_BYTES,
+        }
+    }
+}
+
+fn too_large() -> StorageError {
+    StorageError::new(format!(
+        "the folder is larger than a skill may be: at most {MAX_SKILL_FILES} files and {} MiB",
+        MAX_SKILL_BYTES / 1024 / 1024
+    ))
+}
+
+/// Whether two descriptions are of the same file. On Unix by its device and
+/// number, so that a file swapped for a link after it was looked at is
+/// noticed; elsewhere only that both are plain files.
+#[cfg(unix)]
+fn same_file(looked_at: &Metadata, opened: &Metadata) -> bool {
+    use std::os::unix::fs::MetadataExt;
+    looked_at.dev() == opened.dev() && looked_at.ino() == opened.ino()
+}
+
+#[cfg(not(unix))]
+fn same_file(looked_at: &Metadata, opened: &Metadata) -> bool {
+    looked_at.is_file() && opened.is_file()
+}
+
+/// Copies one plain file within what the copy may still take, never
+/// through a link.
+fn copy_file(from: &Path, to: &Path, allowance: &mut Allowance) -> Result<(), StorageError> {
+    if allowance.files == 0 {
+        return Err(too_large());
+    }
+    allowance.files -= 1;
+    let looked_at = fs::symlink_metadata(from)
+        .map_err(failed(format!("{} could not be read", from.display())))?;
+    let source =
+        File::open(from).map_err(failed(format!("{} could not be read", from.display())))?;
+    let opened = source
+        .metadata()
+        .map_err(failed(format!("{} could not be read", from.display())))?;
+    if !looked_at.is_file() || !opened.is_file() || !same_file(&looked_at, &opened) {
+        return Err(StorageError::new(format!(
+            "{} changed while it was copied, or is a link, and a skill may not hold one",
+            from.display()
+        )));
+    }
+    let mut target =
+        File::create(to).map_err(failed(format!("{} could not be written", to.display())))?;
+    // One byte more than allowed is read, to know that the file is larger.
+    let copied = io::copy(&mut source.take(allowance.bytes + 1), &mut target)
+        .map_err(failed(format!("{} could not be copied", from.display())))?;
+    if copied > allowance.bytes {
+        return Err(too_large());
+    }
+    allowance.bytes -= copied;
+    Ok(())
+}
+
+/// Copies a folder, its files and its folders, refusing a link, within
+/// what a skill may hold.
+fn copy_folder(from: &Path, to: &Path, allowance: &mut Allowance) -> Result<(), StorageError> {
     fs::create_dir_all(to).map_err(failed(format!(
         "the folder {} could not be made",
         to.display()
@@ -104,15 +175,55 @@ fn copy_folder(from: &Path, to: &Path) -> Result<(), StorageError> {
                 entry.path().display()
             )));
         } else if kind.is_dir() {
-            copy_folder(&entry.path(), &target)?;
+            copy_folder(&entry.path(), &target, allowance)?;
         } else {
-            fs::copy(entry.path(), &target).map_err(failed(format!(
-                "{} could not be copied",
-                entry.path().display()
-            )))?;
+            copy_file(&entry.path(), &target, allowance)?;
         }
     }
     Ok(())
+}
+
+/// Whether a folder holds a link anywhere, without following one. Also
+/// true if it cannot be read, or holds more entries than are left to look
+/// at.
+fn holds_a_link(folder: &Path, entries_left: &mut usize) -> bool {
+    let Ok(entries) = fs::read_dir(folder) else {
+        return true;
+    };
+    for entry in entries {
+        let Some(left) = entries_left.checked_sub(1) else {
+            return true;
+        };
+        *entries_left = left;
+        let Ok((kind, path)) =
+            entry.and_then(|entry| entry.file_type().map(|kind| (kind, entry.path())))
+        else {
+            return true;
+        };
+        if kind.is_symlink() || (kind.is_dir() && holds_a_link(&path, entries_left)) {
+            return true;
+        }
+    }
+    false
+}
+
+/// The names in a folder, without following a link; none if it cannot be
+/// read or is not a folder.
+fn names_in(folder: &Path) -> Vec<String> {
+    let is_folder = fs::symlink_metadata(folder).is_ok_and(|metadata| metadata.is_dir());
+    if !is_folder {
+        return Vec::new();
+    }
+    let mut names: Vec<String> = fs::read_dir(folder)
+        .map(|entries| {
+            entries
+                .filter_map(Result::ok)
+                .map(|entry| entry.file_name().to_string_lossy().into_owned())
+                .collect()
+        })
+        .unwrap_or_default();
+    names.sort();
+    names
 }
 
 /// The text of a `SKILL.md` that is a plain file of a sensible size.
@@ -166,11 +277,15 @@ impl SkillShelf for LocalSkillShelf {
             "name": skill.name().as_str(),
             "description": skill.description(),
         });
-        fs::write(manifest.join("plugin.json"), named.to_string()).map_err(failed(format!(
+        fs::write(manifest.join(MANIFEST_FILE), named.to_string()).map_err(failed(format!(
             "the manifest in {} could not be written",
             manifest.display()
         )))?;
-        let copied = copy_folder(from, &fresh.join(SKILLS_FOLDER).join(skill.name().as_str()));
+        let copied = copy_folder(
+            from,
+            &fresh.join(SKILLS_FOLDER).join(skill.name().as_str()),
+            &mut Allowance::of_a_skill(),
+        );
         if let Err(error) = copied {
             let _ = fs::remove_dir_all(&fresh);
             return Err(error);
@@ -189,20 +304,52 @@ impl SkillShelf for LocalSkillShelf {
 
     fn kept(&self, skill: SkillId) -> Option<KeptSkill> {
         let folder = self.folder_of(skill);
-        let mut names = fs::read_dir(folder.join(SKILLS_FOLDER))
-            .ok()?
-            .filter_map(Result::ok)
-            .filter(|entry| entry.file_type().is_ok_and(|kind| kind.is_dir()))
-            .map(|entry| entry.file_name().to_string_lossy().into_owned());
-        let name = names.next()?;
-        if names.next().is_some() {
-            return None;
+        let top = fs::symlink_metadata(&folder).ok()?;
+        let mut layout = KeptLayout {
+            has_links: top.is_symlink(),
+            ..KeptLayout::default()
+        };
+        if !layout.has_links {
+            layout.top = names_in(&folder);
+            layout.manifest = names_in(&folder.join(MANIFEST_FOLDER));
+            layout.skills = names_in(&folder.join(SKILLS_FOLDER));
+            // A link anywhere, also beside the skill. A copy too large or
+            // too strange to be looked through whole is taken as one.
+            let mut entries_left = 4 * MAX_SKILL_FILES;
+            layout.has_links = holds_a_link(&folder, &mut entries_left);
+            let mut of_the_skill = SkillFolder {
+                folder_name: String::new(),
+                skill_text: None,
+                files: 0,
+                bytes: 0,
+                has_links: false,
+            };
+            if measure(&folder.join(SKILLS_FOLDER), &mut of_the_skill).is_err() {
+                layout.has_links = true;
+            }
+            layout.files = of_the_skill.files;
+            layout.bytes = of_the_skill.bytes;
         }
-        let skill_text = read_skill_file(&folder.join(SKILLS_FOLDER).join(&name).join(SKILL_FILE))?;
+        let skill_folder_name = match layout.skills.as_slice() {
+            [only] => only.clone(),
+            _ => String::new(),
+        };
+        let skill_text = if skill_folder_name.is_empty() || layout.has_links {
+            String::new()
+        } else {
+            read_skill_file(
+                &folder
+                    .join(SKILLS_FOLDER)
+                    .join(&skill_folder_name)
+                    .join(SKILL_FILE),
+            )
+            .unwrap_or_default()
+        };
         Some(KeptSkill {
             folder,
-            skill_folder_name: name,
+            skill_folder_name,
             skill_text,
+            layout,
         })
     }
 
@@ -302,6 +449,91 @@ mod tests {
             chrono::Utc::now(),
         );
         assert!(shelf.keep(&folder, &skill).is_err());
+        assert!(shelf.kept(skill.id()).is_none());
+    }
+
+    fn review_skill() -> Skill {
+        Skill::add(
+            ProjectId::generate(),
+            SkillFile::check(REVIEW, "pcb-review").unwrap(),
+            chrono::Utc::now(),
+        )
+    }
+
+    #[test]
+    fn a_kept_copy_is_read_again_whole_and_what_was_added_to_it_is_seen() {
+        let ground = tempfile::tempdir().unwrap();
+        let shelf = LocalSkillShelf::new(ground.path().join("shelf"));
+        let folder = skill_folder(ground.path());
+        let skill = review_skill();
+        shelf.keep(&folder, &skill).unwrap();
+
+        let kept = shelf.kept(skill.id()).unwrap();
+        assert_eq!(kept.layout.top, [MANIFEST_FOLDER, SKILLS_FOLDER]);
+        assert_eq!(kept.layout.manifest, [MANIFEST_FILE]);
+        assert_eq!(kept.layout.skills, ["pcb-review"]);
+        assert_eq!(kept.layout.files, 2);
+        assert!(!kept.layout.has_links);
+        assert_eq!(
+            teamwright_application::check_kept_layout(&kept.layout, skill.name()),
+            Ok(())
+        );
+
+        // What Claude Code would load from a plugin besides its skills.
+        fs::create_dir(kept.folder.join("hooks")).unwrap();
+        fs::write(kept.folder.join("hooks").join("hooks.json"), "{}").unwrap();
+        fs::write(kept.folder.join(".mcp.json"), "{}").unwrap();
+        let changed = shelf.kept(skill.id()).unwrap();
+        assert_eq!(
+            changed.layout.top,
+            [".claude-plugin", ".mcp.json", "hooks", "skills"]
+        );
+        let problem =
+            teamwright_application::check_kept_layout(&changed.layout, skill.name()).unwrap_err();
+        assert!(problem.contains(".mcp.json"), "{problem}");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_link_put_into_a_kept_copy_is_seen() {
+        let ground = tempfile::tempdir().unwrap();
+        let shelf = LocalSkillShelf::new(ground.path().join("shelf"));
+        let folder = skill_folder(ground.path());
+        let skill = review_skill();
+        shelf.keep(&folder, &skill).unwrap();
+        let kept = shelf.kept(skill.id()).unwrap();
+        std::os::unix::fs::symlink(
+            "/etc/hostname",
+            kept.folder
+                .join(SKILLS_FOLDER)
+                .join("pcb-review")
+                .join("checklists")
+                .join("host.md"),
+        )
+        .unwrap();
+
+        assert!(shelf.kept(skill.id()).unwrap().layout.has_links);
+    }
+
+    #[test]
+    fn the_limits_hold_while_a_folder_is_copied() {
+        let ground = tempfile::tempdir().unwrap();
+        let shelf = LocalSkillShelf::new(ground.path().join("shelf"));
+        let skill = review_skill();
+
+        let large = skill_folder(ground.path());
+        let bytes = usize::try_from(MAX_SKILL_BYTES).unwrap();
+        fs::write(large.join("large.bin"), vec![0_u8; bytes]).unwrap();
+        let refusal = shelf.keep(&large, &skill).unwrap_err().to_string();
+        assert!(refusal.contains("larger than a skill may be"), "{refusal}");
+        assert!(shelf.kept(skill.id()).is_none());
+        fs::remove_file(large.join("large.bin")).unwrap();
+
+        for number in 0..MAX_SKILL_FILES {
+            fs::write(large.join(format!("note-{number}.md")), "x").unwrap();
+        }
+        let refusal = shelf.keep(&large, &skill).unwrap_err().to_string();
+        assert!(refusal.contains("larger than a skill may be"), "{refusal}");
         assert!(shelf.kept(skill.id()).is_none());
     }
 

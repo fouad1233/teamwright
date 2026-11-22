@@ -3834,6 +3834,9 @@ pub struct LibrarySkillDto {
     /// Whether this computer keeps its folder. Without it, no turn here is
     /// given the skill.
     here: bool,
+    /// Why the copy this computer keeps is not given to any turn, in words,
+    /// if it fails the check before a turn.
+    problem: Option<String>,
 }
 
 /// How a connector is started, both ways on the wire. Variables are named,
@@ -4021,6 +4024,7 @@ impl From<&teamwright_application::Library> for LibraryDto {
                     description: entry.skill.description().to_owned(),
                     added_at: moment_to_text(entry.skill.added_at()),
                     here: entry.here,
+                    problem: entry.problem.clone(),
                 })
                 .collect(),
             connectors: library

@@ -2060,6 +2060,11 @@ export interface LibrarySkill {
   addedAt: Moment;
   /** Whether this computer keeps its folder. Without it, no turn here is given the skill. */
   here: boolean;
+  /**
+   * Why the copy this computer keeps is not given to any turn, in words, if it fails the check
+   * made before every turn: changed on the disk, holding more than Teamwright wrote, or a link.
+   */
+  problem: string | null;
 }
 
 /** A connector of the library of a project. */

@@ -37,7 +37,13 @@ export function KitField({ library, choice, onChange }: KitFieldProps) {
           key={skill.id}
           on={choice.skills.includes(skill.id)}
           label={`Skill: ${skill.name}`}
-          hint={skill.here ? skill.description : 'Not on this computer, so not given here.'}
+          hint={
+            skill.here
+              ? skill.description
+              : skill.problem !== null
+                ? `Not given here: ${skill.problem}.`
+                : 'Not on this computer, so not given here.'
+          }
           onChange={() => {
             onChange(toggleSkill(choice, skill.id));
           }}

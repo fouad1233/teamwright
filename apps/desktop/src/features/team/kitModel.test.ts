@@ -24,7 +24,9 @@ const parts: LibraryConnector = {
 };
 
 const library: Library = {
-  skills: [{ id: 's1', name: 'pcb-review', description: 'x', addedAt: '', here: true }],
+  skills: [
+    { id: 's1', name: 'pcb-review', description: 'x', addedAt: '', here: true, problem: null },
+  ],
   connectors: [parts],
   kits: [
     { memberId: 'm1', skills: ['s1'], connectors: [{ connectorId: 'c1', tools: ['search'] }] },

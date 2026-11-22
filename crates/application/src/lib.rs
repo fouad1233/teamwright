@@ -100,9 +100,10 @@ pub use integrations::{
     events_sent_to_an_address, events_told_in_a_channel,
 };
 pub use kits::{
-    InMemoryKitRepository, KeptSkill, KitChoice, KitRepository, KitService, Library,
-    LibraryConnector, LibrarySkill, MAX_SKILL_BYTES, MAX_SKILL_FILES, NewConnector,
-    NewConnectorStart, NewHeader, PretendShelf, SKILL_FILE, SkillFolder, SkillShelf, turn_kit_of,
+    InMemoryKitRepository, KeptLayout, KeptSkill, KitChoice, KitRepository, KitService, Library,
+    LibraryConnector, LibrarySkill, MANIFEST_FILE, MANIFEST_FOLDER, MAX_SKILL_BYTES,
+    MAX_SKILL_FILES, NewConnector, NewConnectorStart, NewHeader, PretendShelf, SKILL_FILE,
+    SKILLS_FOLDER, SkillFolder, SkillShelf, check_kept_layout, turn_kit_of,
     variables_of_the_library,
 };
 pub use memory::{

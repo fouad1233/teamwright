@@ -422,6 +422,117 @@ fn a_specialist_without_a_kit_gets_nothing() {
 }
 
 #[test]
+fn a_copy_that_holds_more_than_teamwright_wrote_is_not_given_and_says_why() {
+    let space = workspace();
+    space.shelf.put_folder("/skills/pcb-review", REVIEW);
+    let skill = space
+        .service
+        .add_skill(space.project.id(), Path::new("/skills/pcb-review"))
+        .unwrap();
+    space
+        .service
+        .set_kit(
+            space.specialist.id(),
+            KitChoice {
+                skills: vec![skill.id()],
+                connectors: Vec::new(),
+            },
+        )
+        .unwrap();
+    let member = space.members.find(space.specialist.id()).unwrap().unwrap();
+    let given = || {
+        turn_kit_of(space.kits.as_ref(), space.shelf.as_ref(), &member)
+            .unwrap()
+            .skills
+            .len()
+    };
+    let problem = || {
+        space.service.library(space.project.id()).unwrap().skills[0]
+            .problem
+            .clone()
+    };
+    assert_eq!(given(), 1);
+    assert_eq!(problem(), None);
+
+    for (change, expected) in [
+        (
+            Box::new(|layout: &mut KeptLayout| layout.top.push("hooks".to_owned()))
+                as Box<dyn Fn(&mut KeptLayout)>,
+            "more than Teamwright wrote: hooks",
+        ),
+        (
+            Box::new(|layout: &mut KeptLayout| layout.top.push(".mcp.json".to_owned())),
+            ".mcp.json",
+        ),
+        (
+            Box::new(|layout: &mut KeptLayout| layout.manifest.push("marketplace.json".to_owned())),
+            "plugin.json",
+        ),
+        (
+            Box::new(|layout: &mut KeptLayout| layout.skills.push("other".to_owned())),
+            "the skill pcb-review",
+        ),
+        (
+            Box::new(|layout: &mut KeptLayout| layout.has_links = true),
+            "link",
+        ),
+        (
+            Box::new(|layout: &mut KeptLayout| layout.bytes = MAX_SKILL_BYTES + 1),
+            "larger",
+        ),
+    ] {
+        space
+            .service
+            .remove_skill(space.project.id(), skill.id())
+            .ok();
+        // A fresh copy for each case.
+        let skill = space
+            .service
+            .add_skill(space.project.id(), Path::new("/skills/pcb-review"))
+            .unwrap();
+        space
+            .service
+            .set_kit(
+                space.specialist.id(),
+                KitChoice {
+                    skills: vec![skill.id()],
+                    connectors: Vec::new(),
+                },
+            )
+            .unwrap();
+        assert_eq!(given(), 1);
+        space
+            .shelf
+            .change_kept_layout(skill.id(), |layout| change(layout));
+        assert_eq!(given(), 0, "{expected}");
+        let said = problem().unwrap_or_default();
+        assert!(said.contains(expected), "{said}");
+        assert!(!space.service.library(space.project.id()).unwrap().skills[0].here);
+    }
+}
+
+#[test]
+fn a_damaged_copy_can_be_replaced_by_adding_the_folder_again() {
+    let space = workspace();
+    space.shelf.put_folder("/skills/pcb-review", REVIEW);
+    let skill = space
+        .service
+        .add_skill(space.project.id(), Path::new("/skills/pcb-review"))
+        .unwrap();
+    space
+        .shelf
+        .change_kept_layout(skill.id(), |layout| layout.top.push("agents".to_owned()));
+    let again = space
+        .service
+        .add_skill(space.project.id(), Path::new("/skills/pcb-review"))
+        .unwrap();
+    assert_eq!(again.id(), skill.id());
+    let library = space.service.library(space.project.id()).unwrap();
+    assert!(library.skills[0].here);
+    assert_eq!(library.skills[0].problem, None);
+}
+
+#[test]
 fn a_program_named_by_a_relative_path_is_refused_and_a_stored_one_is_never_given() {
     let space = workspace();
     let mut relative = parts_program(&[]);
