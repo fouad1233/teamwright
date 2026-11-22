@@ -226,10 +226,18 @@ Several specialists working together with the manager in the loop.
   teammates, and never on Windows; a permission holds only where this
   computer's own log wrote the answer; every allowed command runs in the
   sandbox of Claude Code, and the turn fails if there is none. Tested at
-  every layer and seen in a browser on the demo. No real specialist has
-  asked, the shape of the events was read from the documentation, and
-  the sandbox has never been seen working: until a signed-in run has
-  shown it, allowing a command is not ready to be relied on
+  every layer and seen in a browser on the demo. A second review, of the
+  fixes, found that a permission could be revived and moved through the
+  sync folder, and that a command still saw the manager's whole
+  environment. Since 22 November 2026 command permissions are off on
+  each computer until the manager switches them on on the page
+  Computers; when on, a command runs only in a turn the manager starts
+  by hand, with a cleared environment; a permission grants only if every
+  state of it was written on this computer; a web domain is one host.
+  No real specialist has asked, the shape of the events was read from
+  the documentation, and no command has run in the built program: the
+  sandbox and the cleared environment have never been seen working, and
+  until a signed-in run has shown them the switch should stay off
 
 ## M5 · Seeing the work 🚧
 
