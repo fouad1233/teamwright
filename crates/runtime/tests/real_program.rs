@@ -346,7 +346,12 @@ fn the_own_instructions_of_a_specialist_reach_a_real_session() {
         "In one sentence: what is a pull-up resistor for?",
         SessionChoice::New,
     );
-    request.extra_instructions = Some(instructions_for(&member, &project, &[]));
+    request.extra_instructions = Some(instructions_for(
+        &member,
+        &project,
+        &[],
+        &teamwright_domain::WordsMark::generate(),
+    ));
     assert!(!request.prompt.contains("PERSIMMON"));
 
     let turn = runtime().start_turn(request, Box::new(|_| {})).unwrap();
@@ -471,6 +476,7 @@ fn a_real_session_searches_the_memory_and_remembers_a_fact_through_the_team_bus(
                 task: None,
                 recorded_at: chrono::Utc.with_ymd_and_hms(2026, 11, 21, 9, 0, 0).unwrap(),
             }],
+            mark: teamwright_domain::WordsMark::generate(),
         },
     ];
     let events = Arc::new(Mutex::new(Vec::new()));

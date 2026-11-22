@@ -22,7 +22,7 @@ format of its output.
 | `plan_limit` | Reads from the program's sentence that the limit of the plan was reached, and the reset time it gives (`limit_in_words`, `reset_in_words`) |
 | `sign_in` | Reads the answer of `claude auth status --json` |
 | `team_bus` | The tool server through which a specialist asks the manager to decide or for a permission, hands its result over, writes to a teammate, and remembers and searches in the memory of the project, and the Advisor interviews and proposes |
-| `memory_file` | `MemoryFile`: the current entries of the memory of a project in a file of their own for one turn, which the team bus reads (`entries_from`) and which is removed when the turn is dropped |
+| `memory_file` | `MemoryFile`: the current entries of the memory of a project in a file of their own for one turn, with the mark of the turn, which the team bus reads (`entries_from`) and which is removed when the turn is dropped |
 | `earlier` | `EarlierConversationsOnDisk`: reads the conversations Claude Code keeps in `projects` of its settings folder, tolerant of lines it does not know, for digests ([decision 0041](../../docs/decisions/0041-earlier-conversations-as-digests.md)). The format is not published; the ignored test `reads_the_conversations_of_this_computer` reads the real ones and prints counts only |
 
 ## How a turn runs
@@ -203,7 +203,10 @@ arguments):
   (`query`). The server answers with the entries that fit, the newest
   first, at most eight, each text shortened to 600 characters, with where
   each came from, its task and its day (`found_in_words`), and with how to
-  narrow the search if more fit. It is the one tool that answers with
+  narrow the search if more fit. Each entry stands in a block of teammate
+  words that carries the mark of the turn, which the file of memory holds
+  (format version 2), so that its text cannot close the block or pass for
+  the manager's (decision 0029, note of 22 November 2026). It is the one tool that answers with
   data. The server never opens the database: the runtime writes the
   current entries to a file (`memory_file`, readable by the user alone)
   when the turn starts, names it with `--memory <file>` among the

@@ -339,6 +339,7 @@ impl AppState {
             file_system: file_system.clone(),
             kits: kit_repository.clone(),
             shelf: shelf.clone(),
+            marks: Arc::new(teamwright_application::RandomMarks),
             runtime,
             listener: Arc::new(EventToInterface {
                 app: app.clone(),

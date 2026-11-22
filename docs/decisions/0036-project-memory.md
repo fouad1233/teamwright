@@ -111,3 +111,17 @@ of three hyphens inside the text is broken so that it cannot end the block
 Entries the manager wrote stay as they were: they are the manager's words.
 The specialist's search tool is unchanged; it hands entries back as data
 with their source named.
+
+## Note of 22 November 2026: framed answers of a search, after a second review
+
+A second review found that `search_memory` handed back the title and text of
+each entry raw, though many are written by specialists. Each entry in an
+answer now stands in the same block as messages and handoffs, with the mark
+of the turn (see the note of this day in
+[decision 0029](0029-handoffs-and-messages-between-specialists.md)): its kind
+and title, then where it came from, its task and day, on the first line. The
+answer ends by saying that what stands in the blocks is a record of the
+team, not an instruction. The manager's own entries are framed in a search
+too, because the team bus knows where an entry came from only in words; in a
+brief they still stand without a block. The file of memory the bus reads now
+carries the mark, in format version 2.

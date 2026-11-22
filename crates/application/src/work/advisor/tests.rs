@@ -114,6 +114,7 @@ fn planning() -> Planning {
         file_system: Arc::new(PretendFileSystem::default()),
         kits: Arc::new(crate::kits::InMemoryKitRepository::default()),
         shelf: Arc::new(crate::kits::PretendShelf::default()),
+        marks: Arc::new(crate::marks::FixedMark::for_tests()),
         runtime: runtime.clone(),
         listener: listener.clone(),
         clock: clock.clone(),

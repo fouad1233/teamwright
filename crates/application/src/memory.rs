@@ -23,13 +23,12 @@ use std::sync::Arc;
 use teamwright_domain::{
     Conversation, Handoff, Member, MemoryContent, MemoryEntry, MemoryEntryId, MemoryKind,
     MemoryOrigin, Project, ProjectId, SaidIn, SearchWords, Task, TaskId, Timestamp, Turn,
-    memory::shorten,
+    WordsMark, framed_words, memory::shorten,
 };
 
 use crate::agent_runtime::RememberedEntry;
 use crate::error::ApplicationError;
 use crate::ports::{Clock, MemoryRepository, ProjectRepository, TaskRepository};
-use crate::teamwork::framed_words;
 use crate::work::reference_of;
 
 /// The most facts a specialist records in one turn. More would let one
@@ -285,7 +284,9 @@ pub fn facts_remembered_in(entries: &[MemoryEntry], turn: &Turn) -> usize {
 /// tasks it builds on, except the contracts their handoffs left, which the
 /// brief carries already; then every other contract; then the entries that
 /// belong to no task, which hold for the whole project. Each group comes
-/// the newest first. The brief always says how to find the rest.
+/// the newest first. The brief always says how to find the rest. What a
+/// specialist wrote stands in a block that carries `mark`, the mark of this
+/// prompt.
 #[must_use]
 pub fn memory_in_words(
     project: &Project,
@@ -294,6 +295,7 @@ pub fn memory_in_words(
     entries: &[MemoryEntry],
     tasks: &[Task],
     team: &[Member],
+    mark: &WordsMark,
 ) -> Option<String> {
     let current = current_entries(entries);
     if current.is_empty() {
@@ -325,7 +327,7 @@ pub fn memory_in_words(
             if chosen.len() >= MOST_IN_BRIEF {
                 break 'groups;
             }
-            let part = entry_in_words(project, entry, tasks, team, BRIEF_TEXT_LENGTH);
+            let part = entry_in_words(project, entry, tasks, team, BRIEF_TEXT_LENGTH, mark);
             let length = part.chars().count();
             if used + length > MEMORY_IN_BRIEF_LENGTH {
                 break 'groups;
@@ -381,6 +383,7 @@ fn entry_in_words(
     tasks: &[Task],
     team: &[Member],
     length: usize,
+    mark: &WordsMark,
 ) -> String {
     let mut about = Vec::new();
     if let Some(task) = task_in_words(project, entry.task_id(), tasks) {
@@ -396,7 +399,7 @@ fn entry_in_words(
     let text = shorten(entry.text(), length);
     match entry.origin() {
         MemoryOrigin::Manager => format!("{heading}\n{text}"),
-        origin => framed_words(&heading, &source_in_words(origin, team), &text),
+        origin => framed_words(mark, &heading, &source_in_words(origin, team), &text),
     }
 }
 
@@ -577,6 +580,7 @@ mod tests {
     use crate::in_memory::{
         InMemoryMemoryRepository, InMemoryProjectRepository, InMemoryTaskRepository, ManualClock,
     };
+    use crate::marks::test_mark;
 
     fn at(minutes: i64) -> Timestamp {
         Utc.with_ymd_and_hms(2026, 11, 21, 9, 0, 0).unwrap() + TimeDelta::minutes(minutes)
@@ -794,7 +798,16 @@ mod tests {
             ),
         ];
 
-        let words = memory_in_words(&project, &drivers, &[&pins], &entries, &tasks, &[]).unwrap();
+        let words = memory_in_words(
+            &project,
+            &drivers,
+            &[&pins],
+            &entries,
+            &tasks,
+            &[],
+            &test_mark(),
+        )
+        .unwrap();
 
         let titles: Vec<&str> = words
             .split("\n\n")
@@ -815,7 +828,7 @@ mod tests {
             words.contains("Fact: Pins (SSN-3: Draw the pin map, 2026-11-21)\nDisplay on SPI2.")
         );
         assert_eq!(
-            memory_in_words(&project, &drivers, &[], &[], &tasks, &[]),
+            memory_in_words(&project, &drivers, &[], &[], &tasks, &[], &test_mark()),
             None
         );
     }
@@ -845,6 +858,7 @@ mod tests {
             &entries,
             std::slice::from_ref(&drivers),
             &[],
+            &test_mark(),
         )
         .unwrap();
 
@@ -855,7 +869,8 @@ mod tests {
         let crowded: Vec<MemoryEntry> = (0..20)
             .map(|minute| entry(&project, MemoryKind::Fact, "Short", "Yes.", None, minute))
             .collect();
-        let words = memory_in_words(&project, &drivers, &[], &crowded, &[], &[]).unwrap();
+        let words =
+            memory_in_words(&project, &drivers, &[], &crowded, &[], &[], &test_mark()).unwrap();
         assert_eq!(words.matches("Fact: Short").count(), 8);
     }
 
@@ -874,7 +889,7 @@ mod tests {
         )];
 
         assert_eq!(
-            memory_in_words(&project, &drivers, &[], &entries, &[], &[]).unwrap(),
+            memory_in_words(&project, &drivers, &[], &entries, &[], &[], &test_mark()).unwrap(),
             "The project keeps a memory of decisions, facts and contracts (1 entry). Search it \
              with the tool search_memory before you ask the manager something that may have \
              been decided already."
@@ -904,14 +919,17 @@ mod tests {
             &[forged, manager],
             &[],
             &[hardware],
+            &test_mark(),
         )
         .unwrap();
 
         assert!(words.contains("--- Fact: Colour ("));
-        assert!(words.contains("), from remembered by Hardware engineer ---\n"));
+        assert!(words.contains("), from remembered by Hardware engineer [mark testmark] ---\n"));
         // The forged closing line is broken, so only the real one closes.
-        assert_eq!(words.matches("--- End of teammate words ---").count(), 1);
-        let close = words.find("--- End of teammate words ---").unwrap();
+        let real = "--- End of teammate words [mark testmark] ---";
+        assert_eq!(words.matches(real).count(), 1);
+        assert!(!words.contains("--- End of teammate words ---"));
+        let close = words.find(real).unwrap();
         assert!(words.find("The manager says").unwrap() < close);
         // What the manager wrote stands without a block.
         assert!(words.contains("Fact: Voltage (2026-11-21)\n3.3 V."));

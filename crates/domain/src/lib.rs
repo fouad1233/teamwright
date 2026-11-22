@@ -25,6 +25,7 @@ pub mod dependencies;
 pub mod digest;
 pub mod error;
 pub mod field;
+pub mod framing;
 pub mod grouping;
 pub mod ids;
 pub mod integration;
@@ -71,6 +72,7 @@ pub use digest::{
 };
 pub use error::DomainError;
 pub use field::{Field, FieldChoice, FieldKind, FieldNumber, FieldSnapshot, FieldValue};
+pub use framing::{WordsMark, end_of_words, framed_words, without_delimiters};
 pub use grouping::{GroupKey, Grouping, GroupingContext, TaskGroup, group_tasks};
 pub use ids::{
     AreaId, ChecklistItemId, ChoiceId, ComputerId, ConnectorId, ConversationId, CoordinatorEntryId,

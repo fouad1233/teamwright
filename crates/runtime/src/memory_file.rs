@@ -7,9 +7,10 @@
 //! and names the file to the bus with `--memory` (decision 0036). The file
 //! is removed when the turn is over.
 //!
-//! The file is JSON: a format version and the entries, each with its kind,
-//! title, text, where it came from and its task in words, and when it was
-//! recorded.
+//! The file is JSON: a format version, the mark that frames the entries in
+//! the answer of a search (decision 0029, note of 22 November 2026), and
+//! the entries, each with its kind, title, text, where it came from and its
+//! task in words, and when it was recorded.
 
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Write};
@@ -20,9 +21,10 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use teamwright_application::{MemoryKind, RememberedEntry};
+use teamwright_domain::WordsMark;
 
 /// The version of the format of the file.
-const FORMAT_VERSION: u32 = 1;
+const FORMAT_VERSION: u32 = 2;
 
 /// Counts the files this program writes, so that two turns that start in
 /// the same instant get files of their own.
@@ -42,8 +44,8 @@ impl MemoryFile {
     /// # Errors
     ///
     /// Returns an error if the file could not be written.
-    pub fn write(entries: &[RememberedEntry]) -> io::Result<Self> {
-        Self::write_in(&std::env::temp_dir(), entries)
+    pub fn write(entries: &[RememberedEntry], mark: &WordsMark) -> io::Result<Self> {
+        Self::write_in(&std::env::temp_dir(), entries, mark)
     }
 
     /// Writes the entries to a new file in `folder`.
@@ -51,9 +53,14 @@ impl MemoryFile {
     /// # Errors
     ///
     /// Returns an error if the file could not be written.
-    pub fn write_in(folder: &Path, entries: &[RememberedEntry]) -> io::Result<Self> {
+    pub fn write_in(
+        folder: &Path,
+        entries: &[RememberedEntry],
+        mark: &WordsMark,
+    ) -> io::Result<Self> {
         let contents = serde_json::to_vec(&FileContents {
             version: FORMAT_VERSION,
+            mark: mark.as_str().to_owned(),
             entries: entries.iter().map(EntryInFile::of).collect(),
         })
         .map_err(io::Error::other)?;
@@ -79,13 +86,14 @@ impl Drop for MemoryFile {
     }
 }
 
-/// Reads the entries back from a file that [`MemoryFile`] wrote.
+/// Reads the entries and the mark back from a file that [`MemoryFile`]
+/// wrote.
 ///
 /// # Errors
 ///
 /// Returns what is wrong, in words, if the file cannot be read or is not
 /// in the format.
-pub fn entries_from(path: &Path) -> Result<Vec<RememberedEntry>, String> {
+pub fn entries_from(path: &Path) -> Result<(Vec<RememberedEntry>, WordsMark), String> {
     let bytes = fs::read(path).map_err(|error| format!("it cannot be read: {error}"))?;
     let contents: FileContents =
         serde_json::from_slice(&bytes).map_err(|error| format!("it is not readable: {error}"))?;
@@ -95,11 +103,13 @@ pub fn entries_from(path: &Path) -> Result<Vec<RememberedEntry>, String> {
             contents.version
         ));
     }
-    contents
+    let mark = WordsMark::parse(&contents.mark).map_err(|error| error.to_string())?;
+    let entries = contents
         .entries
         .into_iter()
         .map(EntryInFile::into_entry)
-        .collect()
+        .collect::<Result<_, _>>()?;
+    Ok((entries, mark))
 }
 
 /// Opens a new file in `folder` that nobody else has, with a name of its
@@ -133,6 +143,7 @@ fn new_file(folder: &Path) -> io::Result<(PathBuf, File)> {
 #[derive(Debug, Serialize, Deserialize)]
 struct FileContents {
     version: u32,
+    mark: String,
     entries: Vec<EntryInFile>,
 }
 
@@ -182,6 +193,10 @@ mod tests {
 
     use super::*;
 
+    fn mark() -> WordsMark {
+        WordsMark::parse("testmark").unwrap()
+    }
+
     fn entries() -> Vec<RememberedEntry> {
         vec![
             RememberedEntry {
@@ -206,10 +221,10 @@ mod tests {
     #[test]
     fn the_entries_are_read_back_as_they_were_written_and_the_file_goes_with_its_owner() {
         let folder = tempfile::tempdir().unwrap();
-        let file = MemoryFile::write_in(folder.path(), &entries()).unwrap();
+        let file = MemoryFile::write_in(folder.path(), &entries(), &mark()).unwrap();
         let path = file.path().to_owned();
 
-        assert_eq!(entries_from(&path), Ok(entries()));
+        assert_eq!(entries_from(&path), Ok((entries(), mark())));
         drop(file);
         assert!(!path.exists());
     }
@@ -217,11 +232,11 @@ mod tests {
     #[test]
     fn two_files_written_at_once_do_not_meet() {
         let folder = tempfile::tempdir().unwrap();
-        let first = MemoryFile::write_in(folder.path(), &[]).unwrap();
-        let second = MemoryFile::write_in(folder.path(), &entries()).unwrap();
+        let first = MemoryFile::write_in(folder.path(), &[], &mark()).unwrap();
+        let second = MemoryFile::write_in(folder.path(), &entries(), &mark()).unwrap();
 
         assert_ne!(first.path(), second.path());
-        assert_eq!(entries_from(first.path()), Ok(Vec::new()));
+        assert_eq!(entries_from(first.path()), Ok((Vec::new(), mark())));
     }
 
     #[cfg(unix)]
@@ -230,7 +245,7 @@ mod tests {
         use std::os::unix::fs::PermissionsExt;
 
         let folder = tempfile::tempdir().unwrap();
-        let file = MemoryFile::write_in(folder.path(), &entries()).unwrap();
+        let file = MemoryFile::write_in(folder.path(), &entries(), &mark()).unwrap();
 
         let mode = fs::metadata(file.path()).unwrap().permissions().mode();
         assert_eq!(mode & 0o777, 0o600);
@@ -245,11 +260,13 @@ mod tests {
                 .starts_with("it cannot be read")
         );
         let other = folder.path().join("other.json");
-        fs::write(&other, r#"{"version":2,"entries":[]}"#).unwrap();
+        fs::write(&other, r#"{"version":1,"mark":"testmark","entries":[]}"#).unwrap();
         assert_eq!(
             entries_from(&other),
-            Err("its format version 2 is not known".to_owned())
+            Err("its format version 1 is not known".to_owned())
         );
+        fs::write(&other, r#"{"version":2,"mark":"BAD MARK","entries":[]}"#).unwrap();
+        assert!(entries_from(&other).is_err());
         fs::write(&other, "not json").unwrap();
         assert!(
             entries_from(&other)

@@ -32,6 +32,7 @@ pub mod groups;
 pub mod in_memory;
 pub mod integrations;
 pub mod kits;
+pub mod marks;
 pub mod memory;
 pub mod notifications;
 pub mod permissions;
@@ -106,6 +107,7 @@ pub use kits::{
     SKILLS_FOLDER, SkillFolder, SkillShelf, check_kept_layout, turn_kit_of,
     variables_of_the_library,
 };
+pub use marks::{FixedMark, MarkSource, RandomMarks, test_mark};
 pub use memory::{
     MOST_FACTS_PER_TURN, MemoryService, NewFact, Searchable, contract_entries, decision_entry,
     memory_in_words, remembered_entries, search,

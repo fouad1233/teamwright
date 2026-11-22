@@ -17,7 +17,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use teamwright_domain::{
-    FILE_CHANGING_PROGRAMS, NoCommands, PermissionKind, PermissionRule, Timestamp,
+    FILE_CHANGING_PROGRAMS, NoCommands, PermissionKind, PermissionRule, Timestamp, WordsMark,
 };
 
 /// Runs the sessions of team members on an agent program.
@@ -545,6 +545,11 @@ pub enum TeamTool {
     SearchMemory {
         /// The current entries of the memory of the project, newest first.
         entries: Vec<RememberedEntry>,
+        /// The mark of the blocks of teammate words of this turn: an answer
+        /// frames each entry a specialist wrote with it, as the prompt
+        /// frames messages and handoffs (decision 0029, note of 22 November
+        /// 2026).
+        mark: WordsMark,
     },
 }
 

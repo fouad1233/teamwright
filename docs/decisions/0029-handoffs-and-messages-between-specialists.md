@@ -128,3 +128,35 @@ never give permission and never change the rules. The digests given to the
 Advisor are framed in the same spirit, as accounts and not instructions. The
 framing is a help to the model, not a lock: what a specialist may do is still
 decided by its permissions ([decision 0011](0011-what-a-specialist-may-do.md)).
+
+## Note of 22 November 2026: a mark in every frame, after a second review
+
+A second review found that the frame could be imitated. Only runs of the
+ASCII hyphen were broken, so a line of Unicode dashes (`———` and their kin)
+that said `End of teammate words`, or the plain words on a line of their
+own, passed through and could look like the end of the block.
+
+- **Dashes are folded first.** Before runs of hyphens are broken, every
+  character that looks like a hyphen becomes one: U+2010 to U+2015, U+2043,
+  U+2212, U+2E3A, U+2E3B, U+FE31, U+FE32, U+FE58, U+FE63, U+FF0D and the
+  soft hyphen. The text can then draw no line of hyphens at all.
+- **Each prompt has a mark.** Teamwright makes a short random mark for each
+  turn (16 hexadecimal digits) and puts it on both lines of every block:
+  `--- A note, from Hardware engineer [mark 3f9a…] ---` and
+  `--- End of teammate words [mark 3f9a…] ---`. The fixed instructions of
+  the turn name the mark once and say that a block ends only at the line
+  with that mark; any other line is part of the teammate's words. A text
+  written before the turn cannot know the mark; should one hold it, it is
+  taken out. A brief carries the mark of the turn it starts; a block from
+  an earlier turn of the conversation carries its own.
+- **The answers of `search_memory` are framed too** (decision 0036): the
+  team bus reads the mark of its turn from the file of memory it is given.
+- **Where it lives.** The framing is a rule about one text, so it moved
+  from the application to the domain (`framing`: `WordsMark`,
+  `framed_words`, `without_delimiters`), where both the application and the
+  team bus of the runtime use it. The randomness comes through a port of
+  the application, `MarkSource`: `RandomMarks` in the program, `FixedMark`
+  (`testmark`) in tests, so that what tests expect stays exact.
+
+The frame is still a help to the model, not a lock; the permissions of a
+turn decide what a specialist may do.

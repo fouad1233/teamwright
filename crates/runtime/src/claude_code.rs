@@ -365,13 +365,13 @@ impl AgentRuntime for ClaudeCode {
 /// The file that holds the memory of the project for a turn that may
 /// search it, written now. Nothing for a turn without `search_memory`.
 fn memory_file_for(request: &TurnRequest) -> Result<Option<MemoryFile>, AgentRuntimeError> {
-    let Some(entries) = request.team_tools.iter().find_map(|tool| match tool {
-        TeamTool::SearchMemory { entries } => Some(entries),
+    let Some((entries, mark)) = request.team_tools.iter().find_map(|tool| match tool {
+        TeamTool::SearchMemory { entries, mark } => Some((entries, mark)),
         _ => None,
     }) else {
         return Ok(None);
     };
-    MemoryFile::write(entries)
+    MemoryFile::write(entries, mark)
         .map(Some)
         .map_err(|error| AgentRuntimeError::CouldNotRun {
             message: format!("the memory of the project could not be written for it: {error}"),
@@ -663,13 +663,15 @@ mod tests {
         };
         assert!(memory_file_for(&request).unwrap().is_none());
 
+        let mark = teamwright_domain::WordsMark::parse("testmark").unwrap();
         request.team_tools.push(TeamTool::SearchMemory {
             entries: Vec::new(),
+            mark: mark.clone(),
         });
         let file = memory_file_for(&request).unwrap().unwrap();
         assert_eq!(
             crate::memory_file::entries_from(file.path()),
-            Ok(Vec::new())
+            Ok((Vec::new(), mark))
         );
         let bus = TeamBus {
             program: PathBuf::from("teamwright"),
