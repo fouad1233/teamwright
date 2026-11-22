@@ -179,11 +179,13 @@ fn on_search_path(environment: &Environment, name: &str) -> Option<PathBuf> {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(unix)]
     use std::collections::BTreeMap;
     use std::ffi::OsStr;
 
     use super::*;
 
+    #[cfg(unix)]
     fn as_map(environment: &Environment) -> BTreeMap<String, String> {
         environment
             .iter()

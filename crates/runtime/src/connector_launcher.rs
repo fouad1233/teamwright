@@ -799,12 +799,17 @@ mod tests {
         let bin = ground.path().join("bin");
         fs::create_dir(&bin).unwrap();
         make_program(&bin.join("parts-server"));
-        // A file that may not be run is passed over, as a shell does.
+        // A file that may not be run is passed over, as a shell does. On
+        // Windows a file has no such mark, so there the folder that holds
+        // one is left out of the search path.
         let other = ground.path().join("other");
         fs::create_dir(&other).unwrap();
         fs::write(other.join("parts-server"), "").unwrap();
-        let search =
-            std::env::join_paths([PathBuf::from("."), other.clone(), bin.clone()]).unwrap();
+        #[cfg(unix)]
+        let folders = vec![PathBuf::from("."), other, bin.clone()];
+        #[cfg(not(unix))]
+        let folders = vec![PathBuf::from("."), bin.clone()];
+        let search = std::env::join_paths(folders).unwrap();
 
         assert_eq!(
             find_program("parts-server", Some(&search), &[]),
