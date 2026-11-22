@@ -650,7 +650,19 @@ fn a_real_session_gets_its_chosen_skill_and_connector_and_nothing_of_the_users_o
         "{:?}",
         started.skills
     );
-    assert_eq!(started.plugins, ["probe-skill"], "{:?}", started.plugins);
+    // The program lists its own built-in plugins too (security, telemetry
+    // and privacy defaults, named `cc-plugin-…`, which it marks `@builtin`
+    // in itself): they are not the user's. Every other plugin is a leak.
+    let others: Vec<&String> = started
+        .plugins
+        .iter()
+        .filter(|plugin| plugin.as_str() != "probe-skill" && !plugin.starts_with("cc-plugin-"))
+        .collect();
+    assert!(
+        started.plugins.iter().any(|plugin| plugin == "probe-skill") && others.is_empty(),
+        "{:?}",
+        started.plugins
+    );
     let own = own_skills_of_the_user();
     for skill in &started.skills {
         let bare = skill.rsplit(':').next().unwrap_or(skill);
