@@ -116,7 +116,13 @@ A single specialist that really works through Claude Code.
   by Teamwright's own launcher in an empty folder, with only the
   variables it names, turns start without the secrets of the library,
   and the copy of a skill is checked whole before every turn; the
-  launcher was started by hand on Linux. Never run against the real
+  launcher was started by hand on Linux. Since 22 November a connector
+  or a tool that arrives or changes through the sync folder is started
+  only after the manager confirmed, on that computer, exactly what it
+  starts (a fingerprint kept for each computer and never synced), and
+  each connector starts in a fresh empty folder of its own; proven by
+  tests with two databases syncing through a folder and seen in the
+  demo. Never run against the real
   Claude Code: the tests for it were written and have not passed yet,
   the earlier tests against the real program must be run again because
   every turn changed, and nothing of it was run on Windows.
