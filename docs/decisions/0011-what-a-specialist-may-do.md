@@ -94,3 +94,18 @@ the tool `ask_permission`; the manager allows one command, a prefix of
 commands or a web domain, once, for a task or always; and a turn is started
 with exactly those rules added. Nothing else of this profile changes, and
 nothing in a running turn can approve anything.
+
+## Note, 22 November 2026, after the first real run on Linux
+
+The rule that denies writing in a folder given for reading, and in the
+shelf of a specialist's skills, was `Edit(<folder>/**)`. On Linux and macOS
+that is not an absolute path: a rule that starts with one slash is read from
+the place of the settings, here the work folder. So a read-only folder was
+writable there, and a real session wrote a file into it. The rule was
+written this way from the start, so version 0.1.0 has the defect on Linux
+and macOS; on Windows, where a folder starts with a drive letter, it held.
+It is now `Edit(//home/sample/x/**)` for Unix, and names with spaces,
+parentheses and other special characters are written so that they stay
+protected. The reasons, the pages of the documentation and the real runs are
+in [decision 0013](0013-the-folders-of-a-project.md). The rest of this
+profile is unchanged.

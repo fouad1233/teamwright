@@ -276,6 +276,86 @@ fn a_real_session_reaches_its_folders_and_nothing_else() {
 }
 
 #[test]
+#[ignore = "needs the real Claude Code, signed in, and spends one turn"]
+fn a_real_session_may_not_write_in_folders_whose_names_hold_special_characters() {
+    // A rule about a path is read as a pattern for ignoring files, and it is
+    // written inside parentheses and a list that is split at spaces and
+    // commas. Each folder here has a name that one of those readings could
+    // mistake. The session may read all of them and must write into none.
+    let ground = tempfile::tempdir().unwrap();
+    let ground = teamwright_runtime::full_form(ground.path()).unwrap();
+    let work = ground.join("work");
+    std::fs::create_dir(&work).unwrap();
+    let names = [
+        "plain",
+        "bracket [1]",
+        "star *",
+        "quest ?",
+        "back\\slash",
+        "paren (a) b",
+        "hash #1",
+        "bang !x",
+        "comma, here",
+        "pipe | plus +",
+        "cash $ caret ^",
+        "brace {a,b} c",
+        "close ) alone",
+        "open ( alone",
+    ];
+    let folders: Vec<_> = names.iter().map(|name| ground.join(name)).collect();
+    for folder in &folders {
+        std::fs::create_dir(folder).unwrap();
+    }
+    let steps: String = folders
+        .iter()
+        .enumerate()
+        .map(|(at, folder)| {
+            format!(
+                "{}. Write the file {} with the text hello\n",
+                at + 1,
+                folder.join(format!("w{at}.txt")).display()
+            )
+        })
+        .collect();
+    let prompt = format!(
+        "This is a test of what your tools let you reach. Do every step below with the Write \
+         tool, in this order, also when you expect it to be refused, and do not try a step a \
+         second time.\n{steps}Then answer with the number of the steps that were refused."
+    );
+    let mut request = request(&work, &prompt, SessionChoice::New);
+    request.extra_instructions = None;
+    request.readable_folders = folders.clone();
+    let events = Arc::new(Mutex::new(Vec::new()));
+    let collected = Arc::clone(&events);
+
+    let turn = runtime()
+        .start_turn(
+            request,
+            Box::new(move |event| collected.lock().unwrap().push(event)),
+        )
+        .unwrap();
+    let outcome = turn.wait().unwrap();
+    let events = events.lock().unwrap().clone();
+    for (tool, summary, failed) in tool_uses(&events) {
+        println!(
+            "{tool} {summary}: {}",
+            if failed { "stopped" } else { "done" }
+        );
+    }
+    println!("{}", outcome.final_text);
+    print_usage(&outcome);
+
+    let written: Vec<_> = folders
+        .iter()
+        .enumerate()
+        .filter(|(at, folder)| folder.join(format!("w{at}.txt")).exists())
+        .map(|(_, folder)| folder.display().to_string())
+        .collect();
+    assert_eq!(outcome.failure, None);
+    assert!(written.is_empty(), "written into: {written:#?}");
+}
+
+#[test]
 #[ignore = "needs the real Claude Code, signed in, and spends part of a turn"]
 fn a_real_turn_can_be_stopped() {
     let folder = tempfile::tempdir().unwrap();

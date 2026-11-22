@@ -239,13 +239,7 @@ pub fn turn_arguments_with(
         let folder = folder.to_string_lossy();
         check_value("folder", &folder)?;
         push_pair(&mut arguments, "--add-dir", &folder);
-        // A rule about a path uses forward slashes on every system. A
-        // session given this rule read a text file and a PDF in such a
-        // folder and was refused when it tried to write there.
-        disallowed_tools.push(format!(
-            "Edit({}/**)",
-            folder.replace('\\', "/").trim_end_matches('/')
-        ));
+        disallowed_tools.push(format!("Edit({})", write_rule_path(&folder)));
     }
 
     // The lists come last. Each takes every following argument up to the
@@ -258,6 +252,66 @@ pub fn turn_arguments_with(
     push_list(&mut arguments, "--disallowedTools", &disallowed_tools)?;
 
     Ok(arguments)
+}
+
+/// The path of a rule that forbids writing in a folder and everything
+/// below it, as the rule writes it: `<folder>/**`.
+///
+/// Read and Edit rules use the syntax of gitignore, and the documentation
+/// (<https://code.claude.com/docs/en/permissions>, "How path patterns
+/// match") gives four kinds of start: `//path` is absolute from the root of
+/// the file system, `~/path` from the home folder, `/path` from the place of
+/// the settings (for a session started by Teamwright: its working folder),
+/// and `path` from the current folder. So an absolute folder of a Unix
+/// system, `/a/b`, is written `//a/b/**`. With one slash the rule forbids
+/// writing in `<working folder>/a/b` and leaves the folder itself open: on
+/// Linux a session wrote a file into a read-only folder that way.
+///
+/// A folder of Windows, which starts with a drive letter or two backslashes,
+/// is written with forward slashes and no change at the start
+/// (`C:/Users/sample/Documents/**`). That form was seen working on Windows
+/// in a real run; the documentation names `//c/Users/...` for the same
+/// folder. Windows has not been run again since.
+///
+/// Letters, digits and the marks `/ # ! - _ . :` are written as they are.
+/// A star or a square bracket gets a backslash and a backslash gets four,
+/// which a real run showed to work. Every other character, among them
+/// spaces, commas, parentheses and the question mark, is written as `?`.
+fn write_rule_path(folder: &str) -> String {
+    let mut letters = folder.chars();
+    let drive = matches!(
+        (letters.next(), letters.next()),
+        (Some(letter), Some(':')) if letter.is_ascii_alphabetic()
+    );
+    let windows_form = drive || folder.starts_with(r"\\");
+    let slashed = if windows_form {
+        folder.replace('\\', "/")
+    } else {
+        folder.to_owned()
+    };
+    let start = if windows_form { "" } else { "/" };
+    let path = format!("{start}{}", slashed.trim_end_matches('/'));
+    // Anything that a pattern, the parentheses of a rule or the list of
+    // rules (split at spaces and commas) could read as more than itself
+    // becomes `?`, which matches any one character. So the rule can only
+    // forbid more than the folder, never less.
+    let mut rule = String::new();
+    for letter in path.chars() {
+        match letter {
+            '\\' => rule.push_str("\\\\\\\\"),
+            '*' | '[' | ']' => {
+                rule.push('\\');
+                rule.push(letter);
+            }
+            '/' | '#' | '!' | '-' | '_' | '.' | ':' => {
+                rule.push(letter);
+            }
+            letter if letter.is_alphanumeric() => rule.push(letter),
+            _ => rule.push('?'),
+        }
+    }
+    rule.push_str("/**");
+    rule
 }
 
 /// The settings a session is started with, as one JSON object, or nothing.
@@ -511,9 +565,61 @@ mod tests {
                 "Bash",
                 "PowerShell",
                 "Edit(C:/Users/sample/Documents/Teamwright/SSN/**)",
-                "Edit(/home/sample/shared/**)",
+                "Edit(//home/sample/shared/**)",
             ]
         );
+    }
+
+    #[test]
+    fn a_rule_for_a_folder_of_unix_starts_with_two_slashes() {
+        // One slash would mean "from the working folder of the session".
+        assert_eq!(write_rule_path("/a/b"), "//a/b/**");
+        assert_eq!(write_rule_path("/a/b/"), "//a/b/**");
+        assert_eq!(
+            write_rule_path("/home/sample/.teamwright/skills/0196f3a2"),
+            "//home/sample/.teamwright/skills/0196f3a2/**"
+        );
+    }
+
+    #[test]
+    fn a_rule_for_a_folder_of_windows_keeps_its_drive_and_uses_forward_slashes() {
+        assert_eq!(
+            write_rule_path(r"C:\Users\sample\Documents\Teamwright\SSN"),
+            "C:/Users/sample/Documents/Teamwright/SSN/**"
+        );
+        assert_eq!(write_rule_path(r"D:\a b\"), "D:/a?b/**");
+        assert_eq!(
+            write_rule_path(r"\\server\share\data"),
+            "//server/share/data/**"
+        );
+    }
+
+    #[test]
+    fn a_rule_never_holds_what_a_pattern_or_the_list_of_rules_could_misread() {
+        // Seen in real runs: each of these folders stayed read-only.
+        let rule = |name: &str| write_rule_path(&format!("/t/{name}"));
+        assert_eq!(rule("data sheets (old)"), "//t/data?sheets??old?/**");
+        assert_eq!(rule("paren (a) b"), "//t/paren??a??b/**");
+        assert_eq!(rule("comma, here"), "//t/comma??here/**");
+        assert_eq!(rule("star *"), r"//t/star?\*/**");
+        assert_eq!(rule("bracket [1]"), r"//t/bracket?\[1\]/**");
+        assert_eq!(rule(r"back\slash"), r"//t/back\\\\slash/**");
+        assert_eq!(rule("hash #1"), "//t/hash?#1/**");
+        assert_eq!(rule("bang !x"), "//t/bang?!x/**");
+        assert_eq!(rule("quest ?"), "//t/quest??/**");
+        assert_eq!(rule("tab\tand trailing "), "//t/tab?and?trailing?/**");
+        // No space, comma or parenthesis survives, whatever the name.
+        let all = rule("a (b) , {c} | $ ^ + ' \"");
+        assert!(!all.contains([' ', ',', '(', ')', '{', '|', '$', '^', '+', '\'', '"']));
+        // The folder's own name keeps its letters, also outside ASCII.
+        assert_eq!(rule("daten blätter"), "//t/daten?blätter/**");
+    }
+
+    #[test]
+    fn a_folder_with_parentheses_is_one_rule_in_the_command_line() {
+        let folders = [PathBuf::from("/tmp/data sheets (old)")];
+        let arguments = text(&turn_arguments(&request(), &folders, None).unwrap());
+        assert!(arguments.contains(&"Edit(//tmp/data?sheets??old?/**)".to_owned()));
     }
 
     fn text(arguments: &[OsString]) -> Vec<String> {
@@ -1089,7 +1195,7 @@ mod tests {
                 "--disallowedTools",
                 "Bash",
                 "PowerShell",
-                "Edit(/home/sample/.teamwright/skills/0196f3a2/**)",
+                "Edit(//home/sample/.teamwright/skills/0196f3a2/**)",
             ]
             .map(String::from),
         );

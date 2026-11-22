@@ -38,7 +38,7 @@ claude -p --output-format stream-json --verbose
        [--mcp-config <the team bus as JSON>] [--add-dir <folder> …]
        --tools Read Glob Grep Edit Write NotebookEdit Skill ToolSearch
        --allowedTools Read Glob Grep [mcp__teamwright__<tool> …]
-       --disallowedTools Bash PowerShell [Edit(<folder>/**) …]
+       --disallowedTools Bash PowerShell [Edit(<folder>/**) …]  # //home/x/** on Unix, C:/x/** on Windows
 ```
 
 The built-in tools and the rules come from the `PermissionProfile` of the
@@ -55,7 +55,10 @@ names of the tools and `--member <name>` for each member the project has
 runs without them. A folder the session may only read
 (`readable_folders`) is resolved to its full form like the working folder,
 added with `--add-dir`, and denied for writing with the rule
-`Edit(<folder with forward slashes>/**)`.
+`Edit(//home/x/**)` on Unix, where one slash would mean "from the work
+folder", and `Edit(C:/x/**)` on Windows. Characters a rule could misread
+(spaces, commas, parentheses) are written as `?` (`write_rule_path` in
+`arguments.rs`; decision 0013).
 
 The prompt goes to standard input, never onto the command line: Windows
 limits the length of a command line, and quoting would differ per system.
