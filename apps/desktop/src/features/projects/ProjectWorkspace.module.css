@@ -10,7 +10,8 @@
   flex: none;
   flex-direction: column;
   padding: var(--space-5) var(--space-5) 0;
-  border-bottom: 1px solid var(--rule);
+  border-bottom: 1px solid var(--head-edge);
+  background: var(--head-wash);
 }
 
 .heading {

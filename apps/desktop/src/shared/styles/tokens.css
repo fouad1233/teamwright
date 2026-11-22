@@ -252,6 +252,14 @@
   --pattern-size: auto;
   --pattern-swatch-size: auto;
   --pattern-band: 0px;
+  /* The head of the window (decision 0028, note of 22 November 2026): the
+     header of a project and the line under its active tab. Lamplight and the
+     plain palettes leave the head bare and the line ink; the themes of one
+     colour and white give the head a wash of the colour and the line the
+     colour itself. */
+  --head-wash: transparent;
+  --head-edge: var(--rule);
+  --tab-line: var(--ink);
   /* The height of a swatch in the chooser of themes. */
   --theme-swatch-height: 72px;
 

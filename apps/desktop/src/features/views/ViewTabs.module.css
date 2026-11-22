@@ -57,7 +57,7 @@
 }
 
 .active {
-  border-bottom-color: var(--ink);
+  border-bottom-color: var(--tab-line);
   color: var(--ink);
 }
 
