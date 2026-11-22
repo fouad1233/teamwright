@@ -92,11 +92,16 @@ the specialist writes. With a standing permission and the coordinator
 answering messages between teammates, it could have happened with nobody
 looking. And the words on the card had not said so.
 
-Three agents were set to it the same night: no prefixes, no standing
-permission for a command, none in a turn nobody asked for, the sandbox of
-Claude Code switched on and failing closed, connectors started by
-Teamwright itself in a folder of its own, and a sentence on the card
-that says what allowing a command means.
+Three agents were set to it the same night, and the limit of the plan
+stopped two of them a second time, at midnight, until twenty to four.
+By the morning it was in: no prefixes, no standing permission for a
+command, none in a turn that only answers a teammate, none next to a
+connector's secret, the sandbox of Claude Code switched on and failing
+closed, connectors started by Teamwright itself in an empty folder with
+only the variables they name, and two sentences on the card that say
+what allowing a command means. The sandbox has never been seen working.
+The roadmap says so, and says that allowing a command is not ready to be
+relied on until a signed-in run has shown it.
 
 ## Why it went this way
 

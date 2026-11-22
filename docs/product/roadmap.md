@@ -99,9 +99,14 @@ A single specialist that really works through Claude Code.
   that shut out the user's own hooks, skills and connectors, which the
   earlier flags did not promise. Tested on storage, on two databases
   taking in each other's changes, on the exact command line and in the
-  demo. Never run against the real Claude Code: the test for it was
-  written and has not passed yet, and the earlier tests against the real
-  program must be run again because every turn changed
+  demo. After the same review a connector that is a program is started
+  by Teamwright's own launcher in an empty folder, with only the
+  variables it names, turns start without the secrets of the library,
+  and the copy of a skill is checked whole before every turn; the
+  launcher was started by hand on Linux. Never run against the real
+  Claude Code: the tests for it were written and have not passed yet,
+  the earlier tests against the real program must be run again because
+  every turn changed, and nothing of it was run on Windows
 
 ## M3 · The Advisor 🚧
 
@@ -182,17 +187,22 @@ Several specialists working together with the manager in the loop.
   in the built program
 - 🚧 Permission requests for risky actions routed to the manager
   ([decision 0038](../decisions/0038-permission-requests-routed-to-the-manager.md)).
-  A specialist asks through the team bus for one command, a prefix of
-  commands or a web domain, and says why; the manager allows it once,
-  for the task or always, or refuses, and may narrow the rule first.
-  The next turn is started with exactly that rule added. Standing
-  permissions are listed in the Team place and can be taken back, and
-  they hold for one specialist, one project and one computer. What can
-  never be allowed is checked in code. Tested at every layer and seen in
-  a browser on the demo; never run against a signed-in Claude Code, and
-  the shape of the events it rests on was read from the documentation,
-  not seen. A command that is allowed runs with the manager's rights:
-  there is no sandbox around it
+  A specialist asks through the team bus for one exact command or a web
+  domain, and says why; the manager allows it once or for the task, a
+  web domain also always, or refuses. The next turn is started with
+  exactly that rule added. Standing permissions are listed in the Team
+  place and can be taken back. A review on the night it was built found
+  that one allowed command was any program run as the manager, and that
+  prefixes, quotes and paths passed the checks. Since then: no prefixes,
+  a command is checked as the shell reads it, never allowed always,
+  never next to a connector's secret, never in a turn that only answers
+  teammates, and never on Windows; a permission holds only where this
+  computer's own log wrote the answer; every allowed command runs in the
+  sandbox of Claude Code, and the turn fails if there is none. Tested at
+  every layer and seen in a browser on the demo. No real specialist has
+  asked, the shape of the events was read from the documentation, and
+  the sandbox has never been seen working: until a signed-in run has
+  shown it, allowing a command is not ready to be relied on
 
 ## M5 · Seeing the work 🚧
 
