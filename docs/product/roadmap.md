@@ -29,6 +29,16 @@ A desktop app that opens and manages projects and tasks without any AI.
 - ✅ Board with drag and drop, list view, task panel
 - ✅ Demo backend, so the interface also runs in a plain browser
 - ✅ Smoke test that drives the real application
+- ✅ The same on Linux, through WebDriver under a display of its own
+  (`tools/smoke/desktop-smoke-linux.mjs`, 76 checks at seventeen
+  stations, run on 22 November 2026), and a test that opens an old
+  database in a newer build (`tools/smoke/old-database-linux.mjs`): a
+  database made by the program of the main branch, at format 17, opened
+  in the build of the night of 21 November, went to format 29, and its
+  project could be read and changed. No real specialist takes part in
+  either: a stand-in for Claude Code fails every turn. Not covered:
+  dragging, the save and folder windows, the print layout,
+  notifications and syncing on Linux
 - ✅ A team for every project: AI specialists and people that tasks can be
   given to
 - ✅ Screenshots of the real application, taken by a tool
@@ -89,7 +99,10 @@ A single specialist that really works through Claude Code.
   Not yet seen in the built program, and no real specialist has run with
   instructions: the test against the real Claude Code was written but
   could not run, because Claude Code on that night's computer was not
-  signed in
+  signed in.
+  Since then, in the built program on Linux (22 November 2026): a
+  ready-made specialist was added, its instructions were changed, and
+  both were there after a restart
 - 🚧 Skills and connectors for a specialist, chosen by the manager
   ([decision 0039](../decisions/0039-skills-and-connectors-chosen-by-the-manager.md)). A project
   keeps a library of skills (checked, and copied on each computer) and of
@@ -106,7 +119,11 @@ A single specialist that really works through Claude Code.
   launcher was started by hand on Linux. Never run against the real
   Claude Code: the tests for it were written and have not passed yet,
   the earlier tests against the real program must be run again because
-  every turn changed, and nothing of it was run on Windows
+  every turn changed, and nothing of it was run on Windows.
+  Since then, in the built program on Linux (22 November 2026): the
+  library opened, a connector whose program is a bare name was added and
+  kept after a restart, and one with a relative path was refused; no skill
+  was added there
 
 ## M3 · The Advisor 🚧
 
@@ -139,7 +156,10 @@ From a conversation to an approved team and plan.
   Claude Code does not publish; it read the real conversations of the
   development computer in a test, and the whole flow was seen in a
   browser on demo data. Not tried in the built program, and no real
-  Advisor has read a digest yet
+  Advisor has read a digest yet.
+  Since then, in the built program on Linux (22 November 2026): the list
+  of the computer's conversations opened, and a digest was drafted, kept
+  and found after a restart
 
 ## M4 · Teamwork 🚧
 
@@ -169,7 +189,10 @@ Several specialists working together with the manager in the loop.
   to it, and the manager reads, searches and changes memory in the place
   Memory. Tested at every layer and seen on demo data; the built bus
   answered a search and a remembered fact over standard input. Never run
-  with a real session of Claude Code
+  with a real session of Claude Code.
+  Since then, in the built program on Linux (22 November 2026): a fact was
+  added by hand, found by search, shown in the place Memory and kept after
+  a restart
 - 🚧 Coordinator: dependency-driven start, concurrency limit, token budgets
   ([decision 0037](../decisions/0037-the-coordinator.md)). Off until the
   manager switches it on for a project; then it starts a task when what
@@ -184,7 +207,11 @@ Several specialists working together with the manager in the loop.
   is reached it starts nothing and says why once; work the limit
   stopped goes on by itself after the reset, once for each reset
   (decision 0040). It has never started a real specialist and never ran
-  in the built program
+  in the built program.
+  Since then, in the built program on Linux (22 November 2026): it was
+  switched on with a budget and watched for a minute with a stand-in for
+  Claude Code that fails every turn; it started the task once, said why
+  the turn failed, waited for the manager and started nothing more
 - 🚧 Permission requests for risky actions routed to the manager
   ([decision 0038](../decisions/0038-permission-requests-routed-to-the-manager.md)).
   A specialist asks through the team bus for one exact command or a web
@@ -217,7 +244,9 @@ Several specialists working together with the manager in the loop.
   and ended, read from the log by the category of the statuses. A late
   start, a late finish and work that runs past its due date are told
   apart by hatching and by words, not by colour alone. Seen in a browser
-  on demo data only
+  on demo data only.
+  Since then, in the built program on Linux (22 November 2026): the switch
+  was seen at work and is kept by the view after a restart
 - ✅ The office: specialists as characters with activity, time left and usage.
   A workshop in plan with a bench for everybody and a lamp lit where work
   goes on; "time left" is answered with how long work has taken and the
@@ -243,7 +272,7 @@ Several specialists working together with the manager in the loop.
   them, otherwise the word unknown (decision 0040). The latest
   activity is the newest entries of the log of the project, as the
   Activity view tells them, which today means changes to tasks; seen on
-  demo data only
+  demo data and in the built program on Linux
 - ✅ Views the manager adds, names, filters, orders and removes, next to
   the fixed places Team, Office and Advisor
   ([decision 0021](../decisions/0021-views-the-manager-can-add.md)).
@@ -254,8 +283,10 @@ Several specialists working together with the manager in the loop.
   list can be grouped by status, assignee, priority, area, tag or sprint:
   the rule is in the domain, a card dragged to another lane changes that
   field through the existing commands, and the sections of a list fold.
-  Tested in every layer and seen in a browser on demo data; not run in
-  the built program
+  Tested in every layer and seen in a browser on demo data. A board
+  grouped by assignee and one grouped by tag were seen in the built
+  program on Linux and kept after a restart; dragging a card between
+  lanes was not tried there
 - ✅ Every kind of view the tracker the owner uses has, asked for on
   15 November 2026, but for the map, which the owner said is not needed.
   A view may keep content of its own
@@ -335,7 +366,11 @@ Several specialists working together with the manager in the loop.
   when every task is in a done category. It is a second sheet of the
   Report view, printed like it and saved as Markdown into the work
   folder. Seen in a browser on demo data, including a finished project;
-  not tried in the built program, and the print layout was not looked at
+  not tried in the built program, and the print layout was not looked at.
+  Since then, in the built program on Linux (22 November 2026): the sheet
+  of the whole project was shown, and saved as Markdown into the work
+  folder through the command the interface calls after the save window;
+  the save window itself was not tried
 
 ## M6 · Agile 🚧
 
@@ -366,13 +401,18 @@ Several specialists working together with the manager in the loop.
   change different tags or items of one task both keep their change.
   Tested in every layer, the taking in with two databases, and seen in a
   browser on demo data; not yet run in the built program. A task made in
-  a view that is filtered by a tag does not get that tag yet
+  a view that is filtered by a tag does not get that tag yet.
+  Since then, in the built program on Linux (22 November 2026): a tag made
+  in place and a checklist with items ticked, on the card, in the panel,
+  in the history and after a restart
 - ✅ Work-in-progress limits
   ([decision 0033](../decisions/0033-work-in-progress-limits-and-templates.md)):
   a status can have a limit, set where the statuses are edited and shown
   at the head of its lane, in the red of trouble and marked "over" when
   it is exceeded. A limit never stops a task from moving. Tested in
-  every layer and seen in the demo, not yet in the built program
+  every layer and seen in the demo, not yet in the built program.
+  Since then, in the built program on Linux (22 November 2026): a lane of
+  a Kanban project showed that it was over its limit
 - ✅ Custom fields
   ([decision 0035](../decisions/0035-custom-fields.md)): six kinds
   (text, a number with a unit, a date, yes or no, a choice from a
@@ -382,12 +422,17 @@ Several specialists working together with the manager in the loop.
   history says when a value changed. Synced value by value. Tested in
   every layer, the taking in with two databases, and seen in a browser
   on demo data; not yet run in the built program. A field's kind cannot
-  be changed, and there is no kind for a person
+  be changed, and there is no kind for a person.
+  Since then, in the built program on Linux (22 November 2026): a value of
+  each of the six kinds, refused when of the wrong kind, in the panel, as
+  columns of the table, in the history, in a filter and after a restart
 - ✅ Templates: a new project starts from Standard, Kanban, Scrum,
   Hardware product or Engineering, which set its statuses and limits,
   its views, its areas and, for Scrum, a first sprint (decision 0033).
   Nothing remembers the template afterwards. Tested in every layer and
-  seen in the demo, not yet in the built program
+  seen in the demo, not yet in the built program.
+  Since then, in the built program on Linux (22 November 2026): a project
+  was made from each of the five, the Kanban one in the dialog
 
 ## M7 · Many computers 🚧
 
@@ -432,7 +477,8 @@ Several specialists working together with the manager in the loop.
   off until switched on, at most one look a day, "Look now", and a quiet
   mark at the foot of the navigation. The rule, the reading of GitHub's
   list against a listener on the same computer and the interface on the
-  demo were verified; a look from the built program was not. Installing
+  demo were verified; and "Look now" in the built program on Linux asked GitHub once and
+  found nothing newer than 0.1.0. Installing
   an update from inside the program is still not built: it needs signed
   update files and a signing key only the founder can make
 - ✅ [User manual](../user-manual/README.md): a table of contents and
