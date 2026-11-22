@@ -69,8 +69,10 @@ struct Office {
     store: Arc<InMemoryCoordinatorRepository>,
     projects: Arc<InMemoryProjectRepository>,
     teamwork: Arc<InMemoryTeamworkRepository>,
+    permissions: Arc<crate::in_memory::InMemoryPermissionRepository>,
     runtime: Arc<ScriptedRuntime>,
     clock: Arc<ManualClock>,
+    this_computer: ComputerId,
     plan_limit: PlanLimitService,
     project: Project,
     hardware: Member,
@@ -92,6 +94,7 @@ fn office_on(this_computer: ComputerId) -> Office {
     let views = Arc::new(InMemoryViewRepository::default());
     let teamwork = Arc::new(InMemoryTeamworkRepository::default());
     let store = Arc::new(InMemoryCoordinatorRepository::default());
+    let permissions = Arc::new(crate::in_memory::InMemoryPermissionRepository::default());
     let runtime = Arc::new(ScriptedRuntime::new());
     let clock = Arc::new(ManualClock::starting_at(start_of_evening()));
     let plan_limit =
@@ -138,7 +141,7 @@ fn office_on(this_computer: ComputerId) -> Office {
         )),
         teamwork: teamwork.clone(),
         digests: Arc::new(crate::in_memory::InMemoryDigestRepository::default()),
-        permissions: Arc::new(crate::in_memory::InMemoryPermissionRepository::default()),
+        permissions: permissions.clone(),
         memory: Arc::new(crate::in_memory::InMemoryMemoryRepository::default()),
         folders: Arc::new(FixedProjectFolders::inside("projects")),
         places: Arc::new(InMemoryPlacesRepository::default()),
@@ -192,8 +195,10 @@ fn office_on(this_computer: ComputerId) -> Office {
         store,
         projects: projects_store,
         teamwork,
+        permissions,
         runtime,
         clock,
+        this_computer,
         plan_limit,
         project,
         hardware,
@@ -891,4 +896,135 @@ fn a_budget_set_for_a_member_of_another_project_is_refused() {
         .set_budget(office.project.id(), BudgetScope::Project, Some(5));
     assert!(matches!(result, Err(ApplicationError::Rule(_))));
     let _ = &office.team;
+}
+
+/// A permission the manager allowed on this computer, for a task of a
+/// specialist (decision 0038).
+fn allowed_for_task(
+    office: &Office,
+    member: &Member,
+    task: &Task,
+    kind: teamwright_domain::PermissionKind,
+    what: &str,
+) -> teamwright_domain::PermissionRule {
+    use teamwright_domain::{
+        Answered, ConversationId, PermissionRequest, PermissionRule, PermissionScope, TurnId,
+    };
+    let rule = PermissionRule::new(kind, what).unwrap();
+    office.clock.advance(TimeDelta::seconds(1));
+    let mut request = PermissionRequest::ask(
+        office.project.id(),
+        SaidIn {
+            member_id: member.id(),
+            conversation_id: ConversationId::generate(),
+            turn_id: TurnId::generate(),
+        },
+        Some(task.id()),
+        rule.clone(),
+        "The task needs it.",
+        office.clock.now(),
+    )
+    .unwrap();
+    request
+        .allow(
+            PermissionScope::Task,
+            rule.clone(),
+            "",
+            Answered {
+                at: office.clock.now(),
+                computer: office.this_computer,
+                next_turn: TurnId::generate(),
+            },
+        )
+        .unwrap();
+    crate::ports::PermissionRepository::save_request(office.permissions.as_ref(), &request)
+        .unwrap();
+    rule
+}
+
+#[test]
+fn work_the_coordinator_starts_runs_no_command_allowed_for_its_task() {
+    use crate::agent_runtime::PermissionProfile;
+    use teamwright_domain::PermissionKind;
+
+    let office = office();
+    let schematic = office.task("Draw the schematic", &office.hardware);
+    let check = allowed_for_task(
+        &office,
+        &office.hardware,
+        &schematic,
+        PermissionKind::Command,
+        "make check",
+    );
+    let docs = allowed_for_task(
+        &office,
+        &office.hardware,
+        &schematic,
+        PermissionKind::WebDomain,
+        "docs.rs",
+    );
+    office.switch_on();
+    office.act();
+
+    // Started by the coordinator: the web domain, and no command.
+    let started = &office.runtime.requests()[0];
+    assert_eq!(
+        started.permissions,
+        PermissionProfile::specialist().with_granted(std::slice::from_ref(&docs))
+    );
+    assert!(
+        !started
+            .extra_instructions
+            .as_deref()
+            .unwrap_or_default()
+            .contains("make check")
+    );
+
+    // The manager's own reply in the same conversation has the command.
+    office.end(0, None);
+    let conversation = office.work.list_for_project(office.project.id()).unwrap()[0]
+        .conversation
+        .id();
+    office.work.reply(conversation, "Run the checks.").unwrap();
+    assert_eq!(
+        office.runtime.requests()[1].permissions,
+        PermissionProfile::specialist().with_granted(&[check, docs])
+    );
+}
+
+#[test]
+fn work_the_coordinator_goes_on_with_after_the_limit_runs_no_command() {
+    use crate::agent_runtime::PermissionProfile;
+    use teamwright_domain::PermissionKind;
+
+    let office = office();
+    let schematic = office.task("Draw the schematic", &office.hardware);
+    let check = allowed_for_task(
+        &office,
+        &office.hardware,
+        &schematic,
+        PermissionKind::Command,
+        "make check",
+    );
+    // The manager starts the work by hand: the command is there.
+    office.work.start_work(schematic.id()).unwrap();
+    assert_eq!(
+        office.runtime.requests()[0].permissions,
+        PermissionProfile::specialist().with_granted(std::slice::from_ref(&check))
+    );
+
+    let resets_at = chrono::Utc
+        .with_ymd_and_hms(2026, 11, 21, 22, 40, 0)
+        .unwrap();
+    office.clock.advance(TimeDelta::minutes(15));
+    office.end(0, at_the_limit(resets_at));
+    office.switch_on();
+    office.clock.advance(TimeDelta::hours(3));
+    office.plan_limit.look_at_reset().unwrap();
+    office.act();
+
+    // The coordinator goes on with it: no command.
+    let went_on = &office.runtime.requests()[1];
+    assert!(went_on.prompt.starts_with(GO_ON_REQUEST));
+    assert_eq!(went_on.permissions, PermissionProfile::specialist());
 }

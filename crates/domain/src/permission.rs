@@ -436,8 +436,9 @@ fn checked_domain(text: &str) -> Result<String, DomainError> {
 }
 
 /// Why a specialist can be given no command at all, whatever the manager
-/// answered: a command runs in a sandbox or not at all, never next to a
-/// secret, and never in a turn nobody asked for.
+/// answered: a command runs in a sandbox or not at all, and never next to a
+/// secret. A turn nobody started by hand runs none either; that is said by
+/// [`StartedBy`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum NoCommands {
     /// The computer has no sandbox for commands. Claude Code has none on
@@ -446,9 +447,6 @@ pub enum NoCommands {
     /// The specialist has a connector that is handed a secret in an
     /// environment variable. A command could read it.
     SecretInReach,
-    /// The turn was started by the coordinator to answer the messages of
-    /// teammates: nobody asked for it, and nobody watches it.
-    ForTeammates,
 }
 
 impl NoCommands {
@@ -464,10 +462,6 @@ impl NoCommands {
                 "this specialist has a connector that is given a secret in an environment \
                  variable, and a command could read it; take that connector from the \
                  specialist first"
-            }
-            Self::ForTeammates => {
-                "a turn that answers teammates is started by the coordinator, not by the \
-                 manager, and runs no command"
             }
         }
     }
@@ -816,8 +810,10 @@ impl PermissionRequest {
     /// taken back.
     ///
     /// A command is given to no turn that can run none
-    /// ([`TurnAbout::no_commands`]), and a command allowed always, which
-    /// could be stored before that was refused, to none at all.
+    /// ([`TurnAbout::may_run_commands`]): one the coordinator started, or
+    /// one kept from commands for another reason. A command allowed always,
+    /// which could be stored before that was refused, is given to none at
+    /// all.
     #[must_use]
     pub fn grants(&self, turn: &TurnAbout) -> Option<&PermissionRule> {
         let answer = self.answer.as_ref()?;
@@ -831,8 +827,7 @@ impl PermissionRequest {
         {
             return None;
         }
-        if rule.runs_commands() && (turn.no_commands.is_some() || *scope == PermissionScope::Always)
-        {
+        if rule.runs_commands() && (!turn.may_run_commands() || *scope == PermissionScope::Always) {
             return None;
         }
         let holds = match scope {
@@ -855,6 +850,24 @@ pub struct Answered {
     pub next_turn: TurnId,
 }
 
+/// Who started a turn, as far as its permissions go.
+///
+/// A command allowed by the manager runs only in a turn the manager started
+/// by hand and can follow: the brief of Start work, a reply, Try again, the
+/// answer to a question or to the permission request itself. A turn the
+/// coordinator starts or continues on its own (decision 0037), to begin a
+/// task, to go on after the limit of the plan, or to answer teammates, is
+/// watched by nobody, and the messages of teammates are added to its
+/// request; it runs no command, whatever was allowed (decision 0038, note
+/// of 22 November 2026). A web domain holds in both.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum StartedBy {
+    /// The manager, by hand.
+    Manager,
+    /// The coordinator, on its own.
+    Coordinator,
+}
+
 /// A turn about to start, as far as its permissions go.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TurnAbout {
@@ -868,9 +881,21 @@ pub struct TurnAbout {
     pub turn_id: TurnId,
     /// The computer it runs on.
     pub computer: ComputerId,
+    /// Who started it. A turn the coordinator started runs no command.
+    pub started_by: StartedBy,
     /// Why the turn can run no command, whatever was allowed, if it can
     /// run none.
     pub no_commands: Option<NoCommands>,
+}
+
+impl TurnAbout {
+    /// Whether the turn may be given a command the manager allowed: it was
+    /// started by the manager by hand, and nothing else keeps commands away
+    /// from it.
+    #[must_use]
+    pub const fn may_run_commands(&self) -> bool {
+        matches!(self.started_by, StartedBy::Manager) && self.no_commands.is_none()
+    }
 }
 
 /// The rules the requests give a turn, each once, in the order they were
@@ -1166,11 +1191,7 @@ mod tests {
 
     #[test]
     fn why_no_command_is_said_in_words() {
-        for no in [
-            NoCommands::NoSandbox,
-            NoCommands::SecretInReach,
-            NoCommands::ForTeammates,
-        ] {
+        for no in [NoCommands::NoSandbox, NoCommands::SecretInReach] {
             assert!(matches!(
                 no.as_error(),
                 DomainError::PermissionNotPossible { reason } if reason == no.reason()
@@ -1231,6 +1252,7 @@ mod tests {
             task_id: task,
             turn_id,
             computer: setting.computer,
+            started_by: StartedBy::Manager,
             no_commands: None,
         }
     }
@@ -1419,16 +1441,41 @@ mod tests {
             answered(&setting),
         )
         .unwrap();
-        for no in [
-            NoCommands::ForTeammates,
-            NoCommands::SecretInReach,
-            NoCommands::NoSandbox,
-        ] {
+        for no in [NoCommands::SecretInReach, NoCommands::NoSandbox] {
             let mut about = turn(&setting, Some(setting.task), TurnId::generate());
             about.no_commands = Some(no);
             assert!(for_task.grants(&about).is_none(), "{no:?}");
             assert!(docs.grants(&about).is_some(), "{no:?}");
         }
+    }
+
+    #[test]
+    fn a_turn_the_coordinator_started_is_given_no_command_but_a_domain() {
+        let setting = setting();
+        let mut for_task = request(&setting);
+        for_task
+            .allow(
+                PermissionScope::Task,
+                command("npm test").unwrap(),
+                "",
+                answered(&setting),
+            )
+            .unwrap();
+        let mut docs = request_for(&setting, domain("docs.rs").unwrap());
+        docs.allow(
+            PermissionScope::Task,
+            domain("docs.rs").unwrap(),
+            "",
+            answered(&setting),
+        )
+        .unwrap();
+        let mut about = turn(&setting, Some(setting.task), TurnId::generate());
+        assert!(about.may_run_commands());
+        assert!(for_task.grants(&about).is_some());
+        about.started_by = StartedBy::Coordinator;
+        assert!(!about.may_run_commands());
+        assert!(for_task.grants(&about).is_none());
+        assert!(docs.grants(&about).is_some());
     }
 
     #[test]

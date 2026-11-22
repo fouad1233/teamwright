@@ -90,7 +90,7 @@ pub use memory::{
 pub use permission::{
     Answered, FILE_CHANGING_PROGRAMS, NoCommands, PermissionAnswer, PermissionDecision,
     PermissionKind, PermissionRequest, PermissionRequestSnapshot, PermissionRule, PermissionScope,
-    TurnAbout, granted_rules,
+    StartedBy, TurnAbout, granted_rules,
 };
 pub use planning::{
     Interview, InterviewAnswer, InterviewQuestion, InterviewSnapshot, Proposal, ProposalChange,

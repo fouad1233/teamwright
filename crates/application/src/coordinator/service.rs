@@ -395,7 +395,7 @@ impl CoordinatorService {
         let tasks = &gathered.tasks;
         let members = &gathered.members;
         for start in &plan.starts {
-            match ports.work.start_work(start.task_id) {
+            match ports.work.start_work_by_coordinator(start.task_id) {
                 Ok(_) => entries.push(
                     entry(
                         CoordinatorEntryKind::Started,
@@ -435,8 +435,12 @@ impl CoordinatorService {
 
         for going in &plan.goes_on {
             // As the manager's "Try again" does: a reply in the conversation
-            // whose turn the limit ended.
-            let text = match ports.work.reply(going.conversation_id, GO_ON_REQUEST) {
+            // whose turn the limit ended. Unlike it, a turn nobody started by
+            // hand, so it runs no command (decision 0038).
+            let text = match ports
+                .work
+                .reply_by_coordinator(going.conversation_id, GO_ON_REQUEST)
+            {
                 Ok(_) => words::went_on(&project, tasks, members, going.task_id, going.member_id),
                 Err(error) => format!(
                     "Could not go on with {}: {error}.",
@@ -457,7 +461,7 @@ impl CoordinatorService {
 
         for wake in &plan.wakes {
             let started = match gathered.conversation_for_answers(wake.member_id, ports) {
-                Some(conversation) => ports.work.reply_to_teammates(conversation, WAKE_REQUEST),
+                Some(conversation) => ports.work.reply_by_coordinator(conversation, WAKE_REQUEST),
                 None => ports
                     .work
                     .ask_to_answer_teammates(wake.member_id, WAKE_REQUEST),

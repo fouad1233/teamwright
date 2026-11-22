@@ -15,7 +15,7 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError, Weak};
 
 use teamwright_domain::{
     Answered, NoCommands, PermissionKind, PermissionRequest, PermissionRequestId, PermissionRule,
-    PermissionScope, TurnAbout, granted_rules,
+    PermissionScope, StartedBy, TurnAbout, granted_rules,
 };
 use teamwright_domain::{
     Assignee, ComputerId, Conversation, ConversationId, DecisionOption, DecisionRequest,
@@ -330,6 +330,29 @@ impl WorkService {
     /// working on something else, if the program cannot start the turn, or
     /// if storage fails.
     pub fn start_work(&self, task_id: TaskId) -> Result<ConversationWithTurns, ApplicationError> {
+        self.start_work_as(task_id, StartedBy::Manager)
+    }
+
+    /// Starts the work on a task for the coordinator (decision 0037). Like
+    /// [`Self::start_work`], except that the manager did not start the turn
+    /// by hand and does not watch it, so it is given no command, whatever
+    /// was allowed (decision 0038, note of 22 November 2026).
+    ///
+    /// # Errors
+    ///
+    /// As [`Self::start_work`].
+    pub fn start_work_by_coordinator(
+        &self,
+        task_id: TaskId,
+    ) -> Result<ConversationWithTurns, ApplicationError> {
+        self.start_work_as(task_id, StartedBy::Coordinator)
+    }
+
+    fn start_work_as(
+        &self,
+        task_id: TaskId,
+        started_by: StartedBy,
+    ) -> Result<ConversationWithTurns, ApplicationError> {
         let _work = self.inner.hold_work();
         let ports = &self.inner.ports;
         let task = self.inner.require_task(task_id)?;
@@ -379,7 +402,7 @@ impl WorkService {
                 turn,
                 prompt: None,
                 answered_permission: None,
-                started_by: StartedBy::Manager,
+                started_by,
             },
             Worker::Specialist(&member),
             &project,
@@ -416,16 +439,17 @@ impl WorkService {
         self.reply_as(conversation_id, message, StartedBy::Manager)
     }
 
-    /// Goes on with a conversation so that its specialist answers the
-    /// messages of its teammates: the turn the coordinator gives a
-    /// specialist (decision 0037). Like [`Self::reply`], except that
-    /// nobody asked for the turn, so it is given no command, whatever was
-    /// allowed (decision 0038).
+    /// Goes on with a conversation for the coordinator (decision 0037): so
+    /// that its specialist answers the messages of its teammates, or goes on
+    /// with its task after the limit of the plan stopped it. Like
+    /// [`Self::reply`], except that the manager did not start the turn by
+    /// hand and does not watch it, so it is given no command, whatever was
+    /// allowed (decision 0038, notes of 21 and 22 November 2026).
     ///
     /// # Errors
     ///
     /// As [`Self::reply`].
-    pub fn reply_to_teammates(
+    pub fn reply_by_coordinator(
         &self,
         conversation_id: ConversationId,
         message: &str,
@@ -944,19 +968,16 @@ impl WorkService {
                 // What the manager allowed this specialist, for this turn
                 // (decision 0038): the standing permissions, those of the
                 // task, and the one the answer that starts it allows. No
-                // command in a turn nobody asked for, next to a secret, or
-                // where no sandbox can hold it.
-                let no_commands = match started_by {
-                    StartedBy::Coordinator => Some(NoCommands::ForTeammates),
-                    StartedBy::Manager => self.inner.no_commands_for(member)?,
-                };
+                // command in a turn the manager did not start by hand, next
+                // to a secret, or where no sandbox can hold it.
                 let about = TurnAbout {
                     project_id: project.id(),
                     member_id: member.id(),
                     task_id: conversation.task_id(),
                     turn_id: turn.id(),
                     computer: ports.this_computer,
-                    no_commands,
+                    started_by,
+                    no_commands: self.inner.no_commands_for(member)?,
                 };
                 let mut requests = ports.permissions.requests_of_project(project.id())?;
                 requests.extend(answered_permission.iter().cloned());
@@ -1095,20 +1116,9 @@ struct NewTurn {
     /// turn: the request with what happened in the program since the worker
     /// last spoke, which its session did not see.
     prompt: Option<String>,
-    /// Who started the turn.
+    /// Who started the turn: the manager by hand, or the coordinator. A
+    /// turn the coordinator started runs no command (decision 0038).
     started_by: StartedBy,
-}
-
-/// Who started a turn, as far as its permissions go.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum StartedBy {
-    /// The manager: a brief, a message, an answer. Or the coordinator
-    /// starting or continuing work on a task, which the manager planned.
-    Manager,
-    /// The coordinator, to answer the messages of teammates. Nobody asked
-    /// for the turn, and nobody watches it, so it runs no command
-    /// (decision 0038).
-    Coordinator,
 }
 
 impl Inner {
@@ -1705,6 +1715,12 @@ fn permission_answer_in_words(request: &PermissionRequest, answer: &PermissionRe
                 .map_or_else(|_| request.asked().in_words(), |rule| rule.in_words());
             let how_long = match scope {
                 PermissionScope::Once => "for this turn only",
+                // A command runs only in turns the manager starts by hand
+                // (decision 0038, note of 22 November 2026).
+                PermissionScope::Task if *kind == PermissionKind::Command => {
+                    "for every turn of yours on this task that the manager starts (not in a turn \
+                     the coordinator starts on its own)"
+                }
                 PermissionScope::Task => "for every turn of yours on this task",
                 PermissionScope::Always => {
                     "for every turn of yours in this project, until the \
@@ -5202,7 +5218,7 @@ mod tests {
         // teammates does not.
         workspace
             .work
-            .reply_to_teammates(conversation.conversation.id(), "Teammates asked you.")
+            .reply_by_coordinator(conversation.conversation.id(), "Teammates asked you.")
             .unwrap();
         let for_teammates = &workspace.ports.runtime.requests()[2];
         assert_eq!(for_teammates.permissions, PermissionProfile::specialist());

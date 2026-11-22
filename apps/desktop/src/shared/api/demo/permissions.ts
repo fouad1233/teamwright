@@ -255,7 +255,11 @@ export function permissionAnswerInWords(
   if (answer.decision === 'allow') {
     const howLong: Record<PermissionScope, string> = {
       once: 'for this turn only',
-      task: 'for every turn of yours on this task',
+      // A command runs only in turns the manager starts by hand.
+      task:
+        answer.kind === 'command'
+          ? 'for every turn of yours on this task that the manager starts (not in a turn the coordinator starts on its own)'
+          : 'for every turn of yours on this task',
       always: 'for every turn of yours in this project, until the manager takes it back',
     };
     said = `Permission: the manager allowed you to ${permissionInWords(answer.kind, answer.what.trim())}, ${howLong[answer.scope]}. It is available now. Go on with your work.`;

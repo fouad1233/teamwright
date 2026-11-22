@@ -39,15 +39,19 @@ export function runsCommands(kind: PermissionKind): boolean {
 
 /**
  * What the manager reads before allowing a command: what it really means,
- * and what holds it in. The sandbox is the one every turn with a command is
- * started in: it lets the command change files only in the folder of the
- * project, keeps it out of the rest of the home folder (Claude Code opens
- * the git settings again), and lets it reach only the web domains the
- * manager allowed.
+ * and what is meant to hold it in. The sandbox is the one every turn with a
+ * command is started in: it is to let the command change files only in the
+ * folder of the project, keep it out of the rest of the home folder (Claude
+ * Code opens the git settings again), and let it reach only the web domains
+ * the manager allowed. It has not been seen working in this version, and
+ * the card says so. With the shell there, Claude Code also runs its own
+ * read-only commands without asking (decision 0038, note of 22 November
+ * 2026).
  */
 export const WHAT_A_COMMAND_MEANS = [
   'This specialist can change the files this command runs (scripts, build files, tests). Allowing it lets the specialist run any program as you.',
-  'It runs in a sandbox: it can change files only in the folder of the project, cannot read the rest of your home folder except your git settings, and reaches no web domain you have not allowed.',
+  'It runs in a sandbox meant to let it change files only in the folder of the project, keep it out of the rest of your home folder except your git settings, and reach no web domain you have not allowed. That sandbox has not been proven in this version of Teamwright.',
+  'With any allowed command the specialist can also read, list and search files inside the folders of the project with the shell.',
 ] as const;
 
 /** One of the answers to a request: allowed for a while, or refused. */
@@ -78,7 +82,7 @@ export function choicesFor(
       option: {
         label: 'Allow for this task',
         consequence: runsCommands(request.kind)
-          ? `For every turn of ${specialist} about this task, except a turn that only answers its teammates.`
+          ? `For every turn of ${specialist} about this task that you start yourself: Start work, a reply, Try again. Never in a turn the coordinator starts on its own.`
           : `For every turn of ${specialist} about this task.`,
       },
     });

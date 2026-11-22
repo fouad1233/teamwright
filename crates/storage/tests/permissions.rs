@@ -15,8 +15,8 @@ use teamwright_application::{
 };
 use teamwright_domain::{
     Answered, ComputerId, ConversationId, MemberId, PermissionKind, PermissionRequest,
-    PermissionRule, PermissionScope, Project, SaidIn, TaskId, Timestamp, TurnAbout, TurnId,
-    granted_rules,
+    PermissionRule, PermissionScope, Project, SaidIn, StartedBy, TaskId, Timestamp, TurnAbout,
+    TurnId, granted_rules,
 };
 use teamwright_storage::{
     Database, SqliteAreaRepository, SqliteConversationRepository, SqliteMemberRepository,
@@ -224,6 +224,7 @@ fn turn_on(computer: &Computer, request: &PermissionRequest) -> TurnAbout {
         task_id: request.task_id(),
         turn_id: TurnId::generate(),
         computer: computer.database.device_id(),
+        started_by: StartedBy::Manager,
         no_commands: None,
     }
 }

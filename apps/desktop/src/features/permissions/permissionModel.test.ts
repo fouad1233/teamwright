@@ -50,6 +50,10 @@ describe('permissions in words', () => {
       'This specialist can change the files this command runs (scripts, build files, tests). Allowing it lets the specialist run any program as you.',
     );
     expect(WHAT_A_COMMAND_MEANS[1]).toMatch(/^It runs in a sandbox/);
+    expect(WHAT_A_COMMAND_MEANS[1]).toMatch(/has not been proven/);
+    expect(WHAT_A_COMMAND_MEANS[2]).toBe(
+      'With any allowed command the specialist can also read, list and search files inside the folders of the project with the shell.',
+    );
   });
 });
 
