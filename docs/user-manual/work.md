@@ -99,7 +99,7 @@ to run a command, such as a build or a test, or to read a page on the web, it
 does not work around the rule. It asks you, and its turn ends. The request
 waits in the *Inbox*, next to the questions, the oldest first.
 
-<img alt="The inbox with a request for permission: the command python3 tools/check.py, the reason of the specialist, the sentence that a command runs with your rights, four answers and the field What you allow" src="pictures/permission-request.png">
+<img alt="The inbox with a request for permission: the command python3 tools/check.py, the reason of the specialist, the two sentences about what allowing a command means and about the sandbox, and three answers: Allow once, Allow for this task and Refuse" src="pictures/permission-request.png">
 
 A request says who asks, for which task, and exactly what it wants, in one of
 two kinds: *Command* (one exact command line) or *Web domain*. Under it
