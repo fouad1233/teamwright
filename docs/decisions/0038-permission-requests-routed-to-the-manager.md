@@ -330,11 +330,14 @@ than what the manager read.
   them. The network reaches only the web domains the manager allowed,
   which Claude Code adds to the sandbox itself; with `strictAllowlist`
   every other host is refused at once instead of asked about. The sandbox
-  does not hide environment variables; the rule above keeps commands away
-  from the secrets Teamwright hands to connectors, and nothing hides the
-  manager's own variables yet. Claude Code has no sandbox on Windows, so
-  on Windows no command is allowed: the answer is refused with the reason
-  in words.
+  does not hide environment variables. A turn now starts without the
+  variables the connectors of the project name (decision 0039, note of the
+  same night), except those of the headers of its connectors at an address,
+  which Claude Code itself must have; the rule above keeps every command
+  away from a specialist that has such a secret. Other variables of the
+  manager's environment still reach a command. Claude Code has no sandbox
+  on Windows, so on Windows no command is allowed: the answer is refused
+  with the reason in words.
 - **Honest words.** Where the manager allows a command, the card says:
   "This specialist can change the files this command runs (scripts, build
   files, tests). Allowing it lets the specialist run any program as you."
