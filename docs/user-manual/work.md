@@ -95,27 +95,47 @@ its page.
 
 A specialist reads and writes in the folders of its project and does nothing
 else on its own (see [safety and trust](safety-and-trust.md)). When it needs
-to run a command, such as a build or a test, or to read a page on the web, it
-does not work around the rule. It asks you, and its turn ends. The request
-waits in the *Inbox*, next to the questions, the oldest first.
+to read a page on the web, or, if you switched command permissions on, to
+run a command such as a build or a test, it does not work around the rule.
+It asks you, and its turn ends. The request waits in the *Inbox*, next to the
+questions, the oldest first.
 
-<img alt="The inbox with a request for permission: the command python3 tools/check.py, the reason of the specialist, the two sentences about what allowing a command means and about the sandbox, and three answers: Allow once, Allow for this task and Refuse" src="pictures/permission-request.png">
+**Commands are off until you switch them on.** On a new computer a
+specialist can ask only for a web domain. A request for a command is
+refused before it reaches you, and no command runs, whatever you allowed
+before. To let specialists ask for commands, switch on *Let specialists ask
+to run commands on this computer* under *Commands* on the page *Computers*
+(see [settings](settings.md#commands)). Read what it says first: the
+sandbox commands are meant to run in has not been proven in this version of
+Teamwright. Leave it off unless you trust the files of your projects.
+
+<img alt="The inbox with a request for permission: the command python3 tools/check.py, the reason of the specialist, the sentences about what allowing a command means and about the sandbox, and three answers: Allow once, Allow for this task and Refuse" src="pictures/permission-request.png">
+
+The picture was taken before 22 November 2026. Since then the card says
+that the sandbox has not been proven, adds a third sentence about reading
+files with the shell, and words *Allow for this task* as below.
 
 A request says who asks, for which task, and exactly what it wants, in one of
-two kinds: *Command* (one exact command line) or *Web domain*. Under it
-stands the reason in the specialist's own words. For a command there are also
-these sentences: *This specialist can change the files this command runs
+two kinds: *Command* (one exact command line) or *Web domain* (one host,
+such as `docs.rs`; never all the hosts under a name). Under it stands the
+reason in the specialist's own words. For a command there are also these
+sentences: *This specialist can change the files this command runs
 (scripts, build files, tests). Allowing it lets the specialist run any
-program as you.* and what the sandbox it runs in holds it to. Read them.
+program as you.*, what the sandbox it is meant to run in would hold it to,
+that this sandbox has not been proven, and *With any allowed command the
+specialist can also read, list and search files inside the folders of the
+project with the shell.* Read them.
 
 1. Open the *Inbox* and read what is asked and why.
 2. Pick an answer:
    - *Allow once*: for the next turn only. If the specialist needs it again,
      it asks again.
-   - *Allow for this task*: for every turn of that specialist on this task.
+   - *Allow for this task*: for every turn of that specialist on this task
+     that you start yourself: *Start work*, a reply, *Try again*, an answer.
      It is offered only when the request is about a task. A turn that the
-     coordinator starts only to answer the questions of teammates runs no
-     command, whatever you allowed.
+     coordinator starts on its own, to begin the task, to go on after the
+     limit of your plan or to answer teammates, runs no command, whatever
+     you allowed. A web domain holds in those turns too.
    - *Always allow* the specialist, offered only for a web domain: for every
      turn in this project, on this computer, until you take it back. A
      command is never allowed always.
@@ -125,9 +145,13 @@ program as you.* and what the sandbox it runs in holds it to. Read them.
    Teamwright checks what you typed again and refuses what could never be
    allowed (see
    [what can never be allowed](safety-and-trust.md#what-can-never-be-allowed)).
-   It also refuses a command for a specialist that has a connector given a
-   secret in an environment variable, and every command on Windows, and
-   says why.
+   It also refuses a command while command permissions are switched off,
+   for a specialist that has a connector given a secret in an environment
+   variable, on a computer where Claude Code is signed in with an
+   environment variable (an API key), and on a computer that cannot make
+   the sandbox (every Windows computer, and a Linux computer without
+   bubblewrap and socat), and says why. While command permissions are off,
+   a request for a command asked before can only be refused.
 4. Add a word for the specialist if you like, and press *Answer*.
 
 Your answer starts a new turn of the same conversation, which says in words
@@ -146,15 +170,19 @@ specialist it is for, how long it holds, and *Take back*. Press *Take back*
 and the next turn starts without it. A permission you allowed once is gone
 with its turn and is not listed. A command allowed always before
 21 November 2026, when that was still possible, is listed as *no longer
-valid*: it allows nothing, and *Take back* removes it.
+valid*: it allows nothing, and *Take back* removes it. While command
+permissions are switched off, a command allowed for a task says that it
+allows nothing until they are switched on again.
 
 Note: permission requests were tested at every layer and seen in the demo,
 where a task whose title starts with *Check*, *Test*, *Measure* or *Run* makes
 the pretended specialist ask. A real specialist has never asked, and no
 command has ever run on a permission in the installed program. The sandbox
-every allowed command runs in, and the setting that keeps commands from
-reading outside the folders, were taken from the documentation of Claude
-Code and have never been seen in a run.
+every allowed command is meant to run in, the cleared environment it starts
+with, and the setting that keeps commands from reading outside the folders,
+were taken from the documentation of Claude Code and the installed program,
+and have never been seen in a run. That is why command permissions are off
+until you switch them on.
 
 ## The limit of your Claude plan
 

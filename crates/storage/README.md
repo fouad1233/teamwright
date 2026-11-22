@@ -40,6 +40,7 @@ involved.
 | `notices` | What syncing tells the manager, kept on this computer |
 | `folder` | `FolderOfComputers`: the files in the sync folder, which implements the port `SyncFolder` |
 | `ledger` | `SqliteSyncLedger`: the bookkeeping of syncing, which implements the port `SyncLedger` |
+| `command_choice` | `SqliteCommandChoice`: whether command permissions are switched on, on this computer, in the key `command_permissions` of `meta`; off until switched on; not logged, so never synced ([decision 0038](../../docs/decisions/0038-permission-requests-routed-to-the-manager.md), note of 22 November 2026) |
 | `notification_choice` | `SqliteNotificationChoice`: whether this computer shows notifications, and which, in the keys `notifications`, `notify_waiting`, `notify_finished` and `notify_stopped` of `meta`; not logged, so never synced |
 | `plan_limit` | `SqlitePlanLimitStore`: what this computer knows about the limits of its Claude plan, as one JSON value in the key `plan_limit` of `meta`; what cannot be read back is forgotten; not logged, so never synced (decision 0040) |
 | `update_choice` | `SqliteUpdateChoice`: whether this computer looks for a newer version, when it last looked, whether that look failed and which release it offered, in the keys `update_look`, `update_last_look`, `update_look_failed` and `update_offered_*` of `meta`; not logged, so never synced ([decision 0043](../../docs/decisions/0043-a-notice-of-newer-versions.md)) |
@@ -277,9 +278,13 @@ involved.
   command the stricter rules of 21 November 2026 refuse) is not read back
   at all, and one that arrives from a computer that still knew it is not
   kept. Whether the answer was written here is read from the log: only if
-  every state of the request that carries an answer was made by this
-  computer (`answered_here`). An answer taken in from the sync folder is
-  shown and grants nothing here, whatever computer it names.
+  the request has an answer and every state of it the log keeps, with an
+  answer or without, waiting or applied, was made by this computer
+  (`answered_here`). An answer taken in from the sync folder is shown and
+  grants nothing here, whatever computer it names; so does an answer
+  written here that a state from the sync folder moved to another
+  specialist or task or brought back after it was taken back (note of 22
+  November 2026).
 - **An approved plan is one transaction.** `SqlitePlanningRepository`
   writes the project (with its next task number), every new member, every
   new task with what it waits for, and the turn with its approved proposal,

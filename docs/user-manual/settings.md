@@ -1,8 +1,9 @@
 # Settings of this computer
 
 This page explains the settings on the page *Computers*: the theme, the
-notifications and the notice of a newer version. They are kept on this
-computer only. Your other computers keep their own.
+notifications, the switch of command permissions and the notice of a newer
+version. They are kept on this computer only. Your other computers keep
+their own.
 
 Open *Computers* at the foot of the sidebar.
 
@@ -46,6 +47,31 @@ Once the main switch is on there is a way to send a test notification. In the
 installed program the choice was made and kept and the test notification was
 sent without a refusal. Nobody has yet seen a notification on the screen, and
 none was pressed.
+
+## Commands
+
+Under *Commands* is the switch *Let specialists ask to run commands on this
+computer*. It is off until you switch it on, on each computer.
+
+- Off, a specialist can ask you only to fetch pages from a web domain. A
+  request for a command is refused before it reaches you, and no command
+  runs, whatever you allowed before.
+- On, a specialist can ask you to run one exact command, such as
+  `npm test`, and you can allow it once or for a task (see
+  [when a specialist asks for a permission](work.md#when-a-specialist-asks-for-a-permission)).
+
+The words beside the switch say what it means. A specialist can change the
+files a command runs (scripts, build files, tests), so allowing a command
+lets it run any program as you. Commands are meant to run in a sandbox that
+keeps them inside the folders of the project, and that sandbox has not been
+proven in this version of Teamwright. Keep it off unless you trust the files
+of your projects. If this computer can run no command even when it is on
+(Windows, a Linux without `bubblewrap` and `socat`, or Claude Code signed in
+with an environment variable), the part says why.
+
+Web domains do not depend on this switch. The switch was tested and seen in
+the demo, in a dark and a light theme; no command has run with it in the
+installed program.
 
 ## A newer version
 

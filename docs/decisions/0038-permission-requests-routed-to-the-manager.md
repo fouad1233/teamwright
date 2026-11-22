@@ -350,3 +350,129 @@ tested, and the ignored test
 in `crates/runtime/tests/real_program.rs` would prove that a sandboxed
 command cannot read a file in the home folder. Until it has passed, the
 sandbox is a promise of the documentation.
+
+## Note of 22 November 2026, after a second review
+
+A second review, the next night, still before any project of a user had
+used this feature, found six more ways in which a permission reached
+further than the manager read, one of them confirmed with a scratch
+program.
+
+### What the second review found
+
+1. **A permission could be revived and moved through the sync folder.**
+   Whether an answer was written here looked only at the logged states
+   that carry a decision. A request merges field by field, and the
+   specialist, the task, the project and the taking back are fields of
+   their own. A synced state `{"withdrawn_at": null, "member_id": …,
+   "task_id": …}` with a later stamp and no decision left this computer's
+   "allowed" in place, still counted as written here, taken back no
+   longer, and belonging to another specialist and task.
+2. **Turns the coordinator starts for a task got that task's command.** The
+   coordinator began a task with the call of Start work and went on after
+   the limit of the plan with the call of a reply; both counted as started
+   by the manager. A command allowed for the task ran in a turn nobody
+   watched, with the waiting messages of teammates added to its request.
+3. **A sandboxed command saw the whole environment.** The documentation of
+   the sandbox says sandboxed commands inherit the environment of Claude
+   Code, "including any secrets". Only the variables connectors name were
+   removed, so a script the specialist wrote could read `GH_TOKEN`, cloud
+   keys and the rest, and pass them on through an allowed domain, a handoff
+   or a memory entry.
+4. **One command opened more than that command.** With the shell there,
+   Claude Code runs its read-only commands without asking, and in the mode
+   a specialist works in approves `mkdir`, `touch`, `rm`, `rmdir`, `mv`,
+   `cp` and `sed`; `sed` was not denied. `nocorrect`, `noglob`, `busybox`
+   and `flock` in front of `rm`, `.` and `source`, and `cat =python3` (zsh
+   turns `=name` into a full path) passed the rules.
+5. **Wildcard domains over shared names** (`*.co.uk`, `*.github.io`,
+   `*.s3.amazonaws.com`) were accepted, and a domain allowed always also
+   opens the network of the sandbox to commands.
+6. **The sandbox's failing closed had a soft spot.** In the installed
+   program a missing seccomp helper is only a warning, and without it a
+   sandboxed command can reach Unix sockets.
+
+### What changed
+
+- **Off until switched on.** Nothing of command permissions has run with a
+  real Claude Code, and the sandbox has never been seen working. So command
+  permissions are a choice of each computer, kept in `meta` like the choice
+  about notifications, never logged and never synced, and off until the
+  manager switches them on, under *Commands* on the page Computers. The
+  words there say what it allows, that a specialist can change the files a
+  command runs, that the sandbox has not been proven in this version, and
+  that it should stay off unless the manager trusts the files of the
+  project. While it is off, `ask_permission` is offered for web domains
+  only (the bus refuses a command with the reason in words, and nothing
+  reaches the inbox), no turn gets a command whatever is stored, allowing
+  one is refused, and the inbox and the Team place offer none. The same
+  holds wherever a command is held back for another reason: it cannot even
+  be asked for. Web domains are not behind the switch. The demo's sample
+  has it on, so that the card can be seen; the empty demo starts with it
+  off, as a new computer does.
+- **Every state written here.** A request grants only if every state the
+  log keeps of it, with an answer or without, waiting or applied, was
+  written on this computer: a request is asked and answered on the
+  computer that runs its conversation. One state from anywhere else, a
+  taking back on another computer included, and it grants nothing here.
+- **Who started the turn is explicit.** The domain has `StartedBy`, the
+  turn carries it where grants are gathered, and a turn the coordinator
+  starts or continues on its own (to begin a task, to go on after the
+  limit, to answer teammates) is given no command, whatever was allowed.
+  Only a turn the manager starts by hand gets one: Start work, a reply,
+  Try again, the answer to a question or to the request itself. "Allow for
+  this task" says so on the card, to the specialist and in the demo.
+- **A cleared environment.** A turn that may run a command is started with
+  the base set only: what the connector launcher gives every program
+  (`PATH`, `HOME`, the user, the locale, `TZ`, `TMPDIR`), `SHELL`,
+  `CLAUDE_CONFIG_DIR`, and the variables of a proxy and its certificates.
+  Nothing else, not even a connector's variable. A manager who signs in to
+  Claude Code with an environment variable (`ANTHROPIC_…`,
+  `CLAUDE_CODE_OAUTH_TOKEN`, Bedrock or Vertex) cannot have that, so such a
+  computer runs no command, and allowing one is refused with the reason in
+  words. `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB` is not set. It is in the
+  installed program, 2.1.289 (`strings` on the program file that `claude`
+  resolves to): there it scrubs a list of credential variables from
+  subprocesses, needs bubblewrap, and also forces the permission mode back
+  to `default` when another is given ("Permission mode forced to default —
+  CLAUDE_CODE_SUBPROCESS_ENV_SCRUB is set"). That would change how a
+  specialist's file edits are approved, in a way never seen in a run, and
+  the cleared environment leaves it nothing to scrub that matters.
+- **More refused.** `sed` is among the programs that change files, so no
+  command starts with it and a turn with a command denies `Bash(sed *)`.
+  These never start a command: `noglob`, `nocorrect`, `flock`, `busybox`,
+  `toybox`, `chrt`, `taskset`, `setpriv`, `unshare`, `sg`, `script`, `.`,
+  `source`, `strace`, `ltrace`, `nsenter`, `chroot`, `prlimit`, `numactl`,
+  `setarch`, `runuser`, `systemd-run`, `fakeroot`, `faketime`, `unbuffer`,
+  `rlwrap` and `caffeinate`, beside those refused before (`time`, `nice`,
+  `ionice`, `stdbuf`, `watch`, `exec`, `command`, `builtin`, `eval` and
+  others). A word that starts with `=` is refused. Each bypass is a test by
+  name. The card says that with any allowed command the specialist can
+  also read, list and search files inside the folders of the project with
+  the shell.
+- **One host.** A web domain names one host; a wildcard is refused
+  altogether. Keeping a wildcard only under a registrable name would need
+  the public list of suffixes, which Teamwright does not carry and would
+  have to keep up to date. A stored wildcard is not read back, like a
+  prefix.
+- **The sandbox checked from outside.** Whether this computer can sandbox
+  commands (`AgentRuntime::why_no_commands`, which replaces
+  `sandboxes_commands`) is now as strict as can be checked without running
+  Claude Code: never on Windows or the first WSL; on macOS
+  `/usr/bin/sandbox-exec` must be there; on Linux `bwrap` and `socat` must
+  be on the search path, and `bwrap` must make and leave an empty sandbox
+  with every namespace of its own (which fails where unprivileged
+  namespaces are switched off). What cannot be checked from outside:
+  whether Claude Code's seccomp helper loads (in 2.1.289 it is built into
+  the program and read from `/proc/self/exe`, and a failure is only a
+  warning), whether its sandbox then starts with the settings of this
+  decision, and whether it holds a command in.
+
+**Still never seen working.** No command has run on a permission in the
+installed program. The ignored tests
+`a_real_allowed_command_runs_in_a_sandbox_that_keeps_it_inside_the_folders`
+and `a_real_allowed_command_sees_none_of_the_managers_secrets` in
+`crates/runtime/tests/real_program.rs` would prove the sandbox and the
+cleared environment; neither has passed. The trial of `bwrap`
+(`this_computer_can_make_the_sandbox`) passed on the Linux computer this
+was written on.

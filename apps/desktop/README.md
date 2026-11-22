@@ -223,14 +223,24 @@ The shell is where the work of an AI specialist meets the outside world
   (`open_permission_requests`), answering one (`answer_permission`,
   `PermissionAnswerInput`: allow with a scope, a kind and the text, or
   refuse, each with a word), which answers with the conversation it goes
-  on in, and taking a standing one back (`withdraw_permission`). The inbox
+  on in, taking a standing one back (`withdraw_permission`), and the
+  switch of command permissions of this computer (`command_permissions`,
+  `switch_command_permissions`, `CommandPermissionsDto`), which the page
+  Computers shows as a part of its own (`features/permissions/CommandSettings`):
+  off until switched on, with what it allows and that the sandbox has not
+  been proven. While it is off the inbox offers only "Refuse" for a request
+  for a command, and Team says that a standing command grants nothing. The
+  inbox
   shows an open request beside the questions, the oldest first
   (`features/permissions/PermissionCard`): who asks, the task, exactly the
   command or the domain in the type of code, why, and for a command what
   allowing it means (the specialist can change the files it runs, so it can
-  run any program as the manager) and the sandbox it runs in
-  (`WHAT_A_COMMAND_MEANS`); the manager picks once, for the task, always
-  (only for a web domain) or refuse, may edit the rule, and answers. Team
+  run any program as the manager), the sandbox it is meant to run in, which
+  has not been proven, and that the shell also lets the specialist read,
+  list and search the files of the project (`WHAT_A_COMMAND_MEANS`); the
+  manager picks once, for the task (for a command: only in turns the
+  manager starts), always (only for a web domain) or refuse, may edit the
+  rule, and answers. Team
   lists the standing permissions of the specialists, each with "Take back"
   (`StandingPermissions`); one that is no longer valid (`noLongerValid`)
   or was answered on another computer says so. The demo backend keeps
@@ -238,7 +248,9 @@ The shell is where the work of an AI specialist meets the outside world
   rules; its simulated specialist asks to run a script on a task whose
   title starts with "Check", "Test", "Measure" or "Run", and the sample
   project has two standing permissions: `cargo build` for a task and
-  `docs.espressif.com` always.
+  `docs.espressif.com` always. The demo follows the switch too: its sample
+  has command permissions switched on, so that the card can be seen, and
+  the empty demo starts with them off, as a new computer does.
 - **What the agents spent.** `project_usage` answers with what every member,
   the Advisor and those who left have spent (`ProjectUsageDto`: the tokens
   by kind and in all, the turns that ended, the model of the latest turn,

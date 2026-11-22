@@ -28,7 +28,9 @@ such as Claude Code not being signed in, says so in words. See
 
 **A specialist says in its report that it could not do something.** It cannot
 run commands, fetch from the internet or leave its folders unless you allow
-it. It should ask you for a permission, which waits in the *Inbox*; see
+it. It should ask you for a permission, which waits in the *Inbox*. It can
+ask for a command only if you switched command permissions on under
+*Commands* on the page *Computers*; see
 [when a specialist asks for a permission](work.md#when-a-specialist-asks-for-a-permission).
 For what can never be allowed, see
 [what a specialist may and may not do](safety-and-trust.md#what-can-never-be-allowed).
@@ -42,11 +44,23 @@ removes it.
 **The request I wanted to allow was refused as I typed it.** Teamwright
 refuses a command that could join or quote other commands, name a path
 outside the folder anywhere in a word, or start with a program that only
-starts another. It also refuses a command allowed always, any command on
-Windows, and a command for a specialist that has a connector given a secret,
-and says which. Allow one exact command, once or for the task. The list is
+starts another. It also refuses a command allowed always, any command while
+command permissions are switched off, on Windows or on a computer signed in
+to Claude Code with an environment variable, a command for a specialist
+that has a connector given a secret, and a web domain with a `*`, and says
+which. Allow one exact command or one host, once or for the task. The list
+is
 in
 [what can never be allowed](safety-and-trust.md#what-can-never-be-allowed).
+
+**A request for a command can only be refused.** Command permissions are
+switched off on this computer. Switch them on under *Commands* on the page
+*Computers*, after reading what it says, or refuse the request.
+
+**A command I allowed for a task did not run.** It runs only in turns you
+start yourself: *Start work*, a reply, *Try again*, an answer. A turn the
+coordinator starts on its own runs no command. It also runs in no turn while
+command permissions are switched off.
 
 **I cannot remove or ask a specialist, or delete its task or project.** It is
 working. A specialist works on one thing at a time. Press *Stop* first.

@@ -15,6 +15,7 @@ format of its output.
 | `claude_code` | `ClaudeCode`: the four things the interface asks for |
 | `locate` | `Locator`: finds the program on the search path and in the documented places |
 | `environment` | `Environment`: the exact set of variables the program is started with |
+| `commands` | What a turn that may run a command needs: the cleared environment it is started with (`environment_for_commands`), the variables of a sign-in by a variable (`sign_in_variable`), and whether this computer can sandbox commands at all (`why_no_commands`) |
 | `arguments` | The command lines: version, sign-in, a turn, the desktop app |
 | `process` | Starting the program, feeding it the prompt, reading it, stopping it |
 | `decode` | Turns the JSON lines of headless mode into `AgentEvent`s and a `TurnOutcome` |
@@ -137,6 +138,23 @@ documentation and found in Claude Code 2.1.289; none has been seen working.
 The ignored test
 `a_real_allowed_command_runs_in_a_sandbox_that_keeps_it_inside_the_folders`
 would prove that a sandboxed command cannot read a file in the home folder.
+
+A sandboxed command inherits the environment of Claude Code, so a turn that
+may run a command is started with a cleared environment: the base set of
+the connector launcher (`PATH`, `HOME`, the user, the locale, `TZ`,
+`TMPDIR`), `SHELL`, `CLAUDE_CONFIG_DIR` and the variables of a proxy, and
+nothing else (`environment_for_commands`; note of 22 November 2026 to
+decision 0038). A manager signed in with a variable (`ANTHROPIC_…`,
+`CLAUDE_CODE_OAUTH_TOKEN`, Bedrock, Vertex) runs no command on that
+computer. `why_no_commands` answers the application: never on Windows or
+the first WSL; on macOS `/usr/bin/sandbox-exec` must be there; on Linux
+`bwrap` and `socat` must be on the search path and `bwrap` must make and
+leave an empty sandbox. `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB` is not set: in
+2.1.289 it forces the permission mode back to `default`. The ignored test
+`a_real_allowed_command_sees_none_of_the_managers_secrets` would prove that
+an allowed command sees none of the manager's variables, and
+`this_computer_can_make_the_sandbox` (in `commands.rs`) passes on a Linux
+computer with `bwrap` and `socat`.
 The ignored test
 `a_real_session_gets_its_chosen_skill_and_connector_and_nothing_of_the_users_own`
 in `tests/real_program.rs` has never run (needs the built program:
@@ -196,7 +214,10 @@ arguments):
 - `ask_permission`: a specialist asks the manager for permission to do
   something it may not do on its own: a `kind` (`command` or
   `web_domain`), `what` (the command line or the domain) and a `reason`, checked by the rules of a permission of
-  the domain (`permission_from`). Like a question, it ends the turn: the
+  the domain (`permission_from`). A command can be asked for only when the
+  bus is started with `--commands` after the tool's name; without it the
+  tool offers `web_domain` only and refuses a command with the reason in
+  words, and the decoder does not report one (`with_commands_askable`). Like a question, it ends the turn: the
   server answers that nothing is allowed yet and that the answer comes as
   the next message, and the decoder reports `PermissionAsked`
   ([decision 0038](../../docs/decisions/0038-permission-requests-routed-to-the-manager.md)).

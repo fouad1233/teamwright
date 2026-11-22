@@ -27,8 +27,9 @@ loosened from the interface. That is on purpose.
 ## What it may not do
 
 - It cannot run commands on its own. It has no shell, so it cannot compile,
-  run tests, install anything or start a program, unless you allow one
-  precise command. See [permissions you give](#permissions-you-give).
+  run tests, install anything or start a program, unless you switched
+  command permissions on for this computer and then allow one precise
+  command. See [permissions you give](#permissions-you-give).
 - It cannot fetch anything from the internet on its own, unless you allow one
   web domain, and it cannot order parts or publish anything.
 - It can neither read nor change a file anywhere else on your computer. The
@@ -47,11 +48,20 @@ permission, or says so in its report, instead of working around it.
 
 ## Permissions you give
 
-A specialist that needs to run a command or fetch from a web domain can ask
-you, with its reason, and you answer in the inbox (see
+A specialist that needs to fetch from a web domain, or to run a command if
+you switched command permissions on, can ask you, with its reason, and you
+answer in the inbox (see
 [work](work.md#when-a-specialist-asks-for-a-permission)). This is the one way
 to open what is closed above, and it opens exactly what you read and nothing
 more. Read this part before you allow anything.
+
+**Commands are off until you switch them on.** Command permissions are a
+choice of each computer, under *Commands* on the page *Computers* (see
+[settings](settings.md#commands)), and they start off. While they are off a
+specialist can ask only for a web domain, no request for a command reaches
+you, and no turn runs a command, whatever you allowed before. They are off
+because nothing of them has been seen working with a real Claude Code yet.
+Switch them on only if you trust the files of your projects.
 
 **A command can run anything the specialist writes.** A specialist may write
 files in its folder, and most commands worth allowing run files from that
@@ -60,19 +70,37 @@ folder: `npm test` and `npm run` run `package.json`, `cargo build` runs
 allowing such a command lets the specialist run any program as you. Allow it
 only when you would be content to run the files of the project yourself.
 
-**A command runs in a sandbox.** Every allowed command runs inside the
-sandbox of Claude Code: it can change files only in the folder of the
-project, cannot read the rest of your home folder (Claude Code still lets it
-read your git settings), and reaches no web domain you have not allowed. If
-the sandbox cannot start, the turn does not start. Claude Code has no
-sandbox on Windows, so on Windows no command can be allowed. The sandbox has
-not been seen working yet (see the note below).
+**A command is meant to run in a sandbox.** Every allowed command runs
+inside the sandbox of Claude Code, which is to let it change files only in
+the folder of the project, keep it from reading the rest of your home folder
+(Claude Code still lets it read your git settings), and let it reach no web
+domain you have not allowed. If the sandbox cannot start, the turn does not
+start. Claude Code has no sandbox on Windows, so on Windows no command can be
+allowed; on Linux it needs the programs `bubblewrap` and `socat`, and
+Teamwright tries `bubblewrap` once before it allows a command. Some of what
+the sandbox needs on Linux can only be seen in a run. The sandbox has not
+been seen working yet (see the note below).
+
+**A command does not see your secrets.** The sandbox does not hide
+environment variables, so a turn that may run a command is started with
+almost none: the search path, your home folder and user name, the language,
+the time zone, the temporary folder, the shell, where Claude Code keeps its
+settings, and a proxy if you use one. Your tokens and keys in the
+environment (for GitHub, a cloud, a database) do not reach it. If you sign
+in to Claude Code with an environment variable, such as an API key, that
+computer runs no command at all, because the key would have to stay.
+
+**The shell reads too.** With any allowed command the specialist can also
+read, list and search files inside the folders of the project with the
+shell, as Claude Code allows its read-only commands without asking.
 
 **There are no standing commands.** A command is allowed once or for one
-task, never always. A web domain may be allowed always. A turn the
-coordinator starts only to answer the questions of teammates runs no
-command. A specialist that has a connector given a secret in an environment
-variable is allowed no command, because a command could read the secret.
+task, never always. A web domain may be allowed always. A command runs only
+in a turn you start yourself; a turn the coordinator starts on its own, to
+begin a task, to go on after the limit of your plan or to answer the
+questions of teammates, runs no command. A specialist that has a connector
+given a secret in an environment variable is allowed no command, because a
+command could read the secret.
 
 Some choices keep the risk smaller:
 
@@ -82,7 +110,8 @@ Some choices keep the risk smaller:
 - Look at *Permissions* in the *Team* place now and then, and press *Take
   back* on what you no longer need.
 - A permission holds only on the computer where you gave it. An answer that
-  arrives through the sync folder allows nothing.
+  arrives through the sync folder allows nothing, and so does a permission
+  that anything from the sync folder has changed.
 
 ### What can never be allowed
 
@@ -107,17 +136,27 @@ starts.
 - **These programs, anywhere in a command:** `claude`, `teamwright`, `sudo`,
   `su`, `doas`, `pkexec`, `runas` and `gsudo`. **And at its start:** the
   programs that change files, `rm`, `rmdir`, `mv`, `cp`, `mkdir`, `touch`,
-  `ln`, `chmod`, `chown`, `chgrp`, `dd`, `tee`, `truncate`, `shred` and
-  `install` (a specialist changes files with its file tools, which stay in
-  the folder), and the programs that only start another: `env`, `xargs`,
-  `eval`, `exec`, `nohup`, `timeout`, `time`, `nice`, `ionice`, `watch`,
-  `stdbuf`, `setsid`, `command` and `builtin`.
-- **A command allowed always**, and any command on Windows or for a
-  specialist with a secret in reach (see above).
+  `ln`, `chmod`, `chown`, `chgrp`, `dd`, `tee`, `truncate`, `shred`,
+  `install` and `sed` (a specialist changes files with its file tools,
+  which stay in the folder), and the programs and words of the shell that
+  only start another or run a file in the shell: `env`, `xargs`, `eval`,
+  `exec`, `nohup`, `timeout`, `time`, `nice`, `ionice`, `watch`, `stdbuf`,
+  `setsid`, `command`, `builtin`, `noglob`, `nocorrect`, `flock`,
+  `busybox`, `toybox`, `chrt`, `taskset`, `setpriv`, `unshare`, `sg`,
+  `script`, `.`, `source`, `strace`, `ltrace`, `nsenter`, `chroot`,
+  `prlimit`, `numactl`, `setarch`, `runuser`, `systemd-run`, `fakeroot`,
+  `faketime`, `unbuffer`, `rlwrap` and `caffeinate`.
+- **A word that starts with `=`**: some shells turn `=python3` into the
+  full path of a program.
+- **A command allowed always**, and any command while command permissions
+  are off, on Windows, on a computer signed in to Claude Code with an
+  environment variable, or for a specialist with a secret in reach (see
+  above).
 - **A web domain** that is a single word, `localhost`, a name ending in
   `.local`, or an address in numbers. Your computer and your local network
-  stay closed. A domain may be one host, or all the hosts under one name,
-  such as `*.example.com`.
+  stay closed. A domain is one host. All the hosts under a name, such as
+  `*.example.com`, cannot be allowed: under a name many people share, such
+  as `*.github.io`, anybody can make a host.
 
 A refused request adds nothing, and refused stays refused: the specialist is
 told not to try another way.
@@ -131,8 +170,9 @@ boundary around it, which is why the sandbox is there.
 Note: permissions were tested at every layer and seen in the demo. They have
 never been tried with a real specialist, no command has run on a permission
 in the installed program, and the sandbox has never been seen working: Claude
-Code was not signed in when it was built. Until a real run has shown it,
-allow a command only as if there were no sandbox.
+Code was not signed in when it was built. That is why command permissions
+are off until you switch them on. Until a real run has shown it, allow a
+command only as if there were no sandbox.
 
 ## A connector is a way out of the folder
 
