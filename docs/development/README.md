@@ -180,6 +180,14 @@ what a specialist may do. The specialist of the test above knows its folders
 and does not try to leave them, so that test shows that nothing leaked, and
 this one shows that the program would have refused.
 
+The two tests of the sandbox need a computer on which the program's sandbox
+can start a command. On Linux that means `bwrap` and `socat` on the path, and
+nested user namespaces: on Ubuntu 24.04 with
+`kernel.apparmor_restrict_unprivileged_userns=1` the command dies with
+"apply-seccomp: write /proc/self/setgroups … Permission denied" before it
+runs, and the tests fail on purpose, because a command that did not run shows
+nothing about what the sandbox keeps out.
+
 ## The Advisor at work
 
 ```bash

@@ -957,8 +957,11 @@ fn a_real_allowed_command_runs_in_a_sandbox_that_keeps_it_inside_the_folders() {
     print_usage(&outcome);
     assert_eq!(outcome.failure, None, "the sandbox may be missing");
     assert!(
-        tool_uses(&events).iter().any(|(tool, _, _)| tool == "Bash"),
-        "the command was expected to run: {events:?}"
+        tool_uses(&events)
+            .iter()
+            .any(|(tool, _, failed)| tool == "Bash" && !failed),
+        "the command did not run, so nothing is shown about what the sandbox keeps out (on \
+         Linux the program's sandbox needs nested user namespaces): {events:?}"
     );
     assert!(
         !format!("{events:?}").contains(&secret) && !outcome.final_text.contains(&secret),
@@ -1013,8 +1016,11 @@ fn a_real_allowed_command_sees_none_of_the_managers_secrets() {
     print_usage(&outcome);
     assert_eq!(outcome.failure, None, "the sandbox may be missing");
     assert!(
-        tool_uses(&events).iter().any(|(tool, _, _)| tool == "Bash"),
-        "the command was expected to run: {events:?}"
+        tool_uses(&events)
+            .iter()
+            .any(|(tool, _, failed)| tool == "Bash" && !failed),
+        "the command did not run, so nothing is shown about what the sandbox keeps out (on \
+         Linux the program's sandbox needs nested user namespaces): {events:?}"
     );
     assert!(
         !format!("{events:?}").contains(&secret) && !outcome.final_text.contains(&secret),
