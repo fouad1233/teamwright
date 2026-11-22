@@ -137,3 +137,25 @@ A review found three common forms the rules missed. They are now hidden:
 
 The rules still guess. The manager still reads every digest before it is
 kept.
+
+## Note of 22 November 2026: `-p` and names in capitals, after a second review
+
+A second review found the rule both too blind and too eager:
+
+- **Now hidden:** a password glued to `-p` (`mysql -uroot -pS3cr3tPass`);
+  a value after a name and a separate `=` or `:` (`password = hunter2`);
+  and the value of any name in capitals, digits and underscores that holds
+  `PASSWORD`, `PASSWD`, `SECRET`, `TOKEN` or `KEY` (`PGPASSWORD=hunter2`,
+  `GITHUBTOKEN=…`). A name in small letters that only holds "key", such as
+  `monkey=1`, stays.
+- **Now kept:** the word after a separate `-p`, unless the command named a
+  program whose `-p` takes a password: `mysql`, `mysqldump`, `mysqladmin`,
+  `mysqlimport`, `mysqlshow`, `mysqlcheck`, `mariadb`, `mariadb-dump`,
+  `mariadb-admin` and `sshpass`. So `ssh -p 2222 host`, `git add -p file`,
+  `mkdir -p out` and `psql -p 5432` (a port) read as they were. The program
+  may stand anywhere earlier in the same command (`sudo mysql`, `docker exec
+  db mysql`); a line break, or a word that ends with `;`, `|` or `&`, starts
+  a new command. A glued `-p` is hidden only after those programs too.
+
+The list is short on purpose and will miss a program; the manager still
+reads every digest before it is kept.

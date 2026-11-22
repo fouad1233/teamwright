@@ -64,11 +64,35 @@ enum Next {
     Ordinary,
     /// A secret: it comes after `Bearer` or a name such as `password:`.
     Secret,
-    /// The value of a flag such as `--password` or `-p`. It is hidden
-    /// unless it is another flag, or, when `unless_a_path`, a path: `-p`
-    /// is also what `mkdir -p src/lib` says.
-    ValueOfFlag { unless_a_path: bool },
+    /// The value of a flag such as `--password`, or of `-p` after a
+    /// program whose `-p` takes a password. It is hidden unless it is
+    /// another flag.
+    ValueOfFlag,
+    /// The word after the bare name of a secret, as in `password = hunter2`:
+    /// if it is only `=` or `:`, the word after it is the secret.
+    AfterSecretName,
 }
+
+/// The programs whose `-p` takes a password, glued (`-pS3cr3t`) or, for
+/// some, as the next word. Elsewhere `-p` means something else: a port
+/// (`ssh -p 2222`), a patch (`git add -p`), parents (`mkdir -p`), so the
+/// word after it is kept. `psql` is not here: its `-p` is a port.
+const PASSWORD_FLAG_PROGRAMS: &[&str] = &[
+    "mysql",
+    "mysqldump",
+    "mysqladmin",
+    "mysqlimport",
+    "mysqlshow",
+    "mysqlcheck",
+    "mariadb",
+    "mariadb-dump",
+    "mariadb-admin",
+    "sshpass",
+];
+
+/// Words in a name written in capitals, such as `PGPASSWORD`, that say its
+/// value is a secret.
+const SECRET_CAPITALS: &[&str] = &["PASSWORD", "PASSWD", "SECRET", "TOKEN", "KEY"];
 
 /// Words that, followed by `=` or `:`, say that a secret comes next.
 const SECRET_NAMES: &[&str] = &[
@@ -93,21 +117,29 @@ const SECRET_NAMES: &[&str] = &[
 
 /// Replaces what looks like a secret by [`HIDDEN`]: tokens with a known
 /// beginning, long runs that look random, the value after a word such as
-/// `password=` or `token:`, the word after `Bearer`, the name and password
-/// in an address such as `https://name:secret@host`, and private keys. The
-/// rest of the text, its spaces and its line breaks included, is kept as it
-/// was.
+/// `password=`, `token:`, `password = ` or `PGPASSWORD=`, the word after
+/// `Bearer`, the password of `-p` in a command of a program whose `-p`
+/// takes one ([`PASSWORD_FLAG_PROGRAMS`]), the name and password in an
+/// address such as `https://name:secret@host`, and private keys. The rest
+/// of the text, its spaces and its line breaks included, is kept as it was.
 #[must_use]
 pub fn hide_secrets(text: &str) -> String {
     let text = hide_private_keys(text);
     let mut hidden = String::with_capacity(text.len());
-    let mut next = Next::Ordinary;
+    let mut state = State {
+        next: Next::Ordinary,
+        password_program: false,
+    };
     let mut word = String::new();
     for character in text.chars() {
         if character.is_whitespace() {
             if !word.is_empty() {
-                next = push_word(&mut hidden, &word, next);
+                state = push_word(&mut hidden, &word, state);
                 word.clear();
+            }
+            if matches!(character, '\n' | '\r') {
+                // A new line is a new command.
+                state.password_program = false;
             }
             hidden.push(character);
         } else {
@@ -115,14 +147,51 @@ pub fn hide_secrets(text: &str) -> String {
         }
     }
     if !word.is_empty() {
-        push_word(&mut hidden, &word, next);
+        push_word(&mut hidden, &word, state);
     }
     hidden
 }
 
-/// Adds one word to the text, hidden if it must be, and says what the word
+/// What the words read so far say about the next one.
+#[derive(Debug, Clone, Copy)]
+struct State {
+    /// What the next word must be.
+    next: Next,
+    /// Whether the command being read named a program whose `-p` takes a
+    /// password, anywhere before (`sudo mysql`, `docker exec db mysql`). A
+    /// line break, or a word that ends with `;`, `|` or `&`, ends a
+    /// command.
+    password_program: bool,
+}
+
+/// Adds one word to the text, hidden if it must be, and says what the words
 /// after it must be.
-fn push_word(hidden: &mut String, word: &str, expected: Next) -> Next {
+fn push_word(hidden: &mut String, word: &str, state: State) -> State {
+    let mut password_program = state.password_program || names_a_password_program(word);
+    let next = push_word_in(hidden, word, state.next, password_program);
+    if word.ends_with([';', '|', '&']) {
+        password_program = false;
+    }
+    State {
+        next,
+        password_program,
+    }
+}
+
+/// Whether a word names a program whose `-p` takes a password, by its name
+/// or its path: `mysql`, `/usr/bin/mysql`, `mysql.exe`.
+fn names_a_password_program(word: &str) -> bool {
+    let (_, core, _) = strip_marks(word);
+    let name = core.rsplit(['/', '\\']).next().unwrap_or(core);
+    let lowered = name.to_ascii_lowercase();
+    let name = lowered.strip_suffix(".exe").unwrap_or(&lowered);
+    PASSWORD_FLAG_PROGRAMS.contains(&name)
+}
+
+/// Adds one word to the text, hidden if it must be, and says what the word
+/// after it must be. `password_program` says whether `-p` takes a password
+/// in this command.
+fn push_word_in(hidden: &mut String, word: &str, expected: Next, password_program: bool) -> Next {
     match expected {
         Next::Ordinary => {}
         Next::Secret => {
@@ -135,10 +204,21 @@ fn push_word(hidden: &mut String, word: &str, expected: Next) -> Next {
             push_hidden(hidden, word);
             return Next::Ordinary;
         }
-        Next::ValueOfFlag { unless_a_path } => {
-            let is_another_flag = word.starts_with('-');
-            if !is_another_flag && !(unless_a_path && looks_like_a_path(word)) {
+        Next::ValueOfFlag => {
+            if !word.starts_with('-') {
                 push_hidden(hidden, word);
+                return Next::Ordinary;
+            }
+        }
+        Next::AfterSecretName => {
+            // "password = hunter2", "password =hunter2", "password : x".
+            let separators = word.len() - word.trim_start_matches(['=', ':']).len();
+            if separators > 0 {
+                hidden.push_str(&word[..separators]);
+                if separators == word.len() {
+                    return Next::Secret;
+                }
+                push_hidden(hidden, &word[separators..]);
                 return Next::Ordinary;
             }
         }
@@ -172,23 +252,35 @@ fn push_word(hidden: &mut String, word: &str, expected: Next) -> Next {
         hidden.push_str(after);
         return Next::Ordinary;
     }
+    // "mysql -uroot -pS3cr3t": the password is glued to the flag.
+    if password_program
+        && let Some(glued) = core.strip_prefix("-p")
+        && !glued.is_empty()
+        && !glued.starts_with('=')
+    {
+        hidden.push_str(before);
+        hidden.push_str("-p");
+        hidden.push_str(HIDDEN);
+        hidden.push_str(after);
+        return Next::Ordinary;
+    }
     hidden.push_str(word);
     // "Bearer abc…": the token is the next word.
     if is_a_kind_of_credential(core) {
         return Next::Secret;
     }
-    // "--password abc", "-p abc".
-    match core {
-        "-p" => Next::ValueOfFlag {
-            unless_a_path: true,
-        },
-        _ if names_a_secret(core.trim_start_matches('-')) && core.starts_with("--") => {
-            Next::ValueOfFlag {
-                unless_a_path: false,
-            }
-        }
-        _ => Next::Ordinary,
+    // "--password abc", and "-p abc" after a program whose -p takes a
+    // password. Elsewhere "-p" is a port, a patch or parents.
+    if (core == "-p" && password_program)
+        || (core.starts_with("--") && names_a_secret(core.trim_start_matches('-')))
+    {
+        return Next::ValueOfFlag;
     }
+    // "password = abc": the value may come after a separate "=".
+    if !core.starts_with('-') && (names_a_secret(core) || is_a_capital_secret_name(core)) {
+        return Next::AfterSecretName;
+    }
+    Next::Ordinary
 }
 
 /// Adds a word as [`HIDDEN`], keeping the quotation marks and punctuation
@@ -200,10 +292,14 @@ fn push_hidden(hidden: &mut String, word: &str) {
     hidden.push_str(after);
 }
 
-/// Whether a word is a path of a file or folder: it holds a separator or
-/// starts like a relative or home path.
-fn looks_like_a_path(word: &str) -> bool {
-    word.contains(['/', '\\']) || word.starts_with(['.', '~'])
+/// Whether a name written in capitals, digits and underscores names a
+/// secret: `PGPASSWORD`, `MY_SECRET_2`, `GITHUB_TOKEN`, `AWS_KEY`.
+fn is_a_capital_secret_name(name: &str) -> bool {
+    name.chars().any(|character| character.is_ascii_uppercase())
+        && name.chars().all(|character| {
+            character.is_ascii_uppercase() || character.is_ascii_digit() || character == '_'
+        })
+        && SECRET_CAPITALS.iter().any(|word| name.contains(word))
 }
 
 /// Whether a lower-case or mixed-case name, without leading hyphens, names
@@ -315,7 +411,7 @@ fn secret_assignment(core: &str) -> Option<(&str, usize)> {
     let bare = bare.trim_start_matches('-');
     // `-p=x` is the short flag of a password.
     let is_the_short_flag = name == "-p" && core[separator..].starts_with('=');
-    if !is_the_short_flag && !names_a_secret(bare) {
+    if !is_the_short_flag && !names_a_secret(bare) && !is_a_capital_secret_name(bare) {
         return None;
     }
     let mut separator_end = separator + 1;
@@ -457,6 +553,75 @@ mod tests {
         );
         // A path after -p is a path.
         assert_eq!(hide_secrets("mkdir -p out/logs"), "mkdir -p out/logs");
+    }
+
+    #[test]
+    fn a_password_glued_to_the_p_of_a_database_program_is_hidden() {
+        assert_eq!(
+            hide_secrets("mysql -uroot -pS3cr3tPass mydb"),
+            "mysql -uroot -p[hidden] mydb"
+        );
+        assert_eq!(
+            hide_secrets("sudo /usr/bin/mysqldump -u root -pHunter2 shop > shop.sql"),
+            "sudo /usr/bin/mysqldump -u root -p[hidden] shop > shop.sql"
+        );
+        assert_eq!(
+            hide_secrets("docker exec db mariadb -p'hunter 2'"),
+            "docker exec db mariadb -p[hidden] 2'"
+        );
+        assert_eq!(
+            hide_secrets("sshpass -p hunter2 ssh pi@robot"),
+            "sshpass -p [hidden] ssh pi@robot"
+        );
+    }
+
+    #[test]
+    fn the_word_after_p_is_kept_where_p_is_not_a_password() {
+        for text in [
+            "ssh -p 2222 host",
+            "scp -P 2222 a host:b",
+            "git add -p file.rs",
+            "psql -h localhost -p 5432 -U me shop",
+            "mkdir -p out",
+            "ssh -p2222 host",
+            // A new command after a database program.
+            "mysql -u me shop; ssh -p 2222 host",
+            "mysql -u me shop\nssh -p 2222 host",
+        ] {
+            assert_eq!(hide_secrets(text), text);
+        }
+    }
+
+    #[test]
+    fn a_secret_after_a_name_and_a_separate_equals_sign_is_hidden() {
+        assert_eq!(hide_secrets("password = hunter2"), "password = [hidden]");
+        assert_eq!(hide_secrets("password =hunter2"), "password =[hidden]");
+        assert_eq!(hide_secrets("token : abc123 x"), "token : [hidden] x");
+        assert_eq!(
+            hide_secrets("PGPASSWORD = hunter2 psql"),
+            "PGPASSWORD = [hidden] psql"
+        );
+        // A word after the name that is not a separator is kept.
+        assert_eq!(hide_secrets("the password is good"), "the password is good");
+    }
+
+    #[test]
+    fn a_value_after_a_name_in_capitals_that_says_secret_is_hidden() {
+        assert_eq!(
+            hide_secrets("PGPASSWORD=hunter2 psql shop"),
+            "PGPASSWORD=[hidden] psql shop"
+        );
+        assert_eq!(
+            hide_secrets("export GITHUBTOKEN=abc MYSECRET2=x AWSKEY=y"),
+            "export GITHUBTOKEN=[hidden] MYSECRET2=[hidden] AWSKEY=[hidden]"
+        );
+        assert_eq!(
+            hide_secrets("MYSQL_PWD_PASSWD=x"),
+            "MYSQL_PWD_PASSWD=[hidden]"
+        );
+        // In capitals only: a word that merely holds "key" stays.
+        assert_eq!(hide_secrets("monkey=1 Keyboard=us"), "monkey=1 Keyboard=us");
+        assert_eq!(hide_secrets("PORT=8080 HOME=/x"), "PORT=8080 HOME=/x");
     }
 
     #[test]
