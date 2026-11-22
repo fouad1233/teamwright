@@ -109,11 +109,7 @@ to run commands on this computer* under *Commands* on the page *Computers*
 sandbox commands are meant to run in has not been proven in this version of
 Teamwright. Leave it off unless you trust the files of your projects.
 
-<img alt="The inbox with a request for permission: the command python3 tools/check.py, the reason of the specialist, the sentences about what allowing a command means and about the sandbox, and three answers: Allow once, Allow for this task and Refuse" src="pictures/permission-request.png">
-
-The picture was taken before 22 November 2026. Since then the card says
-that the sandbox has not been proven, adds a third sentence about reading
-files with the shell, and words *Allow for this task* as below.
+<img alt="The inbox with a request for permission: the command python3 tools/check.py, the reason of the specialist, the sentences about what allowing a command means, about the sandbox (which has not been proven) and about reading files with the shell, and three answers: Allow once, Allow for this task and Refuse" src="pictures/permission-request.png">
 
 A request says who asks, for which task, and exactly what it wants, in one of
 two kinds: *Command* (one exact command line) or *Web domain* (one host,
