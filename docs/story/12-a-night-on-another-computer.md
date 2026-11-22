@@ -103,6 +103,35 @@ what allowing a command means. The sandbox has never been seen working.
 The roadmap says so, and says that allowing a command is not ready to be
 relied on until a signed-in run has shown it.
 
+### The second look, and the program at last
+
+The fixes were read again by an agent that had not written them. It
+found one more way in, and proved it with a small program of its own: a
+permission that the manager had taken back could be brought back through
+the sync folder and moved to another specialist, because the check
+looked only at the part of the record that carried the answer. It found
+a worse one that nobody had asked it to look for: a connector that
+arrived through the sync folder was started as it came.
+
+So there was a second round before the morning. A permission counts only
+if every state of it was written on this computer. A connector is
+started only as the manager confirmed it on this computer. A command
+runs only in a turn the manager starts by hand, and with a cleared
+environment. And because the sandbox had still never been seen working,
+the whole of it was put behind a switch that is off: a specialist cannot
+even ask for a command until the manager turns that on.
+
+Meanwhile another agent did what had not been done once all night. It
+built the program and started it, on a display of its own, and drove the
+real window through seventy-six checks: a project from each template, a
+task with a tag and a checklist and a field of each kind, the views, the
+memory, the coordinator switched on against a stand-in that fails every
+turn. It started the task once, said why it failed, and waited. A
+database made by the program of the main branch opened and went from
+format 17 to 29. No command and no part of the wire contract was wrong.
+One sentence on the first screen was: it still said that a team that
+works together was to come.
+
 ## Why it went this way
 
 **A draft, not the main branch.** The lab computer cannot build for
@@ -138,3 +167,8 @@ written by the one who built it.
    itself.
 5. Near midnight a visitor walks the benches, reading as a thief would,
    and leaves a list on the last one.
+6. Before dawn the visitor comes back and finds a window left open that
+   the first list had closed a door beside. A switch is fitted on the
+   wall, and left off.
+7. First light. For the first time that night somebody opens the real
+   door of the workshop and walks through every room.
