@@ -66,9 +66,11 @@
   /* Each line says where it stands and how large it is, as fractions of the
      height of the picture (film.json, from the film's own data). Under the
      picture, where the window is tall, the same fractions are turned into
-     pixels: a line low in the picture opens the band of text, and the
-     lines of the end card keep their order and spacing below it. */
-  const LOW_LINE = 0.9;
+     pixels: a line that leaves again (a caption) opens the band of text,
+     and the lines that stay to the end (those of the end card) keep their
+     order and spacing below it. (Until the third film a line was a caption
+     when it stood below nine tenths of the height; the third film sets its
+     captions at 0.89 and the last line of its card at 0.912.) */
   const BELOW_TOP = 0.73;
   const BELOW_SPACING = 520;
   const BELOW_SIZE = 460;
@@ -352,7 +354,7 @@
       let size;
       if (below) {
         size = Math.max(14, line.size * BELOW_SIZE);
-        const offset = line.y > LOW_LINE ? 0 : Math.max(0, line.y - BELOW_TOP) * BELOW_SPACING;
+        const offset = line.end !== null ? 0 : Math.max(0, line.y - BELOW_TOP) * BELOW_SPACING;
         top = bandTop + offset + size / 2;
       } else {
         size = Math.max(14, line.size * picture.height);
@@ -365,6 +367,23 @@
       line.element.style.width = `${width - 2 * gutter}px`;
       line.element.style.top = `${top}px`;
       line.element.style.fontSize = `${size}px`;
+    }
+    if (below) keepApart(lines.filter((line) => line.end === null));
+  }
+
+  /* Under the picture a line of the end card may wrap onto two rows on a
+     narrow screen; the lines below it then move down so that none covers
+     another. */
+  function keepApart(cardLines) {
+    let bottom = -Infinity;
+    for (const line of [...cardLines].sort((a, b) => a.y - b.y)) {
+      const height = line.element.offsetHeight;
+      let top = parseFloat(line.element.style.top);
+      if (top - height / 2 < bottom + 4) {
+        top = bottom + 4 + height / 2;
+        line.element.style.top = `${top}px`;
+      }
+      bottom = top + height / 2;
     }
   }
 
