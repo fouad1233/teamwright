@@ -26,7 +26,8 @@
  *   --full               one picture of the whole page as well
  *   --wait MS            how long to wait at each place (default 900)
  *
- * Nothing is needed but Node.js 22 or later and Edge.
+ * Nothing is needed but Node.js 22 or later and Edge (or, without Edge,
+ * Google Chrome).
  */
 
 import { spawn } from 'node:child_process';
@@ -39,6 +40,8 @@ const EDGE = [
   'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
   'C:/Program Files/Microsoft/Edge/Application/msedge.exe',
   '/usr/bin/microsoft-edge',
+  // Chrome speaks the same debugging protocol; used where Edge is not installed.
+  '/usr/bin/google-chrome',
 ];
 
 function option(name, fallback) {
@@ -68,7 +71,7 @@ class Browser {
   static async start(port) {
     const profile = mkdtempSync(join(tmpdir(), 'teamwright-look-'));
     const executable = EDGE.find((path) => existsSync(path));
-    if (!executable) throw new Error('Microsoft Edge was not found');
+    if (!executable) throw new Error('Neither Microsoft Edge nor Google Chrome was found');
     const child = spawn(executable, [
       '--headless=new',
       `--remote-debugging-port=${port}`,
