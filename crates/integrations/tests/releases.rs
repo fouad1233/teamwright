@@ -76,7 +76,12 @@ fn the_list_is_asked_for_without_anything_of_the_manager_and_read() {
         .iter()
         .find(|line| line.to_ascii_lowercase().starts_with("user-agent:"))
         .unwrap();
-    assert!(agent.contains("Teamwright/0.1.0"), "{agent}");
+    // The version is the program's own, so that the test holds for every
+    // release and not only the one it was written in.
+    assert!(
+        agent.contains(concat!("Teamwright/", env!("CARGO_PKG_VERSION"))),
+        "{agent}"
+    );
 }
 
 #[test]
