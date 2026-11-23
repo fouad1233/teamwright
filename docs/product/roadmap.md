@@ -520,7 +520,14 @@ Several specialists working together with the manager in the loop.
 - 🚧 Installers: a workflow builds them for Windows, macOS (Apple silicon
   and Intel) and Linux and publishes them as a release when a version is
   tagged. [Version 0.1.0](https://github.com/fouad1233/teamwright/releases/tag/v0.1.0)
-  was published on 18 November 2026 as a pre-release. The installers are
+  was published on 18 November 2026 as a pre-release, and
+  [version 0.2.0](https://github.com/fouad1233/teamwright/releases/tag/v0.2.0)
+  on 23 November 2026, with what was built from 21 to 23 November and
+  the correction of the read-only folders on Linux and macOS. In that
+  run the job for Macs with Apple silicon built its installer and then
+  failed, because two jobs tried to create the release in the same
+  second; it was run a second time and its files were added. The
+  workflow still has that fault. The installers are
   not signed, so Windows and macOS warn before they open; none of them
   was installed and started by anybody yet, and the macOS and Linux
   builds were never run at all. The program tells the manager when a
@@ -540,16 +547,18 @@ Several specialists working together with the manager in the loop.
   real specialist. Its links were checked. Nobody new to the program has
   tried to follow it, and three older pictures of the built program no
   longer match what it looks like
-- 🚧 Public demo in the browser
+- ✅ Public demo in the browser
   ([decision 0032](../decisions/0032-a-public-demo-in-the-browser.md)):
   the interface, built for the browser (`npm run build:demo`), is
   published by the website's workflow under `demo/`, with a band that
   says it is a demo, a page for phones and a specialist at work when it
   opens. The commands of the workflow were run on a clean copy and the
   result clicked through in a headless Chrome at desktop and phone
-  sizes. It is not published yet: the workflow runs when this reaches
-  the main branch, and that first run, a real phone and browsers other
-  than Chrome were not tried
+  sizes. It was published on 23 November 2026 at
+  <https://fouad1233.github.io/teamwright/demo/>: the workflow's first
+  run on the main branch succeeded, and the published demo was opened
+  once in a browser and loaded without an error. A real phone and
+  browsers other than Chrome were not tried
 - ✅ A website on GitHub Pages that explains the project, with the film
   run by scrolling ([decision 0023](../decisions/0023-a-website-without-a-framework.md)):
   <https://fouad1233.github.io/teamwright/>, published on 14 November
