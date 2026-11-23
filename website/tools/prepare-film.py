@@ -26,7 +26,7 @@ With FRAMES it writes into the output folder, which git ignores:
 
 - manifest.json: what the page needs to know about everything below;
 - large/pack-NN.bin and small/pack-NN.bin: every second frame of the film
-  (12 a second) as WebP pictures, 1920 and 1280 pixels wide, laid end to end
+  (12 a second for a film at 24 frames a second, 15 at 30) as WebP pictures, 1920 and 1280 pixels wide, laid end to end
   in a few dozen files. The manifest says where each picture starts and
   how long it is. The first packs hold every sixteenth frame of the film,
   so that the page can scrub through the whole film once they are in;
@@ -50,10 +50,12 @@ import zipfile
 
 from PIL import Image
 
-# Every second frame of a film at 24 frames a second: 12 a second.
+# Every second frame of the film: 12 a second for a film at 24 frames a
+# second, 15 at 30. The page reads the rate from the manifest.
 STEP = 2
 # The levels of detail, as the step between pictures of the page's own
-# numbering (12 a second): every 8th is every 16th frame of the film.
+# numbering: every 8th is every 16th frame of the film (two thirds of a
+# second at 24 frames a second, a little over half a second at 30).
 LEVELS = (8, 4, 2, 1)
 # The large set is as wide as the film itself, so that nothing is lost on a
 # wide screen; the small one is for phones, whose screens have about 1200
@@ -84,8 +86,12 @@ def encode(image, width, quality):
 
 
 TYPES = {'Instrument Sans': 'sans', 'Instrument Serif': 'serif', 'IBM Plex Mono': 'mono'}
-# The colours of the lines, as the tokens of the site name them.
-TONES = {'#e8e0d0': 'ink', '#b9af9d': 'soft', '#c9a96e': 'brass'}
+# The colours of the lines, as the tokens of the site name them: the first
+# film's, then the third film's (its ink and soft ink are a shade lighter).
+TONES = {
+    '#e8e0d0': 'ink', '#b9af9d': 'soft', '#c9a96e': 'brass',
+    '#eee8dc': 'ink', '#c4baa8': 'soft',
+}
 
 
 def number(value):
@@ -199,7 +205,7 @@ def main():
 
     manifest = {
         'version': 1,
-        'framesPerSecond': film['framesPerSecond'] // STEP,
+        'framesPerSecond': film['framesPerSecond'] // STEP,   # pictures a second
         'frameCount': count,
         'type': 'image/webp',
         'sets': {},
