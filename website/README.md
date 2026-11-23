@@ -182,6 +182,26 @@ first run, GitHub Pages must be set to deploy from GitHub Actions
 Set `published` in `film.json` to the day the film is put in the release.
 It is the upload date in the structured data of the video.
 
+### The stills of the chapters
+
+Each chapter in `film.json` names its still (`still.picture`) and says what
+it shows (`still.alt`). The still is shown on the stage until a frame of the
+film is there, and in the chapter itself when the film does not scrub
+(reduced motion, no script). It is one of:
+
+- a picture of the program, `images/<picture>-960.webp` and its other
+  widths: for a chapter in which that view of the program is seen;
+- `mark`, the mark of Teamwright;
+- `film`, the film's own frame, `media/film/stills/<chapter>.webp`, for a
+  chapter in which no picture of the program is seen (the desk, the
+  themes, the device). Without the film's media (`--without-film`) it
+  becomes the mark.
+
+The first chapter's still is also the first picture of the stage and is
+asked for early in the head; `write-page.mjs` writes both. With a still
+from the film it is not in git, so the first view's budget in `check.mjs`
+does not count it.
+
 ## How the scrubbing works
 
 The stage is a `position: sticky` box that fills the window. The chapters

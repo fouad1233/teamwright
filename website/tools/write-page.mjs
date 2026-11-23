@@ -5,9 +5,9 @@
  *   node website/tools/write-page.mjs --without-film  writes them for a site
  *                                                     that has no film media
  *
- * - The chapters of the film, the rail that names them, the address of the
- *   film's media and the structured data of the film (VideoObject) come
- *   from website/film.json. Its numbers are written there by
+ * - The chapters of the film, the rail that names them, the first picture
+ *   of the stage, the address of the film's media and the structured data
+ *   of the film (VideoObject) come from website/film.json. Its numbers are written there by
  *   prepare-film.py from the film's own data file, never by hand.
  * - The structured data of the questions (FAQPage) comes from the section
  *   "Questions" of the page itself, so that the two always say the same.
@@ -16,8 +16,14 @@
  * `<!-- NAME:end -->`. Everything else in the page is written by hand.
  * check.mjs uses the same functions to fail when a part is out of date.
  *
+ * A chapter's still is a picture of the program (images/<picture>-960.webp
+ * and its other widths), the mark ("mark"), or the film's own frame
+ * ("film": media/film/stills/<chapter>.webp, written by prepare-film.py),
+ * for a chapter in which no picture of the program is seen.
+ *
  * With --without-film the page does not point at website/media/film and
- * does not describe a video. The publishing workflow uses it when there is
+ * does not describe a video; a chapter whose still is the film's frame
+ * shows the mark instead. The publishing workflow uses it when there is
  * no film to publish (see website/README.md).
  */
 
@@ -48,14 +54,29 @@ function twoDigits(number) {
   return String(number).padStart(2, '0');
 }
 
+/** What a still of the film's own frame becomes when there is no film. */
+const MARK_ALT = 'The mark of Teamwright: a letter T laid out of five blocks, the one that holds the others in gold.';
+
+/** The picture a chapter shows, with the film or without it. */
+function pictureOf(chapter, withoutFilm) {
+  const { picture, alt } = chapter.still;
+  if (picture === 'film' && withoutFilm) return { picture: 'mark', alt: MARK_ALT };
+  return { picture, alt };
+}
+
+const filmStill = (chapter) => `media/film/stills/${chapter.id}.webp`;
+
 /** The lines of the film that begin inside a chapter. */
 export function linesOf(film, chapter) {
   return film.lines.filter((line) => line.start >= chapter.start && line.start < chapter.end);
 }
 
-function stillOf(chapter, index) {
-  const { picture, alt } = chapter.still;
+function stillOf(chapter, index, withoutFilm) {
+  const { picture, alt } = pictureOf(chapter, withoutFilm);
   const loading = index === 0 ? '' : ' loading="lazy"';
+  if (picture === 'film') {
+    return `<img src="${filmStill(chapter)}" width="1920" height="1080" alt="${escapeHtml(alt)}"${loading} decoding="async">`;
+  }
   if (picture === 'mark') {
     return `<img src="images/icons/mark.svg" width="1024" height="1024" alt="${escapeHtml(alt)}"${loading} decoding="async">`;
   }
@@ -67,13 +88,33 @@ function stillOf(chapter, index) {
 }
 
 /** The image a chapter shows on the stage before a frame of the film is in. */
-function stageStillOf(chapter) {
-  const { picture } = chapter.still;
+function stageStillOf(chapter, withoutFilm) {
+  const { picture } = pictureOf(chapter, withoutFilm);
+  if (picture === 'film') return filmStill(chapter);
   if (picture === 'mark') return 'images/icons/mark.svg';
   return `images/${picture}-960.webp 960w, images/${picture}-1600.webp 1600w`;
 }
 
-export function chaptersHtml(film) {
+/** The first picture of the stage, and the line in the head that asks for it early. */
+export function firstStill(film, withoutFilm) {
+  const chapter = film.chapters[0];
+  const { picture } = pictureOf(chapter, withoutFilm);
+  if (picture === 'film' || picture === 'mark') {
+    const source = picture === 'film' ? filmStill(chapter) : 'images/icons/mark.svg';
+    const [width, height] = picture === 'film' ? [1920, 1080] : [1024, 1024];
+    return {
+      preload: `<link rel="preload" as="image" href="${source}" fetchpriority="high">`,
+      stage: `    <img class="stage-still" data-stage-still src="${source}" width="${width}" height="${height}" alt="" fetchpriority="high">`,
+    };
+  }
+  const srcset = `images/${picture}-960.webp 960w, images/${picture}-1600.webp 1600w`;
+  return {
+    preload: `<link rel="preload" as="image" href="images/${picture}-960.webp" imagesrcset="${srcset}" imagesizes="100vw" fetchpriority="high">`,
+    stage: `    <img class="stage-still" data-stage-still src="images/${picture}-960.webp" srcset="${srcset}" sizes="100vw" width="1600" height="935" alt="" fetchpriority="high">`,
+  };
+}
+
+export function chaptersHtml(film, withoutFilm = false) {
   return film.chapters
     .map((chapter, index) => {
       const lines = linesOf(film, chapter)
@@ -83,9 +124,9 @@ export function chaptersHtml(film) {
         )
         .join('\n');
       return [
-        `<section class="chapter" id="${chapter.id}" aria-labelledby="${chapter.id}-title" data-chapter data-start="${chapter.start}" data-end="${chapter.end}" data-still="${stageStillOf(chapter)}" style="--seconds: ${chapter.end - chapter.start}">`,
+        `<section class="chapter" id="${chapter.id}" aria-labelledby="${chapter.id}-title" data-chapter data-start="${chapter.start}" data-end="${chapter.end}" data-still="${stageStillOf(chapter, withoutFilm)}" style="--seconds: ${chapter.end - chapter.start}">`,
         `  <figure class="chapter-still">`,
-        `    ${stillOf(chapter, index)}`,
+        `    ${stillOf(chapter, index, withoutFilm)}`,
         `  </figure>`,
         `  <div class="chapter-text">`,
         `    <h3 class="chapter-title" id="${chapter.id}-title"><span class="label">${twoDigits(index + 1)} · ${chapter.start} to ${chapter.end} s</span> ${escapeHtml(chapter.title)}</h3>`,
@@ -179,9 +220,11 @@ const MEDIA = '<meta name="teamwright-film-media" content="media/film/manifest.j
 export function parts(film, page, { withoutFilm = false } = {}) {
   return {
     'film:media': withoutFilm ? '' : MEDIA,
+    'film:first-still': firstStill(film, withoutFilm).preload,
+    'film:stage-still': firstStill(film, withoutFilm).stage,
     'film:video-object': withoutFilm ? '' : videoObject(film),
     'film:rail': railHtml(film),
-    'film:chapters': chaptersHtml(film),
+    'film:chapters': chaptersHtml(film, withoutFilm),
     'page:questions-data': questionsData(page),
   };
 }
