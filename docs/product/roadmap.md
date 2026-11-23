@@ -562,7 +562,11 @@ Several specialists working together with the manager in the loop.
 - ✅ A website on GitHub Pages that explains the project, with the film
   run by scrolling ([decision 0023](../decisions/0023-a-website-without-a-framework.md)):
   <https://fouad1233.github.io/teamwright/>, published on 14 November
-  2026 with the film of 107 seconds. Seen from GitHub in a headless Edge
+  2026 with the film of 107 seconds. Since 23 November 2026 it carries
+  the third film, "From a wish to a device": 183 seconds in eleven
+  chapters, with the Advisor, the team and Claude Code first; the live
+  page was opened once in a browser after it was published, at the
+  first frame and in the fourth chapter, with no error. Seen from GitHub in a headless Edge
   at a desktop and a phone size; not seen in other browsers or on a real
   phone, and not yet known to any search engine
 
