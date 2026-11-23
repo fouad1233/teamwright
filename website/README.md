@@ -116,15 +116,19 @@ published from a release.
 ### Prepare it
 
 Putting a new version of the film in is one run of one tool, from the root
-of the repository (`F` is the folder of the film, `advertisement/film-1`
-in the main checkout, outside git):
+of the repository. The film on the site since 23 November 2026 is the third
+film, in its dark look (the site has one ground, a dark one). `F` is its
+folder, `teamwright-film` beside the repository, outside git; its
+`cut/tools/web.py` writes the data and the frames (see `cut/README.md`
+there):
 
 ```bash
-python website/tools/prepare-film.py --web-json $F/film/web.json \
-    $F/frames/full/clean \
-    --video $F/film/teamwright-film-1.mp4 \
-    --small-video $F/film/teamwright-film-1-small.mp4 \
-    --zip website-film.zip
+python3 -I $F/cut/tools/web.py dark $F/cut/web-dark
+python website/tools/prepare-film.py --web-json $F/cut/web-dark/web.json \
+    $F/cut/web-dark/frames \
+    --video $F/cut/teamwright-film-3-dark.mp4 \
+    --small-video $F/cut/teamwright-film-3-dark-small.mp4 \
+    --zip $F/website-film.zip
 ```
 
 `web.json` is written by the film's assembly from the same tables the film
@@ -145,8 +149,9 @@ part of the picture, and is not a line. From the frames the tool writes:
 
 - `manifest.json`, which the page reads first;
 - `large/pack-NN.bin` (1920 pixels wide) and `small/pack-NN.bin` (1280):
-  every second frame (12 a second) as WebP, laid end to end in packs of
-  about 1.5 MB. The first packs hold every sixteenth frame of the film;
+  every second frame (12 a second for a film at 24 frames a second, 15 for
+  the third film at 30; the page reads the rate from the manifest) as
+  WebP, laid end to end in packs of about 1.5 MB. The first packs hold every sixteenth frame of the film;
   the later ones fill in between;
 - `stills/<chapter>.webp`: the frame `stillAfter` seconds into each
   chapter;
@@ -154,8 +159,10 @@ part of the picture, and is not a line. From the frames the tool writes:
 - with `--zip`, all of it in one file, `website-film.zip`.
 
 It took about six minutes for 1728 frames at 1920 by 1080 on the computer
-it was written on. It needs no ffmpeg. Run `npm run check` after it, and
-commit `film.json` and `index.html` if they changed.
+it was written on, and about six minutes for the 2,746 pictures of the
+third film on the computer it was prepared on. It needs no ffmpeg. Run
+`npm run check` after it, and commit `film.json` and `index.html` if
+they changed.
 
 ### Publish it
 
@@ -182,6 +189,10 @@ first run, GitHub Pages must be set to deploy from GitHub Actions
 Set `published` in `film.json` to the day the film is put in the release.
 It is the upload date in the structured data of the video.
 
+Publish the zip before the page: `film.json` and the zip belong together
+(the chapters' seconds and stills), so a page with new chapters over the
+old film's frames is wrong until the zip is replaced.
+
 ### The stills of the chapters
 
 Each chapter in `film.json` names its still (`still.picture`) and says what
@@ -200,7 +211,8 @@ film is there, and in the chapter itself when the film does not scrub
 The first chapter's still is also the first picture of the stage and is
 asked for early in the head; `write-page.mjs` writes both. With a still
 from the film it is not in git, so the first view's budget in `check.mjs`
-does not count it.
+counts it only where the film's media are prepared (the third film's first
+still is 39 kB; the first view is then 203 kB of its 260).
 
 ## How the scrubbing works
 
@@ -288,6 +300,27 @@ pass about 1.4 MB. Measure again with the finished film.
 
 Not measured: other browsers than Edge, a real phone, a real slow network,
 and the memory of decoded pictures.
+
+**The third film** (183.1 s at 30 frames a second, 2,746 pictures in each
+set), prepared on 23 November 2026 at WebP quality 80 and 76 as before:
+
+| | Large (1920) | Small (1280) |
+|---|---|---|
+| Every sixteenth frame, before the whole film can be scrubbed | 19.9 MB | 9.9 MB |
+| Every picture | 159.8 MB in 106 packs | 79.5 MB in 55 packs |
+| The video, played with "Watch the film" | 83.7 MB | 15.4 MB |
+
+`website-film.zip` is 339 MB (the first film's was 100 MB). A Blender
+frame weighs about 60 kB at 1920 pixels, three times an interface frame.
+Quality 72 would save about a sixth (50 kB a frame) and was not taken: the
+owner found the film soft before. Looked at on that day with `look.mjs`
+and a headless Chrome 158 (no Edge on that computer), served by `serve.mjs`
+with no limit on the network, at 1440 by 900 and at 390 by 844 and 360 by
+780 as a phone: the film scrubs from the first frame to the last, the lines
+come at their moments, the rail and its jumps, "Watch the film" plays the
+video with its sound, reduced motion shows the stills, and the browser
+reported nothing. The times on a local server say nothing about a real
+network and are not given.
 
 The published site was looked at once, on 14 November 2026, the evening it
 went up, with `look.mjs` at 1600 by 900 and at a phone's size: nothing

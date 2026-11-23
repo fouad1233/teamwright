@@ -1,17 +1,17 @@
 {
   "about": "The film of the website. The numbers (the length of the film, the start and end of each chapter, the lines) are written by tools/prepare-film.py from the data file the film is made with; do not change them by hand. The rest is the site's own: a chapter begins with the shot fromShot and runs to the next chapter; stillAfter is the moment of its still, in seconds from its start.",
   "film": {
-    "name": "I wish I could build it",
-    "description": "A short film about Teamwright. Somebody wants to build a small sensor hub, a board, its firmware and a case, and runs the project as the manager of a team of AI specialists. The interface in the film is the real program on a sample project; the board, the parts and the case are modelled for the film.",
-    "seconds": 107.208,
-    "framesPerSecond": 24,
+    "name": "From a wish to a device",
+    "description": "A short film about Teamwright. Somebody wants to build a small sensor hub, a board, its firmware and a case. He tells the Advisor, which proposes a team of AI specialists that run on his own Claude Code, and he manages the work in the program's tracker. The interface in the film is the real program on sample projects; the desk, the person, the board, the parts and the case are modelled for the film.",
+    "seconds": 183.1,
+    "framesPerSecond": 30,
     "width": 1920,
     "height": 1080,
-    "published": "2026-11-14",
+    "published": "2026-11-23",
     "video": "teamwright-film.mp4",
     "smallVideo": "teamwright-film-small.mp4",
     "thumbnail": "images/share.png",
-    "frames": 2573
+    "frames": 5493
   },
   "site": {
     "address": "https://fouad1233.github.io/teamwright/",
@@ -21,370 +21,476 @@
     {
       "id": "wish",
       "title": "The wish",
-      "fromShot": "1",
+      "fromShot": "A0",
       "stillAfter": 2.5,
-      "start": 0,
-      "end": 11,
-      "seen": "A desk at night under one lamp. A notebook holds a pencil sketch of a small box with a screen. A board, firmware and a case are too much for one person. Then the laptop opens on Teamwright.",
+      "seen": "A desk at night under one lamp. A person wants to build a sensor hub, and a notebook holds a pencil sketch of a small box with a screen. A board, firmware and a case are too much for one person. Then the laptop opens on Teamwright.",
       "still": {
-        "picture": "first-run",
-        "alt": "The first screen of Teamwright after it is installed: no project yet, and a button to start one."
-      }
+        "picture": "film",
+        "alt": "A person sits at a desk at night under one lamp, beside a dark window, a notebook in front of him."
+      },
+      "start": 0,
+      "end": 18.267
     },
     {
       "id": "advisor",
       "title": "Tell the Advisor",
-      "fromShot": "4",
-      "stillAfter": 12.6,
-      "start": 11,
-      "end": 26.417,
-      "seen": "The real program. The brief is typed, the Advisor asks its questions, then proposes three specialists and a plan of fourteen tasks. The manager approves.",
+      "fromShot": "09a-advisor-interview",
+      "stillAfter": 8,
+      "seen": "The real program. The Advisor hears what the manager wants and asks what it needs to know. Then it proposes a team of AI specialists and a plan of tasks, which the manager can change before approving it.",
       "still": {
         "picture": "advisor-proposal",
         "alt": "The proposal of the Advisor: the project in its words, a team of three specialists with a model and an effort for each, and a plan of fourteen tasks with their owners and what each waits for."
-      }
+      },
+      "start": 18.267,
+      "end": 30.2
     },
     {
-      "id": "views",
-      "title": "One plan, every view",
-      "fromShot": "4b",
-      "stillAfter": 9.9,
-      "start": 26.417,
-      "end": 53.208,
-      "seen": "The same project four days into its first sprint: the board of the sprint, the backlog with its sprints, story points and burndown, the list, the Gantt chart, the calendar and the dashboard. Then the chooser that adds a view, and the office with two specialists at work.",
+      "id": "claude-code",
+      "title": "A team on Claude Code",
+      "fromShot": "11a-claude-code",
+      "stillAfter": 3,
+      "seen": "The team of the project: the manager and three AI specialists, each with its model and effort. Every specialist runs on the Claude Code installed on the manager's own computer, with the manager's own plan.",
       "still": {
-        "picture": "backlog",
-        "alt": "The Backlog view: the sprint that runs, with its dates, its story points and its burndown, the planned sprint, and the backlog under them."
-      }
+        "picture": "team",
+        "alt": "The Team view of a sample project: the manager and three AI specialists, each with what it does, and under them the line that says the specialists run on your own Claude Code, signed in with your plan."
+      },
+      "start": 30.2,
+      "end": 36.967
     },
     {
       "id": "team",
       "title": "The team at work",
-      "fromShot": "5",
-      "stillAfter": 2.5,
-      "start": 53.208,
-      "end": 58.208,
-      "seen": "From a lamp of the office into a workshop: three benches, a lamp over each, one for each specialist.",
+      "fromShot": "13-work-handoff",
+      "stillAfter": 7,
+      "seen": "The specialists work on their tasks, hand their results over and write to each other. The office shows who is at work. With the coordinator switched on, ready work starts by itself, within a budget.",
       "still": {
-        "picture": "specialist-office",
-        "alt": "The office while a specialist works: a plan of a workshop with a bench for every member of the team, and the lamp over the working one lit."
-      }
+        "picture": "office",
+        "alt": "The office of a sample project: a workshop drawn in plan, with a bench and a person at a desk for every member of the team."
+      },
+      "start": 36.967,
+      "end": 53.067
     },
     {
-      "id": "schematic",
-      "title": "Schematic becomes board",
-      "fromShot": "6",
-      "stillAfter": 4,
-      "start": 58.208,
-      "end": 69.208,
-      "seen": "On the bench of the hardware engineer a schematic draws itself in gold, and its lines sink into a bare board. Then the view glides low over the finished board: its pads, its tracks, its vias and its print.",
-      "still": {
-        "picture": "specialist-working",
-        "alt": "A specialist at work on a task: the panel of the task shows every step it takes as it happens."
-      }
-    },
-    {
-      "id": "parts",
-      "title": "A choice waits for you",
-      "fromShot": "7",
-      "stillAfter": 3,
-      "start": 69.208,
-      "end": 74.208,
-      "seen": "The parts land on the board. The task that is the manager's, ordering the boards and parts, waits for the manager.",
+      "id": "charge",
+      "title": "You stay in charge",
+      "fromShot": "16-permission",
+      "stillAfter": 2,
+      "seen": "A specialist that needs more asks the manager in the inbox, and waits for the answer. When the limit of the Claude plan is reached, the team waits and goes on after. The memory keeps what was decided.",
       "still": {
         "picture": "specialist-inbox",
         "alt": "The inbox of the manager: a question from a specialist, with the options, what each leads to, and the one it recommends."
-      }
+      },
+      "start": 53.067,
+      "end": 66.9
     },
     {
-      "id": "case",
-      "title": "The case comes down",
-      "fromShot": "8",
-      "stillAfter": 4,
-      "start": 74.208,
-      "end": 80.208,
-      "seen": "On the bench of the mechanical designer the case closes round the board.",
+      "id": "your-team",
+      "title": "Your own team",
+      "fromShot": "11-team",
+      "stillAfter": 2.5,
+      "seen": "Ready-made specialists join the team, each with its own instructions. The team is given skills and connectors, and a connector runs only as the manager confirmed it. The Advisor can start from conversations the manager already had.",
+      "still": {
+        "picture": "film",
+        "alt": "The Team view with the dialog that adds a ready-made specialist: a list of specialists to choose from, and the instructions of the chosen one, a technical writer."
+      },
+      "start": 66.9,
+      "end": 83.8
+    },
+    {
+      "id": "tracker",
+      "title": "A full tracker",
+      "fromShot": "01-new-project",
+      "stillAfter": 7.5,
+      "seen": "The plan lives in a tracker that starts from a template. The board of a sprint, whose lane says when it holds too much; a task with tags, a checklist and fields of its own; the table, where every field is a column; the board grouped by person or by tag.",
       "still": {
         "picture": "board",
-        "alt": "The board of a sample project cut into three areas, Electronics, Firmware and Enclosure: its tasks in five statuses from To do to Done."
-      }
+        "alt": "The board of a sample project: tasks in five statuses from To do to Done, each card with its number, what it waits for, its due date, its estimate and who it is given to."
+      },
+      "start": 83.8,
+      "end": 107.667
     },
     {
-      "id": "lives",
-      "title": "It lives",
-      "fromShot": "9",
+      "id": "seeing",
+      "title": "Seeing the work",
+      "fromShot": "06-gantt-actual",
       "stillAfter": 2.5,
-      "start": 80.208,
-      "end": 89.208,
-      "seen": "The closed device lands on the desk. A hand pushes a USB-C plug in, and the screen comes on with its readings: carbon dioxide, temperature and humidity. The person at the desk looks at it and is glad.",
+      "seen": "The Gantt chart sets the plan against what really happened. Then the sprints with their burndown, the dashboard, a report of the whole project, and the computers the project is kept on.",
       "still": {
-        "picture": "specialist-report",
-        "alt": "A specialist has finished a task: the steps it took, its report, and the model, the tokens and the time the work took."
-      }
+        "picture": "gantt",
+        "alt": "The Gantt chart of a sample project: a bar for every task against the days, with lines from each task to the tasks that wait for it."
+      },
+      "start": 107.667,
+      "end": 129.967
+    },
+    {
+      "id": "themes",
+      "title": "Thirteen themes",
+      "fromShot": "themes",
+      "stillAfter": 9,
+      "seen": "One board crossing the thirteen themes of the program, dark and light, three of them new: Rose, Delft and Poppy.",
+      "still": {
+        "picture": "film",
+        "alt": "The board of a sample project in a light theme of white and blue."
+      },
+      "start": 129.967,
+      "end": 145.967
+    },
+    {
+      "id": "device",
+      "title": "The device",
+      "fromShot": "B1",
+      "stillAfter": 9,
+      "seen": "A schematic draws itself in gold. The board follows, its parts land on it, a small display stands on a header, and the case comes down round it.",
+      "still": {
+        "picture": "film",
+        "alt": "The finished board of the sensor hub, close up: green, with its parts on it and a small display standing on a header."
+      },
+      "start": 145.967,
+      "end": 166.533
     },
     {
       "id": "end",
       "title": "Teamwright",
-      "fromShot": "10",
-      "stillAfter": 10.5,
-      "start": 89.208,
-      "end": 107.208,
-      "seen": "The mark of Teamwright, and where to find it.",
+      "fromShot": "E1",
+      "stillAfter": 10,
+      "seen": "The desk again. A hand pushes in the USB-C cable, the device shows its readings, and the person smiles. Then the name Teamwright, where to find it, and who made it.",
       "still": {
-        "picture": "mark",
-        "alt": "The mark of Teamwright: a letter T laid out of five blocks, the one that holds the others in gold."
-      }
+        "picture": "film",
+        "alt": "The finished device on the desk, its cable plugged in and its screen lit, under the name Teamwright."
+      },
+      "start": 166.533,
+      "end": 183.1
     }
   ],
   "lines": [
     {
       "text": "I want to build a sensor hub.",
-      "start": 0.642,
-      "end": 2.722,
+      "start": 3.3,
+      "end": 5.8,
       "type": "sans",
       "weight": 500,
-      "size": 0.043,
-      "y": 0.915,
+      "size": 0.033,
+      "y": 0.89,
       "tone": "ink"
     },
     {
       "text": "A board. Firmware. A case.",
-      "start": 3.393,
-      "end": 6.32,
+      "start": 5.9,
+      "end": 9.7,
       "type": "sans",
       "weight": 500,
-      "size": 0.043,
-      "y": 0.915,
+      "size": 0.033,
+      "y": 0.89,
       "tone": "ink"
     },
     {
       "text": "I wish I could.",
-      "start": 7.32,
-      "end": 8.3,
+      "start": 9.8,
+      "end": 12.9,
       "type": "sans",
       "weight": 500,
-      "size": 0.043,
-      "y": 0.915,
+      "size": 0.033,
+      "y": 0.89,
       "tone": "ink"
     },
     {
       "text": "Teamwright exists.",
-      "start": 8.588,
-      "end": 10.208,
+      "start": 13.9,
+      "end": 15.533,
       "type": "sans",
       "weight": 500,
-      "size": 0.043,
+      "size": 0.033,
+      "y": 0.89,
+      "tone": "ink"
+    },
+    {
+      "text": "Tell the Advisor what you want. It asks what it needs to know.",
+      "start": 19.1,
+      "end": 23.133,
+      "type": "sans",
+      "weight": 500,
+      "size": 0.033,
       "y": 0.915,
       "tone": "ink"
     },
     {
-      "text": "Tell the Advisor what you want.",
-      "start": 11.438,
-      "end": 13.498,
+      "text": "Then it proposes a team of AI specialists, and a plan. Change it before you approve.",
+      "start": 24.067,
+      "end": 30.1,
       "type": "sans",
       "weight": 500,
-      "size": 0.043,
+      "size": 0.033,
       "y": 0.915,
       "tone": "ink"
     },
     {
-      "text": "It asks what it needs to know.",
-      "start": 16.439,
-      "end": 18.399,
+      "text": "Every specialist runs on your own Claude Code, on your computer, with your plan.",
+      "start": 31.033,
+      "end": 36.867,
       "type": "sans",
       "weight": 500,
-      "size": 0.043,
+      "size": 0.033,
       "y": 0.915,
       "tone": "ink"
     },
     {
-      "text": "Then it proposes a team and a plan.",
-      "start": 19.513,
-      "end": 23.394,
+      "text": "They do the work. They hand results over, and write to each other.",
+      "start": 37.8,
+      "end": 42.033,
       "type": "sans",
       "weight": 500,
-      "size": 0.043,
+      "size": 0.033,
       "y": 0.915,
       "tone": "ink"
     },
     {
-      "text": "You approve it.",
-      "start": 24.577,
-      "end": 25.757,
+      "text": "Watch the team at work.",
+      "start": 42.967,
+      "end": 44.967,
       "type": "sans",
       "weight": 500,
-      "size": 0.043,
+      "size": 0.033,
       "y": 0.915,
       "tone": "ink"
     },
     {
-      "text": "Now your plan is a board.",
-      "start": 26.699,
-      "end": 28.579,
+      "text": "Switch the coordinator on, and ready work starts by itself. Within your budget.",
+      "start": 47.167,
+      "end": 52.967,
       "type": "sans",
       "weight": 500,
-      "size": 0.043,
+      "size": 0.033,
       "y": 0.915,
       "tone": "ink"
     },
     {
-      "text": "Four days into the first sprint.",
-      "start": 28.977,
-      "end": 30.777,
+      "text": "When a specialist needs more, it asks you.",
+      "start": 53.9,
+      "end": 57.033,
       "type": "sans",
       "weight": 500,
-      "size": 0.043,
+      "size": 0.033,
       "y": 0.915,
       "tone": "ink"
     },
     {
-      "text": "Run it in sprints, with a backlog, story points and a burndown.",
-      "start": 31.172,
-      "end": 36.702,
+      "text": "When the limit of your plan is reached, the team waits, and goes on after.",
+      "start": 58.1,
+      "end": 62.6,
       "type": "sans",
       "weight": 500,
-      "size": 0.043,
+      "size": 0.033,
       "y": 0.915,
       "tone": "ink"
     },
     {
-      "text": "See the same plan as a list, a Gantt chart, or a calendar.",
-      "start": 37.552,
-      "end": 42.842,
+      "text": "What was decided is remembered.",
+      "start": 63.533,
+      "end": 66,
       "type": "sans",
       "weight": 500,
-      "size": 0.043,
+      "size": 0.033,
       "y": 0.915,
       "tone": "ink"
     },
     {
-      "text": "The dashboard says where the project stands.",
-      "start": 43.488,
-      "end": 46.288,
+      "text": "Add ready-made specialists. Give each its own instructions.",
+      "start": 67.733,
+      "end": 72.133,
       "type": "sans",
       "weight": 500,
-      "size": 0.043,
+      "size": 0.033,
       "y": 0.915,
       "tone": "ink"
     },
     {
-      "text": "Add the views you need.",
-      "start": 47.395,
-      "end": 48.995,
+      "text": "Give them skills and connectors. A connector runs only as you confirmed it.",
+      "start": 73.067,
+      "end": 78.267,
       "type": "sans",
       "weight": 500,
-      "size": 0.043,
+      "size": 0.033,
       "y": 0.915,
       "tone": "ink"
     },
     {
-      "text": "Specialists do the work, each on its task.",
-      "start": 50.061,
-      "end": 53.281,
+      "text": "The Advisor can start from conversations you already had.",
+      "start": 79.2,
+      "end": 82.867,
       "type": "sans",
       "weight": 500,
-      "size": 0.043,
+      "size": 0.033,
       "y": 0.915,
+      "tone": "ink"
+    },
+    {
+      "text": "The plan lives in a full tracker. Start from a template.",
+      "start": 84.633,
+      "end": 88.5,
+      "type": "sans",
+      "weight": 500,
+      "size": 0.033,
+      "y": 0.915,
+      "tone": "ink"
+    },
+    {
+      "text": "Your plan is a board. A lane says when it holds too much.",
+      "start": 89.433,
+      "end": 93.933,
+      "type": "sans",
+      "weight": 500,
+      "size": 0.033,
+      "y": 0.915,
+      "tone": "ink"
+    },
+    {
+      "text": "A task carries tags, a checklist, and fields of your own.",
+      "start": 94.867,
+      "end": 99.167,
+      "type": "sans",
+      "weight": 500,
+      "size": 0.033,
+      "y": 0.915,
+      "tone": "ink"
+    },
+    {
+      "text": "Every field is a column.",
+      "start": 100.1,
+      "end": 102.233,
+      "type": "sans",
+      "weight": 500,
+      "size": 0.033,
+      "y": 0.915,
+      "tone": "ink"
+    },
+    {
+      "text": "Group the board by person, or by tag.",
+      "start": 104.3,
+      "end": 107.033,
+      "type": "sans",
+      "weight": 500,
+      "size": 0.033,
+      "y": 0.915,
+      "tone": "ink"
+    },
+    {
+      "text": "See the plan against what really happened.",
+      "start": 108.5,
+      "end": 111.4,
+      "type": "sans",
+      "weight": 500,
+      "size": 0.033,
+      "y": 0.915,
+      "tone": "ink"
+    },
+    {
+      "text": "Run it in sprints. The burndown follows the scope.",
+      "start": 112.7,
+      "end": 116.5,
+      "type": "sans",
+      "weight": 500,
+      "size": 0.033,
+      "y": 0.915,
+      "tone": "ink"
+    },
+    {
+      "text": "A dashboard that is worked out, not written. And a report of the whole project.",
+      "start": 117.433,
+      "end": 123.133,
+      "type": "sans",
+      "weight": 500,
+      "size": 0.033,
+      "y": 0.915,
+      "tone": "ink"
+    },
+    {
+      "text": "On every computer you own.",
+      "start": 124.067,
+      "end": 126.433,
+      "type": "sans",
+      "weight": 500,
+      "size": 0.033,
+      "y": 0.915,
+      "tone": "ink"
+    },
+    {
+      "text": "Thirteen themes. Three of them new.",
+      "start": 131.467,
+      "end": 134.3,
+      "type": "sans",
+      "weight": 500,
+      "size": 0.033,
+      "y": 0.89,
       "tone": "ink"
     },
     {
       "text": "Schematic. Layout.",
-      "start": 58.865,
-      "end": 61.938,
+      "start": 147.367,
+      "end": 149.8,
       "type": "sans",
       "weight": 500,
-      "size": 0.043,
-      "y": 0.915,
-      "tone": "ink"
-    },
-    {
-      "text": "When a choice is yours, it waits for you.",
-      "start": 69.696,
-      "end": 72.536,
-      "type": "sans",
-      "weight": 500,
-      "size": 0.043,
-      "y": 0.915,
+      "size": 0.033,
+      "y": 0.89,
       "tone": "ink"
     },
     {
       "text": "Board, firmware, enclosure. One plan.",
-      "start": 74.818,
-      "end": 79.098,
+      "start": 157.833,
+      "end": 162.333,
       "type": "sans",
       "weight": 500,
-      "size": 0.043,
-      "y": 0.915,
+      "size": 0.033,
+      "y": 0.89,
       "tone": "ink"
     },
     {
       "text": "You decide. You build it.",
-      "start": 83.307,
-      "end": 85.687,
+      "start": 164.3,
+      "end": 167,
       "type": "sans",
       "weight": 500,
-      "size": 0.043,
-      "y": 0.915,
+      "size": 0.033,
+      "y": 0.89,
       "tone": "ink"
     },
     {
       "text": "You manage. Your team does the work.",
-      "start": 90.968,
-      "end": 93.668,
-      "type": "serif",
-      "weight": 400,
-      "size": 0.047,
-      "y": 0.735,
-      "tone": "soft"
-    },
-    {
-      "text": "This is just the beginning.",
-      "start": 94.074,
-      "end": 95.754,
-      "type": "serif",
-      "weight": 400,
-      "size": 0.047,
-      "y": 0.735,
-      "tone": "soft"
-    },
-    {
-      "text": "Changing how projects are managed, and what one developer can build.",
-      "start": 96.149,
-      "end": 99.969,
-      "type": "serif",
-      "weight": 400,
-      "size": 0.047,
-      "y": 0.735,
-      "tone": "soft"
-    },
-    {
-      "text": "Open source. Runs on your own Claude Code.",
-      "start": 100.331,
-      "end": null,
+      "start": 169.033,
+      "end": 172.167,
       "type": "sans",
       "weight": 500,
-      "size": 0.037,
-      "y": 0.732,
+      "size": 0.033,
+      "y": 0.89,
       "tone": "ink"
     },
     {
-      "text": "github.com/fouad1233/teamwright",
-      "start": 100.658,
+      "text": "You manage. Your team does the work.",
+      "start": 173.433,
+      "end": null,
+      "type": "sans",
+      "weight": 500,
+      "size": 0.032,
+      "y": 0.795,
+      "tone": "ink"
+    },
+    {
+      "text": "Open source · github.com/fouad1233/teamwright",
+      "start": 173.967,
       "end": null,
       "type": "mono",
       "weight": 400,
-      "size": 0.033,
+      "size": 0.024,
       "y": 0.862,
       "tone": "brass"
     },
     {
-      "text": "Contribute, and star it if you like it.",
-      "start": 103.232,
+      "text": "Developed by Fouad Aladhami to accelerate project development",
+      "start": 176.6,
       "end": null,
-      "type": "serif",
-      "weight": 400,
-      "size": 0.04,
-      "y": 0.792,
+      "type": "sans",
+      "weight": 450,
+      "size": 0.024,
+      "y": 0.912,
       "tone": "soft"
     }
   ]
