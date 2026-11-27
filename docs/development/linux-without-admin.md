@@ -149,6 +149,26 @@ node tools/smoke/desktop-smoke-linux.mjs target/debug/teamwright-desktop /tmp/te
 The program writes two warnings about DRI3 on the virtual display; they
 mean only that it draws without the graphics card.
 
+## Building an AppImage
+
+The test of the updater builds AppImages. The bundler's `linuxdeploy` and
+its plugin for GTK ask `pkg-config` where GTK's library folder is, and copy
+the modules of GTK from there. With the unpacked packages, that folder is the
+one under `$SYSROOT`, which holds no modules, and the build stops with
+"Failed to run plugin: gtk". Point `pkg-config` at the system's folder for
+GTK only, with a copy of its `.pc` file that says so, put before the others:
+
+```bash
+mkdir -p "$SYSROOT/appimage-pkgconfig"
+sed 's|^libdir=.*|libdir=/usr/lib/x86_64-linux-gnu|' \
+  "$SYSROOT/usr/lib/x86_64-linux-gnu/pkgconfig/gtk+-3.0.pc" \
+  > "$SYSROOT/appimage-pkgconfig/gtk+-3.0.pc"
+export PKG_CONFIG_PATH="$SYSROOT/appimage-pkgconfig:$PKG_CONFIG_PATH"
+```
+
+The linker still finds `libgtk-3.so` through `LIBRARY_PATH`. Do this only in
+the shell that builds AppImages.
+
 ## What was tried
 
 On 21 November 2026, on Ubuntu 24.04 with Rust 1.100: the four checks of

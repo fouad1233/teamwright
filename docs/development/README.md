@@ -138,6 +138,50 @@ CARGO_TARGET_DIR=/tmp/teamwright-main/target \
 A debug build takes about 4 GB. Remove it afterwards with `cargo clean` and
 `git worktree remove --force /tmp/teamwright-main`.
 
+## The updater on Linux
+
+```bash
+node tools/smoke/update-linux.mjs /tmp/teamwright-update [--reuse-builds]
+```
+
+This proves that the program installs its own update
+([decision 0045](../decisions/0045-installing-updates-from-inside.md)). It
+makes two throwaway key pairs with `npx tauri signer generate` (never the
+project's key) and builds three AppImages with a configuration of its own:
+an older 0.0.1 that trusts the first key and asks a server on
+`127.0.0.1:18473` for updates, a 0.0.2 signed with the first key, and a 0.0.2
+signed with the second. It serves a `latest.json` written as the release
+workflow writes it, the AppImages, and a list of releases shaped like
+GitHub's (the notice is pointed at it through `TEAMWRIGHT_RELEASES_ADDRESS`).
+Then it drives the older program through its window: "Look now", the
+*Install* button, the refusal of the copy signed with the second key (in
+words, with nothing replaced), the download of the right copy with its
+progress, the version put in place, *Restart now*, and the program that
+starts again as 0.0.2. It takes a picture at each step into the folder's
+`pictures`.
+
+It needs what the Linux smoke test needs, network the first time (the
+bundler fetches `linuxdeploy`), and about 15 minutes and 2 GB of disk for the
+three debug builds; `--reuse-builds` skips them on a second run. An AppImage
+normally mounts itself through FUSE; where FUSE is not allowed (as on the
+computer of the night of 27 November 2026, where `fusermount` answers
+"Operation not permitted"), the script sets `APPIMAGE_EXTRACT_AND_RUN=1`, so
+the AppImage unpacks itself into `/tmp` instead. The restarted program
+inherits the variable. On a computer without `sudo`, building an AppImage
+needs one more step; see
+[Linux without administrator rights](linux-without-admin.md#building-an-appimage).
+
+The builds of this test set `dangerousInsecureTransportProtocol`, because the
+updater refuses an address of updates that is not https otherwise. The
+program's own configuration does not.
+
+The script `tools/release/updater-manifest.mjs`, which the release workflow
+runs to write `latest.json`, has tests of its own:
+
+```bash
+node --test tools/release
+```
+
 ## A real specialist at work
 
 ```bash

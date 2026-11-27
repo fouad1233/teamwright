@@ -124,8 +124,14 @@ export class DesktopApplication {
    * @param {number} port           The port of tauri-driver; the one after it is WebKitWebDriver's.
    * @param {object} [options]
    * @param {boolean} [options.withRealAgentProgram]  Lets the application find the real Claude Code.
+   * @param {Record<string, string>} [options.environment]  More variables for the application.
    */
-  static async start(executable, dataDirectory, port, { withRealAgentProgram = false } = {}) {
+  static async start(
+    executable,
+    dataDirectory,
+    port,
+    { withRealAgentProgram = false, environment = {} } = {},
+  ) {
     const tauriDriver = findProgram('tauri-driver', 'TAURI_DRIVER', [
       join(homedir(), '.cargo', 'bin'),
     ]);
@@ -156,6 +162,7 @@ export class DesktopApplication {
           XDG_DATA_HOME: join(webView, 'data'),
           XDG_CACHE_HOME: join(webView, 'cache'),
           XDG_CONFIG_HOME: join(webView, 'config'),
+          ...environment,
         },
       },
     );
@@ -188,6 +195,12 @@ export class DesktopApplication {
   /** Starts the application through a WebDriver session and connects to its window. */
   async openWindow() {
     const base = `http://127.0.0.1:${this.#port}`;
+    // A session whose application ended by itself (a restart, for one) is
+    // still counted by the driver, which allows one at a time.
+    if (this.#session) {
+      await webDriverRequest(this.#session, 'DELETE', '').catch(() => undefined);
+      this.#session = null;
+    }
     const answer = await webDriverRequest(base, 'POST', '/session', {
       capabilities: {
         alwaysMatch: {
@@ -236,7 +249,12 @@ async function webDriverRequest(base, method, path, body) {
 
 /** Removes a data folder after the application that used it has stopped. */
 export function removeDataDirectory(dataDirectory) {
-  rmSync(dataDirectory, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
+  rmSync(dataDirectory, {
+    recursive: true,
+    force: true,
+    maxRetries: 20,
+    retryDelay: 250,
+  });
 }
 
 /** The key WebDriver uses for the Escape key. */
