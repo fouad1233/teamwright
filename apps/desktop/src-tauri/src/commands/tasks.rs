@@ -1,7 +1,9 @@
 //! Commands for tasks.
 
 use tauri::{AppHandle, State};
-use teamwright_application::{ProjectEvent, event_of_created_task, event_of_moved_task};
+use teamwright_application::{
+    NewTask, NewTaskDemands, ProjectEvent, event_of_created_task, event_of_moved_task,
+};
 use teamwright_domain::{Assignee, ComputerId, Member, Project, ProjectId};
 
 use crate::dto::{
@@ -49,7 +51,16 @@ pub async fn create_task(
     state: State<'_, AppState>,
     input: NewTaskInput,
 ) -> Result<TaskDto, CommandError> {
-    let task = state.tasks.create(input.try_into()?)?;
+    let view_id = input.view_id()?;
+    let new_task = NewTask::try_from(input)?;
+    // A task made inside a view gets what the view's filter asks of it.
+    let demands = match view_id {
+        Some(view_id) => state
+            .views
+            .demands_of_new_tasks(view_id, new_task.project_id)?,
+        None => NewTaskDemands::default(),
+    };
+    let task = state.tasks.create_in_view(new_task, &demands)?;
     tell_about_task(&app, &state, task.project_id(), |project, team| {
         Some(event_of_created_task(project, &task, team))
     });

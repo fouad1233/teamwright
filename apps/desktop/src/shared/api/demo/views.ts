@@ -1,5 +1,5 @@
 import { BackendError } from '../backend';
-import type { FieldFilter, Grouping, Id, View, ViewFilter, ViewKind } from '../types';
+import type { FieldFilter, FieldValue, Grouping, Id, View, ViewFilter, ViewKind } from '../types';
 
 /**
  * The rules about the views of a project that concern the views alone, for
@@ -180,6 +180,37 @@ export function refuseFilterOf(view: View): void {
       `"${view.name}" is a ${view.kind}, which cannot be filtered`,
     );
   }
+}
+
+/**
+ * What a view asks of a task made inside it, so that the task stays in the
+ * view: the tag of a tag filter, the choice of a choice filter, "yes" of a
+ * yes filter. A filter for "no", which also shows tasks that hold nothing,
+ * asks for nothing, and neither does a view that cannot be filtered.
+ */
+export interface NewTaskDemands {
+  tagId?: Id;
+  fieldValue?: { fieldId: Id; value: FieldValue };
+}
+
+export function demandsOfNewTasks(view: View): NewTaskDemands {
+  if (!FILTERED_KINDS.includes(view.kind)) {
+    return {};
+  }
+  const { tagId, fieldFilter } = view.filter;
+  const demands: NewTaskDemands = {};
+  if (tagId) {
+    demands.tagId = tagId;
+  }
+  if (fieldFilter?.kind === 'choice') {
+    demands.fieldValue = {
+      fieldId: fieldFilter.fieldId,
+      value: { kind: 'choice', choiceId: fieldFilter.choiceId },
+    };
+  } else if (fieldFilter?.kind === 'yes_no' && fieldFilter.yes) {
+    demands.fieldValue = { fieldId: fieldFilter.fieldId, value: { kind: 'yes_no', yes: true } };
+  }
+  return demands;
 }
 
 /** The kinds of view that can be grouped by something other than status. */

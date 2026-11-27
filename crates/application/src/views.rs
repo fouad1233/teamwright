@@ -10,8 +10,8 @@
 use std::sync::Arc;
 
 use teamwright_domain::{
-    FieldFilter, FieldKind, FieldValue, Grouping, ProjectId, View, ViewAssignee, ViewFilter,
-    ViewId, ViewKind, ViewName,
+    FieldFilter, FieldId, FieldKind, FieldValue, Grouping, ProjectId, TagId, View, ViewAssignee,
+    ViewFilter, ViewId, ViewKind, ViewName,
 };
 
 use crate::error::ApplicationError;
@@ -30,6 +30,37 @@ pub struct NewView {
     /// after its kind: "Board", or "Board 2" if the project has a view
     /// called "Board" already.
     pub name: Option<String>,
+}
+
+/// What a view asks of a task made inside it, so that the task stays in the
+/// view instead of vanishing the moment it is made. Only a definite value is
+/// asked for: a tag, and the choice of a choice field or "yes" of a yes-or-no
+/// field. A filter for "no", which also shows tasks that hold nothing, asks
+/// for nothing.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct NewTaskDemands {
+    /// The tag the new task carries.
+    pub tag: Option<TagId>,
+    /// The value the new task holds for a custom field.
+    pub field_value: Option<(FieldId, FieldValue)>,
+}
+
+impl NewTaskDemands {
+    /// What a filter asks of the tasks made in a view that has it.
+    #[must_use]
+    pub fn of_filter(filter: &ViewFilter) -> Self {
+        let field_value = match filter.field {
+            Some(FieldFilter::Choice { field, choice }) => {
+                Some((field, FieldValue::Choice(choice)))
+            }
+            Some(FieldFilter::YesNo { field, yes: true }) => Some((field, FieldValue::YesNo(true))),
+            Some(FieldFilter::YesNo { yes: false, .. }) | None => None,
+        };
+        Self {
+            tag: filter.tag,
+            field_value,
+        }
+    }
 }
 
 /// The use cases about the views of a project.
@@ -254,6 +285,31 @@ impl ViewService {
         }
         self.views.delete(id)?;
         Ok(())
+    }
+
+    /// What a view asks of a task made inside it
+    /// ([`NewTaskDemands`]), to be given to
+    /// [`TaskService::create_in_view`](crate::TaskService::create_in_view).
+    /// A view of a kind that cannot be filtered asks for nothing.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if there is no such view, if it belongs to another
+    /// project than the task will (`different_projects`), or if storage
+    /// fails.
+    pub fn demands_of_new_tasks(
+        &self,
+        id: ViewId,
+        project_id: ProjectId,
+    ) -> Result<NewTaskDemands, ApplicationError> {
+        let view = self.require_view(id)?;
+        if view.project_id() != project_id {
+            return Err(ApplicationError::DifferentProjects);
+        }
+        if !view.kind().can_be_filtered() {
+            return Ok(NewTaskDemands::default());
+        }
+        Ok(NewTaskDemands::of_filter(&view.filter()))
     }
 
     /// The views of a project in their order.

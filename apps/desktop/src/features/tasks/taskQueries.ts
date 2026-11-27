@@ -14,6 +14,7 @@ import type {
 import { describeFailure, useNotifier } from '@/shared/ui/Toast';
 
 import { useOpenArea } from '../areas/AreaContext';
+import { useViewOfNewTasks } from '../views/NewTaskViewContext';
 import { nextHistoryPage, withMovedTask, withTask } from './taskModel';
 
 /** The name under which the tasks of a project are cached. */
@@ -102,6 +103,7 @@ export function useTaskCommands(projectId: Id): TaskCommands {
   const queryClient = useQueryClient();
   const notifier = useNotifier();
   const openAreaId = useOpenArea()?.id;
+  const viewId = useViewOfNewTasks();
 
   return useMemo(() => {
     const queryKey = tasksKey(projectId);
@@ -135,8 +137,16 @@ export function useTaskCommands(projectId: Id): TaskCommands {
     return {
       create: async (task) => {
         const areaId = task.areaId ?? (task.parentId === undefined ? openAreaId : undefined);
+        // A task opened in a view takes what the view's filter asks of it
+        // (the backend decides what that is); a subtask does not.
+        const inView = task.parentId === undefined && viewId !== undefined ? { viewId } : {};
         const created = await attempt(() =>
-          backend.createTask({ ...task, projectId, ...(areaId === undefined ? {} : { areaId }) }),
+          backend.createTask({
+            ...task,
+            projectId,
+            ...(areaId === undefined ? {} : { areaId }),
+            ...inView,
+          }),
         );
         if (created) {
           show(created);
@@ -190,5 +200,5 @@ export function useTaskCommands(projectId: Id): TaskCommands {
         return removed ?? false;
       },
     };
-  }, [backend, queryClient, notifier, projectId, openAreaId]);
+  }, [backend, queryClient, notifier, projectId, openAreaId, viewId]);
 }

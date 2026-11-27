@@ -169,7 +169,7 @@ pub use updates::{
     LOOK_EVERY, ReleaseSource, UpdateChoice, UpdateChoiceStore, UpdateService, UpdateStatus,
 };
 pub use usage::{AgentUsage, MemberUsage, ProjectUsage, usage_of};
-pub use views::{NewView, ViewService};
+pub use views::{NewTaskDemands, NewView, ViewService};
 pub use work::{
     AgentProgram, AgentProgramState, ApprovedMember, ApprovedOwner, ApprovedProposal, ApprovedTask,
     ConversationWithTurns, FoldersOfTurn, PermissionReply, ProposalEdit, WorkPorts, WorkService,

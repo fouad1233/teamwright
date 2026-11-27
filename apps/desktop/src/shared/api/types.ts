@@ -1380,6 +1380,13 @@ export interface NewTask {
   estimateMinutes?: number;
   startOn?: CalendarDate;
   dueOn?: CalendarDate;
+  /**
+   * The view the task is made in. The task then carries the tag the view
+   * is filtered by, and holds the choice, or "yes", of the custom field it
+   * is filtered by, so that it stays in the view. Left out, nothing is
+   * added. Ignored for a subtask.
+   */
+  viewId?: Id;
 }
 
 export interface NewSprint {

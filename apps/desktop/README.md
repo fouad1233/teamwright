@@ -35,7 +35,10 @@ the rule it breaks.
 are the commands in `commands/views.rs`: `list_views`, `add_view`,
 `rename_view`, `set_view_filter`, `set_view_grouping`, `list_task_groups`,
 `set_view_content`, `move_view` and `remove_view`, which the shell serves
-through `ViewService` and `GroupingService`. A view on the wire has its
+through `ViewService` and `GroupingService`. `create_task` takes an optional
+`viewId`: a task made inside a view gets the tag, or the choice or "yes" of
+a custom field, that the filter of the view asks for, so that it stays in
+the view (`NewTaskViewContext` tells every "Add task" which view is open). A view on the wire has its
 `kind`, its `name`, its `grouping` (`status`, `assignee`, `priority`,
 `area`, `tag` or `sprint`), its `content` (text the interface wrote,
 or null;

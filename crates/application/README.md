@@ -178,6 +178,14 @@ storage crate.
   (`ViewKind::can_be_filtered`; `rule_broken` for the others), and a
   filter can only name a member of the team of the project
   (`member_not_on_team`).
+- A task made inside a view stays in it. `ViewService::demands_of_new_tasks`
+  says what the filter of the view asks of a new task (`NewTaskDemands`: the
+  tag of a tag filter, the choice of a choice filter, "yes" of a yes filter;
+  nothing for "no", which also shows tasks that hold nothing, and nothing
+  for a kind that cannot be filtered; `different_projects` for a view of
+  another project), and `TaskService::create_in_view` makes the task with
+  them. A subtask takes none. Who the task is given to is still decided by
+  the interface ([decision 0030](../../docs/decisions/0030-tags-and-checklists.md)).
 - `set_grouping` changes what a view groups its tasks by. Only a board and
   a list can be grouped by anything but status (`ViewKind::can_be_grouped`;
   `rule_broken` for the others). `GroupingService::groups_of_view` answers

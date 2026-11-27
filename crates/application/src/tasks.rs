@@ -61,6 +61,7 @@ use crate::ports::{
     AreaRepository, Clock, ConversationRepository, MemberRepository, ProjectRepository,
     SprintRepository, TaskRepository,
 };
+use crate::views::NewTaskDemands;
 use crate::work::WorkInProgress;
 
 /// What is needed to open a task.
@@ -164,6 +165,23 @@ impl TaskService {
     /// than its task's, if the title or the dates are not valid, or if
     /// storage fails.
     pub fn create(&self, new_task: NewTask) -> Result<Task, ApplicationError> {
+        self.create_in_view(new_task, &NewTaskDemands::default())
+    }
+
+    /// Opens a task made inside a view, as [`create`](Self::create) does,
+    /// and gives it what the view asks of it: its tag, and its value of a
+    /// custom field, so that the task stays in the view. The demands come
+    /// from [`ViewService::demands_of_new_tasks`](crate::ViewService::demands_of_new_tasks).
+    /// A subtask is not made inside a view, and takes none of them.
+    ///
+    /// # Errors
+    ///
+    /// The same as [`create`](Self::create).
+    pub fn create_in_view(
+        &self,
+        new_task: NewTask,
+        demands: &NewTaskDemands,
+    ) -> Result<Task, ApplicationError> {
         let mut project = self.require_project(new_task.project_id)?;
         let title = TaskTitle::parse(&new_task.title)?;
         let schedule = Schedule::new(new_task.start_on, new_task.due_on)?;
@@ -219,6 +237,14 @@ impl TaskService {
         // A subtask goes where the task it is a part of goes.
         if let Some(sprint_id) = parent.as_ref().and_then(Task::sprint_id) {
             task.plan_into(Some(sprint_id), now);
+        }
+        if parent.is_none() {
+            if let Some(tag_id) = demands.tag {
+                task.put_tag(tag_id, now);
+            }
+            if let Some((field_id, value)) = &demands.field_value {
+                task.set_field_value(*field_id, value.clone(), now);
+            }
         }
 
         // The project is stored first. If storing the task then fails, one

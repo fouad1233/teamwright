@@ -388,3 +388,81 @@ fn a_view_is_filtered_only_by_a_tag_of_its_own_project() {
         .unwrap_err();
     assert_eq!(missing.code(), "not_found");
 }
+
+#[test]
+fn a_task_made_in_a_view_filtered_by_a_tag_carries_the_tag() {
+    let workspace = workspace();
+    let tag = workspace
+        .tags
+        .add(workspace.project.id(), "EMC", None)
+        .unwrap();
+    let board = workspace
+        .views
+        .list_for_project(workspace.project.id())
+        .unwrap()[0]
+        .clone();
+    workspace
+        .views
+        .set_filter(
+            board.id(),
+            ViewFilter {
+                tag: Some(tag.id()),
+                ..ViewFilter::EVERY_TASK
+            },
+        )
+        .unwrap();
+
+    let demands = workspace
+        .views
+        .demands_of_new_tasks(board.id(), workspace.project.id())
+        .unwrap();
+    let made = workspace
+        .tasks
+        .create_in_view(NewTask::titled(workspace.project.id(), "Shield"), &demands)
+        .unwrap();
+    let subtask = workspace
+        .tasks
+        .create_in_view(
+            NewTask {
+                parent_id: Some(made.id()),
+                ..NewTask::titled(workspace.project.id(), "Solder the shield")
+            },
+            &demands,
+        )
+        .unwrap();
+
+    let stored = workspace.tasks.get(made.id()).unwrap();
+    assert_eq!(
+        stored.tags().iter().copied().collect::<Vec<_>>(),
+        [tag.id()]
+    );
+    assert!(subtask.tags().is_empty());
+}
+
+#[test]
+fn a_view_without_a_tag_filter_asks_for_nothing_and_a_view_of_another_project_is_refused() {
+    let workspace = workspace();
+    let board = workspace
+        .views
+        .list_for_project(workspace.project.id())
+        .unwrap()[0]
+        .clone();
+
+    let demands = workspace
+        .views
+        .demands_of_new_tasks(board.id(), workspace.project.id())
+        .unwrap();
+    assert_eq!(demands, crate::views::NewTaskDemands::default());
+    let made = workspace
+        .tasks
+        .create_in_view(NewTask::titled(workspace.project.id(), "Plain"), &demands)
+        .unwrap();
+    assert!(made.tags().is_empty());
+
+    let other = workspace.other_project();
+    let refused = workspace
+        .views
+        .demands_of_new_tasks(board.id(), other.id())
+        .unwrap_err();
+    assert_eq!(refused.code(), "different_projects");
+}

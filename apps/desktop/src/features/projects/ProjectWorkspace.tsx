@@ -9,6 +9,7 @@ import { describeFailure } from '@/shared/ui/Toast';
 
 import { AdvisorView } from '../advisor/AdvisorView';
 import { OpenAreaProvider } from '../areas/AreaContext';
+import { NewTaskViewProvider } from '../views/NewTaskViewContext';
 import { areaToShow, tasksOfArea } from '../areas/areaModel';
 import { useAreas } from '../areas/areaQueries';
 import { MemoryProvider } from '../memory/MemoryContext';
@@ -94,138 +95,142 @@ export function ProjectWorkspace({ project }: { project: Project }) {
       >
         <MemoryProvider projectId={project.id}>
           <OpenAreaProvider area={openArea}>
-            <div className={styles.workspace}>
-              <header className={styles.header}>
-                <div className={styles.heading}>
-                  {openArea ? (
-                    <div className={styles.withArea}>
-                      <h1 className={classNames(styles.name, styles.projectOfArea)}>
-                        <button
-                          type="button"
-                          className={styles.up}
-                          title="Show every area of the project"
-                          onClick={() => {
-                            navigation.openProject(project.id);
-                          }}
-                        >
-                          {project.name}
-                        </button>
+            <NewTaskViewProvider
+              viewId={shownView && isFilterable(shownView.kind) ? shownView.id : undefined}
+            >
+              <div className={styles.workspace}>
+                <header className={styles.header}>
+                  <div className={styles.heading}>
+                    {openArea ? (
+                      <div className={styles.withArea}>
+                        <h1 className={classNames(styles.name, styles.projectOfArea)}>
+                          <button
+                            type="button"
+                            className={styles.up}
+                            title="Show every area of the project"
+                            onClick={() => {
+                              navigation.openProject(project.id);
+                            }}
+                          >
+                            {project.name}
+                          </button>
+                        </h1>
+                        <ChevronRight className={styles.step} aria-hidden />
+                        <span className={classNames(styles.name, styles.areaName)}>
+                          {openArea.name}
+                        </span>
+                      </div>
+                    ) : (
+                      <h1 className={styles.name} title={project.description || undefined}>
+                        {project.name}
                       </h1>
-                      <ChevronRight className={styles.step} aria-hidden />
-                      <span className={classNames(styles.name, styles.areaName)}>
-                        {openArea.name}
-                      </span>
-                    </div>
-                  ) : (
-                    <h1 className={styles.name} title={project.description || undefined}>
-                      {project.name}
-                    </h1>
-                  )}
-                  <span className={classNames('label', styles.key)}>{project.key}</span>
-                  <TeamStrip
-                    onOpen={() => {
-                      navigation.showPlace('team');
-                    }}
+                    )}
+                    <span className={classNames('label', styles.key)}>{project.key}</span>
+                    <TeamStrip
+                      onOpen={() => {
+                        navigation.showPlace('team');
+                      }}
+                    />
+                    <span className={styles.space} />
+                    {areaTasks && (
+                      <TaskTally project={project} tasks={areaTasks} areaName={openArea?.name} />
+                    )}
+                    <ProjectMenu project={project} taskCount={tasks.data?.length ?? 0} />
+                    <Button
+                      variant="primary"
+                      icon={<Plus />}
+                      onClick={() => {
+                        setIsAddingTask(true);
+                      }}
+                    >
+                      New task
+                    </Button>
+                  </div>
+
+                  <ViewTabs
+                    views={views.data ?? NO_VIEWS}
+                    shownView={shownView}
+                    shownPlace={shownPlace}
+                    commands={viewCommands}
                   />
-                  <span className={styles.space} />
-                  {areaTasks && (
-                    <TaskTally project={project} tasks={areaTasks} areaName={openArea?.name} />
+                </header>
+
+                <div className={styles.content}>
+                  {(tasks.isPending || team.isPending || views.isPending) && (
+                    <p className={styles.note}>Loading the project…</p>
                   )}
-                  <ProjectMenu project={project} taskCount={tasks.data?.length ?? 0} />
-                  <Button
-                    variant="primary"
-                    icon={<Plus />}
-                    onClick={() => {
-                      setIsAddingTask(true);
-                    }}
-                  >
-                    New task
-                  </Button>
+                  {tasks.isError && (
+                    <p className={styles.note} role="alert">
+                      The tasks could not be loaded. {describeFailure(tasks.error)}
+                    </p>
+                  )}
+                  {team.isError && (
+                    <p className={styles.note} role="alert">
+                      The team could not be loaded. {describeFailure(team.error)}
+                    </p>
+                  )}
+                  {views.isError && (
+                    <p className={styles.note} role="alert">
+                      The views could not be loaded. {describeFailure(views.error)}
+                    </p>
+                  )}
+                  {/* The views wait for the team as well, so that a task never shows a
+              placeholder where its assignee is about to appear. */}
+                  {isReady && shownPlace !== null && (
+                    <ShownPlace place={shownPlace} project={project} tasks={tasks.data} />
+                  )}
+                  {isReady && shownView && areaTasks && (
+                    <ShownView
+                      // A view of its own for every view and area, so that nothing
+                      // of one lingers in another.
+                      key={`${shownView.id}:${openArea?.id ?? 'every area'}`}
+                      view={shownView}
+                      project={project}
+                      area={openArea}
+                      tasks={areaTasks}
+                      everyTask={tasks.data}
+                      onClearFilter={() => {
+                        void viewCommands.setFilter(shownView.id, EVERY_TASK);
+                      }}
+                    />
+                  )}
+
+                  {tasks.data && openTask && (
+                    <TaskPanel
+                      project={project}
+                      task={openTask}
+                      tasks={tasks.data}
+                      onClose={navigation.closeTask}
+                    />
+                  )}
+
+                  {chatMember && (
+                    <MemberChat
+                      // A panel of its own for every member, so nothing typed for one lingers for another.
+                      key={chatMember.id}
+                      project={project}
+                      member={chatMember}
+                      onClose={navigation.closeChat}
+                    />
+                  )}
                 </div>
 
-                <ViewTabs
-                  views={views.data ?? NO_VIEWS}
-                  shownView={shownView}
-                  shownPlace={shownPlace}
-                  commands={viewCommands}
+                <NewTaskDialog
+                  open={isAddingTask}
+                  project={project}
+                  // A task made while a view of one person's tasks is open goes to
+                  // that person, so that it stays in the view.
+                  assignee={
+                    shownView && isFilterable(shownView.kind)
+                      ? assigneeForNewTasks(shownView.filter)
+                      : undefined
+                  }
+                  onClose={() => {
+                    setIsAddingTask(false);
+                  }}
                 />
-              </header>
-
-              <div className={styles.content}>
-                {(tasks.isPending || team.isPending || views.isPending) && (
-                  <p className={styles.note}>Loading the project…</p>
-                )}
-                {tasks.isError && (
-                  <p className={styles.note} role="alert">
-                    The tasks could not be loaded. {describeFailure(tasks.error)}
-                  </p>
-                )}
-                {team.isError && (
-                  <p className={styles.note} role="alert">
-                    The team could not be loaded. {describeFailure(team.error)}
-                  </p>
-                )}
-                {views.isError && (
-                  <p className={styles.note} role="alert">
-                    The views could not be loaded. {describeFailure(views.error)}
-                  </p>
-                )}
-                {/* The views wait for the team as well, so that a task never shows a
-              placeholder where its assignee is about to appear. */}
-                {isReady && shownPlace !== null && (
-                  <ShownPlace place={shownPlace} project={project} tasks={tasks.data} />
-                )}
-                {isReady && shownView && areaTasks && (
-                  <ShownView
-                    // A view of its own for every view and area, so that nothing
-                    // of one lingers in another.
-                    key={`${shownView.id}:${openArea?.id ?? 'every area'}`}
-                    view={shownView}
-                    project={project}
-                    area={openArea}
-                    tasks={areaTasks}
-                    everyTask={tasks.data}
-                    onClearFilter={() => {
-                      void viewCommands.setFilter(shownView.id, EVERY_TASK);
-                    }}
-                  />
-                )}
-
-                {tasks.data && openTask && (
-                  <TaskPanel
-                    project={project}
-                    task={openTask}
-                    tasks={tasks.data}
-                    onClose={navigation.closeTask}
-                  />
-                )}
-
-                {chatMember && (
-                  <MemberChat
-                    // A panel of its own for every member, so nothing typed for one lingers for another.
-                    key={chatMember.id}
-                    project={project}
-                    member={chatMember}
-                    onClose={navigation.closeChat}
-                  />
-                )}
               </div>
-
-              <NewTaskDialog
-                open={isAddingTask}
-                project={project}
-                // A task made while a view of one person's tasks is open goes to
-                // that person, so that it stays in the view.
-                assignee={
-                  shownView && isFilterable(shownView.kind)
-                    ? assigneeForNewTasks(shownView.filter)
-                    : undefined
-                }
-                onClose={() => {
-                  setIsAddingTask(false);
-                }}
-              />
-            </div>
+            </NewTaskViewProvider>
           </OpenAreaProvider>
         </MemoryProvider>
       </WorkProvider>

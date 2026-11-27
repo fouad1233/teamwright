@@ -445,3 +445,61 @@ fn a_view_is_filtered_only_by_a_choice_or_a_yes_or_no_of_its_own_project() {
     assert_eq!(no_such_field.code(), "not_found");
     assert_eq!(workspace.board().filter(), ViewFilter::EVERY_TASK);
 }
+
+#[test]
+fn a_task_made_in_a_view_filtered_by_a_field_holds_the_value_the_view_shows() {
+    let workspace = workspace();
+    let supplier = workspace.field("Supplier", FieldKind::Choice);
+    let supplier = workspace
+        .fields
+        .add_choice(supplier.id(), "Mouser", None)
+        .unwrap();
+    let mouser = supplier.choices()[0].id();
+    let ordered = workspace.field("Ordered", FieldKind::YesNo);
+    let board = workspace.board().id();
+    let project = workspace.project.id();
+    let make_in_view = |filter: FieldFilter| {
+        workspace
+            .views
+            .set_filter(
+                board,
+                ViewFilter {
+                    field: Some(filter),
+                    ..ViewFilter::EVERY_TASK
+                },
+            )
+            .unwrap();
+        let demands = workspace
+            .views
+            .demands_of_new_tasks(board, project)
+            .unwrap();
+        workspace
+            .tasks
+            .create_in_view(NewTask::titled(project, "Order"), &demands)
+            .unwrap()
+    };
+
+    let by_choice = make_in_view(FieldFilter::Choice {
+        field: supplier.id(),
+        choice: mouser,
+    });
+    let by_yes = make_in_view(FieldFilter::YesNo {
+        field: ordered.id(),
+        yes: true,
+    });
+    let by_no = make_in_view(FieldFilter::YesNo {
+        field: ordered.id(),
+        yes: false,
+    });
+
+    assert_eq!(
+        by_choice.field_values().get(&supplier.id()),
+        Some(&FieldValue::Choice(mouser))
+    );
+    assert_eq!(
+        by_yes.field_values().get(&ordered.id()),
+        Some(&FieldValue::YesNo(true))
+    );
+    // A task that holds nothing already reads as "no", so nothing is set.
+    assert!(by_no.field_values().is_empty());
+}

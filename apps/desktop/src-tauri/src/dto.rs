@@ -28,7 +28,7 @@ use teamwright_domain::{
     Priority, Project, ProjectTemplate, Proposal, ProposedOwner, Schedule, ScopeTask, Sprint,
     SprintSummary, Status, StatusCategory, StatusLoad, Step, StepContent, StoryPoints, Tag, Task,
     TaskChange, TaskChangeKind, TaskGroup, Timestamp, TokenCounts, Turn, Velocity, View,
-    ViewAssignee, ViewFilter, ViewKind, WorkInProgressLimit, context_of,
+    ViewAssignee, ViewFilter, ViewId, ViewKind, WorkInProgressLimit, context_of,
 };
 
 use crate::error::CommandError;
@@ -2367,6 +2367,17 @@ pub struct NewTaskInput {
     start_on: Option<String>,
     #[serde(default)]
     due_on: Option<String>,
+    /// The view the task is made in, if any: the task then gets what the
+    /// view's filter asks of it, so that it stays in the view.
+    #[serde(default)]
+    view_id: Option<String>,
+}
+
+impl NewTaskInput {
+    /// The view the task is made in, if the interface named one.
+    pub fn view_id(&self) -> Result<Option<ViewId>, CommandError> {
+        self.view_id.as_deref().map(parse_id).transpose()
+    }
 }
 
 impl TryFrom<NewTaskInput> for NewTask {
@@ -4136,9 +4147,37 @@ mod tests {
     use std::path::PathBuf;
 
     use chrono::TimeZone;
-    use teamwright_domain::ComputerId;
+    use teamwright_domain::{ComputerId, ProjectId};
 
     use super::*;
+
+    #[test]
+    fn a_new_task_may_name_the_view_it_is_made_in() {
+        let project = ProjectId::generate();
+        let view = ViewId::generate();
+        let named: NewTaskInput = serde_json::from_value(serde_json::json!({
+            "projectId": project.to_string(),
+            "title": "Shield the radio",
+            "viewId": view.to_string(),
+        }))
+        .unwrap();
+        assert_eq!(named.view_id().unwrap(), Some(view));
+
+        let plain: NewTaskInput = serde_json::from_value(serde_json::json!({
+            "projectId": project.to_string(),
+            "title": "Shield the radio",
+        }))
+        .unwrap();
+        assert_eq!(plain.view_id().unwrap(), None);
+
+        let broken: NewTaskInput = serde_json::from_value(serde_json::json!({
+            "projectId": project.to_string(),
+            "title": "Shield the radio",
+            "viewId": "not an identifier",
+        }))
+        .unwrap();
+        assert!(broken.view_id().is_err());
+    }
 
     #[test]
     fn the_folders_of_a_project_travel_with_their_kinds_and_full_access() {

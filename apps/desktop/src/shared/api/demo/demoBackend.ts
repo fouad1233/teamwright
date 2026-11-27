@@ -197,6 +197,7 @@ import {
   type Script,
 } from './simulatedSpecialist';
 import {
+  demandsOfNewTasks,
   nameForNewView,
   refuseFilterOf,
   refuseGroupingOf,
@@ -1149,6 +1150,16 @@ export class DemoBackend implements Backend {
       }
       this.checkAssignee(newTask.assignee ?? null, project.id);
       const areaId = this.areaForNewTask(project, newTask.areaId, parent);
+      // A task made inside a view gets what the view's filter asks of it, so
+      // that it stays in the view. A subtask does not.
+      const view = newTask.viewId ? this.requireView(newTask.viewId) : undefined;
+      if (view && view.projectId !== project.id) {
+        throw new BackendError(
+          'different_projects',
+          'a task can only be made in a view of its own project',
+        );
+      }
+      const demands = view && !parent ? demandsOfNewTasks(view) : {};
 
       const lastInStatus = this.tasksOfStatus(project.id, status.id).at(-1);
       const number = this.nextTaskNumbers.get(project.id) ?? 1;
@@ -1166,9 +1177,11 @@ export class DemoBackend implements Backend {
         assignee: newTask.assignee ?? null,
         parentId: newTask.parentId ?? null,
         blockedBy: [],
-        tagIds: [],
+        tagIds: demands.tagId ? [demands.tagId] : [],
         checklist: [],
-        fieldValues: {},
+        fieldValues: demands.fieldValue
+          ? { [demands.fieldValue.fieldId]: demands.fieldValue.value }
+          : {},
         estimateMinutes: newTask.estimateMinutes ?? null,
         // A subtask goes where the task it is a part of goes.
         sprintId: parent?.sprintId ?? null,

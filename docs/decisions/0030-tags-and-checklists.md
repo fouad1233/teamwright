@@ -80,4 +80,11 @@ on the desk is an everyday case, and both must stay.
 - A new task made in a view filtered by a tag does not carry the tag yet,
   so it leaves that view at once. The view says what it shows; carrying
   the tag over is left for later.
+  *Note of 27 November 2026:* done. A task made inside a view now carries
+  the tag the view is filtered by, and holds the choice or "yes" of a
+  custom field it is filtered by ([decision 0035](0035-custom-fields.md)).
+  The interface names the view when it makes the task, and the application
+  decides what the filter asks for. A filter for "no" asks for nothing, as
+  a task that holds nothing reads as no, and a subtask takes nothing from
+  the view.
 - The workbook names the tags of each task in a column of its Tasks sheet.
