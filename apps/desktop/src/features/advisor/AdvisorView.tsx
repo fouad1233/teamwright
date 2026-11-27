@@ -29,6 +29,7 @@ import {
 import { ImportEarlierConversations, KeptDigests } from './EarlierConversations';
 import { InterviewCard } from './InterviewCard';
 import { ProposalCard } from './ProposalCard';
+import { WorkFolderRow } from './WorkFolderRow';
 
 /**
  * Where a project is planned with the Advisor: the manager says what they
@@ -120,6 +121,8 @@ export function AdvisorView({ project }: { project: Project }) {
             </>
           )}
         </header>
+        {/* The folder stays in reach: a later round may plan work in another one. */}
+        <WorkFolderRow project={project} />
         <ImportEarlierConversations
           project={project}
           open={isImporting}
@@ -315,6 +318,9 @@ function StartPlanning({ project, onStart, onCancel }: StartPlanningProps) {
         of tasks. You change what does not fit and approve it. Nothing is added to the project
         before that.
       </p>
+
+      {/* Where the work goes is settled before the Advisor reads it and plans. */}
+      <WorkFolderRow project={project} />
 
       <Field label="What you want">
         <TextArea
