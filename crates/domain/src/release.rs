@@ -151,6 +151,72 @@ pub fn newer_release<'a>(current: &Version, published: &'a [Release]) -> Option<
         .max_by(|a, b| a.version.cmp(&b.version))
 }
 
+/// Whether the version that the address of updates offers may be installed
+/// over this program ([decision 0045](../../../docs/decisions/0045-installing-updates-from-inside.md)).
+///
+/// The updater asks this, not its own comparison, so that the notice and
+/// the installer order versions by the same rule. Only a newer version is
+/// installed, never the same or an older one. A version with a mark (a
+/// release candidate) is installed only over a program that has a mark
+/// itself: a program on a settled version is not moved onto an unsettled
+/// one by itself, as the notice does not send it to one once full releases
+/// exist.
+#[must_use]
+pub fn is_installable(current: &Version, offered: &Version) -> bool {
+    offered > current && (!offered.has_mark() || current.has_mark())
+}
+
+/// How this copy of the program was installed, as far as updating it goes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InstallKind {
+    /// An application bundle on macOS, from the `.dmg`.
+    MacApplication,
+    /// Installed on Windows by the setup program or the `.msi`.
+    WindowsInstaller,
+    /// An AppImage on Linux: one file, which the program may replace.
+    AppImage,
+    /// A package of the system on Linux, from the `.deb` or the `.rpm`.
+    SystemPackage,
+    /// Not installed by any installer: a copy built from the source.
+    NotInstalled,
+}
+
+/// Why a copy of the program cannot install its own update.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ByHandReason {
+    /// The files belong to the package manager of the system. Replacing
+    /// them needs the administrator's password and would leave the package
+    /// manager believing an older version is installed.
+    SystemPackage,
+    /// The copy was built from the source, not installed: there is no
+    /// installed program to replace.
+    NotInstalled,
+}
+
+impl InstallKind {
+    /// Whether this copy installs its own updates, or why not.
+    ///
+    /// # Errors
+    ///
+    /// The reason an update has to be installed by hand.
+    pub const fn updates_itself(self) -> Result<(), ByHandReason> {
+        match self {
+            Self::MacApplication | Self::WindowsInstaller | Self::AppImage => Ok(()),
+            Self::SystemPackage => Err(ByHandReason::SystemPackage),
+            Self::NotInstalled => Err(ByHandReason::NotInstalled),
+        }
+    }
+
+    /// Whether the update is put in place only when the program restarts.
+    /// On Windows the installer replaces the files of a program that is no
+    /// longer running, so it runs as the program closes. Elsewhere the new
+    /// version is put in place at once and starts at the next start.
+    #[must_use]
+    pub const fn installs_on_restart(self) -> bool {
+        matches!(self, Self::WindowsInstaller)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -273,6 +339,57 @@ mod tests {
         // is sent only to full releases.
         let published = [release("v0.1.0", false), release("v0.3.0", true)];
         assert_eq!(newer_release(&version("0.2.0"), &published), None);
+    }
+
+    #[test]
+    fn only_a_newer_version_is_installed() {
+        assert!(is_installable(&version("0.2.0"), &version("0.3.0")));
+        assert!(is_installable(&version("0.9.0"), &version("0.10.0")));
+        assert!(!is_installable(&version("0.3.0"), &version("0.3.0")));
+        assert!(!is_installable(&version("0.3.0"), &version("0.2.9")));
+    }
+
+    #[test]
+    fn a_settled_program_is_not_moved_onto_a_marked_version() {
+        assert!(!is_installable(&version("1.0.0"), &version("1.1.0-rc.1")));
+        // A program with a mark moves on, to the next mark or the release.
+        assert!(is_installable(
+            &version("1.1.0-rc.1"),
+            &version("1.1.0-rc.2")
+        ));
+        assert!(is_installable(&version("1.1.0-rc.2"), &version("1.1.0")));
+    }
+
+    #[test]
+    fn the_installer_and_the_notice_order_versions_alike() {
+        // Whatever the notice offers to a program without a mark, among
+        // full releases, the installer would install.
+        let current = version("0.2.0");
+        let published = [release("v0.10.0", false), release("v0.9.0", false)];
+        let offered = newer_release(&current, &published).unwrap();
+        assert!(is_installable(&current, &offered.version));
+    }
+
+    #[test]
+    fn only_copies_that_own_their_files_update_themselves() {
+        for installation in [
+            InstallKind::MacApplication,
+            InstallKind::WindowsInstaller,
+            InstallKind::AppImage,
+        ] {
+            assert_eq!(installation.updates_itself(), Ok(()));
+        }
+        assert_eq!(
+            InstallKind::SystemPackage.updates_itself(),
+            Err(ByHandReason::SystemPackage)
+        );
+        assert_eq!(
+            InstallKind::NotInstalled.updates_itself(),
+            Err(ByHandReason::NotInstalled)
+        );
+        assert!(InstallKind::WindowsInstaller.installs_on_restart());
+        assert!(!InstallKind::MacApplication.installs_on_restart());
+        assert!(!InstallKind::AppImage.installs_on_restart());
     }
 
     #[test]
