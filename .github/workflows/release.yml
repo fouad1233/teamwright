@@ -68,19 +68,28 @@ jobs:
 
             Teamwright runs its AI specialists on your own Claude Code, which must be installed and signed in.
         run: |
-          if ! gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
-            # --verify-tag: the tag must already be pushed; nothing is
-            # tagged here.
-            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag \
-              --draft --prerelease --title "Teamwright $TAG" --notes "$NOTES"
+          # A draft is found by listing the releases, not by its tag. The
+          # list can lag for a moment behind a release that was just made
+          # (it did on 27 November 2026, and the run failed), so the id is
+          # taken from the answer of the request that makes the release,
+          # and the list is only asked for a release that was there before.
+          release_id() {
+            gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+              --jq "first(.[] | select(.tag_name == \"$TAG\") | .id)"
+          }
+          id=$(release_id)
+          if [ -z "$id" ]; then
+            # The tag must already be pushed; nothing is tagged here.
+            git ls-remote --exit-code --tags \
+              "https://github.com/$GITHUB_REPOSITORY" "refs/tags/$TAG" > /dev/null
+            id=$(gh api -X POST "repos/$GITHUB_REPOSITORY/releases" \
+              -f tag_name="$TAG" -f name="Teamwright $TAG" -f body="$NOTES" \
+              -F draft=true -F prerelease=true --jq .id)
           else
             echo "The release of $TAG exists already; the builds add to it."
           fi
-          # A draft is not found by its tag, so the id is read from the list.
-          id=$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
-            --jq "first(.[] | select(.tag_name == \"$TAG\") | .id)")
           if [ -z "$id" ]; then
-            echo "The release of $TAG was not found after it was created." >&2
+            echo "The release of $TAG could not be made or found." >&2
             exit 1
           fi
           echo "id=$id" >> "$GITHUB_OUTPUT"
