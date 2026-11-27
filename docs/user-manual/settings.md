@@ -97,15 +97,58 @@ Under *Version* the page shows the version of this program, for example
   request says only the address of the list and the version of this program.
 - *Look now* looks at once, whether or not the switch is on, and says when it
   last looked. It does not turn the switch on.
-- When a newer version is known, a card names it and a button opens its release
-  page in your browser. A small line "0.2.0 is out" (with the number of the
-  new version) also shows at the foot of the sidebar. Nothing waits for you,
-  so it is quiet.
+- When a newer version is known, a card names it, says where it comes from,
+  and offers *Install 0.3.0* (with the number of the new version) and *Open the
+  release page*. A small line "0.3.0 is out" also shows at the foot of the
+  sidebar. Nothing waits for you, so it is quiet.
 - A network that is down is not an error. The page only says that it could
   not look.
 
 A pre-release is offered only while you run a pre-release yourself, or while no
-full release exists. Teamwright cannot install the new version for you: you
-download it from the release page. The rule was tested, the reading of GitHub's
-list was tested against a listener on the same computer, and the interface was
-seen on the demo. A look from the installed program was not tried.
+full release exists.
+
+### Installing a newer version
+
+Teamwright installs a newer version only when you press *Install*, and
+restarts only when you say so.
+
+1. Press *Install 0.3.0*. Teamwright asks for the update, downloads it and
+   shows how much has arrived.
+2. It checks that the download is signed with the key built into Teamwright.
+   A download that is not is thrown away, and the card says so: "The download
+   was refused". Nothing is installed then, and the version you have still
+   runs.
+3. When the new version is ready the card says so and offers *Restart now* and
+   *Later*. *Later* is fine: the new version starts the next time you open
+   Teamwright. On Windows the new version is installed when you choose
+   *Restart now*.
+4. If specialists are at work, the card says how many. A restart stops them,
+   as closing Teamwright does, so the button then reads *Stop them and
+   restart*. You can continue their conversations afterwards.
+
+If the card says there is nothing newer for this computer yet, the release
+may still be on its way; try again later, or use the release page.
+
+**Version 0.2.0 cannot do this.** It was published before Teamwright could
+install its own updates. Install the next version by hand once, from the
+release page (see [installing](what-teamwright-is.md#installing)); from then
+on it updates itself.
+
+**Copies that update by hand.** On Linux, a copy installed from the `.deb` or
+the `.rpm` belongs to the package manager of the system, so Teamwright does not
+replace it: install the new package the same way. The AppImage updates itself.
+A copy built from the source has nothing to replace either. In both cases the
+card keeps the release page and says why.
+
+**On a Mac.** Move Teamwright to Applications before you first open it. A
+program opened from the Downloads folder or the disk image may run from a
+hidden copy that cannot be replaced. Only the first install shows the warning
+about an unidentified developer; an update installed by Teamwright itself is
+expected not to show it again. That was never tried on a Mac: tell the project
+what you see.
+
+What was tried: on Linux, an older AppImage built for the test found a newer
+one on a server on the same computer, refused a copy signed with another key,
+downloaded the right one with its progress, installed it and restarted as the
+new version. Updating through GitHub, on Windows and on a Mac has not been
+tried yet; the first real release will be the first.

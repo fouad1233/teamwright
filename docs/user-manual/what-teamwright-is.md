@@ -62,9 +62,16 @@ Version 0.1.0 is a pre-release. Nobody has yet installed it and started it
 from these installers, and the macOS and Linux builds have never been run.
 Tell the project if one of them does not start.
 
-The program can tell you when a newer version is out (see
-[settings of this computer](settings.md#a-newer-version)). It cannot install
-an update by itself. You download and install a new version the same way.
+On a Mac, move Teamwright to Applications before you open it the first time.
+
+**Updates.** The program can tell you when a newer version is out, and
+install it when you press the button (see
+[settings of this computer](settings.md#installing-a-newer-version)). Every
+update is checked against the project's signing key before it is installed.
+Version 0.2.0 cannot do this yet: install the next version by hand once, the
+same way as above, and from then on Teamwright updates itself. On Linux this
+holds for the AppImage; a `.deb` or `.rpm` is updated by installing the new
+package.
 
 ## Trying it without installing
 

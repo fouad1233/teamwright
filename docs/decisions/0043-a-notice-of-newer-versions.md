@@ -125,3 +125,16 @@ only if its text is exactly the version as parsed, with or without a `v`
 before it, so it holds only numbers, letters, dots and one hyphen. Any other
 tag, such as one with build text after a `+`, is left out like `nightly`. The
 address is written from the repository and that checked tag.
+
+## Note of 27 November 2026: installing is built
+
+The founder made the signing key, and installing from inside the program
+is now built ([decision 0045](0045-installing-updates-from-inside.md)). This
+record still decides when the program looks and what the notice says. The
+card now offers a button that installs the newer version, and the rule
+`is_installable` beside `newer_release` decides, for the notice and the
+installer alike, which version counts as newer. The program's version is now
+read from `tauri.conf.json` (the version the installers carry) rather than
+from the crate, so that the notice and the installer compare the same
+number. The line "Installing from inside the program is still not built"
+above no longer holds.
