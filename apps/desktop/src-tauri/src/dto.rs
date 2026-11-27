@@ -1390,14 +1390,17 @@ impl From<AgentProgram> for AgentProgramDto {
     }
 }
 
-/// The folders of a project as the interface sees them. Paths travel as
-/// text.
+/// The folders of a project as the interface sees them, and whether its
+/// specialists have full access on this computer (decision 0044). Paths
+/// travel as text.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProjectPlacesDto {
     work_folder: String,
     is_work_folder_chosen: bool,
     reference_folders: Vec<String>,
+    written_folders: Vec<String>,
+    full_access: bool,
 }
 
 impl From<ProjectPlaces> for ProjectPlacesDto {
@@ -1410,6 +1413,12 @@ impl From<ProjectPlaces> for ProjectPlacesDto {
                 .iter()
                 .map(|folder| path_to_text(folder))
                 .collect(),
+            written_folders: places
+                .written_folders
+                .iter()
+                .map(|folder| path_to_text(folder))
+                .collect(),
+            full_access: places.full_access,
         }
     }
 }
@@ -4123,10 +4132,33 @@ impl From<&teamwright_application::Library> for LibraryDto {
 mod tests {
     #![allow(clippy::unwrap_used)]
 
+    use std::path::PathBuf;
+
     use chrono::TimeZone;
     use teamwright_domain::ComputerId;
 
     use super::*;
+
+    #[test]
+    fn the_folders_of_a_project_travel_with_their_kinds_and_full_access() {
+        let dto = ProjectPlacesDto::from(ProjectPlaces {
+            work_folder: PathBuf::from("/home/sample/board"),
+            is_work_folder_chosen: true,
+            reference_folders: vec![PathBuf::from("/home/sample/datasheets")],
+            written_folders: vec![PathBuf::from("/home/sample/firmware")],
+            full_access: true,
+        });
+        assert_eq!(
+            serde_json::to_value(dto).unwrap(),
+            serde_json::json!({
+                "workFolder": "/home/sample/board",
+                "isWorkFolderChosen": true,
+                "referenceFolders": ["/home/sample/datasheets"],
+                "writtenFolders": ["/home/sample/firmware"],
+                "fullAccess": true
+            })
+        );
+    }
 
     #[test]
     fn a_connector_and_a_kit_are_read_as_the_interface_sends_them() {

@@ -126,6 +126,20 @@ export interface Backend {
   /** Takes a folder away from what the specialists of a project may read. */
   removeReferenceFolder(projectId: Id, folder: string): Promise<ProjectPlaces>;
   /**
+   * Lets the specialists of a project read and change a folder besides the
+   * work folder. A folder is never both read-only and written, never inside
+   * or around another folder of the project, and never one of the places no
+   * specialist may change.
+   */
+  addWrittenFolder(projectId: Id, folder: string): Promise<ProjectPlaces>;
+  /** Takes a folder away from what the specialists of a project may change. */
+  removeWrittenFolder(projectId: Id, folder: string): Promise<ProjectPlaces>;
+  /**
+   * Switches full access of a project on or off, on this computer. It holds
+   * from the next turn on.
+   */
+  setFullAccess(projectId: Id, on: boolean): Promise<ProjectPlaces>;
+  /**
    * Copies files into the folder `references` inside the work folder of a
    * project, where its specialists can read them. Nothing else of the
    * folders the files come from is shown to them. Answers with the names

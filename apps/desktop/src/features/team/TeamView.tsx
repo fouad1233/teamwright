@@ -12,6 +12,7 @@ import { ActionMenu } from '@/shared/ui/Menu';
 import { CoordinatorPanel } from '../coordinator/CoordinatorPanel';
 import { Portrait } from '../office/characters/Portrait';
 import { StandingPermissions } from '../permissions/StandingPermissions';
+import { FullAccessMark } from '../projects/FullAccessMark';
 import { TaskTally } from '../projects/TaskTally';
 import { usageInWords } from '../office/officeModel';
 import { TeamMessages } from '../teamwork/TeamMessages';
@@ -123,6 +124,7 @@ export function TeamView({ project, tasks }: TeamViewProps) {
 
   return (
     <div className={styles.view}>
+      <FullAccessMark projectId={project.id} className={styles.access} />
       <table className={styles.table}>
         <thead>
           <tr>

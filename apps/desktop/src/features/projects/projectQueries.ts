@@ -245,6 +245,10 @@ export interface PlacesCommands {
   setWorkFolder(folder: string | null): Promise<void>;
   addReferenceFolder(folder: string): Promise<void>;
   removeReferenceFolder(folder: string): Promise<void>;
+  addWrittenFolder(folder: string): Promise<void>;
+  removeWrittenFolder(folder: string): Promise<void>;
+  /** Switches full access of the project on or off, on this computer. */
+  setFullAccess(on: boolean): Promise<void>;
   /** Copies files for the specialists. Resolves to the names the copies have. */
   addReferenceFiles(files: string[]): Promise<string[]>;
   /** Shows the work folder in the file manager of this computer. */
@@ -269,6 +273,9 @@ export function usePlacesCommands(projectId: Id): PlacesCommands {
       addReferenceFolder: (folder) => change(() => backend.addReferenceFolder(projectId, folder)),
       removeReferenceFolder: (folder) =>
         change(() => backend.removeReferenceFolder(projectId, folder)),
+      addWrittenFolder: (folder) => change(() => backend.addWrittenFolder(projectId, folder)),
+      removeWrittenFolder: (folder) => change(() => backend.removeWrittenFolder(projectId, folder)),
+      setFullAccess: (on) => change(() => backend.setFullAccess(projectId, on)),
       addReferenceFiles: (files) => backend.addReferenceFiles(projectId, files),
       showWorkFolder: () => backend.showWorkFolder(projectId),
     };

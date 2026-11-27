@@ -438,6 +438,18 @@ export class TauriBackend implements Backend {
     return call('remove_reference_folder', { projectId, folder });
   }
 
+  addWrittenFolder(projectId: Id, folder: string): Promise<ProjectPlaces> {
+    return call('add_written_folder', { projectId, folder });
+  }
+
+  removeWrittenFolder(projectId: Id, folder: string): Promise<ProjectPlaces> {
+    return call('remove_written_folder', { projectId, folder });
+  }
+
+  setFullAccess(projectId: Id, on: boolean): Promise<ProjectPlaces> {
+    return call('set_full_access', { projectId, on });
+  }
+
   addReferenceFiles(projectId: Id, files: string[]): Promise<string[]> {
     return call('add_reference_files', { projectId, files });
   }

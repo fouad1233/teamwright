@@ -1,0 +1,15 @@
+/* A label with a small open lock: quiet, in the ink of a label, never lit.
+   It is a standing fact about the project, not something that happens. */
+.mark {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+.mark svg {
+  width: 12px;
+  height: 12px;
+}

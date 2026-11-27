@@ -7,6 +7,8 @@ import { formatMoment, taskReference } from '@/shared/lib/format';
 import { Button, IconButton } from '@/shared/ui/Button';
 import { Switch } from '@/shared/ui/Switch';
 
+import { FULL_ACCESS_FOR_THE_COORDINATOR } from '../projects/placesModel';
+import { useProjectPlaces } from '../projects/projectQueries';
 import { tasksKey } from '../tasks/taskQueries';
 import { BudgetLine } from './BudgetLine';
 import styles from './Coordinator.module.css';
@@ -28,6 +30,7 @@ interface CoordinatorPanelProps {
 export function CoordinatorPanel({ project, tasks, members }: CoordinatorPanelProps) {
   const { data: coordinator } = useCoordinator(project.id);
   const commands = useCoordinatorCommands(project.id);
+  const fullAccess = useProjectPlaces(project.id).data?.fullAccess === true;
   const backend = useBackend();
   const queryClient = useQueryClient();
   const specialists = members.filter((member) => member.kind === 'agent');
@@ -61,6 +64,7 @@ export function CoordinatorPanel({ project, tasks, members }: CoordinatorPanelPr
           void commands.switchTo(on);
         }}
       />
+      {fullAccess && <p className={styles.note}>{FULL_ACCESS_FOR_THE_COORDINATOR}</p>}
 
       {coordinator && (
         <div className={styles.limit}>

@@ -249,6 +249,10 @@ export const COMMANDS_SWITCHED_OFF =
 export const SECRET_IN_REACH =
   'this permission cannot be given: this specialist has a connector that is given a secret in an environment variable, and a command could read it; take that connector from the specialist first';
 
+/** Why no command can be allowed in a project with full access, in the application's words. */
+export const FULL_ACCESS_NO_COMMANDS =
+  'this permission cannot be given: this project has full access on this computer, and a command is never allowed together with it: its sandbox would reach the whole disk. Switch full access off in the folders of the project to allow commands again';
+
 /** The answer as the specialist reads it, the request of its next turn. */
 export function permissionAnswerInWords(
   request: PermissionRequest,

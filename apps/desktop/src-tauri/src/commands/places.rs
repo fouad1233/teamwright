@@ -1,5 +1,6 @@
-//! Commands for the folders of a project: the work folder, the reference
-//! folders, and the files copied in for reference.
+//! Commands for the folders of a project: the work folder, the folders to
+//! write in, the reference folders, the files copied in for reference, and
+//! full access.
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -72,6 +73,45 @@ pub async fn remove_reference_folder(
     let places = state
         .places
         .remove_reference_folder(parse_id(&project_id)?, Path::new(&folder))?;
+    Ok(ProjectPlacesDto::from(places))
+}
+
+/// Lets the specialists of a project write in a folder besides the work
+/// folder (decision 0044).
+#[tauri::command]
+pub async fn add_written_folder(
+    state: State<'_, AppState>,
+    project_id: String,
+    folder: String,
+) -> Result<ProjectPlacesDto, CommandError> {
+    let places = state
+        .places
+        .add_written_folder(parse_id(&project_id)?, Path::new(&folder))?;
+    Ok(ProjectPlacesDto::from(places))
+}
+
+/// Takes a folder to write in away from the specialists of a project.
+#[tauri::command]
+pub async fn remove_written_folder(
+    state: State<'_, AppState>,
+    project_id: String,
+    folder: String,
+) -> Result<ProjectPlacesDto, CommandError> {
+    let places = state
+        .places
+        .remove_written_folder(parse_id(&project_id)?, Path::new(&folder))?;
+    Ok(ProjectPlacesDto::from(places))
+}
+
+/// Switches full access of a project on or off, on this computer
+/// (decision 0044).
+#[tauri::command]
+pub async fn set_full_access(
+    state: State<'_, AppState>,
+    project_id: String,
+    on: bool,
+) -> Result<ProjectPlacesDto, CommandError> {
+    let places = state.places.set_full_access(parse_id(&project_id)?, on)?;
     Ok(ProjectPlacesDto::from(places))
 }
 

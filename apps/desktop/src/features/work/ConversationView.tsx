@@ -8,6 +8,8 @@ import { formatMoment } from '@/shared/lib/format';
 import { Button } from '@/shared/ui/Button';
 import { Prose } from '@/shared/ui/Prose';
 
+import { FullAccessMark } from '../projects/FullAccessMark';
+import { useProjectPlaces } from '../projects/projectQueries';
 import { RunsElsewhere, useComputerOf } from '../sync/RunsElsewhere';
 import { useNow } from '../sync/useNow';
 import { toolStepInWords } from '../memory/memoryModel';
@@ -60,7 +62,13 @@ export function ConversationView({
   // The demo has no real session behind a conversation, so it has nothing
   // to open in the Claude app; nor has a computer the session is not on.
   const canOpenInClaude = !isDemo && isHere && hasSession(conversation);
-  const hasFirstLine = !hidesMember || working !== undefined || canOpenInClaude;
+  // Full access is a choice of this computer, for the specialists: a
+  // conversation that runs elsewhere, or the Advisor's, is not marked.
+  const fullAccess =
+    useProjectPlaces(project.id).data?.fullAccess === true &&
+    isHere &&
+    conversation.memberId !== null;
+  const hasFirstLine = !hidesMember || working !== undefined || canOpenInClaude || fullAccess;
 
   return (
     <div className={styles.conversation}>
@@ -71,6 +79,7 @@ export function ConversationView({
             <span className={styles.name}>{name}</span>
           </>
         )}
+        {fullAccess && <FullAccessMark projectId={project.id} />}
         <span className={styles.space} />
         {working ? (
           <>

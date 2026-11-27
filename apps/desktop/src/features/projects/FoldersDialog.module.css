@@ -66,6 +66,42 @@
   margin-top: var(--space-1);
 }
 
+/* What the specialists may do in a folder, set as a mark at the edge of
+   its line: work, written, read only. The path takes the room it needs and
+   pushes the mark to the right. */
+.reference .path {
+  flex: 1;
+}
+
+.kind {
+  flex: none;
+}
+
+/* As wide as the button that removes a folder. */
+.noRemoval {
+  flex: none;
+  width: 26px;
+}
+
+/* What full access gives and what stays closed: read before it is switched
+   on, with a red edge, because it is the one choice here that lets a
+   specialist change anything of the manager's. */
+.words {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  max-width: 560px;
+  padding-left: var(--space-3);
+  border-left: 2px solid var(--danger);
+  color: var(--ink-soft);
+  font-size: var(--text-small);
+  line-height: 1.55;
+}
+
+.coordinator {
+  color: var(--ink);
+}
+
 /* What was just done, said quietly next to the button that did it. */
 .done {
   color: var(--ink-faint);

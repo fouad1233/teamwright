@@ -836,6 +836,15 @@ export function sampleWorkspace(today: Date = new Date()): DemoWorkspace {
     // card can be seen; a new computer, and the empty demo, start with it
     // off (decision 0038, note of 22 November 2026).
     commandPermissionsOn: true,
+    // A folder to write in, so that the kinds of folders can be seen. Full
+    // access stays off, as on a new computer, and because the sample shows
+    // a command, which full access rules out (decision 0044).
+    places: {
+      [project.id]: {
+        writtenFolders: ['C:\\Users\\you\\Projects\\sensor-node-firmware'],
+        fullAccess: false,
+      },
+    },
   };
 }
 

@@ -126,6 +126,19 @@ export interface ProjectPlaces {
    * design. The specialists may read them and cannot change them.
    */
   referenceFolders: string[];
+  /**
+   * Folders besides the work folder that the specialists may read and
+   * change, such as the repository of the firmware next to the one of the
+   * board (decision 0044).
+   */
+  writtenFolders: string[];
+  /**
+   * Whether the specialists of the project may read and change files
+   * wherever the manager's account can, except Teamwright's own data, the
+   * sync folder, the settings of Claude Code and the keys of the system.
+   * Kept for this computer only; off until the manager switches it on.
+   */
+  fullAccess: boolean;
 }
 
 /**

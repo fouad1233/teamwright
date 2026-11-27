@@ -56,6 +56,8 @@ describe('the folders of a project in the DemoBackend', () => {
       workFolder: 'C:\\Users\\you\\Documents\\Teamwright\\SSN',
       isWorkFolderChosen: false,
       referenceFolders: [],
+      writtenFolders: [],
+      fullAccess: false,
     });
   });
 
@@ -194,6 +196,57 @@ describe('the folders of a project in the DemoBackend', () => {
     const failure = await refusal(backend.exportWorkbook(project.id, path ?? ''));
     expect(failure.code).toBe('not_available');
     expect((await refusal(backend.showExportedWorkbook(path ?? ''))).code).toBe('not_available');
+  });
+});
+
+describe('folders to write in and full access in the DemoBackend', () => {
+  let backend: DemoBackend;
+  let project: Project;
+
+  beforeEach(async () => {
+    backend = new DemoBackend(undefined, {
+      ...testEnvironment(),
+      folders: [...FOLDERS, 'E:\\Firmware', 'C:\\Users\\you', 'C:\\Users\\you\\.ssh'],
+    });
+    project = await backend.createProject({ name: 'Smart sensor node', workflow: 'engineering' });
+  });
+
+  it('lets the specialists write in a further folder, once, and takes it away again', async () => {
+    await backend.addWrittenFolder(project.id, 'E:\\Firmware');
+    const twice = await backend.addWrittenFolder(project.id, 'e:/firmware/');
+    expect(twice.writtenFolders).toEqual(['E:\\Firmware']);
+    const gone = await backend.removeWrittenFolder(project.id, 'E:\\Firmware\\');
+    expect(gone.writtenFolders).toEqual([]);
+  });
+
+  it('never makes a folder both read-only and written, nor nests it in another', async () => {
+    await backend.addReferenceFolder(project.id, 'D:\\Datasheets');
+    const same = await refusal(backend.addWrittenFolder(project.id, 'D:\\Datasheets'));
+    expect(same.code).toBe('rule_broken');
+    expect(same.message).toBe(
+      'D:\\Datasheets is the reference folder D:\\Datasheets; a folder of a project is the work folder, a folder to write in or a folder only to read, never two of them',
+    );
+    const inside = await refusal(backend.addWrittenFolder(project.id, 'D:\\Datasheets\\Bosch'));
+    expect(inside.message).toContain('lies inside the reference folder');
+    await backend.setWorkFolder(project.id, 'C:\\Work\\sensor-node');
+    const around = await refusal(backend.addWrittenFolder(project.id, 'C:\\Work'));
+    expect(around.message).toContain('contains the work folder');
+  });
+
+  it('refuses a protected place, a folder inside one and a folder around one', async () => {
+    const keys = await refusal(backend.addWrittenFolder(project.id, 'C:\\Users\\you\\.ssh'));
+    expect(keys.code).toBe('rule_broken');
+    expect(keys.message).toContain('the keys of the system');
+    const home = await refusal(backend.addWrittenFolder(project.id, 'C:\\Users\\you'));
+    expect(home.message).toContain('switch on full access');
+    expect((await backend.projectPlaces(project.id)).writtenFolders).toEqual([]);
+  });
+
+  it('keeps full access per project, off until switched on', async () => {
+    const other = await backend.createProject({ name: 'Battery charger', workflow: 'engineering' });
+    expect((await backend.setFullAccess(project.id, true)).fullAccess).toBe(true);
+    expect((await backend.projectPlaces(other.id)).fullAccess).toBe(false);
+    expect((await backend.setFullAccess(project.id, false)).fullAccess).toBe(false);
   });
 });
 

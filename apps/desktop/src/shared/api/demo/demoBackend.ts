@@ -117,13 +117,14 @@ import {
   PretendedPermissions,
   COMMANDS_SWITCHED_OFF,
   SECRET_IN_REACH,
+  FULL_ACCESS_NO_COMMANDS,
   checkedRule,
   checkedScope,
   permissionAnswerInWords,
 } from './permissions';
 import { PretendedGitHub } from './gitHub';
 import { PretendedIntegrations } from './integrations';
-import { freeName, isInside, isSameFolder, nameOf } from './places';
+import { PROTECTED_PLACES, freeName, isInside, isSameFolder, nameOf, relationOf } from './places';
 import { pretendedListing } from './projectFiles';
 import { projectReportOf } from './projectReport';
 import {
@@ -236,6 +237,10 @@ interface ChosenPlaces {
   /** The work folder, or nothing while Teamwright's own folder is used. */
   workFolder: string | null;
   referenceFolders: string[];
+  /** The folders besides the work folder that the specialists may change. */
+  writtenFolders: string[];
+  /** Whether the specialists have full access on the pretended computer. */
+  fullAccess: boolean;
   /** The names of the files in the folder `references`. */
   referenceFiles: string[];
 }
@@ -305,6 +310,11 @@ export interface DemoWorkspace {
    * them on.
    */
   commandPermissionsOn?: boolean;
+  /**
+   * The folders to write in, and full access, of the projects (decision
+   * 0044). Left out, a project has neither, as a new project has.
+   */
+  places?: Record<Id, { writtenFolders: string[]; fullAccess: boolean }>;
 }
 
 const browserEnvironment: DemoEnvironment = {
@@ -513,6 +523,11 @@ export class DemoBackend implements Backend {
     );
     this.permissions = new PretendedPermissions(workspace?.permissions ?? []);
     this.commandsOn = workspace?.commandPermissionsOn ?? false;
+    for (const [projectId, given] of Object.entries(workspace?.places ?? {})) {
+      const chosen = this.chosenPlacesOf(projectId);
+      chosen.writtenFolders = [...given.writtenFolders];
+      chosen.fullAccess = given.fullAccess;
+    }
     this.memory = new PretendedMemory(
       Object.entries(workspace?.memory ?? {}).flatMap(([projectId, entries]) =>
         entries.map((entry) => ({ projectId, entry })),
@@ -726,6 +741,9 @@ export class DemoBackend implements Backend {
       for (const reference of chosen.referenceFolders) {
         refuseFoldersThatOverlap(tidy, reference);
       }
+      for (const written of chosen.writtenFolders) {
+        refuseOverlap(tidy, written, 'the folder to write in');
+      }
       chosen.workFolder = tidy;
       return this.placesOf(project);
     });
@@ -737,6 +755,9 @@ export class DemoBackend implements Backend {
       const chosen = this.chosenPlacesOf(project.id);
       const tidy = this.requireFolder(folder);
       refuseFoldersThatOverlap(this.placesOf(project).workFolder, tidy);
+      for (const written of chosen.writtenFolders) {
+        refuseOverlap(tidy, written, 'the folder to write in');
+      }
       if (!chosen.referenceFolders.some((other) => isSameFolder(other, tidy))) {
         chosen.referenceFolders.push(tidy);
       }
@@ -751,6 +772,56 @@ export class DemoBackend implements Backend {
       chosen.referenceFolders = chosen.referenceFolders.filter(
         (other) => !isSameFolder(other, folder),
       );
+      return this.placesOf(project);
+    });
+  }
+
+  addWrittenFolder(projectId: Id, folder: string): Promise<ProjectPlaces> {
+    return this.answer(() => {
+      const project = this.requireProject(projectId);
+      const chosen = this.chosenPlacesOf(project.id);
+      const tidy = this.requireFolder(folder);
+      if (chosen.writtenFolders.some((other) => isSameFolder(other, tidy))) {
+        return this.placesOf(project);
+      }
+      for (const place of PROTECTED_PLACES) {
+        const relation = relationOf(tidy, place.folder);
+        if (relation !== null) {
+          const why =
+            relation === 'contains'
+              ? 'which no specialist may change; to let the specialists write almost everywhere, switch on full access, which keeps such places closed'
+              : 'which no specialist may change';
+          throw new BackendError(
+            'rule_broken',
+            `${tidy} ${relation} ${place.what} (${place.folder}), ${why}`,
+          );
+        }
+      }
+      refuseOverlap(tidy, this.placesOf(project).workFolder, 'the work folder');
+      for (const reference of chosen.referenceFolders) {
+        refuseOverlap(tidy, reference, 'the reference folder');
+      }
+      for (const written of chosen.writtenFolders) {
+        refuseOverlap(tidy, written, 'the folder to write in');
+      }
+      chosen.writtenFolders.push(tidy);
+      return this.placesOf(project);
+    });
+  }
+
+  removeWrittenFolder(projectId: Id, folder: string): Promise<ProjectPlaces> {
+    return this.answer(() => {
+      const project = this.requireProject(projectId);
+      const chosen = this.chosenPlacesOf(project.id);
+      chosen.writtenFolders = chosen.writtenFolders.filter((other) => !isSameFolder(other, folder));
+      return this.placesOf(project);
+    });
+  }
+
+  setFullAccess(projectId: Id, on: boolean): Promise<ProjectPlaces> {
+    return this.answer(() => {
+      const project = this.requireProject(projectId);
+      this.chosenPlacesOf(project.id).fullAccess = on;
       return this.placesOf(project);
     });
   }
@@ -893,7 +964,13 @@ export class DemoBackend implements Backend {
   private chosenPlacesOf(projectId: Id): ChosenPlaces {
     let chosen = this.places.get(projectId);
     if (!chosen) {
-      chosen = { workFolder: null, referenceFolders: [], referenceFiles: [] };
+      chosen = {
+        workFolder: null,
+        referenceFolders: [],
+        writtenFolders: [],
+        fullAccess: false,
+        referenceFiles: [],
+      };
       this.places.set(projectId, chosen);
     }
     return chosen;
@@ -906,6 +983,8 @@ export class DemoBackend implements Backend {
       workFolder: chosen.workFolder ?? `${PROJECTS_FOLDER}\\${project.key}`,
       isWorkFolderChosen: chosen.workFolder !== null,
       referenceFolders: [...chosen.referenceFolders],
+      writtenFolders: [...chosen.writtenFolders],
+      fullAccess: chosen.fullAccess,
     };
   }
 
@@ -1592,6 +1671,9 @@ export class DemoBackend implements Backend {
         }
         if (answer.kind === 'command' && this.library.namesASecret(member)) {
           throw new BackendError('rule_broken', SECRET_IN_REACH);
+        }
+        if (answer.kind === 'command' && this.chosenPlacesOf(member.projectId).fullAccess) {
+          throw new BackendError('rule_broken', FULL_ACCESS_NO_COMMANDS);
         }
       }
       this.refuseWhileBusy(member);
@@ -3033,7 +3115,9 @@ export class DemoBackend implements Backend {
     // A request for a command does not reach the manager while command
     // permissions are switched off: the team bus refuses it.
     const asksPermission =
-      script.asksPermission && (script.asksPermission.kind !== 'command' || this.commandsOn)
+      script.asksPermission &&
+      (script.asksPermission.kind !== 'command' ||
+        (this.commandsOn && !this.chosenPlacesOf(conversation.projectId).fullAccess))
         ? script.asksPermission
         : undefined;
     if (asksPermission && conversation.memberId !== null) {
@@ -4722,6 +4806,21 @@ function tidyProposedTasks(
     );
   }
   return tidy;
+}
+
+/**
+ * Refuses a folder that is, lies inside or contains another folder of the
+ * project, where one of them is a folder to write in: a folder of a project
+ * has one kind.
+ */
+function refuseOverlap(folder: string, other: string, otherKind: string): void {
+  const relation = relationOf(folder, other);
+  if (relation !== null) {
+    throw new BackendError(
+      'rule_broken',
+      `${folder} ${relation} ${otherKind} ${other}; a folder of a project is the work folder, a folder to write in or a folder only to read, never two of them`,
+    );
+  }
 }
 
 /**
