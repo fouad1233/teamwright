@@ -1,10 +1,27 @@
-# Builds the installers of Teamwright for Windows, macOS and Linux and
-# publishes them as a release on GitHub.
+# Builds the installers of Teamwright for Windows, macOS and Linux, signs
+# the files of its updates, and publishes them as a release on GitHub
+# (decision 0045).
 #
-# It runs when a tag that begins with "v" is pushed (v0.1.0), and can be
-# started by hand for a tag that exists. The installers are not signed:
-# signing needs certificates the project does not have yet. The notes of
-# the release say what Windows and macOS show because of that.
+# It runs when a tag that begins with "v" is pushed (v0.3.0), and can be
+# started by hand for a tag that exists. The installers are not signed with
+# Apple's or Microsoft's certificates: the project does not have them yet.
+# The files of updates are signed with the project's own key, the secret
+# TAURI_SIGNING_PRIVATE_KEY, and the program refuses an update that is not.
+#
+# The jobs, in order:
+#
+# 1. `release` creates the release once, as a draft, before anything is
+#    built. (Before, each of the four builds tried to create it, and on 23
+#    November 2026 two did so in the same second and one failed after
+#    building.)
+# 2. `installers` builds on four computers at once and adds the installers,
+#    the update files and their signatures to that draft. None of them
+#    writes latest.json.
+# 3. `updates` runs only when all four builds succeeded: it writes
+#    latest.json from the four signatures, publishes the release, and puts
+#    latest.json on the release with the fixed tag `updates`, which is the
+#    address every copy of the program asks. Until then, copies keep being
+#    offered the version before.
 name: Release
 
 on:
@@ -13,16 +30,64 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: The tag to build and release, for example v0.1.0
+        description: The tag to build and release, for example v0.3.0
         required: true
 
 # Publishing a release writes to the repository.
 permissions:
   contents: write
 
+env:
+  TAG: ${{ github.event.inputs.tag || github.ref_name }}
+
 jobs:
+  release:
+    name: Create the release
+    runs-on: ubuntu-latest
+    outputs:
+      id: ${{ steps.release.outputs.id }}
+    steps:
+      - name: Create the draft release of the tag, unless it exists
+        id: release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NOTES: |
+            Teamwright is pre-alpha. What works is in the roadmap: https://github.com/fouad1233/teamwright/blob/main/docs/product/roadmap.md
+
+            **Updating.** From this version on, Teamwright can install its next versions itself: on the page Computers, part Version, press "Look now", then the button that installs the newer version, then "Restart now". It checks that every update is signed with the project's key and refuses it otherwise. A copy of 0.2.0 or older cannot do this yet: install this version by hand once, as below; after that it updates itself. On Linux this works for the AppImage; a `.deb` or `.rpm` is updated by installing the new package.
+
+            **Which file**
+            - Windows: the file that ends in `-setup.exe` (or the `.msi`).
+            - macOS: the `.dmg`; `aarch64` is for Macs with Apple silicon, `x64` for Macs with an Intel processor. Move Teamwright to Applications before you open it the first time, so that it can update itself later. (The `.app.tar.gz` files are for the updater, not for you.)
+            - Linux: the `.AppImage`, the `.deb` or the `.rpm`.
+            - The `.sig` files and `latest.json` are for the updater.
+
+            **The installers are not signed with Apple's or Microsoft's certificates.** The project does not have them yet.
+            - Windows shows "Windows protected your PC": choose "More info", then "Run anyway".
+            - macOS says the app cannot be opened: open System Settings, Privacy & Security, and choose "Open Anyway"; or right-click the app and choose "Open".
+
+            Teamwright runs its AI specialists on your own Claude Code, which must be installed and signed in.
+        run: |
+          if ! gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            # --verify-tag: the tag must already be pushed; nothing is
+            # tagged here.
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag \
+              --draft --prerelease --title "Teamwright $TAG" --notes "$NOTES"
+          else
+            echo "The release of $TAG exists already; the builds add to it."
+          fi
+          # A draft is not found by its tag, so the id is read from the list.
+          id=$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+            --jq "first(.[] | select(.tag_name == \"$TAG\") | .id)")
+          if [ -z "$id" ]; then
+            echo "The release of $TAG was not found after it was created." >&2
+            exit 1
+          fi
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+
   installers:
     name: Installers on ${{ matrix.name }}
+    needs: release
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -43,7 +108,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.inputs.tag || github.ref }}
+          ref: ${{ env.TAG }}
 
       - name: Install the libraries Tauri needs on Linux
         if: runner.os == 'Linux'
@@ -63,28 +128,70 @@ jobs:
           cache: npm
       - run: npm ci
 
-      # Builds the program with its installers and adds them to the release
-      # of the tag, which it creates if it is not there.
+      # Builds the program with its installers and its signed update files
+      # (bundle.createUpdaterArtifacts in tauri.conf.json), and adds them
+      # with their .sig files to the draft. latest.json is written once, by
+      # the job `updates`, so the four builds never overwrite each other.
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          # The key has no password.
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ''
         with:
           projectPath: apps/desktop
-          tagName: ${{ github.event.inputs.tag || github.ref_name }}
-          releaseName: Teamwright ${{ github.event.inputs.tag || github.ref_name }}
-          releaseBody: |
-            Teamwright is pre-alpha. What works is in the roadmap: https://github.com/fouad1233/teamwright/blob/main/docs/product/roadmap.md
-
-            **Which file**
-            - Windows: the file that ends in `-setup.exe` (or the `.msi`).
-            - macOS: the `.dmg`; `aarch64` is for Macs with Apple silicon, `x64` for Macs with an Intel processor.
-            - Linux: the `.AppImage`, the `.deb` or the `.rpm`.
-
-            **The installers are not signed.** Signing needs certificates the project does not have yet.
-            - Windows shows "Windows protected your PC": choose "More info", then "Run anyway".
-            - macOS says the app cannot be opened: open System Settings, Privacy & Security, and choose "Open Anyway"; or right-click the app and choose "Open".
-
-            Teamwright runs its AI specialists on your own Claude Code, which must be installed and signed in.
-          releaseDraft: false
+          releaseId: ${{ needs.release.outputs.id }}
+          tagName: ${{ env.TAG }}
+          releaseDraft: true
           prerelease: true
+          includeUpdaterJson: false
           args: ${{ matrix.args }}
+
+  updates:
+    name: Publish the release and its updates
+    needs: [release, installers]
+    runs-on: ubuntu-latest
+    # Two releases at once must not replace latest.json in the wrong order.
+    concurrency:
+      group: teamwright-updates
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Download the signatures of the four builds
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir signatures
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern '*.sig' --dir signatures
+          ls -l signatures
+
+      # Refuses, and so stops the job before anything is published, unless
+      # all four computers have an update signed for this version.
+      - name: Write latest.json
+        run: node tools/release/updater-manifest.mjs "$TAG" "$GITHUB_REPOSITORY" signatures latest.json
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease --latest=false
+
+      - name: Put latest.json where the program asks for it
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          UPDATES_NOTES: |
+            The address the updater of Teamwright asks: this release holds only `latest.json`, which says which version is newest and where its signed files are. The release workflow replaces it each time a version is released. Do not delete this release or its tag: every copy of Teamwright newer than 0.2.0 looks here.
+        run: |
+          if ! gh release view updates --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            gh release create updates --repo "$GITHUB_REPOSITORY" --target main \
+              --prerelease --latest=false --title "Updates of Teamwright" --notes "$UPDATES_NOTES"
+          fi
+          # Also on the release itself, for anyone who reads it there.
+          gh release upload "$TAG" latest.json --repo "$GITHUB_REPOSITORY" --clobber
+          gh release upload updates latest.json --repo "$GITHUB_REPOSITORY" --clobber
