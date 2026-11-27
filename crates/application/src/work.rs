@@ -2028,6 +2028,7 @@ fn proposal_from(proposed: PlanProposal) -> Result<Proposal, DomainError> {
                 estimate_minutes: task.estimate_minutes,
                 priority: task.priority,
                 waits_for: task.waits_for,
+                part_of: task.part_of,
             })
         })
         .collect::<Result<Vec<_>, DomainError>>()?;

@@ -1383,6 +1383,7 @@ fn a_proposal() -> Proposal {
         estimate_minutes: Some(120),
         priority: Priority::High,
         waits_for,
+        part_of: None,
     };
     Proposal::new(
         "A device that measures the air.",
@@ -1563,10 +1564,15 @@ fn a_proposal_changed_before_approval_is_logged_whole_and_survives_reopening_the
             ProposalChange::RemoveTask { task: 0 },
             ProposalChange::AddTask {
                 title: TaskTitle::parse("Write the manual").unwrap(),
+                part_of: None,
             },
             ProposalChange::AddWait {
                 task: 2,
                 waits_for: 1,
+            },
+            ProposalChange::AddTask {
+                title: TaskTitle::parse("Write the chapter on the board").unwrap(),
+                part_of: Some(2),
             },
         ] {
             turn.change_proposal(change).unwrap();
@@ -1576,7 +1582,7 @@ fn a_proposal_changed_before_approval_is_logged_whole_and_survives_reopening_the
     };
 
     // Each change is one logged state of the whole proposal.
-    assert_eq!(logged, pairs(&[("proposal", "upsert"); 5]));
+    assert_eq!(logged, pairs(&[("proposal", "upsert"); 6]));
     let reopened = Store::on(Database::open(&path).unwrap());
     let found = reopened.conversations.turns_of(conversation.id()).unwrap();
     assert_eq!(found, [turn]);
@@ -1592,12 +1598,16 @@ fn a_proposal_changed_before_approval_is_logged_whole_and_survives_reopening_the
         [
             "Draw the schematic in KiCad",
             "Order the parts",
-            "Write the manual"
+            "Write the manual",
+            "Write the chapter on the board"
         ]
     );
     assert_eq!(proposal.tasks()[0].estimate_minutes, None);
     assert_eq!(proposal.tasks()[1].waits_for, [0]);
     assert_eq!(proposal.tasks()[2].waits_for, [1]);
+    // The part keeps the task it belongs to.
+    let wholes: Vec<_> = proposal.tasks().iter().map(|task| task.part_of).collect();
+    assert_eq!(wholes, [None, None, None, Some(2)]);
 }
 
 #[test]
@@ -2848,6 +2858,7 @@ fn approving_a_proposal_creates_the_team_and_the_plan_in_one_logged_write() {
                     estimate_minutes: Some(480),
                     priority: Priority::Normal,
                     waits_for: Vec::new(),
+                    part_of: None,
                 },
                 PlannedTask {
                     title: "Order the parts".to_owned(),
@@ -2855,7 +2866,8 @@ fn approving_a_proposal_creates_the_team_and_the_plan_in_one_logged_write() {
                     owner: PlannedOwner::Manager,
                     estimate_minutes: None,
                     priority: Priority::High,
-                    waits_for: vec![0],
+                    waits_for: Vec::new(),
+                    part_of: Some(0),
                 },
             ],
         }),
@@ -2890,6 +2902,7 @@ fn approving_a_proposal_creates_the_team_and_the_plan_in_one_logged_write() {
                 estimate_minutes: Some(480),
                 priority: Priority::Normal,
                 waits_for: Vec::new(),
+                part_of: None,
             },
             ApprovedTask {
                 title: "Order the parts".to_owned(),
@@ -2897,7 +2910,8 @@ fn approving_a_proposal_creates_the_team_and_the_plan_in_one_logged_write() {
                 owner: Some(ApprovedOwner::Manager),
                 estimate_minutes: None,
                 priority: Priority::High,
-                waits_for: vec![0],
+                waits_for: Vec::new(),
+                part_of: Some(0),
             },
         ],
     };
@@ -2936,7 +2950,9 @@ fn approving_a_proposal_creates_the_team_and_the_plan_in_one_logged_write() {
     let mut tasks = task_repository.list_for_project(project.id()).unwrap();
     tasks.sort_by_key(Task::number);
     assert_eq!(tasks[0].assignee(), Some(Assignee::Member(team[0].id())));
-    assert!(tasks[1].blocked_by().contains(&tasks[0].id()));
+    // The part became a subtask of the task made for its whole, in the
+    // same logged write.
+    assert_eq!(tasks[1].parent_id(), Some(tasks[0].id()));
     let turns = conversation_repository.turns_of(id).unwrap();
     assert!(turns[0].proposal().unwrap().approved_at().is_some());
     let stored = project_repository.find(project.id()).unwrap().unwrap();

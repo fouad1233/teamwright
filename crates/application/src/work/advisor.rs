@@ -72,6 +72,9 @@ pub struct ApprovedTask {
     /// The tasks of the same proposal that must be finished first, by
     /// their places from 0.
     pub waits_for: Vec<usize>,
+    /// The task of the same proposal it is a part of, by its place from 0,
+    /// or nothing for a task of its own.
+    pub part_of: Option<usize>,
 }
 
 /// Who a task of an approved proposal is given to.
@@ -137,10 +140,21 @@ pub enum ProposalEdit {
         /// The task it is to stop waiting for.
         waits_for: usize,
     },
-    /// Adds a task of the manager's own at the end of the plan.
+    /// Adds a task of the manager's own at the end of the plan, as a part
+    /// of a task of the proposal if one is named.
     AddTask {
         /// What is to be done.
         title: String,
+        /// The task it is a part of, or nothing for a task of its own.
+        part_of: Option<usize>,
+    },
+    /// Makes a task a part of another task of the proposal, or, with
+    /// nothing, a task of its own.
+    MakePartOf {
+        /// The task.
+        task: usize,
+        /// The task it is to be a part of, or nothing.
+        part_of: Option<usize>,
     },
     /// Takes a task out of the proposal.
     RemoveTask {
@@ -351,9 +365,10 @@ impl WorkService {
     /// specialists, each with the color a newcomer gets, and the tasks are
     /// created in the first status of the workflow, after the tasks that
     /// are there, numbered on, each waiting for the tasks the proposal
-    /// says. A proposed member whose name the team has already, whatever
-    /// the capitals, is not added again, and a task given to that name
-    /// goes to the member the team has. The project, the members, the
+    /// says. A task that is a part of another becomes a subtask of the task
+    /// created for that one. A proposed member whose name the team has
+    /// already, whatever the capitals, is not added again, and a task given
+    /// to that name goes to the member the team has. The project, the members, the
     /// tasks and the approved proposal are stored in one write, or
     /// nothing is. The proposal keeps what was approved, with the moment.
     /// No work starts by itself.
@@ -365,7 +380,10 @@ impl WorkService {
     /// rule (`rule_broken`): a name or a title, two members of one name, a
     /// task given to somebody who is neither on the team nor in the
     /// proposal, a task waiting for no other task of the proposal, tasks
-    /// waiting in a circle, or nothing left at all; if the conversation runs
+    /// waiting in a circle, a task that is a part of no other task of the
+    /// proposal, tasks that are parts of each other in a circle, a part
+    /// waiting for the task it is a part of, or nothing left at all; if the
+    /// conversation runs
     /// on another computer (`runs_elsewhere`), where approving it a second
     /// time would create the same tasks twice; or if storage fails.
     pub fn approve_proposal(
@@ -486,9 +504,17 @@ impl WorkService {
                 .iter()
                 .filter_map(|&earlier| created.get(earlier).map(Task::id))
                 .collect();
+            // A part becomes a subtask of the task created for its whole,
+            // which may come after it in the plan.
+            let parent = proposed
+                .part_of
+                .and_then(|whole| created.get(whole).map(Task::id));
             if let Some(task) = created.get_mut(place) {
                 for blocker in blockers {
                     task.block_on(blocker, now)?;
+                }
+                if parent.is_some() {
+                    task.set_parent(parent, now)?;
                 }
             }
         }
@@ -589,6 +615,7 @@ fn proposed_task_from(task: ApprovedTask) -> Result<ProposedTask, ApplicationErr
         estimate_minutes: task.estimate_minutes,
         priority: task.priority,
         waits_for: task.waits_for,
+        part_of: task.part_of,
     })
 }
 
@@ -627,9 +654,11 @@ fn proposal_change_from(edit: ProposalEdit) -> Result<ProposalChange, Applicatio
         ProposalEdit::RemoveWait { task, waits_for } => {
             ProposalChange::RemoveWait { task, waits_for }
         }
-        ProposalEdit::AddTask { title } => ProposalChange::AddTask {
+        ProposalEdit::AddTask { title, part_of } => ProposalChange::AddTask {
             title: TaskTitle::parse(&title)?,
+            part_of,
         },
+        ProposalEdit::MakePartOf { task, part_of } => ProposalChange::MakePartOf { task, part_of },
         ProposalEdit::RemoveTask { task } => ProposalChange::RemoveTask { task },
         ProposalEdit::RemoveMember { member } => ProposalChange::RemoveMember { member },
         ProposalEdit::SetProfile {
@@ -722,9 +751,9 @@ pub fn message_after_approval(message: &str, approved: &Proposal) -> String {
             .to_owned(),
         String::new(),
         "This is what the manager approved. Before approving, the manager may have changed \
-         titles, sizes, owners and what waits for what, taken members or tasks out, and added \
-         tasks. What you proposed and do not find here was left out on purpose: do not propose \
-         it again unless the manager asks for it."
+         titles, sizes, owners, what waits for what and which task is a part of which, taken \
+         members or tasks out, and added tasks. What you proposed and do not find here was left \
+         out on purpose: do not propose it again unless the manager asks for it."
             .to_owned(),
     ];
     if !approved.members().is_empty() {
@@ -759,7 +788,8 @@ pub fn message_after_approval(message: &str, approved: &Proposal) -> String {
 }
 
 /// A task of an approved proposal in one line: its title, who does it, its
-/// size and the tasks it waits for, by their numbers in the list.
+/// size, the task it is a part of and the tasks it waits for, by their
+/// numbers in the list.
 fn approved_task_in_words(task: &ProposedTask) -> String {
     let owner = match &task.owner {
         None => "nobody".to_owned(),
@@ -769,6 +799,9 @@ fn approved_task_in_words(task: &ProposedTask) -> String {
     let mut details = vec![format!("given to {owner}")];
     if let Some(minutes) = task.estimate_minutes {
         details.push(format!("size {minutes} minutes"));
+    }
+    if let Some(whole) = task.part_of {
+        details.push(format!("part of {}", whole + 1));
     }
     if !task.waits_for.is_empty() {
         let numbers: Vec<String> = task
@@ -944,8 +977,13 @@ pub fn instructions_for_advisor(
                         .find(|member| member.id() == member_id)
                         .map_or_else(|| "nobody".to_owned(), |member| member.name().to_string()),
                 };
+                let whole = task
+                    .parent_id()
+                    .and_then(|parent_id| tasks.iter().find(|other| other.id() == parent_id))
+                    .map(|parent| format!(", part of {}", reference_of(project, parent)))
+                    .unwrap_or_default();
                 format!(
-                    "- {}: {} ({status}, given to {owner})",
+                    "- {}: {} ({status}, given to {owner}{whole})",
                     reference_of(project, task),
                     task.title()
                 )
@@ -983,6 +1021,11 @@ pub fn instructions_for_advisor(
             "- Where one discipline builds on the result of another, make that result a task of \
              its own with a name, for example \"Define the pin map\", and let the tasks that need \
              it wait for it.",
+            "- A task that is too large for one piece of work is split into parts: list each part \
+             as a task with part_of naming the task it belongs to. That task starts only once its \
+             parts are finished, so a part never waits for it. Do not split everything: most \
+             tasks have no parts. Only a task of the same proposal can have new parts; a task that \
+             exists cannot.",
             "- Plan what the manager asked for and nothing more.",
             "",
             "Rules:",

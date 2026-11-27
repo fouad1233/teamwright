@@ -105,6 +105,7 @@ const PROPOSAL: NewProposal = {
       estimateMinutes: 120,
       priority: 'high',
       waitsFor: [],
+      partOf: null,
     },
     {
       title: 'Choose the microcontroller and the sensors',
@@ -114,6 +115,7 @@ const PROPOSAL: NewProposal = {
       estimateMinutes: 240,
       priority: 'high',
       waitsFor: [0],
+      partOf: null,
     },
     {
       title: 'Define the pin map',
@@ -123,6 +125,7 @@ const PROPOSAL: NewProposal = {
       estimateMinutes: 120,
       priority: 'normal',
       waitsFor: [1],
+      partOf: null,
     },
     {
       title: 'Draw the schematic',
@@ -131,6 +134,7 @@ const PROPOSAL: NewProposal = {
       estimateMinutes: 480,
       priority: 'normal',
       waitsFor: [2],
+      partOf: null,
     },
     {
       title: 'Route the board',
@@ -140,6 +144,7 @@ const PROPOSAL: NewProposal = {
       estimateMinutes: 600,
       priority: 'normal',
       waitsFor: [3],
+      partOf: null,
     },
     {
       title: 'Define the outline of the board',
@@ -149,6 +154,7 @@ const PROPOSAL: NewProposal = {
       estimateMinutes: 60,
       priority: 'normal',
       waitsFor: [4],
+      partOf: null,
     },
     {
       title: 'Write the sensor drivers',
@@ -157,6 +163,7 @@ const PROPOSAL: NewProposal = {
       estimateMinutes: 480,
       priority: 'normal',
       waitsFor: [2],
+      partOf: null,
     },
     {
       title: 'Write the screens of the display',
@@ -165,6 +172,7 @@ const PROPOSAL: NewProposal = {
       estimateMinutes: 300,
       priority: 'normal',
       waitsFor: [6],
+      partOf: null,
     },
     {
       title: 'Write the Wi-Fi setup',
@@ -173,6 +181,7 @@ const PROPOSAL: NewProposal = {
       estimateMinutes: 360,
       priority: 'normal',
       waitsFor: [6],
+      partOf: null,
     },
     {
       title: 'Design the enclosure',
@@ -182,6 +191,7 @@ const PROPOSAL: NewProposal = {
       estimateMinutes: 480,
       priority: 'normal',
       waitsFor: [5],
+      partOf: null,
     },
     {
       title: 'Order the parts for three prototypes',
@@ -190,14 +200,45 @@ const PROPOSAL: NewProposal = {
       estimateMinutes: 60,
       priority: 'high',
       waitsFor: [4],
+      partOf: null,
     },
     {
       title: 'Assemble and test the prototype',
-      description: 'One device, assembled, running the firmware, in its enclosure.',
+      description:
+        'One device, assembled, running the firmware, in its enclosure. Its parts come first; what is left is fitting the board into the enclosure.',
       owner: { kind: 'manager' },
-      estimateMinutes: 360,
+      estimateMinutes: 60,
       priority: 'normal',
       waitsFor: [7, 8, 9, 10],
+      partOf: null,
+    },
+    {
+      title: 'Solder the first board',
+      description: 'One board with every part on it, checked for shorts before it is powered.',
+      owner: { kind: 'manager' },
+      estimateMinutes: 150,
+      priority: 'normal',
+      waitsFor: [10],
+      partOf: 11,
+    },
+    {
+      title: 'Load the firmware',
+      description: 'The firmware runs on the board, and the screen shows the first readings.',
+      owner: { kind: 'manager' },
+      estimateMinutes: 30,
+      priority: 'normal',
+      waitsFor: [12],
+      partOf: 11,
+    },
+    {
+      title: 'Compare the readings with a reference meter',
+      description:
+        'An hour side by side with a meter you trust. Done when the readings agree within the tolerance of the sensors.',
+      owner: { kind: 'manager' },
+      estimateMinutes: 120,
+      priority: 'normal',
+      waitsFor: [13],
+      partOf: 11,
     },
   ],
 };
@@ -275,7 +316,7 @@ export function scriptForAnswers(team: readonly string[] = []): Script {
       },
     ],
     endsAfter: 900,
-    answer: `${whom ?? 'I propose'} twelve tasks. Ordering the parts, assembling and testing are yours. Change what does not fit, and approve it when it does.`,
+    answer: `${whom ?? 'I propose'} twelve tasks, the last of them in three parts. Ordering the parts, assembling and testing are yours. Change what does not fit, and approve it when it does.`,
     tokens: { input: 30, output: 2240, cacheRead: 16_700, cacheWritten: 143_000 },
     // It reads the documents of the project before it proposes, which fills
     // most of its window.
@@ -335,6 +376,7 @@ export function withoutLastMember(proposal: NewProposal): NewProposal {
           const moved = newPlace.get(place);
           return moved === undefined ? [] : [moved];
         }),
+        partOf: task.partOf === null ? null : (newPlace.get(task.partOf) ?? null),
       })),
   };
 }

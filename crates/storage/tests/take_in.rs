@@ -1451,6 +1451,7 @@ fn a_proposal_changed_before_approval_reaches_the_other_computer_as_it_reads() {
         estimate_minutes: Some(60),
         priority: Priority::Normal,
         waits_for,
+        part_of: None,
     };
     let mut turn = Turn::start(
         conversation.id(),
@@ -1493,6 +1494,11 @@ fn a_proposal_changed_before_approval_reaches_the_other_computer_as_it_reads() {
         waits_for: 1,
     })
     .unwrap();
+    turn.change_proposal(ProposalChange::MakePartOf {
+        task: 0,
+        part_of: Some(1),
+    })
+    .unwrap();
     conversations.save_turn(&turn).unwrap();
     keep_in_step(&desk, &laptop);
 
@@ -1506,6 +1512,7 @@ fn a_proposal_changed_before_approval_reaches_the_other_computer_as_it_reads() {
         "Route the board in four layers"
     );
     assert!(proposal.tasks()[2].waits_for.is_empty());
+    assert_eq!(proposal.tasks()[0].part_of, Some(1));
     assert_eq!(laptop.everything(), desk.everything());
 }
 

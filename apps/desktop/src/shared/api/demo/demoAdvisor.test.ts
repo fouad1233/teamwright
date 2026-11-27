@@ -296,7 +296,7 @@ describe('planning with the Advisor in the DemoBackend', () => {
         'Mechanical engineer',
       ]);
       expect(proposal.members[0]).toMatchObject({ model: null, effort: 'high' });
-      expect(proposal.tasks).toHaveLength(12);
+      expect(proposal.tasks).toHaveLength(15);
       expect(proposal.tasks[0]).toMatchObject({
         title: 'Agree on what the device must do',
         owner: { kind: 'manager' },
@@ -305,6 +305,13 @@ describe('planning with the Advisor in the DemoBackend', () => {
         waitsFor: [],
       });
       expect(proposal.tasks[11]?.waitsFor).toEqual([7, 8, 9, 10]);
+      // The last task is split into three parts, which follow it.
+      expect(proposal.tasks.map((task) => task.partOf)).toEqual([
+        ...Array<null>(12).fill(null),
+        11,
+        11,
+        11,
+      ]);
     });
 
     it('creates nothing before the manager approves', async () => {
@@ -345,7 +352,9 @@ describe('planning with the Advisor in the DemoBackend', () => {
       expect(team[1]).toMatchObject({ model: 'sonnet', effort: null });
 
       const tasks = await backend.listTasks(project.id);
-      expect(tasks.map((task) => task.number)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+      expect(tasks.map((task) => task.number)).toEqual([
+        1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+      ]);
       expect(new Set(tasks.map((task) => task.statusId))).toEqual(
         new Set([project.statuses[0]?.id]),
       );
@@ -368,6 +377,18 @@ describe('planning with the Advisor in the DemoBackend', () => {
         tasks[10]?.id,
       ]);
       expect(tasks[2]?.description).toContain('Which pin goes to which part');
+      // The parts of the last task are its subtasks, each with its owner,
+      // its size and what it waits for.
+      expect(tasks.slice(0, 12).every((task) => task.parentId === null)).toBe(true);
+      expect(tasks.slice(12).map((task) => task.parentId)).toEqual(
+        Array<string | undefined>(3).fill(tasks[11]?.id),
+      );
+      expect(tasks[12]).toMatchObject({
+        title: 'Solder the first board',
+        assignee: { kind: 'manager' },
+        estimateMinutes: 150,
+      });
+      expect(tasks[13]?.blockedBy).toEqual([tasks[12]?.id]);
 
       expect(proposalOf(approved).approvedAt).toBe(environment.now().toISOString());
       expect(await backend.listConversationsWaiting()).toHaveLength(0);
@@ -410,11 +431,11 @@ describe('planning with the Advisor in the DemoBackend', () => {
 
       expect(await backend.listMembers(project.id)).toHaveLength(2);
       const tasks = await backend.listTasks(project.id);
-      expect(tasks).toHaveLength(11);
+      expect(tasks).toHaveLength(14);
       // The last task waited for the enclosure too. That task is gone.
       expect(tasks[10]?.blockedBy).toEqual([tasks[7]?.id, tasks[8]?.id, tasks[9]?.id]);
       expect(proposalOf(approved).members).toHaveLength(2);
-      expect(proposalOf(approved).tasks).toHaveLength(11);
+      expect(proposalOf(approved).tasks).toHaveLength(14);
     });
 
     it('gives a task to the member the team already has, and does not add that member again', async () => {
@@ -461,9 +482,12 @@ describe('planning with the Advisor in the DemoBackend', () => {
       await backend.approveProposal(conversation.id, unchanged(proposalOf(conversation)));
 
       const tasks = await backend.listTasks(project.id);
-      expect(tasks).toHaveLength(13);
+      expect(tasks).toHaveLength(16);
       expect(tasks[0]?.title).toBe('Something that was there');
-      expect(tasks[12]?.number).toBe(13);
+      expect(tasks[15]?.number).toBe(16);
+      // A part becomes a subtask of the task made for its whole, not of a
+      // task that was there.
+      expect(tasks[13]?.parentId).toBe(tasks[12]?.id);
     });
 
     it('refuses two members of the same name', async () => {
@@ -496,7 +520,7 @@ describe('planning with the Advisor in the DemoBackend', () => {
     it('refuses a task that waits for itself, or for a task that is not there', async () => {
       const conversation = await proposed();
 
-      for (const waitsFor of [[3], [12], [-1], [1.5]]) {
+      for (const waitsFor of [[3], [15], [-1], [1.5]]) {
         const changed = unchanged(proposalOf(conversation));
         const task = changed.tasks[3];
         if (task) {
@@ -580,7 +604,7 @@ describe('planning with the Advisor in the DemoBackend', () => {
       expect(nothingYet.code).toBe('no_proposal_open');
       expect(nothingYet.message).toBe('no proposal is open in this conversation');
       expect(twice.code).toBe('no_proposal_open');
-      expect(await backend.listTasks(project.id)).toHaveLength(12);
+      expect(await backend.listTasks(project.id)).toHaveLength(15);
     });
 
     it('takes a message of the manager as a wish for a change, and proposes again', async () => {
@@ -679,11 +703,89 @@ describe('planning with the Advisor in the DemoBackend', () => {
       expect(proposal.members[0]).toMatchObject({ model: 'haiku', effort: null });
       expect(proposal.members).toHaveLength(2);
       const titles = titlesOf(proposal);
-      expect(titles).toHaveLength(12);
+      expect(titles).toHaveLength(15);
       expect(titles).not.toContain('Design the enclosure');
-      expect(titles[11]).toBe('Write the manual');
+      expect(titles[14]).toBe('Write the manual');
       // The last task waited for 7, 8, 9 and 10; 9 is gone and 10 moved up.
       expect(proposal.tasks[10]?.waitsFor).toEqual([7, 8, 9]);
+      // Its parts moved up with it.
+      expect(proposal.tasks[11]?.partOf).toBe(10);
+    });
+
+    it('moves a part, adds a part, and releases the parts of a task that is taken out', async () => {
+      const conversation = await proposed();
+      const changes: ProposalChange[] = [
+        // "Load the firmware" becomes a task of its own.
+        { kind: 'makePartOf', task: 13, partOf: null },
+        // "Define the outline of the board" becomes a part of "Route the
+        // board", which it waits for no longer.
+        { kind: 'removeWait', task: 5, waitsFor: 4 },
+        { kind: 'makePartOf', task: 5, partOf: 4 },
+        { kind: 'addTask', title: 'Order a stencil', partOf: 4 },
+        // "Assemble and test the prototype" is taken out. Its two parts that
+        // are left stay, as tasks of their own.
+        { kind: 'removeTask', task: 11 },
+      ];
+      for (const change of changes) {
+        await backend.changeProposal(conversation.id, change);
+      }
+
+      const proposal = proposalOf(await now(conversation.id));
+      expect(
+        proposal.tasks.flatMap((task) => (task.partOf === null ? [] : [[task.title, task.partOf]])),
+      ).toEqual([
+        ['Define the outline of the board', 4],
+        ['Order a stencil', 4],
+      ]);
+      expect(proposal.tasks).toHaveLength(15);
+      expect(proposal.tasks[11]).toMatchObject({ title: 'Solder the first board', partOf: null });
+    });
+
+    it('refuses a part that waits for its task, or lies in a circle of parts', async () => {
+      const conversation = await proposed();
+      const before = proposalOf(conversation);
+      const refused = async (change: ProposalChange) => {
+        const error = await refusal(backend.changeProposal(conversation.id, change));
+        return [error.code, error.message];
+      };
+
+      expect(await refused({ kind: 'addWait', task: 13, waitsFor: 11 })).toEqual([
+        'rule_broken',
+        '"Load the firmware" cannot wait for "Assemble and test the prototype", which waits for it already',
+      ]);
+      expect(await refused({ kind: 'makePartOf', task: 11, partOf: 12 })).toEqual([
+        'rule_broken',
+        '"Assemble and test the prototype" cannot be a part of "Solder the first board", which is a part of it already',
+      ]);
+      // "Define the outline of the board" waits for "Route the board", so it
+      // cannot be one of its parts.
+      expect((await refused({ kind: 'makePartOf', task: 5, partOf: 4 }))[0]).toBe('rule_broken');
+      expect(await refused({ kind: 'addTask', title: 'Order a stencil', partOf: 15 })).toEqual([
+        'rule_broken',
+        'the proposal has no task 16',
+      ]);
+      expect(proposalOf(await now(conversation.id))).toEqual(before);
+
+      // The same rules hold for what is approved.
+      const circle = unchanged(before);
+      const assemble = circle.tasks[11];
+      if (assemble) {
+        assemble.partOf = 12;
+      }
+      const error = await refusal(backend.approveProposal(conversation.id, circle));
+      expect([error.code, error.message]).toEqual([
+        'rule_broken',
+        'the tasks of the proposal are parts of each other in a circle',
+      ]);
+      const nowhere = unchanged(before);
+      const solder = nowhere.tasks[12];
+      if (solder) {
+        solder.partOf = 15;
+      }
+      expect((await refusal(backend.approveProposal(conversation.id, nowhere))).message).toBe(
+        '"Solder the first board" is a part of a task that is not another task of the proposal',
+      );
+      expect(await backend.listTasks(project.id)).toHaveLength(0);
     });
 
     it('approves a changed proposal in one step as it then reads', async () => {
@@ -739,9 +841,9 @@ describe('planning with the Advisor in the DemoBackend', () => {
         'rule_broken',
         '"Define the pin map" waits for a task that is not another task of the proposal',
       ]);
-      expect(await refused({ kind: 'removeTask', task: 12 })).toEqual([
+      expect(await refused({ kind: 'removeTask', task: 15 })).toEqual([
         'rule_broken',
-        'the proposal has no task 13',
+        'the proposal has no task 16',
       ]);
       expect(
         await refused({ kind: 'giveTo', task: 0, owner: { kind: 'member', name: 'Electrician' } }),
@@ -836,6 +938,7 @@ describe('tasks that wait in a circle', () => {
     estimateMinutes: null,
     priority: 'normal' as const,
     waitsFor,
+    partOf: null,
   });
 
   it('finds none where every task waits only for earlier ones', () => {

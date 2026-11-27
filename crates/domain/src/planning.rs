@@ -10,6 +10,13 @@
 //! [`ProposalChange`] at a time: the title, the size and what a task waits
 //! for, and the rest of what a task or a member says.
 //!
+//! A proposed task may be a part of another task of the same proposal, as
+//! a subtask is a part of a task on the board. Parts follow the rules of
+//! subtasks: a part may have parts of its own, at any depth, and no task is
+//! a part of itself, directly or further down. A task with parts starts
+//! only once its parts are finished, so a part may not wait for the task it
+//! is a part of.
+//!
 //! The rules here are those about one proposal. Whether the owner of a task
 //! is somebody the project has needs the team, and is checked where the
 //! team is known.
@@ -263,6 +270,10 @@ pub struct ProposedTask {
     /// The tasks of the same proposal that must be finished first, by their
     /// places from 0.
     pub waits_for: Vec<usize>,
+    /// The task of the same proposal this one is a part of, by its place
+    /// from 0, or nothing for a task of its own. Approving makes it a
+    /// subtask of that task.
+    pub part_of: Option<usize>,
 }
 
 /// One change the manager makes to a proposal before approving it. Tasks
@@ -321,13 +332,25 @@ pub enum ProposalChange {
         waits_for: usize,
     },
     /// Adds a task of the manager's own at the end of the plan: given to
-    /// nobody, of normal priority, without a size, waiting for nothing.
+    /// nobody, of normal priority, without a size, waiting for nothing,
+    /// and a part of a task of the proposal if one is named.
     AddTask {
         /// What is to be done.
         title: TaskTitle,
+        /// The task it is a part of, or nothing for a task of its own.
+        part_of: Option<usize>,
     },
-    /// Takes a task out. No task waits for it any more, and the places of
-    /// the tasks after it move up by one.
+    /// Makes a task a part of another task of the proposal, or, with
+    /// nothing, a task of its own.
+    MakePartOf {
+        /// The task.
+        task: usize,
+        /// The task it is to be a part of, or nothing.
+        part_of: Option<usize>,
+    },
+    /// Takes a task out. No task waits for it any more, its parts take its
+    /// place under the task it was a part of (or become tasks of their
+    /// own), and the places of the tasks after it move up by one.
     RemoveTask {
         /// The task.
         task: usize,
@@ -453,6 +476,9 @@ impl Proposal {
     /// Returns an error if two members have the same name, whatever the
     /// capitals; if a task waits for itself or for a place that is not
     /// another task of the list; if tasks wait for each other in a circle;
+    /// if a task is a part of itself or of a place that is not another task
+    /// of the list; if tasks are parts of each other in a circle; if a part
+    /// waits for the task it is a part of, directly or through other tasks;
     /// or if nothing is left: no members and no tasks.
     pub fn check_approval(
         members: Vec<ProposedMember>,
@@ -468,7 +494,8 @@ impl Proposal {
     ///
     /// Returns an error if the proposal has been approved already, if the
     /// change names a task or a member the proposal does not have, if a
-    /// task is to wait for itself or for a task that waits for it, or if
+    /// task is to wait for itself or for a task that waits for it, if a
+    /// task is to be a part of itself or of one of its parts, or if
     /// nothing would be left: no members and no tasks.
     pub fn change(&mut self, change: ProposalChange) -> Result<(), DomainError> {
         if !self.is_open() {
@@ -496,24 +523,41 @@ impl Proposal {
                     .waits_for
                     .retain(|&earlier| earlier != waits_for);
             }
-            ProposalChange::AddTask { title } => tasks.push(ProposedTask {
-                title,
-                description: String::new(),
-                owner: None,
-                estimate_minutes: None,
-                priority: Priority::Normal,
-                waits_for: Vec::new(),
-            }),
+            ProposalChange::AddTask { title, part_of } => {
+                if let Some(whole) = part_of {
+                    task_at(&mut tasks, whole)?;
+                }
+                tasks.push(ProposedTask {
+                    title,
+                    description: String::new(),
+                    owner: None,
+                    estimate_minutes: None,
+                    priority: Priority::Normal,
+                    waits_for: Vec::new(),
+                    part_of,
+                });
+            }
+            ProposalChange::MakePartOf { task, part_of } => {
+                make_part_of(&mut tasks, task, part_of)?;
+            }
             ProposalChange::RemoveTask { task } => {
-                task_at(&mut tasks, task)?;
+                let whole = task_at(&mut tasks, task)?.part_of;
                 tasks.remove(task);
+                let moved_up = |place: usize| if place > task { place - 1 } else { place };
                 for other in &mut tasks {
                     other.waits_for = other
                         .waits_for
                         .iter()
                         .filter(|&&earlier| earlier != task)
-                        .map(|&earlier| if earlier > task { earlier - 1 } else { earlier })
+                        .map(|&earlier| moved_up(earlier))
                         .collect();
+                    // A part of the task that is taken out stays in the
+                    // plan, because its work is still to be done. It goes
+                    // where the task was.
+                    if other.part_of == Some(task) {
+                        other.part_of = whole;
+                    }
+                    other.part_of = other.part_of.map(moved_up);
                 }
             }
             ProposalChange::RemoveMember { member } => {
@@ -601,6 +645,14 @@ fn tidy_plan(
                     waits_for.push(earlier);
                 }
             }
+            if task
+                .part_of
+                .is_some_and(|whole| whole >= count || whole == place)
+            {
+                return Err(DomainError::PartOfNoOtherTask {
+                    title: task.title.to_string(),
+                });
+            }
             Ok(ProposedTask {
                 description: task.description.trim().to_owned(),
                 waits_for,
@@ -608,8 +660,14 @@ fn tidy_plan(
             })
         })
         .collect::<Result<Vec<_>, _>>()?;
-    if graph_of(&tasks).has_cycle() {
+    if waits_of(&tasks).has_cycle() {
         return Err(DomainError::TasksWaitInCircle);
+    }
+    if wholes_of(&tasks).has_cycle() {
+        return Err(DomainError::PartsInCircle);
+    }
+    if graph_of(&tasks).has_cycle() {
+        return Err(DomainError::PartsWaitInCircle);
     }
     if members.is_empty() && tasks.is_empty() {
         return Err(DomainError::EmptyProposal);
@@ -653,14 +711,61 @@ fn add_wait(tasks: &mut [ProposedTask], task: usize, waits_for: usize) -> Result
     Ok(())
 }
 
-/// What the tasks of a plan wait for, by their places, with the rule of
-/// the tasks of a project.
+/// Makes a task of a plan a part of another, or a task of its own, if that
+/// closes no circle.
+fn make_part_of(
+    tasks: &mut [ProposedTask],
+    task: usize,
+    part_of: Option<usize>,
+) -> Result<(), DomainError> {
+    let title = task_at(tasks, task)?.title.to_string();
+    if let Some(whole) = part_of {
+        let other = task_at(tasks, whole)?.title.to_string();
+        if whole == task {
+            return Err(DomainError::PartOfNoOtherTask { title });
+        }
+        // The task it is to be a part of must not lie below it already.
+        if wholes_of(tasks).would_create_cycle(task, whole) {
+            return Err(DomainError::PartWouldCloseCircle { title, other });
+        }
+    }
+    task_at(tasks, task)?.part_of = part_of;
+    Ok(())
+}
+
+/// What the tasks of a plan wait for, by their places: what each task
+/// says it waits for and, as on the board, a task with parts for its
+/// parts.
 fn graph_of(tasks: &[ProposedTask]) -> DependencyGraph<usize> {
+    DependencyGraph::from_waits(tasks.iter().enumerate().map(|(place, task)| {
+        let parts = tasks
+            .iter()
+            .enumerate()
+            .filter(move |(_, other)| other.part_of == Some(place))
+            .map(|(part, _)| part);
+        (place, task.waits_for.iter().copied().chain(parts))
+    }))
+}
+
+/// What the tasks of a plan wait for, by their places, as they say it,
+/// without their parts.
+fn waits_of(tasks: &[ProposedTask]) -> DependencyGraph<usize> {
     DependencyGraph::from_waits(
         tasks
             .iter()
             .enumerate()
             .map(|(place, task)| (place, task.waits_for.iter().copied())),
+    )
+}
+
+/// Which task of a plan each task is a part of, as a graph in which a part
+/// waits for its task, so that a circle of parts shows as a circle.
+fn wholes_of(tasks: &[ProposedTask]) -> DependencyGraph<usize> {
+    DependencyGraph::from_waits(
+        tasks
+            .iter()
+            .enumerate()
+            .map(|(place, task)| (place, task.part_of)),
     )
 }
 
@@ -725,6 +830,7 @@ mod tests {
             estimate_minutes: None,
             priority: Priority::Normal,
             waits_for,
+            part_of: None,
         }
     }
 
@@ -1142,6 +1248,7 @@ mod tests {
     fn a_task_of_the_managers_own_comes_at_the_end_and_waits_for_nothing() {
         let proposal = changed(ProposalChange::AddTask {
             title: title("Order the parts"),
+            part_of: None,
         })
         .unwrap();
 
@@ -1212,5 +1319,237 @@ mod tests {
             Err(DomainError::AlreadyApproved)
         );
         assert_eq!(proposal, before);
+    }
+
+    fn part(title: &str, part_of: usize) -> ProposedTask {
+        ProposedTask {
+            part_of: Some(part_of),
+            ..task(title, Vec::new())
+        }
+    }
+
+    /// A plan with parts: 0 has the parts 1 and 2, 2 has the part 3, and
+    /// 4 is a task of its own that waits for 0.
+    fn plan_with_parts() -> Proposal {
+        Proposal::new(
+            "A device.",
+            Vec::new(),
+            vec![
+                task("Build the board", Vec::new()),
+                part("Draw the schematic", 0),
+                part("Route the board", 0),
+                part("Check the clearances", 2),
+                task("Write the manual", vec![0]),
+            ],
+        )
+        .unwrap()
+    }
+
+    fn parts_changed(change: ProposalChange) -> Result<Proposal, DomainError> {
+        let mut proposal = plan_with_parts();
+        let before = proposal.clone();
+        let result = proposal.change(change);
+        if result.is_err() {
+            assert_eq!(proposal, before);
+        }
+        result.map(|()| proposal)
+    }
+
+    fn wholes(proposal: &Proposal) -> Vec<Option<usize>> {
+        proposal.tasks().iter().map(|task| task.part_of).collect()
+    }
+
+    #[test]
+    fn a_task_can_be_a_part_of_another_task_and_a_part_can_have_parts() {
+        let proposal = plan_with_parts();
+
+        assert_eq!(wholes(&proposal), [None, Some(0), Some(0), Some(2), None]);
+    }
+
+    #[test]
+    fn a_task_is_a_part_only_of_another_task_of_the_proposal() {
+        for whole in [1, 2] {
+            let error = Proposal::check_approval(
+                Vec::new(),
+                vec![
+                    task("Build the board", Vec::new()),
+                    part("Route the board", whole),
+                ],
+            )
+            .unwrap_err();
+            assert_eq!(
+                error.to_string(),
+                "\"Route the board\" is a part of a task that is not another task of the proposal"
+            );
+        }
+    }
+
+    #[test]
+    fn tasks_are_not_parts_of_each_other_in_a_circle() {
+        let error = Proposal::check_approval(
+            Vec::new(),
+            vec![
+                part("Build the board", 2),
+                part("Draw the schematic", 0),
+                part("Route the board", 1),
+            ],
+        )
+        .unwrap_err();
+
+        assert_eq!(error, DomainError::PartsInCircle);
+        assert_eq!(
+            error.to_string(),
+            "the tasks of the proposal are parts of each other in a circle"
+        );
+    }
+
+    #[test]
+    fn a_part_does_not_wait_for_the_task_it_is_a_part_of() {
+        // The task waits for its parts, as on the board, so a part that
+        // waits for it, directly or through another task, waits forever.
+        for waits in [vec![0], vec![2]] {
+            let error = Proposal::check_approval(
+                Vec::new(),
+                vec![
+                    task("Build the board", Vec::new()),
+                    ProposedTask {
+                        part_of: Some(0),
+                        ..task("Route the board", waits)
+                    },
+                    task("Order the parts", vec![0]),
+                ],
+            )
+            .unwrap_err();
+            assert_eq!(error, DomainError::PartsWaitInCircle);
+        }
+        // A part may wait for another part of the same task.
+        assert!(
+            Proposal::check_approval(
+                Vec::new(),
+                vec![
+                    task("Build the board", Vec::new()),
+                    part("Draw the schematic", 0),
+                    ProposedTask {
+                        part_of: Some(0),
+                        ..task("Route the board", vec![1])
+                    },
+                ],
+            )
+            .is_ok()
+        );
+    }
+
+    #[test]
+    fn a_part_can_be_moved_to_another_task_or_made_a_task_of_its_own() {
+        let moved = parts_changed(ProposalChange::MakePartOf {
+            task: 3,
+            part_of: Some(4),
+        })
+        .unwrap();
+        assert_eq!(wholes(&moved), [None, Some(0), Some(0), Some(4), None]);
+
+        let alone = parts_changed(ProposalChange::MakePartOf {
+            task: 1,
+            part_of: None,
+        })
+        .unwrap();
+        assert_eq!(wholes(&alone), [None, None, Some(0), Some(2), None]);
+    }
+
+    #[test]
+    fn a_task_is_not_made_a_part_of_itself_or_of_its_own_parts() {
+        assert_eq!(
+            parts_changed(ProposalChange::MakePartOf {
+                task: 0,
+                part_of: Some(3),
+            })
+            .unwrap_err()
+            .to_string(),
+            "\"Build the board\" cannot be a part of \"Check the clearances\", which is a part of \
+             it already"
+        );
+        assert_eq!(
+            parts_changed(ProposalChange::MakePartOf {
+                task: 2,
+                part_of: Some(2),
+            }),
+            Err(DomainError::PartOfNoOtherTask {
+                title: "Route the board".to_owned()
+            })
+        );
+        assert_eq!(
+            parts_changed(ProposalChange::MakePartOf {
+                task: 2,
+                part_of: Some(5),
+            }),
+            Err(DomainError::NoSuchProposedTask { number: 6 })
+        );
+        // A task of its own that waits for the whole cannot become a part
+        // of it: the whole would wait for it in turn.
+        assert_eq!(
+            parts_changed(ProposalChange::MakePartOf {
+                task: 4,
+                part_of: Some(0),
+            }),
+            Err(DomainError::PartsWaitInCircle)
+        );
+    }
+
+    #[test]
+    fn a_part_does_not_wait_for_its_task_once_it_is_one() {
+        assert_eq!(
+            parts_changed(ProposalChange::AddWait {
+                task: 3,
+                waits_for: 0,
+            })
+            .unwrap_err()
+            .to_string(),
+            "\"Check the clearances\" cannot wait for \"Build the board\", which waits for it \
+             already"
+        );
+    }
+
+    #[test]
+    fn taking_a_task_out_leaves_its_parts_where_it_was() {
+        let proposal = parts_changed(ProposalChange::RemoveTask { task: 2 }).unwrap();
+
+        let titles: Vec<_> = proposal
+            .tasks()
+            .iter()
+            .map(|task| task.title.as_str())
+            .collect();
+        assert_eq!(
+            titles,
+            [
+                "Build the board",
+                "Draw the schematic",
+                "Check the clearances",
+                "Write the manual"
+            ]
+        );
+        assert_eq!(wholes(&proposal), [None, Some(0), Some(0), None]);
+        assert_eq!(proposal.tasks()[3].waits_for, [0]);
+
+        let top = parts_changed(ProposalChange::RemoveTask { task: 0 }).unwrap();
+        assert_eq!(wholes(&top), [None, None, Some(1), None]);
+        assert!(top.tasks()[3].waits_for.is_empty());
+    }
+
+    #[test]
+    fn a_task_of_the_managers_own_can_be_added_as_a_part() {
+        let proposal = parts_changed(ProposalChange::AddTask {
+            title: title("Order the stencil"),
+            part_of: Some(2),
+        })
+        .unwrap();
+
+        assert_eq!(proposal.tasks()[5], part("Order the stencil", 2));
+        assert_eq!(
+            parts_changed(ProposalChange::AddTask {
+                title: title("Order the stencil"),
+                part_of: Some(9),
+            }),
+            Err(DomainError::NoSuchProposedTask { number: 10 })
+        );
     }
 }

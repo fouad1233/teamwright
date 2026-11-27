@@ -232,7 +232,12 @@ fn plan() -> PlanProposal {
             estimate_minutes: Some(minutes),
             priority,
             waits_for: waits.to_vec(),
+            part_of: None,
         }
+    };
+    let part = |whole: usize, task: PlannedTask| PlannedTask {
+        part_of: Some(whole),
+        ..task
     };
     let normal = Priority::Normal;
     let high = Priority::High;
@@ -347,9 +352,35 @@ fn plan() -> PlanProposal {
                 "Assemble and test the prototype",
                 "One device.",
                 None,
-                360,
+                60,
                 normal,
                 &[7, 8, 9, 10],
+            ),
+            part(
+                11,
+                task(
+                    "Solder the first board",
+                    "One board.",
+                    None,
+                    150,
+                    normal,
+                    &[10],
+                ),
+            ),
+            part(
+                11,
+                task("Load the firmware", "It starts.", None, 30, normal, &[12]),
+            ),
+            part(
+                11,
+                task(
+                    "Compare the readings with a reference meter",
+                    "Within the tolerance.",
+                    None,
+                    120,
+                    normal,
+                    &[13],
+                ),
             ),
         ],
     }
@@ -383,6 +414,9 @@ fn without_last_member(plan: &PlanProposal) -> PlanProposal {
                     .iter()
                     .filter_map(|place| new_place.get(place).copied())
                     .collect(),
+                part_of: task
+                    .part_of
+                    .and_then(|place| new_place.get(&place).copied()),
                 ..task.clone()
             })
             .collect(),
@@ -416,6 +450,7 @@ fn unchanged(proposal: &Proposal) -> ApprovedProposal {
                 estimate_minutes: task.estimate_minutes,
                 priority: task.priority,
                 waits_for: task.waits_for.clone(),
+                part_of: task.part_of,
             })
             .collect(),
     }
@@ -993,7 +1028,7 @@ fn ends_the_turn_after_the_answers_with_a_team_and_a_plan_that_are_not_approved(
     assert_eq!(names, [HARDWARE, FIRMWARE, MECHANICAL]);
     assert_eq!(proposal.members()[0].model, None);
     assert_eq!(proposal.members()[0].effort, Some(Effort::High));
-    assert_eq!(proposal.tasks().len(), 12);
+    assert_eq!(proposal.tasks().len(), 15);
     let first = &proposal.tasks()[0];
     assert_eq!(first.title.as_str(), "Agree on what the device must do");
     assert_eq!(first.owner, Some(ProposedOwner::Manager));
@@ -1001,6 +1036,10 @@ fn ends_the_turn_after_the_answers_with_a_team_and_a_plan_that_are_not_approved(
     assert_eq!(first.priority, Priority::High);
     assert!(first.waits_for.is_empty());
     assert_eq!(proposal.tasks()[11].waits_for, [7, 8, 9, 10]);
+    // The last task is split into three parts, which follow it.
+    let wholes: Vec<_> = proposal.tasks().iter().map(|task| task.part_of).collect();
+    assert_eq!(wholes[..12], [None; 12]);
+    assert_eq!(wholes[12..], [Some(11); 3]);
 }
 
 #[test]
@@ -1058,7 +1097,7 @@ fn adds_the_members_to_the_team_and_creates_the_tasks_when_it_is_approved() {
 
     let tasks = planning.tasks();
     let numbers: Vec<u32> = tasks.iter().map(Task::number).collect();
-    assert_eq!(numbers, (1..=12).collect::<Vec<_>>());
+    assert_eq!(numbers, (1..=15).collect::<Vec<_>>());
     let first_status = planning.project.workflow().statuses()[0].id();
     assert!(tasks.iter().all(|task| task.status_id() == first_status));
     // The plan lands in the first area of the project, the one it started
@@ -1090,6 +1129,21 @@ fn adds_the_members_to_the_team_and_creates_the_tasks_when_it_is_approved() {
     let mut expected = vec![tasks[7].id(), tasks[8].id(), tasks[9].id(), tasks[10].id()];
     expected.sort();
     assert_eq!(last_waits_for, expected);
+    // The parts of the last task are its subtasks, each with its owner,
+    // its size and what it waits for.
+    assert!(tasks[..12].iter().all(|task| task.parent_id().is_none()));
+    assert!(
+        tasks[12..]
+            .iter()
+            .all(|task| task.parent_id() == Some(tasks[11].id()))
+    );
+    assert_eq!(tasks[12].title().as_str(), "Solder the first board");
+    assert_eq!(tasks[12].assignee(), Some(Assignee::Manager));
+    assert_eq!(tasks[12].estimate_minutes(), Some(150));
+    assert_eq!(
+        tasks[13].blocked_by().iter().copied().collect::<Vec<_>>(),
+        [tasks[12].id()]
+    );
     assert!(
         tasks[2]
             .description()
@@ -1189,7 +1243,7 @@ fn approves_what_the_manager_left_of_it_and_keeps_that_on_record() {
 
     assert_eq!(planning.members().len(), 2);
     let tasks = planning.tasks();
-    assert_eq!(tasks.len(), 11);
+    assert_eq!(tasks.len(), 14);
     // The last task waited for the enclosure too. That task is gone.
     let mut waits: Vec<_> = tasks[10].blocked_by().iter().copied().collect();
     waits.sort();
@@ -1197,7 +1251,7 @@ fn approves_what_the_manager_left_of_it_and_keeps_that_on_record() {
     expected.sort();
     assert_eq!(waits, expected);
     assert_eq!(proposal_of(&recorded).members().len(), 2);
-    assert_eq!(proposal_of(&recorded).tasks().len(), 11);
+    assert_eq!(proposal_of(&recorded).tasks().len(), 14);
 }
 
 #[test]
@@ -1249,9 +1303,12 @@ fn adds_to_the_tasks_the_project_already_has() {
         .unwrap();
 
     let tasks = planning.tasks();
-    assert_eq!(tasks.len(), 13);
+    assert_eq!(tasks.len(), 16);
     assert_eq!(tasks[0].title().as_str(), "Something that was there");
-    assert_eq!(tasks[12].number(), 13);
+    assert_eq!(tasks[15].number(), 16);
+    // A part becomes a subtask of the task made for its whole, not of a
+    // task that was there.
+    assert_eq!(tasks[13].parent_id(), Some(tasks[12].id()));
 }
 
 #[test]
@@ -1294,7 +1351,7 @@ fn refuses_a_task_that_waits_for_itself_or_for_a_task_that_is_not_there() {
     let planning = planning();
     let conversation = planning.proposed();
 
-    for waits_for in [vec![3], vec![12], vec![usize::MAX]] {
+    for waits_for in [vec![3], vec![15], vec![usize::MAX]] {
         let mut changed = unchanged(proposal_of(&conversation));
         changed.tasks[3].waits_for = waits_for;
         let (code, message) = refusal(planning.approve(&conversation, changed));
@@ -1384,7 +1441,7 @@ fn refuses_to_approve_twice_and_where_nothing_was_proposed() {
         "no proposal is open in this conversation"
     );
     assert_eq!(twice, "no_proposal_open");
-    assert_eq!(planning.tasks().len(), 12);
+    assert_eq!(planning.tasks().len(), 15);
 }
 
 // Changing a proposal before approving it
@@ -1487,6 +1544,7 @@ fn changes_the_rest_of_a_task_and_of_a_member_and_adds_and_takes_out_tasks() {
         },
         ProposalEdit::AddTask {
             title: "Write the manual".to_owned(),
+            part_of: None,
         },
         // "Design the enclosure", which nothing but the last task waits for.
         ProposalEdit::RemoveTask { task: 9 },
@@ -1514,11 +1572,170 @@ fn changes_the_rest_of_a_task_and_of_a_member_and_adds_and_takes_out_tasks() {
     assert_eq!(proposal.members()[0].effort, None);
     assert_eq!(proposal.members().len(), 2);
     let titles = titles_of(proposal);
-    assert_eq!(titles.len(), 12);
+    assert_eq!(titles.len(), 15);
     assert!(!titles.contains(&"Design the enclosure".to_owned()));
-    assert_eq!(titles[11], "Write the manual");
+    assert_eq!(titles[14], "Write the manual");
     // The last task waited for 7, 8, 9 and 10; 9 is gone and 10 moved up.
     assert_eq!(proposal.tasks()[10].waits_for, [7, 8, 9]);
+    // Its parts moved up with it.
+    assert_eq!(proposal.tasks()[11].part_of, Some(10));
+}
+
+#[test]
+fn moves_a_part_adds_a_part_and_releases_the_parts_of_a_task_that_is_taken_out() {
+    let planning = planning();
+    let conversation = planning.proposed();
+    let edits = [
+        // "Load the firmware" becomes a task of its own.
+        ProposalEdit::MakePartOf {
+            task: 13,
+            part_of: None,
+        },
+        // "Define the outline of the board" becomes a part of "Route the
+        // board", which it waits for no longer.
+        ProposalEdit::RemoveWait {
+            task: 5,
+            waits_for: 4,
+        },
+        ProposalEdit::MakePartOf {
+            task: 5,
+            part_of: Some(4),
+        },
+        ProposalEdit::AddTask {
+            title: "Order a stencil".to_owned(),
+            part_of: Some(4),
+        },
+        // "Assemble and test the prototype" is taken out. Its two parts that
+        // are left stay, as tasks of their own.
+        ProposalEdit::RemoveTask { task: 11 },
+    ];
+    for edit in edits {
+        planning.change(&conversation, edit).unwrap();
+    }
+
+    let proposal = planning.now(conversation.conversation.id());
+    let proposal = proposal_of(&proposal);
+    let wholes: Vec<_> = proposal
+        .tasks()
+        .iter()
+        .map(|task| (task.title.to_string(), task.part_of))
+        .filter(|(_, whole)| whole.is_some())
+        .collect();
+    assert_eq!(
+        wholes,
+        [
+            ("Define the outline of the board".to_owned(), Some(4)),
+            ("Order a stencil".to_owned(), Some(4)),
+        ]
+    );
+    assert_eq!(proposal.tasks().len(), 15);
+    assert_eq!(
+        proposal.tasks()[11].title.as_str(),
+        "Solder the first board"
+    );
+    assert_eq!(proposal.tasks()[11].part_of, None);
+}
+
+#[test]
+fn refuses_a_part_that_waits_for_its_task_or_lies_in_a_circle_of_parts() {
+    let planning = planning();
+    let conversation = planning.proposed();
+    let before = proposal_of(&conversation).clone();
+    let refused = |edit| refusal(planning.change(&conversation, edit));
+
+    assert_eq!(
+        refused(ProposalEdit::AddWait {
+            task: 13,
+            waits_for: 11
+        }),
+        (
+            "rule_broken".to_owned(),
+            "\"Load the firmware\" cannot wait for \"Assemble and test the prototype\", which \
+             waits for it already"
+                .to_owned()
+        )
+    );
+    assert_eq!(
+        refused(ProposalEdit::MakePartOf {
+            task: 11,
+            part_of: Some(12)
+        }),
+        (
+            "rule_broken".to_owned(),
+            "\"Assemble and test the prototype\" cannot be a part of \"Solder the first board\", \
+             which is a part of it already"
+                .to_owned()
+        )
+    );
+    // "Define the outline of the board" waits for "Route the board", so it
+    // cannot be one of its parts.
+    assert_eq!(
+        refused(ProposalEdit::MakePartOf {
+            task: 5,
+            part_of: Some(4)
+        })
+        .0,
+        "rule_broken"
+    );
+    assert_eq!(
+        refused(ProposalEdit::AddTask {
+            title: "Order a stencil".to_owned(),
+            part_of: Some(15)
+        }),
+        (
+            "rule_broken".to_owned(),
+            "the proposal has no task 16".to_owned()
+        )
+    );
+    assert_eq!(
+        proposal_of(&planning.now(conversation.conversation.id())),
+        &before
+    );
+
+    // The same rules hold for what is approved.
+    let mut circle = unchanged(&before);
+    circle.tasks[11].part_of = Some(12);
+    let (code, message) = refusal(planning.approve(&conversation, circle));
+    assert_eq!(code, "rule_broken");
+    assert_eq!(
+        message,
+        "the tasks of the proposal are parts of each other in a circle"
+    );
+    let mut nowhere = unchanged(&before);
+    nowhere.tasks[12].part_of = Some(15);
+    assert_eq!(
+        refusal(planning.approve(&conversation, nowhere)).1,
+        "\"Solder the first board\" is a part of a task that is not another task of the proposal"
+    );
+    assert!(planning.tasks().is_empty());
+}
+
+#[test]
+fn tells_the_advisor_which_approved_task_is_a_part_of_which() {
+    let planning = planning();
+    let conversation = planning.proposed();
+    planning
+        .approve(&conversation, unchanged(proposal_of(&conversation)))
+        .unwrap();
+
+    planning
+        .work
+        .reply(conversation.conversation.id(), "Add a battery.")
+        .unwrap();
+
+    let requests = planning.runtime.requests();
+    let request = requests.last().unwrap();
+    assert!(request.prompt.contains(
+        "13. Solder the first board (given to the manager, size 150 minutes, part of 12, waits \
+         for 11)"
+    ));
+    assert!(request.prompt.contains("which task is a part of which"));
+    // The tasks that exist are listed with the task they are a part of.
+    let instructions = request.extra_instructions.as_deref().unwrap_or_default();
+    assert!(instructions.contains(
+        "- AQN-13: Solder the first board (To do, given to the manager, part of AQN-12)"
+    ));
+    assert!(instructions.contains("Only a task of the same proposal can have new parts"));
 }
 
 #[test]
@@ -1654,10 +1871,10 @@ fn refuses_a_change_that_breaks_a_rule_and_leaves_the_proposal_as_it_was() {
         )
     );
     assert_eq!(
-        refused(ProposalEdit::RemoveTask { task: 12 }),
+        refused(ProposalEdit::RemoveTask { task: 15 }),
         (
             "rule_broken".to_owned(),
-            "the proposal has no task 13".to_owned()
+            "the proposal has no task 16".to_owned()
         )
     );
     assert_eq!(

@@ -217,7 +217,8 @@ const INTERVIEW_DESCRIPTION: &str = "Ask the manager what you need to know befor
 const PROPOSE_PLAN_DESCRIPTION: &str = "Propose the team and the plan of the project to the \
      manager, who can change them and approves them. Nothing is created before the manager \
      approves. If the project has members or tasks already, propose only the members and the \
-     tasks that are to be added. After calling it, end your turn.";
+     tasks that are to be added. A task that is too large for one piece of work may be split \
+     into parts with part_of; most tasks have none. After calling it, end your turn.";
 
 /// What the tool `publish_handoff` tells the model it is for.
 const PUBLISH_HANDOFF_DESCRIPTION: &str = "Hand the result of your task over to whoever builds \
@@ -649,7 +650,11 @@ fn interview_question_from(
 /// owner: "manager", a proposed member or a member of the team, whatever
 /// the capitals. A task waits only for other tasks of the list, counted
 /// from 1 by the model and from 0 in the plan that comes out, and the
-/// tasks do not wait for each other in a circle. An estimate in hours
+/// tasks do not wait for each other in a circle. A task may be a part of
+/// another task of the list, counted the same way, at any depth, as a
+/// subtask is on the board; no task is a part of itself, directly or
+/// further down, and a part does not wait for the task it is a part of,
+/// which starts only once its parts are finished. An estimate in hours
 /// becomes minutes, and the priority is normal unless it is said.
 /// Whitespace around the texts is removed. Names and titles follow the
 /// rules of members and tasks.
@@ -716,6 +721,21 @@ pub fn proposal_from(arguments: &Value, team: &[String]) -> Result<PlanProposal,
         return Err(
             "The tasks wait for each other in a circle, so none of them could start. Let a task \
              wait only for tasks that do not wait for it."
+                .to_owned(),
+        );
+    }
+    if parts_in_circle(&tasks) {
+        return Err(
+            "The tasks are parts of each other in a circle. A part belongs to a task that is not \
+             one of its own parts."
+                .to_owned(),
+        );
+    }
+    if parts_wait_in_circle(&tasks) {
+        return Err(
+            "A part waits for the task it is a part of, directly or through other tasks. A task \
+             with parts starts only once its parts are finished, so none of them could start. \
+             Let a part wait only for tasks outside its own task, or for other parts."
                 .to_owned(),
         );
     }
@@ -842,6 +862,21 @@ fn planned_task_from(
         }
     }
 
+    let part_of = match task.get("part_of") {
+        None | Some(Value::Null) => None,
+        Some(value) => Some(
+            place_from(value, count)
+                .filter(|whole| *whole + 1 != place)
+                .ok_or_else(|| {
+                    format!(
+                        "Task {place} is a part of {value}, which is not another task of the list. \
+                         Give part_of as the place of the task it belongs to, counted from 1, or \
+                         leave it out."
+                    )
+                })?,
+        ),
+    };
+
     Ok(PlannedTask {
         title,
         description: optional_text(task, "description")?.unwrap_or_default(),
@@ -849,6 +884,7 @@ fn planned_task_from(
         estimate_minutes,
         priority,
         waits_for,
+        part_of,
     })
 }
 
@@ -870,6 +906,32 @@ fn wait_in_circle(tasks: &[PlannedTask]) -> bool {
             .enumerate()
             .map(|(place, task)| (place, task.waits_for.iter().copied())),
     )
+    .has_cycle()
+}
+
+/// Whether some tasks are parts of each other in a circle. A part is read
+/// as waiting for its task, so that a circle of parts is a circle of waits.
+fn parts_in_circle(tasks: &[PlannedTask]) -> bool {
+    DependencyGraph::from_waits(
+        tasks
+            .iter()
+            .enumerate()
+            .map(|(place, task)| (place, task.part_of)),
+    )
+    .has_cycle()
+}
+
+/// Whether some tasks wait for each other in a circle once a task with
+/// parts waits for its parts, as it does on the board.
+fn parts_wait_in_circle(tasks: &[PlannedTask]) -> bool {
+    DependencyGraph::from_waits(tasks.iter().enumerate().map(|(place, task)| {
+        let parts = tasks
+            .iter()
+            .enumerate()
+            .filter(move |(_, other)| other.part_of == Some(place))
+            .map(|(part, _)| part);
+        (place, task.waits_for.iter().copied().chain(parts))
+    }))
     .has_cycle()
 }
 
@@ -1784,6 +1846,17 @@ fn propose_plan_tool() -> Value {
                                 "items": { "type": "integer" },
                                 "description": "The tasks that must be finished first, by \
                                                 their places in this list, counted from 1."
+                            },
+                            "part_of": {
+                                "type": "integer",
+                                "description": "Only for a part of a larger task: the place \
+                                                of the task in this list that it is a part \
+                                                of, counted from 1. A part can have parts of \
+                                                its own. The larger task starts only once its \
+                                                parts are finished, so a part never waits for \
+                                                it. Leave it out for a task of its own, as \
+                                                most tasks are. It names a task of this list, \
+                                                never a task that exists."
                             }
                         }
                     }
@@ -1850,7 +1923,14 @@ mod tests {
                     "waits_for": [1, 1]
                 },
                 { "title": "Write the drivers", "owner": "Firmware engineer", "waits_for": [2] },
-                { "title": "Design the enclosure", "owner": "Mechanical engineer", "waits_for": [1] }
+                { "title": "Design the enclosure", "owner": "Mechanical engineer", "waits_for": [1] },
+                { "title": "Draw the outline", "owner": "Mechanical engineer", "part_of": 4 },
+                {
+                    "title": "Check the fit",
+                    "owner": "Mechanical engineer",
+                    "part_of": 4,
+                    "waits_for": [5]
+                }
             ]
         })
     }
@@ -2202,6 +2282,10 @@ mod tests {
             tasks[3].owner,
             PlannedOwner::Member("Mechanical engineer".to_owned())
         );
+        // A part names the task it belongs to, counted from 0 here too.
+        let wholes: Vec<_> = tasks.iter().map(|task| task.part_of).collect();
+        assert_eq!(wholes, [None, None, None, None, Some(3), Some(3)]);
+        assert_eq!(tasks[5].waits_for, [4]);
     }
 
     #[test]
@@ -2271,7 +2355,7 @@ mod tests {
             refused(&|arguments| arguments["tasks"][0]["priority"] = json!("soon")),
             "The priority of task 1 is one of low, normal, high and urgent."
         );
-        for wrong in [json!([3]), json!([5]), json!([0]), json!([1.5])] {
+        for wrong in [json!([3]), json!([7]), json!([0]), json!([1.5])] {
             assert!(
                 refused(&|arguments| arguments["tasks"][2]["waits_for"] = wrong.clone())
                     .ends_with("which is not another task of the list."),
@@ -2281,6 +2365,40 @@ mod tests {
         assert!(
             refused(&|arguments| arguments["tasks"][0]["waits_for"] = json!([3]))
                 .starts_with("The tasks wait for each other in a circle")
+        );
+        for wrong in [
+            json!(5),
+            json!(7),
+            json!(0),
+            json!(1.5),
+            json!("4"),
+            json!([4]),
+        ] {
+            assert_eq!(
+                refused(&|arguments| arguments["tasks"][4]["part_of"] = wrong.clone()),
+                format!(
+                    "Task 5 is a part of {wrong}, which is not another task of the list. Give \
+                     part_of as the place of the task it belongs to, counted from 1, or leave it \
+                     out."
+                )
+            );
+        }
+        assert!(
+            refused(&|arguments| arguments["tasks"][3]["part_of"] = json!(6))
+                .starts_with("The tasks are parts of each other in a circle.")
+        );
+        assert!(
+            refused(&|arguments| arguments["tasks"][5]["waits_for"] = json!([4]))
+                .starts_with("A part waits for the task it is a part of")
+        );
+        // Through another task: the part waits for a task that waits for
+        // the task it is a part of.
+        assert!(
+            refused(&|arguments| {
+                arguments["tasks"][1]["waits_for"] = json!([4]);
+                arguments["tasks"][5]["waits_for"] = json!([2]);
+            })
+            .starts_with("A part waits for the task it is a part of")
         );
     }
 

@@ -76,6 +76,7 @@ function task(title: string, overrides: Partial<ProposedTask> = {}): ProposedTas
     estimateMinutes: null,
     priority: 'normal',
     waitsFor: [],
+    partOf: null,
     ...overrides,
   };
 }

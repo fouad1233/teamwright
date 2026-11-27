@@ -202,6 +202,36 @@ pub enum DomainError {
         other: String,
     },
 
+    /// A task of a proposal was a part of itself or of a place that is not
+    /// a task of the proposal.
+    #[error("\"{title}\" is a part of a task that is not another task of the proposal")]
+    PartOfNoOtherTask {
+        /// The title of the task.
+        title: String,
+    },
+
+    /// Tasks of a proposal were parts of each other in a circle.
+    #[error("the tasks of the proposal are parts of each other in a circle")]
+    PartsInCircle,
+
+    /// Tasks of a proposal waited for each other in a circle once a task
+    /// with parts waits for its parts, as it does on the board.
+    #[error(
+        "the tasks of the proposal wait for each other in a circle: a task with parts starts only \
+         once its parts are finished, so a part cannot wait for it"
+    )]
+    PartsWaitInCircle,
+
+    /// A task of a proposal was to be made a part of one of its own parts,
+    /// directly or further down.
+    #[error("\"{title}\" cannot be a part of \"{other}\", which is a part of it already")]
+    PartWouldCloseCircle {
+        /// The title of the task that was to be a part.
+        title: String,
+        /// The title of the task it was to be a part of.
+        other: String,
+    },
+
     /// A proposal was to be approved in a turn that proposed nothing.
     #[error("the turn proposed nothing")]
     NothingProposed,

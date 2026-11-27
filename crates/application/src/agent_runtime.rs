@@ -841,6 +841,9 @@ pub struct PlannedTask {
     /// The tasks of the same plan that must be finished first, by their
     /// places, counted from 0.
     pub waits_for: Vec<usize>,
+    /// The task of the same plan this one is a part of, by its place,
+    /// counted from 0, or nothing for a task of its own.
+    pub part_of: Option<usize>,
 }
 
 /// Who a proposed task is given to.

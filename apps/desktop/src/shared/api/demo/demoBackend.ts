@@ -138,6 +138,8 @@ import {
   openInterviewOf,
   openProposalOf,
   proposalAfter,
+  partsInCircle,
+  partsWaitInCircle,
   waitInCircle,
 } from './planning';
 import { PROJECT_TEMPLATES, checkedLimit, requireTemplate, statusLoads } from './templates';
@@ -1944,6 +1946,9 @@ export class DemoBackend implements Backend {
         const task = created[place];
         if (task) {
           task.blockedBy = proposed.waitsFor.flatMap((earlier) => created[earlier]?.id ?? []);
+          // A part becomes a subtask of the task created for its whole,
+          // which may come after it in the plan.
+          task.parentId = proposed.partOf === null ? null : (created[proposed.partOf]?.id ?? null);
         }
       }
 
@@ -4647,7 +4652,9 @@ function tidyProposedMembers(members: readonly ProposedMember[]): ProposedMember
  * Checks the tasks of a proposal that the manager approves, and returns
  * them tidied. A task that is given to a member names one of `known`: the
  * members of the team and of the proposal. A task waits only for other
- * tasks of the proposal, and the tasks do not wait in a circle.
+ * tasks of the proposal, and the tasks do not wait in a circle. A task is a
+ * part only of another task of the proposal, the tasks are not parts of
+ * each other in a circle, and a part does not wait for its task.
  */
 function tidyProposedTasks(
   tasks: readonly ProposedTask[],
@@ -4675,6 +4682,16 @@ function tidyProposedTasks(
         `"${title}" waits for a task that is not another task of the proposal`,
       );
     }
+    const partOf = task.partOf;
+    if (
+      partOf !== null &&
+      (!Number.isInteger(partOf) || partOf < 0 || partOf >= tasks.length || partOf === place)
+    ) {
+      throw new BackendError(
+        'rule_broken',
+        `"${title}" is a part of a task that is not another task of the proposal`,
+      );
+    }
     return {
       title,
       description: task.description.trim(),
@@ -4683,12 +4700,25 @@ function tidyProposedTasks(
       estimateMinutes: task.estimateMinutes,
       priority: task.priority,
       waitsFor,
+      partOf,
     };
   });
   if (waitInCircle(tidy)) {
     throw new BackendError(
       'rule_broken',
       'the tasks of the proposal wait for each other in a circle',
+    );
+  }
+  if (partsInCircle(tidy)) {
+    throw new BackendError(
+      'rule_broken',
+      'the tasks of the proposal are parts of each other in a circle',
+    );
+  }
+  if (partsWaitInCircle(tidy)) {
+    throw new BackendError(
+      'rule_broken',
+      'the tasks of the proposal wait for each other in a circle: a task with parts starts only once its parts are finished, so a part cannot wait for it',
     );
   }
   return tidy;

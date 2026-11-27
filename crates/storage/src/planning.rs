@@ -1,6 +1,7 @@
 //! Stores what the Advisor asked and proposed in a turn: its interview,
 //! with the questions, their options and the answers, and its proposal,
-//! with the members, the tasks and what each task waits for.
+//! with the members, the tasks, what each task waits for and the task it is
+//! a part of.
 //!
 //! Both are kept in rows of their own, keyed by the turn, and are written
 //! only when they differ from what is stored. Each is logged as one entity
@@ -208,6 +209,10 @@ struct ProposedTaskRecord {
     estimate_minutes: Option<i64>,
     priority: String,
     waits_for: Vec<i64>,
+    /// The task of the same proposal this one is a part of. A state logged
+    /// before parts existed has none, and is read as a task of its own.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    part_of: Option<i64>,
 }
 
 impl ProposalRecord {
@@ -252,6 +257,7 @@ impl ProposalRecord {
                             .copied()
                             .map(stored_position)
                             .collect(),
+                        part_of: task.part_of.map(stored_position),
                     }
                 })
                 .collect(),
@@ -318,6 +324,7 @@ impl ProposalRecord {
                         .iter()
                         .map(|&place| position_from_store(place))
                         .collect::<Result<_, _>>()?,
+                    part_of: task.part_of.map(position_from_store).transpose()?,
                 })
             })
             .collect::<Result<Vec<_>, DatabaseError>>()?;
@@ -505,11 +512,11 @@ fn write_proposal(
         transaction.execute(
             "INSERT INTO turn_proposal_tasks (
                  turn_id, position, title, description, owner_kind, owner_name,
-                 estimate_minutes, priority
+                 estimate_minutes, priority, part_of
              )
              VALUES (
                  :turn_id, :position, :title, :description, :owner_kind, :owner_name,
-                 :estimate_minutes, :priority
+                 :estimate_minutes, :priority, :part_of
              )
              ON CONFLICT (turn_id, position) DO UPDATE SET
                  title = excluded.title,
@@ -517,7 +524,8 @@ fn write_proposal(
                  owner_kind = excluded.owner_kind,
                  owner_name = excluded.owner_name,
                  estimate_minutes = excluded.estimate_minutes,
-                 priority = excluded.priority",
+                 priority = excluded.priority,
+                 part_of = excluded.part_of",
             named_params! {
                 ":turn_id": record.turn_id,
                 ":position": position,
@@ -527,6 +535,7 @@ fn write_proposal(
                 ":owner_name": task.owner_name,
                 ":estimate_minutes": task.estimate_minutes,
                 ":priority": task.priority,
+                ":part_of": task.part_of,
             },
         )?;
         // The rows of what a task waits for are only keys, so they are
@@ -655,7 +664,8 @@ pub(crate) fn stored_proposal(
         .collect::<Result<_, _>>()?;
     let mut tasks: Vec<ProposedTaskRecord> = connection
         .prepare(
-            "SELECT title, description, owner_kind, owner_name, estimate_minutes, priority
+            "SELECT title, description, owner_kind, owner_name, estimate_minutes, priority,
+                    part_of
              FROM turn_proposal_tasks WHERE turn_id = :turn_id ORDER BY position",
         )?
         .query_map(named_params! { ":turn_id": turn_id }, |row| {
@@ -667,6 +677,7 @@ pub(crate) fn stored_proposal(
                 estimate_minutes: row.get("estimate_minutes")?,
                 priority: row.get("priority")?,
                 waits_for: Vec::new(),
+                part_of: row.get("part_of")?,
             })
         })?
         .collect::<Result<_, _>>()?;
@@ -709,4 +720,71 @@ fn stored_position(position: usize) -> i64 {
 fn position_from_store(position: i64) -> Result<usize, DatabaseError> {
     usize::try_from(position)
         .map_err(|reason| DatabaseError::damaged("the place", &position.to_string(), reason))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_proposal_logged_before_parts_existed_is_read_as_a_plan_without_parts() {
+        // The state as a version before parts logged it: no `part_of`.
+        let state = serde_json::json!({
+            "turn_id": "turn-1",
+            "summary": "A device.",
+            "members": [],
+            "tasks": [
+                {
+                    "title": "Draw the schematic",
+                    "description": "",
+                    "owner_kind": null,
+                    "owner_name": null,
+                    "estimate_minutes": 60,
+                    "priority": "normal",
+                    "waits_for": []
+                },
+                {
+                    "title": "Route the board",
+                    "description": "",
+                    "owner_kind": "manager",
+                    "owner_name": null,
+                    "estimate_minutes": null,
+                    "priority": "high",
+                    "waits_for": [0]
+                }
+            ],
+            "approved_at": null
+        });
+
+        let record: ProposalRecord = serde_json::from_value(state).unwrap();
+        let proposal = record.into_proposal().unwrap();
+
+        assert_eq!(proposal.tasks().len(), 2);
+        assert!(proposal.tasks().iter().all(|task| task.part_of.is_none()));
+        assert_eq!(proposal.tasks()[1].waits_for, [0]);
+    }
+
+    #[test]
+    fn a_task_of_its_own_is_logged_without_a_part_of_and_a_part_with_one() {
+        let record = ProposedTaskRecord {
+            title: "Route the board".to_owned(),
+            description: String::new(),
+            owner_kind: None,
+            owner_name: None,
+            estimate_minutes: None,
+            priority: "normal".to_owned(),
+            waits_for: Vec::new(),
+            part_of: None,
+        };
+        let alone = serde_json::to_value(&record).unwrap();
+        let part = serde_json::to_value(ProposedTaskRecord {
+            part_of: Some(0),
+            ..record
+        })
+        .unwrap();
+
+        // A version that does not know parts reads both as it always did.
+        assert!(alone.get("part_of").is_none());
+        assert_eq!(part["part_of"], 0);
+    }
 }

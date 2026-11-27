@@ -1389,6 +1389,7 @@ mod tests {
                             estimate_minutes: None,
                             priority: Priority::Normal,
                             waits_for: Vec::new(),
+                            part_of: None,
                         },
                         ProposedTask {
                             title: TaskTitle::parse("Route the board").unwrap(),
@@ -1397,6 +1398,7 @@ mod tests {
                             estimate_minutes: None,
                             priority: Priority::Normal,
                             waits_for: vec![0],
+                            part_of: None,
                         },
                     ],
                 )

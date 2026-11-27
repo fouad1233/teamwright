@@ -403,6 +403,7 @@ mod tests {
                         estimate_minutes: None,
                         priority: Priority::Normal,
                         waits_for: Vec::new(),
+                        part_of: None,
                     }],
                 )
                 .unwrap(),

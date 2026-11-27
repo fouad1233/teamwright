@@ -84,7 +84,54 @@ export function waitInCircle(tasks: readonly ProposedTask[]): boolean {
   return tasks.some((_, place) => closesCircle(place));
 }
 
-/** Whether one task of a plan waits for another, directly or through other tasks. */
+/**
+ * What a task of a plan waits for: the tasks it names and, as on the
+ * board, its parts, because a task with parts starts only once its parts
+ * are finished.
+ */
+function waitsWithParts(tasks: readonly ProposedTask[], place: number): number[] {
+  const parts = tasks.flatMap((task, part) => (task.partOf === place ? [part] : []));
+  return [...(tasks[place]?.waitsFor ?? []), ...parts];
+}
+
+/**
+ * Whether some tasks of a proposal are parts of each other in a circle, so
+ * that no task is the top of them.
+ */
+export function partsInCircle(tasks: readonly ProposedTask[]): boolean {
+  return tasks.some((_, place) => {
+    const seen = new Set<number>();
+    for (
+      let whole = tasks[place]?.partOf ?? null;
+      whole !== null;
+      whole = tasks[whole]?.partOf ?? null
+    ) {
+      if (whole === place) {
+        return true;
+      }
+      if (seen.has(whole)) {
+        return false;
+      }
+      seen.add(whole);
+    }
+    return false;
+  });
+}
+
+/**
+ * Whether some tasks of a proposal wait for each other in a circle once a
+ * task with parts waits for its parts, as it does on the board.
+ */
+export function partsWaitInCircle(tasks: readonly ProposedTask[]): boolean {
+  return waitInCircle(
+    tasks.map((task, place) => ({ ...task, waitsFor: waitsWithParts(tasks, place) })),
+  );
+}
+
+/**
+ * Whether one task of a plan waits for another, directly or through other
+ * tasks, counting that a task waits for its parts.
+ */
 function waitsOn(tasks: readonly ProposedTask[], waiting: number, target: number): boolean {
   const seen = new Set<number>();
   const toVisit = [waiting];
@@ -93,12 +140,31 @@ function waitsOn(tasks: readonly ProposedTask[], waiting: number, target: number
       continue;
     }
     seen.add(current);
-    for (const earlier of tasks[current]?.waitsFor ?? []) {
+    for (const earlier of waitsWithParts(tasks, current)) {
       if (earlier === target) {
         return true;
       }
       toVisit.push(earlier);
     }
+  }
+  return false;
+}
+
+/** Whether a task of a plan lies below another, as its part or further down. */
+function liesBelow(tasks: readonly ProposedTask[], part: number, whole: number): boolean {
+  const seen = new Set<number>();
+  for (
+    let above = tasks[part]?.partOf ?? null;
+    above !== null;
+    above = tasks[above]?.partOf ?? null
+  ) {
+    if (above === whole) {
+      return true;
+    }
+    if (seen.has(above)) {
+      return false;
+    }
+    seen.add(above);
   }
   return false;
 }
@@ -170,7 +236,11 @@ export function proposalAfter(
       task.waitsFor = task.waitsFor.filter((earlier) => earlier !== change.waitsFor);
       break;
     }
-    case 'addTask':
+    case 'addTask': {
+      const partOf = change.partOf ?? null;
+      if (partOf !== null) {
+        taskAt(partOf);
+      }
       tasks.push({
         title: change.title,
         description: '',
@@ -178,15 +248,40 @@ export function proposalAfter(
         estimateMinutes: null,
         priority: 'normal',
         waitsFor: [],
+        partOf,
       });
       break;
+    }
+    case 'makePartOf': {
+      const task = taskAt(change.task);
+      if (change.partOf !== null) {
+        const whole = taskAt(change.partOf);
+        if (change.partOf === change.task) {
+          throw new BackendError(
+            'rule_broken',
+            `"${task.title}" is a part of a task that is not another task of the proposal`,
+          );
+        }
+        if (liesBelow(tasks, change.partOf, change.task)) {
+          throw new BackendError(
+            'rule_broken',
+            `"${task.title}" cannot be a part of "${whole.title}", which is a part of it already`,
+          );
+        }
+      }
+      task.partOf = change.partOf;
+      break;
+    }
     case 'removeTask': {
-      taskAt(change.task);
+      const whole = taskAt(change.task).partOf;
       tasks.splice(change.task, 1);
+      const movedUp = (place: number) => (place > change.task ? place - 1 : place);
       for (const task of tasks) {
-        task.waitsFor = task.waitsFor
-          .filter((earlier) => earlier !== change.task)
-          .map((earlier) => (earlier > change.task ? earlier - 1 : earlier));
+        task.waitsFor = task.waitsFor.filter((earlier) => earlier !== change.task).map(movedUp);
+        // A part of the task that is taken out stays in the plan, because
+        // its work is still to be done. It goes where the task was.
+        const partOf = task.partOf === change.task ? whole : task.partOf;
+        task.partOf = partOf === null ? null : movedUp(partOf);
       }
       break;
     }

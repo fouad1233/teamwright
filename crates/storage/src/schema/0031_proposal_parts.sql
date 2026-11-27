@@ -1,0 +1,16 @@
+-- Teamwright database: a task of a proposal that is a part of another task
+-- of the same proposal (decision 0014, note of 27 November 2026).
+--
+-- The conventions of version 1 hold.
+--
+-- `part_of` is the position of that task in the same proposal, counted
+-- from 0, or NULL for a task of its own. Like `waits_for` it is not
+-- enforced as a reference: the rows of a proposal are rewritten in order
+-- when it changes, and the domain checks the whole proposal when it is
+-- read.
+--
+-- The proposal is logged in `operations` as one entity whose state is the
+-- whole of it. A state logged before this version has no `part_of` on its
+-- tasks and is read as a plan without parts, on every computer; a version
+-- that does not know the field shows the plan without its parts.
+ALTER TABLE turn_proposal_tasks ADD COLUMN part_of INTEGER;

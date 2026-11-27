@@ -842,6 +842,12 @@ export interface ProposedTask {
   priority: Priority;
   /** The tasks of the same proposal that must be finished first, by their places from 0. */
   waitsFor: number[];
+  /**
+   * The task of the same proposal this one is a part of, by its place from
+   * 0, or nothing for a task of its own. Approving makes it a subtask of
+   * that task. A task with parts starts only once its parts are finished.
+   */
+  partOf: number | null;
 }
 
 /**
@@ -873,8 +879,8 @@ export interface ApprovedProposal {
 /**
  * One change the manager makes to an open proposal before approving it.
  * Tasks and members are named by their places from 0. Taking a task out
- * takes out what waited for it, and the places after it move up by one.
- * Taking a member out leaves its tasks to nobody.
+ * takes out what waited for it, its parts go where it was, and the places
+ * after it move up by one. Taking a member out leaves its tasks to nobody.
  */
 export type ProposalChange =
   | { kind: 'retitle'; task: number; title: string }
@@ -884,7 +890,8 @@ export type ProposalChange =
   | { kind: 'giveTo'; task: number; owner: ProposedOwner | null }
   | { kind: 'addWait'; task: number; waitsFor: number }
   | { kind: 'removeWait'; task: number; waitsFor: number }
-  | { kind: 'addTask'; title: string }
+  | { kind: 'addTask'; title: string; partOf?: number | null }
+  | { kind: 'makePartOf'; task: number; partOf: number | null }
   | { kind: 'removeTask'; task: number }
   | { kind: 'removeMember'; member: number }
   | { kind: 'setProfile'; member: number; model: string | null; effort: Effort | null };

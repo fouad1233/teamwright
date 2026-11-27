@@ -1671,6 +1671,9 @@ pub struct ProposedTaskDto {
     priority: &'static str,
     /// The tasks of the same proposal it waits for, by their places from 0.
     waits_for: Vec<usize>,
+    /// The task of the same proposal it is a part of, by its place from 0,
+    /// or null for a task of its own.
+    part_of: Option<usize>,
 }
 
 impl From<&Proposal> for ProposalDto {
@@ -1703,6 +1706,7 @@ impl From<&Proposal> for ProposalDto {
                     estimate_minutes: task.estimate_minutes,
                     priority: task.priority.as_str(),
                     waits_for: task.waits_for.clone(),
+                    part_of: task.part_of,
                 })
                 .collect(),
             approved_at: proposal.approved_at().map(moment_to_text),
@@ -1786,6 +1790,10 @@ pub struct ProposedTaskInput {
     /// which the use case refuses with the rule it breaks.
     #[serde(default)]
     waits_for: Vec<f64>,
+    /// The place of the task it is a part of, from 0, read as `waits_for`
+    /// is; null or missing for a task of its own.
+    #[serde(default)]
+    part_of: Option<f64>,
 }
 
 impl TryFrom<ApprovedProposalInput> for ApprovedProposal {
@@ -1820,6 +1828,7 @@ impl TryFrom<ApprovedProposalInput> for ApprovedProposal {
                         estimate_minutes: task.estimate_minutes,
                         priority: parse_priority(&task.priority)?,
                         waits_for: task.waits_for.into_iter().map(place_from_number).collect(),
+                        part_of: task.part_of.map(place_from_number),
                     })
                 })
                 .collect::<Result<_, CommandError>>()?,
@@ -1871,8 +1880,16 @@ pub enum ProposalEditInput {
     AddWait { task: f64, waits_for: f64 },
     /// Lets a task stop waiting for another task of the proposal.
     RemoveWait { task: f64, waits_for: f64 },
-    /// Adds a task of the manager's own at the end of the plan.
-    AddTask { title: String },
+    /// Adds a task of the manager's own at the end of the plan, as a part of
+    /// a task of the proposal if one is named.
+    AddTask {
+        title: String,
+        #[serde(default)]
+        part_of: Option<f64>,
+    },
+    /// Makes a task a part of another task of the proposal, or, with null,
+    /// a task of its own.
+    MakePartOf { task: f64, part_of: Option<f64> },
     /// Takes a task out of the proposal.
     RemoveTask { task: f64 },
     /// Takes a member out of the proposal.
@@ -1926,7 +1943,14 @@ impl TryFrom<ProposalEditInput> for teamwright_application::ProposalEdit {
                 task: place(task),
                 waits_for: place(waits_for),
             },
-            ProposalEditInput::AddTask { title } => Edit::AddTask { title },
+            ProposalEditInput::AddTask { title, part_of } => Edit::AddTask {
+                title,
+                part_of: part_of.map(place),
+            },
+            ProposalEditInput::MakePartOf { task, part_of } => Edit::MakePartOf {
+                task: place(task),
+                part_of: part_of.map(place),
+            },
             ProposalEditInput::RemoveTask { task } => Edit::RemoveTask { task: place(task) },
             ProposalEditInput::RemoveMember { member } => Edit::RemoveMember {
                 member: place(member),
@@ -4348,10 +4372,40 @@ mod tests {
                 effort: Some(Effort::Low)
             }
         );
+        // A task of the manager's own is a part of nothing unless it says so.
+        assert_eq!(
+            read(serde_json::json!({ "kind": "addTask", "title": "Order it" })).unwrap(),
+            ProposalEdit::AddTask {
+                title: "Order it".to_owned(),
+                part_of: None
+            }
+        );
+        assert_eq!(
+            read(serde_json::json!({ "kind": "addTask", "title": "Order it", "partOf": 2 }))
+                .unwrap(),
+            ProposalEdit::AddTask {
+                title: "Order it".to_owned(),
+                part_of: Some(2)
+            }
+        );
+        assert_eq!(
+            read(serde_json::json!({ "kind": "makePartOf", "task": 4, "partOf": null })).unwrap(),
+            ProposalEdit::MakePartOf {
+                task: 4,
+                part_of: None
+            }
+        );
         // A place that is not a place is read as one no proposal has.
         assert_eq!(
             read(serde_json::json!({ "kind": "removeTask", "task": -1 })).unwrap(),
             ProposalEdit::RemoveTask { task: usize::MAX }
+        );
+        assert_eq!(
+            read(serde_json::json!({ "kind": "makePartOf", "task": 1, "partOf": 0.5 })).unwrap(),
+            ProposalEdit::MakePartOf {
+                task: 1,
+                part_of: Some(usize::MAX)
+            }
         );
         assert!(
             read(serde_json::json!({ "kind": "prioritize", "task": 0, "priority": "huge" }))
