@@ -28,9 +28,9 @@ use teamwright_domain::{
 
 use crate::agent_runtime::{
     self, AgentEvent, AgentRuntime, AgentRuntimeError, ManagerInterview, ManagerQuestion,
-    PermissionAsk, PermissionProfile, PlanProposal, PlannedOwner, ProgramVersion, PublishedHandoff,
-    RememberedFact, RunningTurn, SentMessage, SessionChoice, SessionId, SignIn, TeamTool,
-    TurnFailure, TurnOutcome, TurnRequest,
+    PermissionAsk, PermissionProfile, PlanProposal, PlannedOwner, ProgramVersion, ProtectedPlace,
+    PublishedHandoff, RememberedFact, RunningTurn, SentMessage, SessionChoice, SessionId, SignIn,
+    TeamTool, TurnFailure, TurnOutcome, TurnRequest,
 };
 use crate::error::ApplicationError;
 use crate::kits::{
@@ -986,6 +986,11 @@ impl WorkService {
         // that the turn can still start.
         let readable_folders = self.inner.places.existing_reference_folders(project)?;
         let working_folder = self.inner.places.work_folder_of(project)?;
+        // What no specialist may change, and what the Advisor may not read
+        // either (decision 0044).
+        let protected_places = self.inner.places.protected_places()?;
+        let mut written_folders = Vec::new();
+        let mut full_access = false;
         let mut delivered = Vec::new();
         let mut prompt = prompt;
         let mut kit = agent_runtime::TurnKit::default();
@@ -1052,7 +1057,25 @@ impl WorkService {
                 let mut requests = ports.permissions.requests_of_project(project.id())?;
                 requests.extend(answered_permission.iter().cloned());
                 let granted = granted_rules(&requests, &about);
-                let mut instructions = instructions_for(member, project, &readable_folders, &mark);
+                // The folders to write in, and full access, are for the
+                // specialists who do the work; the Advisor plans from the
+                // work folder and the reference folders (decision 0044). A
+                // turn the coordinator starts gets them too: the manager
+                // gave them to the project.
+                written_folders = self.inner.places.existing_written_folders(project)?;
+                full_access = self.inner.places.has_full_access(project)?;
+                if full_access {
+                    self.inner.places.refuse_full_access_inside_protected(
+                        &protected_places,
+                        std::iter::once(&working_folder).chain(&written_folders),
+                    )?;
+                }
+                let reach = FoldersOfTurn {
+                    reference: &readable_folders,
+                    written: &written_folders,
+                    full_access: full_access.then_some(protected_places.as_slice()),
+                };
+                let mut instructions = instructions_for(member, project, &reach, &mark);
                 if let Some(no) = no_commands {
                     instructions.push_str("\n\n");
                     instructions.push_str(&no_commands_in_words(no));
@@ -1101,6 +1124,9 @@ impl WorkService {
             permissions,
             team_tools,
             readable_folders,
+            written_folders,
+            full_access,
+            protected_places,
             kit,
         };
         let handle = ports
@@ -1212,6 +1238,9 @@ impl Inner {
         }
         if kit_names_a_secret(self.ports.kits.as_ref(), member)? {
             return Ok(Some(NoCommands::SecretInReach));
+        }
+        if self.ports.places.has_full_access(member.project_id())? {
+            return Ok(Some(NoCommands::FullAccess));
         }
         Ok(None)
     }
@@ -2329,16 +2358,32 @@ pub fn brief_with_memory(
     paragraphs.join("\n\n")
 }
 
+/// The folders of a turn besides its work folder, as its instructions name
+/// them (decisions 0013 and 0044).
+#[derive(Debug, Clone, Copy, Default)]
+pub struct FoldersOfTurn<'a> {
+    /// The folders the specialist may read and must not change.
+    pub reference: &'a [PathBuf],
+    /// The folders the specialist may read and write besides the work
+    /// folder.
+    pub written: &'a [PathBuf],
+    /// With full access, the places that stay closed even then; nothing
+    /// without full access.
+    pub full_access: Option<&'a [ProtectedPlace]>,
+}
+
 /// Writes the instructions that are added to the agent program's own: who
-/// the specialist is, and how the team works. `reference_folders` are the
-/// folders the specialist may read and must not change.
+/// the specialist is, and how the team works. `folders` are the folders the
+/// specialist may read or write besides the work folder, and whether it has
+/// full access.
 #[must_use]
 pub fn instructions_for(
     member: &Member,
     project: &Project,
-    reference_folders: &[PathBuf],
+    folders: &FoldersOfTurn<'_>,
     mark: &WordsMark,
 ) -> String {
+    let reference_folders = folders.reference;
     let mut lines = vec![format!(
         "You are {}, a member of the team that works on the project \"{}\" for a human \
          manager. The team is run with the program Teamwright.",
@@ -2355,11 +2400,57 @@ pub fn instructions_for(
             "How the team works:",
             "- You work in the folder of the project, which is the folder you are in. Read what \
              is already there before you begin.",
-            "- Put what you produce into files in that folder, with names that say what they \
-             hold. Do not write anywhere else.",
         ]
         .map(str::to_owned),
     );
+    lines.push(
+        match (folders.full_access.is_some(), folders.written.is_empty()) {
+            (false, true) => {
+                "- Put what you produce into files in that folder, with names that say what \
+                 they hold. Do not write anywhere else."
+            }
+            (false, false) => {
+                "- Put what you produce into files in that folder, with names that say what \
+                 they hold, or in one of the folders to write in below where the task belongs \
+                 there. Do not write anywhere else."
+            }
+            (true, _) => {
+                "- Put what you produce into files in that folder, with names that say what \
+                 they hold, unless the task names another place."
+            }
+        }
+        .to_owned(),
+    );
+    if !folders.written.is_empty() {
+        // On lines of their own, as the reference folders below.
+        lines.push(
+            "- Besides the folder of the project you may read, create and change files in the \
+             folders below. Change there only what the task needs. Write their paths exactly as \
+             they stand here:"
+                .to_owned(),
+        );
+        lines.extend(
+            folders
+                .written
+                .iter()
+                .map(|folder| format!("    {}", folder.display())),
+        );
+    }
+    if let Some(protected) = folders.full_access {
+        lines.push(
+            "- The manager gave this project full access: you may read and write files anywhere \
+             on this computer that the manager's account can, also outside the folders named \
+             here. Use it only for what the task needs, and never remove or overwrite a file you \
+             were not asked to change. These places stay closed to you, for reading as well as \
+             for writing:"
+                .to_owned(),
+        );
+        lines.extend(
+            protected
+                .iter()
+                .map(|place| format!("    {} ({})", place.path.display(), place.kind.in_words())),
+        );
+    }
     if !reference_folders.is_empty() {
         // Each folder stands on a line of its own, because the name of a
         // folder may hold a comma.
@@ -2459,7 +2550,7 @@ fn own_instructions_of(member: &Member) -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
 
     use chrono::{TimeDelta, TimeZone};
     use teamwright_domain::{
@@ -2542,7 +2633,9 @@ mod tests {
                 digests: Arc::new(crate::in_memory::InMemoryDigestRepository::default()),
                 permissions: self.permissions.clone(),
                 command_choice: self.command_choice.clone(),
-                folders: Arc::new(FixedProjectFolders::inside("projects")),
+                folders: Arc::new(
+                    FixedProjectFolders::inside("projects").with_protected(protected_places()),
+                ),
                 places: self.places.clone(),
                 file_system: self.file_system.clone(),
                 kits: self.kits.clone(),
@@ -2563,10 +2656,170 @@ mod tests {
                 self.members.clone(),
                 self.conversations.clone(),
                 self.places.clone(),
-                Arc::new(FixedProjectFolders::inside("projects")),
+                Arc::new(
+                    FixedProjectFolders::inside("projects").with_protected(protected_places()),
+                ),
                 self.file_system.clone(),
             )
         }
+    }
+
+    /// The places of the computer these tests pretend to run on that no
+    /// specialist may change.
+    fn protected_places() -> Vec<ProtectedPlace> {
+        use crate::agent_runtime::ProtectedKind;
+        vec![
+            ProtectedPlace::folder("/sample/data", ProtectedKind::TeamwrightData),
+            ProtectedPlace::folder("/sample/.ssh", ProtectedKind::Keys),
+        ]
+    }
+
+    /// Gives the project of the workspace a folder to write in, and full
+    /// access if `full_access`.
+    fn with_written_folder_and_access(workspace: &Workspace, full_access: bool) {
+        workspace.ports.file_system.add_folder("/sample/firmware");
+        workspace
+            .ports
+            .places_service()
+            .add_written_folder(workspace.project.id(), Path::new("/sample/firmware"))
+            .unwrap();
+        workspace
+            .ports
+            .places_service()
+            .set_full_access(workspace.project.id(), full_access)
+            .unwrap();
+    }
+
+    #[test]
+    fn a_turn_may_write_in_the_folders_to_write_in_and_is_told_so() {
+        let workspace = workspace();
+        with_written_folder_and_access(&workspace, false);
+        workspace.ports.file_system.add_folder("/sample/gone");
+        let mut chosen = workspace.ports.places.find(workspace.project.id()).unwrap();
+        chosen.written_folders.push(PathBuf::from("/sample/gone"));
+        workspace
+            .ports
+            .places
+            .save(workspace.project.id(), &chosen)
+            .unwrap();
+
+        workspace.work.start_work(workspace.schematic.id()).unwrap();
+
+        let request = &workspace.ports.runtime.requests()[0];
+        assert_eq!(
+            request.written_folders,
+            [
+                PathBuf::from("/sample/firmware"),
+                PathBuf::from("/sample/gone")
+            ]
+        );
+        assert!(!request.full_access);
+        assert_eq!(request.protected_places, protected_places());
+        let instructions = request.extra_instructions.as_deref().unwrap();
+        assert!(instructions.contains(
+            "or in one of the folders to write in below where the task belongs there. Do not \
+             write anywhere else."
+        ));
+        assert!(instructions.contains(
+            "Write their paths exactly as they stand here:\n    /sample/firmware\n    /sample/gone\n"
+        ));
+        assert!(!instructions.contains("full access"));
+        // A folder to write in grants nothing else: the profile is a
+        // specialist's.
+        assert_eq!(request.permissions, PermissionProfile::specialist());
+    }
+
+    #[test]
+    fn a_turn_with_full_access_is_told_what_stays_closed_and_gets_no_command() {
+        let workspace = workspace();
+        with_written_folder_and_access(&workspace, true);
+
+        workspace.work.start_work(workspace.schematic.id()).unwrap();
+
+        let request = &workspace.ports.runtime.requests()[0];
+        assert!(request.full_access);
+        assert_eq!(request.written_folders, [PathBuf::from("/sample/firmware")]);
+        assert_eq!(request.protected_places, protected_places());
+        let instructions = request.extra_instructions.as_deref().unwrap();
+        assert!(instructions.contains("The manager gave this project full access"));
+        assert!(instructions.contains("\n    /sample/.ssh (the keys of the system)"));
+        assert!(instructions.contains("\n    /sample/data (Teamwright's own data)"));
+        assert!(instructions.contains("unless the task names another place"));
+        assert!(instructions.contains(NoCommands::FullAccess.reason()));
+        // Commands are switched on in this workspace; with full access the
+        // specialist may still ask only for a web domain.
+        assert!(
+            request
+                .team_tools
+                .contains(&TeamTool::AskPermission { commands: false })
+        );
+        assert_eq!(request.permissions, PermissionProfile::specialist());
+    }
+
+    #[test]
+    fn a_command_allowed_before_grants_nothing_once_full_access_is_on() {
+        let workspace = workspace();
+        workspace
+            .ports
+            .places_service()
+            .set_full_access(workspace.project.id(), true)
+            .unwrap();
+        let reason = workspace
+            .work
+            .inner
+            .no_commands_for(&workspace.engineer)
+            .unwrap();
+        assert_eq!(reason, Some(NoCommands::FullAccess));
+    }
+
+    #[test]
+    fn the_advisor_gets_neither_the_folders_to_write_in_nor_full_access() {
+        let workspace = workspace();
+        with_written_folder_and_access(&workspace, true);
+
+        workspace
+            .work
+            .advise(workspace.project.id(), "Plan the board.", None, None)
+            .unwrap();
+
+        let request = workspace.ports.runtime.requests().pop().unwrap();
+        assert!(request.written_folders.is_empty());
+        assert!(!request.full_access);
+        assert_eq!(request.permissions, PermissionProfile::advisor());
+        assert!(
+            !request
+                .extra_instructions
+                .as_deref()
+                .unwrap()
+                .contains("full access")
+        );
+    }
+
+    #[test]
+    fn a_turn_with_full_access_does_not_start_inside_a_protected_place() {
+        let workspace = workspace();
+        workspace
+            .ports
+            .file_system
+            .add_folder("/sample/data/projects/SSN");
+        let places = workspace.ports.places_service();
+        places
+            .set_work_folder(
+                workspace.project.id(),
+                Some(Path::new("/sample/data/projects/SSN")),
+            )
+            .unwrap();
+        places
+            .set_full_access(workspace.project.id(), true)
+            .unwrap();
+
+        let error = workspace
+            .work
+            .start_work(workspace.schematic.id())
+            .unwrap_err();
+
+        assert_eq!(error.code(), "rule_broken");
+        assert!(workspace.ports.runtime.requests().is_empty());
     }
 
     fn start_of_day() -> Timestamp {
@@ -2997,7 +3250,7 @@ mod tests {
                 instructions_for(
                     &workspace.engineer,
                     &workspace.project,
-                    &[],
+                    &FoldersOfTurn::default(),
                     &crate::marks::test_mark()
                 )
                 .as_str()
@@ -3109,6 +3362,7 @@ mod tests {
                         PathBuf::from("/sample/datasheets"),
                         PathBuf::from("/sample/gone"),
                     ],
+                    written_folders: Vec::new(),
                 },
             )
             .unwrap();
@@ -3155,6 +3409,7 @@ mod tests {
                 &crate::places::ChosenPlaces {
                     work_folder: None,
                     reference_folders: vec![PathBuf::from("/sample/data sheets")],
+                    written_folders: Vec::new(),
                 },
             )
             .unwrap();
@@ -4670,13 +4925,13 @@ mod tests {
         let instructions = instructions_for(
             &workspace.engineer,
             &workspace.project,
-            &[],
+            &FoldersOfTurn::default(),
             &crate::marks::test_mark(),
         );
         let shorter = instructions_for(
             &without_responsibility,
             &workspace.project,
-            &[],
+            &FoldersOfTurn::default(),
             &crate::marks::test_mark(),
         );
 

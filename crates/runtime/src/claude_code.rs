@@ -250,6 +250,18 @@ impl AgentRuntime for ClaudeCode {
             .iter()
             .map(|folder| full_folder(folder))
             .collect::<Result<Vec<_>, _>>()?;
+        // The folders to write in, the working folder and the protected
+        // places are named in their full form too, so that the rules about a
+        // protected place name it as the program finds it, and whether it
+        // lies inside a folder of the turn is decided on the same forms
+        // (decision 0044).
+        request.working_folder = full_folder(&request.working_folder)?;
+        for folder in &mut request.written_folders {
+            *folder = full_folder(folder)?;
+        }
+        for place in &mut request.protected_places {
+            place.path = full_form_of_place(&place.path);
+        }
         // The memory a search of the turn reads is in a file of its own,
         // which lives as long as the turn (decision 0036).
         let memory = memory_file_for(&request)?;
@@ -546,6 +558,21 @@ pub fn full_form(path: &Path) -> std::io::Result<PathBuf> {
     std::fs::canonicalize(path).map(without_verbatim_prefix)
 }
 
+/// The full form of a protected place, which need not exist: a missing
+/// `~/.gnupg` is still protected, in case a session would create it. Its
+/// folder is then put in the full form, and the name added to it.
+fn full_form_of_place(path: &Path) -> PathBuf {
+    if let Ok(full) = full_form(path) {
+        return full;
+    }
+    match (path.parent(), path.file_name()) {
+        (Some(parent), Some(name)) => {
+            full_form(parent).map_or_else(|_| path.to_path_buf(), |parent| parent.join(name))
+        }
+        _ => path.to_path_buf(),
+    }
+}
+
 fn without_verbatim_prefix(path: PathBuf) -> PathBuf {
     let text = path.to_string_lossy();
     if let Some(share) = text.strip_prefix(r"\\?\UNC\") {
@@ -613,6 +640,9 @@ mod tests {
             permissions: PermissionProfile::specialist(),
             team_tools: vec![TeamTool::AskManager],
             readable_folders: Vec::new(),
+            written_folders: Vec::new(),
+            full_access: false,
+            protected_places: Vec::new(),
             kit: teamwright_application::TurnKit::default(),
         };
         let without_bus = ClaudeCode::new();
@@ -645,6 +675,9 @@ mod tests {
             permissions: PermissionProfile::specialist(),
             team_tools: Vec::new(),
             readable_folders: vec![folder.path().join("missing")],
+            written_folders: Vec::new(),
+            full_access: false,
+            protected_places: Vec::new(),
             kit: teamwright_application::TurnKit::default(),
         };
 
@@ -671,6 +704,9 @@ mod tests {
             permissions: PermissionProfile::specialist(),
             team_tools: vec![TeamTool::AskManager],
             readable_folders: Vec::new(),
+            written_folders: Vec::new(),
+            full_access: false,
+            protected_places: Vec::new(),
             kit: teamwright_application::TurnKit::default(),
         };
         assert!(memory_file_for(&request).unwrap().is_none());
@@ -792,6 +828,9 @@ mod tests {
             permissions: PermissionProfile::specialist(),
             team_tools: Vec::new(),
             readable_folders: Vec::new(),
+            written_folders: Vec::new(),
+            full_access: false,
+            protected_places: Vec::new(),
             kit: TurnKit::default(),
         };
         request.permissions = PermissionProfile::specialist().with_granted(&[
@@ -829,6 +868,9 @@ mod tests {
             permissions: PermissionProfile::specialist(),
             team_tools: Vec::new(),
             readable_folders: Vec::new(),
+            written_folders: Vec::new(),
+            full_access: false,
+            protected_places: Vec::new(),
             kit: TurnKit::default(),
         };
         request.permissions = PermissionProfile::specialist().with_granted(&[
@@ -927,6 +969,9 @@ mod tests {
             permissions: PermissionProfile::specialist(),
             team_tools: vec![TeamTool::AskManager],
             readable_folders: Vec::new(),
+            written_folders: Vec::new(),
+            full_access: false,
+            protected_places: Vec::new(),
             kit: teamwright_application::TurnKit::default(),
         };
 

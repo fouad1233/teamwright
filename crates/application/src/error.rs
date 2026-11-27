@@ -271,6 +271,57 @@ pub enum ApplicationError {
         reference_folder: String,
     },
 
+    /// A folder to write in was to be, lie inside or contain another folder
+    /// of the project. A folder of a project has one kind: the work folder,
+    /// a folder to write in, or a folder only to read (decision 0044).
+    #[error(
+        "{folder} {relation} {other_kind} {other}; a folder of a project is the work folder, a \
+         folder to write in or a folder only to read, never two of them"
+    )]
+    WrittenFolderOverlaps {
+        /// The folder that was to be added or chosen, as it was given.
+        folder: String,
+        /// How it stands to the other: "is", "lies inside" or "contains".
+        relation: &'static str,
+        /// What the other folder is: "the work folder", "the folder to
+        /// write in", "the reference folder".
+        other_kind: &'static str,
+        /// The other folder, as it is kept.
+        other: String,
+    },
+
+    /// A folder to write in was to be, lie inside or contain a place no
+    /// specialist may change (decision 0044).
+    #[error("{folder} {relation} {place_kind} ({place}), {why}")]
+    FolderProtected {
+        /// The folder, as it was given.
+        folder: String,
+        /// How it stands to the place: "is", "lies inside" or "contains".
+        relation: &'static str,
+        /// What the place is, in words.
+        place_kind: &'static str,
+        /// The place.
+        place: String,
+        /// Why that is refused, in words.
+        why: &'static str,
+    },
+
+    /// A turn with full access was to start in a folder that lies inside a
+    /// place no specialist may change, so that it could not write there.
+    #[error(
+        "full access cannot be used here: the folder {folder} lies inside {place_kind} \
+         ({place}), which no specialist may change; choose another work folder or switch full \
+         access off"
+    )]
+    FullAccessInsideProtected {
+        /// The folder of the turn.
+        folder: String,
+        /// What the place is, in words.
+        place_kind: &'static str,
+        /// The place.
+        place: String,
+    },
+
     /// A sprint was to start while another sprint of its project runs. A
     /// project has one active sprint at a time.
     #[error("\"{name}\" is still running; complete it before you start another sprint")]
@@ -520,6 +571,9 @@ impl ApplicationError {
             | Self::WorkFolderIsReference { .. }
             | Self::ReferenceInsideWorkFolder { .. }
             | Self::WorkFolderInsideReference { .. }
+            | Self::WrittenFolderOverlaps { .. }
+            | Self::FolderProtected { .. }
+            | Self::FullAccessInsideProtected { .. }
             | Self::FileWithoutName
             | Self::NotAFolderOfProject { .. }
             | Self::OwnerNotThere { .. }

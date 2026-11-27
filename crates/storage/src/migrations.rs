@@ -39,6 +39,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("schema/0027_custom_fields.sql"),
     include_str!("schema/0028_plan_limit_turns.sql"),
     include_str!("schema/0029_permission_requests.sql"),
+    include_str!("schema/0030_written_folders.sql"),
     include_str!("schema/0031_proposal_parts.sql"),
 ];
 
@@ -130,6 +131,7 @@ mod tests {
             "project_places",
             "project_web_addresses",
             "project_reference_folders",
+            "project_written_folders",
             "projects",
             "sprints",
             "statuses",

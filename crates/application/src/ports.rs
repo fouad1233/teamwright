@@ -641,8 +641,9 @@ pub trait EarlierConversations: Send + Sync {
     fn read(&self, source: &str) -> Result<Option<EarlierConversation>, StorageError>;
 }
 
-/// Knows the folder Teamwright gives each project. The specialists work
-/// there unless the manager chooses another work folder.
+/// Knows the folder Teamwright gives each project, and the places of this
+/// computer no specialist may ever change. The specialists work in the
+/// folder of the project unless the manager chooses another work folder.
 pub trait ProjectFolders: Send + Sync {
     /// The folder Teamwright gives a project. It is created if it is
     /// missing.
@@ -651,6 +652,17 @@ pub trait ProjectFolders: Send + Sync {
     ///
     /// Returns an error if the folder does not exist and cannot be created.
     fn folder_of(&self, project: &Project) -> Result<PathBuf, StorageError>;
+
+    /// The places of this computer that no specialist may change, also not
+    /// with full access, and as they are now: Teamwright's own data, the
+    /// sync folder if one is chosen, the settings of the agent program and
+    /// the keys of the system (decision 0044). A written folder may not be
+    /// one of them, lie inside one or contain one.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the sync folder cannot be read from storage.
+    fn protected_places(&self) -> Result<Vec<crate::ProtectedPlace>, StorageError>;
 }
 
 /// Stores the folders the manager has chosen for each project.
@@ -674,13 +686,31 @@ pub trait PlacesRepository: Send + Sync {
     /// Returns an error if the folders could not be written.
     fn save(&self, project_id: ProjectId, places: &ChosenPlaces) -> Result<(), StorageError>;
 
-    /// Forgets the folders chosen for a project. The folders themselves are
-    /// not touched. A project for which nothing is stored is ignored.
+    /// Forgets the folders chosen for a project, and whether it has full
+    /// access. The folders themselves are not touched. A project for which
+    /// nothing is stored is ignored.
     ///
     /// # Errors
     ///
     /// Returns an error if the stored folders could not be removed.
     fn delete(&self, project_id: ProjectId) -> Result<(), StorageError>;
+
+    /// Whether the manager gave the specialists of a project full access on
+    /// this computer (decision 0044). Off until switched on.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if stored data could not be read.
+    fn has_full_access(&self, project_id: ProjectId) -> Result<bool, StorageError>;
+
+    /// Switches full access of a project on or off, on this computer. It is
+    /// kept outside the log of operations, so it never travels to another
+    /// computer, like the choice about commands.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if it could not be written.
+    fn set_full_access(&self, project_id: ProjectId, on: bool) -> Result<(), StorageError>;
 }
 
 /// The files and folders of the computer, as far as the folders of a project

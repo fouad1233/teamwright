@@ -401,6 +401,7 @@ fn the_folders_of_a_project_never_come_from_another_computer() {
             &ChosenPlaces {
                 work_folder: Some("D:/sample/board".into()),
                 reference_folders: Vec::new(),
+                written_folders: vec!["D:/sample/firmware".into()],
             },
         )
         .unwrap();
@@ -428,6 +429,11 @@ fn the_folders_of_a_project_never_come_from_another_computer() {
         laptop.places.find(project.id()).unwrap(),
         ChosenPlaces::default()
     );
+    // Full access is not even logged, so nothing of it is sent.
+    desk.places.set_full_access(project.id(), true).unwrap();
+    let sent_after = desk.database.operations_to_send(0).unwrap();
+    assert_eq!(sent_after.len(), sent.len());
+    assert!(!laptop.places.has_full_access(project.id()).unwrap());
 }
 
 #[test]

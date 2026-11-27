@@ -777,6 +777,7 @@ fn reads_the_work_folder_the_manager_chose_and_the_reference_folders_when_it_pla
             &crate::places::ChosenPlaces {
                 work_folder: Some(PathBuf::from("/sample/existing repository")),
                 reference_folders: vec![PathBuf::from("/sample/datasheets")],
+                written_folders: Vec::new(),
             },
         )
         .unwrap();

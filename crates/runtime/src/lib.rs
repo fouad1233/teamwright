@@ -41,6 +41,7 @@ mod locate;
 pub mod memory_file;
 mod plan_limit;
 mod process;
+mod protected;
 mod sign_in;
 pub mod team_bus;
 
@@ -48,3 +49,4 @@ pub use claude_code::{ClaudeCode, full_form};
 pub use earlier::EarlierConversationsOnDisk;
 pub use environment::Environment;
 pub use locate::Locator;
+pub use protected::protected_places_in_home;

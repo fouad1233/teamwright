@@ -64,6 +64,7 @@ pub use agent_runtime::{
     SignIn, TeamTool, TokenCounts, TurnFailure, TurnOutcome, TurnRequest,
 };
 pub use agent_runtime::{ConnectorStart, KitConnector, KitSkill, TurnKit};
+pub use agent_runtime::{ProtectedKind, ProtectedPlace};
 pub use appearance::{AppearanceService, Theme, ThemeStore};
 pub use areas::AreaService;
 pub use checklists::ChecklistService;
@@ -167,8 +168,9 @@ pub use usage::{AgentUsage, MemberUsage, ProjectUsage, usage_of};
 pub use views::{NewView, ViewService};
 pub use work::{
     AgentProgram, AgentProgramState, ApprovedMember, ApprovedOwner, ApprovedProposal, ApprovedTask,
-    ConversationWithTurns, PermissionReply, ProposalEdit, WorkPorts, WorkService, answers_in_words,
-    brief_for, brief_with_memory, digests_for_advisor, instructions_for, instructions_for_advisor,
+    ConversationWithTurns, FoldersOfTurn, PermissionReply, ProposalEdit, WorkPorts, WorkService,
+    answers_in_words, brief_for, brief_with_memory, digests_for_advisor, instructions_for,
+    instructions_for_advisor,
 };
 pub use workbook::{
     Cell, Column, Section, Sheet, SheetContent, Table, Workbook, WorkbookPorts, WorkbookService,

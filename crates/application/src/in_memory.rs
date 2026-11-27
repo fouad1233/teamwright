@@ -770,13 +770,24 @@ impl PlanningRepository for InMemoryPlanningRepository {
 #[derive(Debug, Clone)]
 pub struct FixedProjectFolders {
     root: PathBuf,
+    protected: Vec<crate::ProtectedPlace>,
 }
 
 impl FixedProjectFolders {
-    /// Puts the folders of the projects into `root`.
+    /// Puts the folders of the projects into `root`. No place is protected.
     #[must_use]
     pub fn inside(root: impl Into<PathBuf>) -> Self {
-        Self { root: root.into() }
+        Self {
+            root: root.into(),
+            protected: Vec::new(),
+        }
+    }
+
+    /// The same, with these places protected.
+    #[must_use]
+    pub fn with_protected(mut self, protected: Vec<crate::ProtectedPlace>) -> Self {
+        self.protected = protected;
+        self
     }
 }
 
@@ -784,12 +795,18 @@ impl ProjectFolders for FixedProjectFolders {
     fn folder_of(&self, project: &Project) -> Result<PathBuf, StorageError> {
         Ok(self.root.join(project.key().as_str()))
     }
+
+    fn protected_places(&self) -> Result<Vec<crate::ProtectedPlace>, StorageError> {
+        Ok(self.protected.clone())
+    }
 }
 
-/// Keeps the folders chosen for each project in memory.
+/// Keeps the folders chosen for each project in memory, and which projects
+/// have full access.
 #[derive(Debug, Default)]
 pub struct InMemoryPlacesRepository {
     places: Mutex<BTreeMap<ProjectId, ChosenPlaces>>,
+    full_access: Mutex<std::collections::BTreeSet<ProjectId>>,
 }
 
 impl PlacesRepository for InMemoryPlacesRepository {
@@ -807,6 +824,21 @@ impl PlacesRepository for InMemoryPlacesRepository {
 
     fn delete(&self, project_id: ProjectId) -> Result<(), StorageError> {
         lock(&self.places).remove(&project_id);
+        lock(&self.full_access).remove(&project_id);
+        Ok(())
+    }
+
+    fn has_full_access(&self, project_id: ProjectId) -> Result<bool, StorageError> {
+        Ok(lock(&self.full_access).contains(&project_id))
+    }
+
+    fn set_full_access(&self, project_id: ProjectId, on: bool) -> Result<(), StorageError> {
+        let mut projects = lock(&self.full_access);
+        if on {
+            projects.insert(project_id);
+        } else {
+            projects.remove(&project_id);
+        }
         Ok(())
     }
 }

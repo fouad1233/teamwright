@@ -5,11 +5,11 @@
 //! which has no length limit and needs no quoting on any system.
 
 use std::ffi::OsString;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use teamwright_application::{
-    AgentRuntimeError, Effort, PermissionMode, PermissionProfile, ProgramVersion, SessionChoice,
-    SessionId, TurnRequest,
+    AgentRuntimeError, Effort, PermissionMode, PermissionProfile, ProgramVersion, ProtectedPlace,
+    SessionChoice, SessionId, TurnRequest,
 };
 
 use crate::kit::{ConnectorStarts, SESSION_SETTINGS, connector_entry, skill_rule};
@@ -241,6 +241,38 @@ pub fn turn_arguments_with(
         push_pair(&mut arguments, "--add-dir", &folder);
         disallowed_tools.push(format!("Edit({})", write_rule_path(&folder)));
     }
+    // A folder to write in is a working folder like the first one: read and
+    // written, with no rule against writing (decision 0044).
+    for folder in &request.written_folders {
+        let folder = folder.to_string_lossy();
+        check_value("folder", &folder)?;
+        push_pair(&mut arguments, "--add-dir", &folder);
+    }
+    // Full access: the root of every file system is a working folder, so
+    // that the file tools reach wherever the user's account can. Restricted
+    // mode stays on, and with it everything else it shuts out.
+    if request.full_access {
+        if permissions.commands_in_sandbox {
+            return Err(invalid(
+                "a turn with full access runs no command: its sandbox would reach the whole disk",
+            ));
+        }
+        for root in roots_of_this_computer() {
+            push_pair(&mut arguments, "--add-dir", &root.to_string_lossy());
+        }
+    }
+    // The places no session may read or change: every one of them with
+    // full access, and without it those that lie inside a folder the
+    // session was given.
+    let given: Vec<&Path> = std::iter::once(request.working_folder.as_path())
+        .chain(readable_folders.iter().map(PathBuf::as_path))
+        .chain(request.written_folders.iter().map(PathBuf::as_path))
+        .collect();
+    for place in &request.protected_places {
+        if request.full_access || given.iter().any(|folder| place.path.starts_with(folder)) {
+            disallowed_tools.extend(protected_rules(place));
+        }
+    }
 
     // The lists come last. Each takes every following argument up to the
     // next option, and an empty list must not be given at all: `--tools`
@@ -252,6 +284,29 @@ pub fn turn_arguments_with(
     push_list(&mut arguments, "--disallowedTools", &disallowed_tools)?;
 
     Ok(arguments)
+}
+
+/// The roots of the file systems of this computer: `/` on Linux and macOS,
+/// and on Windows every drive from `A:` to `Z:` that exists. A session with
+/// full access is given each of them as a working folder.
+fn roots_of_this_computer() -> Vec<PathBuf> {
+    if cfg!(windows) {
+        (b'A'..=b'Z')
+            .map(|letter| PathBuf::from(format!("{}:\\", char::from(letter))))
+            .filter(|drive| drive.is_dir())
+            .collect()
+    } else {
+        vec![PathBuf::from("/")]
+    }
+}
+
+/// The rules that keep a session out of a protected place: one against
+/// reading it and one against changing it. The rule against reading also
+/// stops the tools that write files, but not `NotebookEdit`, so the one
+/// against changing is always given too.
+fn protected_rules(place: &ProtectedPlace) -> [String; 2] {
+    let path = rule_path(&place.path.to_string_lossy(), place.is_folder);
+    [format!("Read({path})"), format!("Edit({path})")]
 }
 
 /// The path of a rule that forbids writing in a folder and everything
@@ -278,6 +333,13 @@ pub fn turn_arguments_with(
 /// which a real run showed to work. Every other character, among them
 /// spaces, commas, parentheses and the question mark, is written as `?`.
 fn write_rule_path(folder: &str) -> String {
+    rule_path(folder, true)
+}
+
+/// The path of a rule about a place: a folder with everything below it
+/// (`<folder>/**`), or a single file (`<file>`), written as
+/// [`write_rule_path`] says.
+fn rule_path(folder: &str, is_folder: bool) -> String {
     let mut letters = folder.chars();
     let drive = matches!(
         (letters.next(), letters.next()),
@@ -310,7 +372,9 @@ fn write_rule_path(folder: &str) -> String {
             _ => rule.push('?'),
         }
     }
-    rule.push_str("/**");
+    if is_folder {
+        rule.push_str("/**");
+    }
     rule
 }
 
@@ -425,6 +489,9 @@ mod tests {
             permissions: PermissionProfile::specialist(),
             team_tools: vec![TeamTool::AskManager],
             readable_folders: Vec::new(),
+            written_folders: Vec::new(),
+            full_access: false,
+            protected_places: Vec::new(),
             kit: TurnKit::default(),
         }
     }
@@ -1260,6 +1327,209 @@ mod tests {
             !arguments
                 .iter()
                 .any(|argument| argument.starts_with("--setting"))
+        );
+    }
+
+    /// The protected places of a computer of Linux, as the desktop names
+    /// them (decision 0044).
+    fn protected() -> Vec<ProtectedPlace> {
+        use teamwright_application::ProtectedKind;
+        vec![
+            ProtectedPlace::folder(
+                "/home/sample/.local/share/dev.teamwright.app",
+                ProtectedKind::TeamwrightData,
+            ),
+            ProtectedPlace::folder(
+                "/home/sample/Dropbox/Teamwright sync",
+                ProtectedKind::SyncFolder,
+            ),
+            ProtectedPlace::folder("/home/sample/.claude", ProtectedKind::AgentProgramSettings),
+            ProtectedPlace::file(
+                "/home/sample/.claude.json",
+                ProtectedKind::AgentProgramSettings,
+            ),
+            ProtectedPlace::folder("/home/sample/.ssh", ProtectedKind::Keys),
+            ProtectedPlace::folder("/home/sample/.gnupg", ProtectedKind::Keys),
+        ]
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_turn_with_full_access_has_exactly_these_arguments() {
+        let mut open = request();
+        open.working_folder = PathBuf::from("/home/sample/Documents/Teamwright/SSN");
+        open.full_access = true;
+        open.protected_places = protected();
+
+        let arguments = text(&turn_arguments(&open, &[], None).unwrap());
+
+        assert_eq!(
+            arguments,
+            [
+                "-p",
+                "--output-format",
+                "stream-json",
+                "--verbose",
+                "--permission-mode",
+                "acceptEdits",
+                "--permission-prompts",
+                "none",
+                "--restricted",
+                "--setting-sources=",
+                "--settings",
+                r#"{"disableAllHooks":true,"disableSkillShellExecution":true,"disableClaudeAiConnectors":true}"#,
+                "--strict-mcp-config",
+                "--add-dir",
+                "/",
+                "--tools",
+                "Read",
+                "Glob",
+                "Grep",
+                "Edit",
+                "Write",
+                "NotebookEdit",
+                "Skill",
+                "ToolSearch",
+                "--allowedTools",
+                "Read",
+                "Glob",
+                "Grep",
+                "--disallowedTools",
+                "Bash",
+                "PowerShell",
+                "Read(//home/sample/.local/share/dev.teamwright.app/**)",
+                "Edit(//home/sample/.local/share/dev.teamwright.app/**)",
+                "Read(//home/sample/Dropbox/Teamwright?sync/**)",
+                "Edit(//home/sample/Dropbox/Teamwright?sync/**)",
+                "Read(//home/sample/.claude/**)",
+                "Edit(//home/sample/.claude/**)",
+                "Read(//home/sample/.claude.json)",
+                "Edit(//home/sample/.claude.json)",
+                "Read(//home/sample/.ssh/**)",
+                "Edit(//home/sample/.ssh/**)",
+                "Read(//home/sample/.gnupg/**)",
+                "Edit(//home/sample/.gnupg/**)",
+            ]
+        );
+    }
+
+    #[test]
+    fn full_access_keeps_everything_else_that_confines_a_session() {
+        let mut open = request();
+        open.full_access = true;
+        open.protected_places = protected();
+        let arguments = text(&turn_arguments(&open, &[], Some(&bus())).unwrap());
+
+        for kept in ["--restricted", "--setting-sources=", "--strict-mcp-config"] {
+            assert!(arguments.contains(&kept.to_owned()), "{kept}");
+        }
+        assert!(
+            arguments
+                .windows(2)
+                .any(|pair| pair == ["--settings", SESSION_SETTINGS])
+        );
+        for never in [
+            "--dangerously-skip-permissions",
+            "--allow-dangerously-skip-permissions",
+            "bypassPermissions",
+            "auto",
+            "--permission-prompt-tool",
+        ] {
+            assert!(!arguments.contains(&never.to_owned()), "{never}");
+        }
+        // The shell stays out, and the team bus stays in.
+        let tools_at = arguments.iter().position(|a| a == "--tools").unwrap();
+        let allowed_at = arguments
+            .iter()
+            .position(|a| a == "--allowedTools")
+            .unwrap();
+        assert!(!arguments[tools_at..allowed_at].contains(&"Bash".to_owned()));
+        assert!(arguments.contains(&"mcp__teamwright__ask_manager".to_owned()));
+    }
+
+    #[test]
+    fn a_turn_with_full_access_and_a_command_is_refused() {
+        let mut both = granted(&[(PermissionKind::Command, "npm test")]);
+        both.full_access = true;
+        assert!(turn_arguments(&both, &[], None).is_err());
+        // A web domain is no command, and may go with full access.
+        let mut domain = granted(&[(PermissionKind::WebDomain, "docs.rs")]);
+        domain.full_access = true;
+        assert!(turn_arguments(&domain, &[], None).is_ok());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_folder_to_write_in_is_added_and_never_denied() {
+        let mut given = request();
+        given.written_folders = vec![PathBuf::from("/home/sample/firmware (rev b)")];
+        given.protected_places = protected();
+
+        let arguments = text(
+            &turn_arguments(&given, &[PathBuf::from("/home/sample/datasheets")], None).unwrap(),
+        );
+
+        let added: Vec<&String> = arguments
+            .windows(2)
+            .filter(|pair| pair[0] == "--add-dir")
+            .map(|pair| &pair[1])
+            .collect();
+        assert_eq!(
+            added,
+            ["/home/sample/datasheets", "/home/sample/firmware (rev b)"]
+        );
+        let denied_at = arguments
+            .iter()
+            .position(|a| a == "--disallowedTools")
+            .unwrap();
+        // The reference folder is denied for writing; the folder to write
+        // in is not; no protected place lies inside a folder of the turn,
+        // so none is named; there is no root.
+        assert_eq!(
+            arguments[denied_at + 1..],
+            ["Bash", "PowerShell", "Edit(//home/sample/datasheets/**)"]
+        );
+        assert!(!arguments.contains(&"/".to_owned()));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_protected_place_inside_a_folder_of_the_turn_is_shut_also_without_full_access() {
+        // The manager chose the home folder as the work folder: the keys
+        // and the settings of Claude Code inside it stay closed.
+        let mut home = request();
+        home.working_folder = PathBuf::from("/home/sample");
+        home.protected_places = protected();
+
+        let arguments = text(&turn_arguments(&home, &[], None).unwrap());
+
+        let denied_at = arguments
+            .iter()
+            .position(|a| a == "--disallowedTools")
+            .unwrap();
+        let denied = &arguments[denied_at + 1..];
+        assert!(denied.contains(&"Read(//home/sample/.ssh/**)".to_owned()));
+        assert!(denied.contains(&"Edit(//home/sample/.claude/**)".to_owned()));
+        assert!(denied.contains(&"Read(//home/sample/.claude.json)".to_owned()));
+        assert!(!arguments.contains(&"/".to_owned()));
+        // A turn in a folder apart from them names none of them.
+        let apart = text(&turn_arguments(&request(), &[], None).unwrap());
+        assert!(!apart.iter().any(|argument| argument.contains(".ssh")));
+    }
+
+    #[test]
+    fn a_rule_for_a_single_file_names_the_file_alone() {
+        assert_eq!(
+            rule_path("/home/sample/.claude.json", false),
+            "//home/sample/.claude.json"
+        );
+        assert_eq!(
+            rule_path("/home/sample/.claude", true),
+            "//home/sample/.claude/**"
+        );
+        assert_eq!(
+            rule_path(r"C:\Users\sample\.claude.json", false),
+            "C:/Users/sample/.claude.json"
         );
     }
 }

@@ -463,6 +463,11 @@ pub enum NoCommands {
     /// The specialist has a connector that is handed a secret in an
     /// environment variable. A command could read it.
     SecretInReach,
+    /// The project has full access on this computer (decision 0044). A
+    /// command would run in a sandbox whose working folders are then the
+    /// whole disk, which was never seen holding anything in; the two are
+    /// not mixed.
+    FullAccess,
 }
 
 impl NoCommands {
@@ -495,6 +500,11 @@ impl NoCommands {
                 "this specialist has a connector that is given a secret in an environment \
                  variable, and a command could read it; take that connector from the \
                  specialist first"
+            }
+            Self::FullAccess => {
+                "this project has full access on this computer, and a command is never allowed \
+                 together with it: its sandbox would reach the whole disk. Switch full access off \
+                 in the folders of the project to allow commands again"
             }
         }
     }

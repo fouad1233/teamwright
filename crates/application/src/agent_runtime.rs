@@ -601,9 +601,90 @@ pub struct TurnRequest {
     /// Folders outside the working folder that the session may read from
     /// and must not write to.
     pub readable_folders: Vec<PathBuf>,
+    /// Folders outside the working folder that the session may read and
+    /// write, as the working folder itself (decision 0044).
+    pub written_folders: Vec<PathBuf>,
+    /// Whether the session may read and write wherever the user's account
+    /// can, except in the protected places (decision 0044). The manager
+    /// switches it on for a project, on one computer.
+    pub full_access: bool,
+    /// The places of this computer no session may ever read or write:
+    /// Teamwright's own data, the sync folder, the agent program's own
+    /// settings and the keys of the system. A session
+    /// with full access is denied each of them; a session without it is
+    /// denied those that lie inside a folder it was given.
+    pub protected_places: Vec<ProtectedPlace>,
     /// The skills and connectors the manager gave the specialist, as far as
     /// this computer has them. Empty for the Advisor.
     pub kit: TurnKit,
+}
+
+/// A place of this computer that no specialist may read or change, whatever
+/// the manager allowed: not with full access, not as a folder to write in
+/// ([decision 0044](../../../docs/decisions/0044-folders-to-write-in-and-full-access.md)).
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ProtectedPlace {
+    /// Where it is, as this computer names it.
+    pub path: PathBuf,
+    /// Whether it is a folder, protected with everything below it, or a
+    /// single file.
+    pub is_folder: bool,
+    /// What it is.
+    pub kind: ProtectedKind,
+}
+
+impl ProtectedPlace {
+    /// A protected folder, with everything below it.
+    #[must_use]
+    pub fn folder(path: impl Into<PathBuf>, kind: ProtectedKind) -> Self {
+        Self {
+            path: path.into(),
+            is_folder: true,
+            kind,
+        }
+    }
+
+    /// A protected single file.
+    #[must_use]
+    pub fn file(path: impl Into<PathBuf>, kind: ProtectedKind) -> Self {
+        Self {
+            path: path.into(),
+            is_folder: false,
+            kind,
+        }
+    }
+}
+
+/// What a protected place is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ProtectedKind {
+    /// Teamwright's own data folder. A specialist that changed it could
+    /// rewrite the database or forge operations of the log; one that read
+    /// it would read every project of the computer and, while a turn runs,
+    /// the values of the connectors' variables.
+    TeamwrightData,
+    /// The folder computers keep in step through. It holds the log of
+    /// every project.
+    SyncFolder,
+    /// The settings of the agent program (`~/.claude`, `~/.claude.json`),
+    /// with the user's own skills, hooks, connectors and the sign-in.
+    AgentProgramSettings,
+    /// The keys of the system: the folder of SSH and the one of GnuPG.
+    /// Reading a private key would hand it to a model.
+    Keys,
+}
+
+impl ProtectedKind {
+    /// What the place is, in words for the manager and the specialist.
+    #[must_use]
+    pub const fn in_words(self) -> &'static str {
+        match self {
+            Self::TeamwrightData => "Teamwright's own data",
+            Self::SyncFolder => "the sync folder",
+            Self::AgentProgramSettings => "the settings of Claude Code",
+            Self::Keys => "the keys of the system",
+        }
+    }
 }
 
 /// How a connector is started. It belongs to the domain; it is named here

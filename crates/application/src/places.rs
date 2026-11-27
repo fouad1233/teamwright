@@ -1,16 +1,23 @@
 //! The folders of a project: the work folder the specialists read and write
-//! in, the reference folders they may only read, and the single files the
-//! manager hands them, which are copied into the work folder
+//! in, further folders they may write in too, the reference folders they may
+//! only read, and the single files the manager hands them, which are copied
+//! into the work folder
 //! ([decision 0013](../../../docs/decisions/0013-the-folders-of-a-project.md)).
+//! And whether the specialists of a project have full access: they may then
+//! read and write wherever the manager's account can, except in the places
+//! no specialist may ever change
+//! ([decision 0044](../../../docs/decisions/0044-folders-to-write-in-and-full-access.md)).
 //!
-//! The folders are facts about one computer. Teamwright never removes a file
-//! or a folder of the manager: forgetting a folder leaves it where it is.
+//! The folders and full access are facts about one computer. Teamwright
+//! never removes a file or a folder of the manager: forgetting a folder
+//! leaves it where it is.
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use teamwright_domain::{Project, ProjectId};
 
+use crate::agent_runtime::ProtectedPlace;
 use crate::error::ApplicationError;
 use crate::ports::{
     ConversationRepository, FileSystem, MemberRepository, PlacesRepository, ProjectFolders,
@@ -33,6 +40,13 @@ pub struct ProjectPlaces {
     /// The folders the specialists may read and must not change, in the
     /// order they were added.
     pub reference_folders: Vec<PathBuf>,
+    /// The folders besides the work folder that the specialists may read
+    /// and write, in the order they were added.
+    pub written_folders: Vec<PathBuf>,
+    /// Whether the specialists may read and write wherever the manager's
+    /// account can, except in the protected places. Kept for this computer
+    /// only, and off until the manager switches it on.
+    pub full_access: bool,
 }
 
 /// What the manager has chosen for the folders of a project, as it is
@@ -45,6 +59,9 @@ pub struct ChosenPlaces {
     /// The reference folders, in the order they were added, as the manager
     /// named them.
     pub reference_folders: Vec<PathBuf>,
+    /// The folders to write in, in the order they were added, as the
+    /// manager named them.
+    pub written_folders: Vec<PathBuf>,
 }
 
 /// The use cases of the folders of a project.
@@ -124,9 +141,20 @@ impl PlacesService {
                     };
                     refuse_folders_that_overlap(&work_folder, &reference)?;
                 }
+                for written in &chosen.written_folders {
+                    refuse_overlap(&work_folder, &self.known(written), WRITTEN)?;
+                }
                 Some(work_folder.given)
             }
         };
+        // Going back to the folder Teamwright gives the project must not
+        // put it into a folder to write in either.
+        if chosen.work_folder.is_none() {
+            let given = self.known(&self.folders.folder_of(&project)?);
+            for written in &chosen.written_folders {
+                refuse_overlap(&given, &self.known(written), WRITTEN)?;
+            }
+        }
         self.places.save(project.id(), &chosen)?;
         self.places_of(&project, chosen)
     }
@@ -153,6 +181,9 @@ impl PlacesService {
             given: work_folder,
         };
         refuse_folders_that_overlap(&work_folder, &reference)?;
+        for written in &chosen.written_folders {
+            refuse_overlap(&reference, &self.known(written), WRITTEN)?;
+        }
         let is_known = chosen
             .reference_folders
             .iter()
@@ -192,6 +223,164 @@ impl PlacesService {
             }
         }
         self.places_of(&project, chosen)
+    }
+
+    /// Lets the specialists of a project write in a folder besides the work
+    /// folder (decision 0044). A folder the project has already as a folder
+    /// to write in is kept once.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if there is no such project, if the folder is not
+    /// named or does not exist, if it is, lies inside or contains the work
+    /// folder, a reference folder or another folder to write in, if it is,
+    /// lies inside or contains a place no specialist may change, or if
+    /// storage fails.
+    pub fn add_written_folder(
+        &self,
+        project_id: ProjectId,
+        folder: &Path,
+    ) -> Result<ProjectPlaces, ApplicationError> {
+        let project = self.require_project(project_id)?;
+        let mut chosen = self.places.find(project.id())?;
+        let written = self.require_folder(folder)?;
+        if chosen
+            .written_folders
+            .iter()
+            .any(|other| self.comparable(other) == written.resolved)
+        {
+            return self.places_of(&project, chosen);
+        }
+        for place in self.folders.protected_places()? {
+            refuse_protected(&written, &self.known(&place.path), &place)?;
+        }
+        let work_folder = self.known(&self.work_folder_in(&project, &chosen)?);
+        refuse_overlap(&written, &work_folder, WORK)?;
+        for reference in &chosen.reference_folders {
+            refuse_overlap(&written, &self.known(reference), REFERENCE)?;
+        }
+        for other in &chosen.written_folders {
+            refuse_overlap(&written, &self.known(other), WRITTEN)?;
+        }
+        chosen.written_folders.push(written.given);
+        self.places.save(project.id(), &chosen)?;
+        self.places_of(&project, chosen)
+    }
+
+    /// Takes a folder to write in away from the specialists of a project. A
+    /// folder the project does not have changes nothing. The folder itself
+    /// is not touched.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if there is no such project or if storage fails.
+    pub fn remove_written_folder(
+        &self,
+        project_id: ProjectId,
+        folder: &Path,
+    ) -> Result<ProjectPlaces, ApplicationError> {
+        let project = self.require_project(project_id)?;
+        let mut chosen = self.places.find(project.id())?;
+        let folder = tidy(folder);
+        if !folder.as_os_str().is_empty() {
+            let removed = self.comparable(&folder);
+            let count_before = chosen.written_folders.len();
+            chosen
+                .written_folders
+                .retain(|other| self.comparable(other) != removed);
+            if chosen.written_folders.len() != count_before {
+                self.places.save(project.id(), &chosen)?;
+            }
+        }
+        self.places_of(&project, chosen)
+    }
+
+    /// Switches full access of a project on or off, on this computer
+    /// (decision 0044). A turn that runs keeps what it was started with;
+    /// the change holds from the next turn.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if there is no such project or if storage fails.
+    pub fn set_full_access(
+        &self,
+        project_id: ProjectId,
+        on: bool,
+    ) -> Result<ProjectPlaces, ApplicationError> {
+        let project = self.require_project(project_id)?;
+        self.places.set_full_access(project.id(), on)?;
+        let chosen = self.places.find(project.id())?;
+        self.places_of(&project, chosen)
+    }
+
+    /// Whether the specialists of a project have full access on this
+    /// computer.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if storage fails.
+    pub fn has_full_access(&self, project: &Project) -> Result<bool, ApplicationError> {
+        Ok(self.places.has_full_access(project.id())?)
+    }
+
+    /// The places of this computer that no specialist may change.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if storage fails.
+    pub fn protected_places(&self) -> Result<Vec<ProtectedPlace>, ApplicationError> {
+        Ok(self.folders.protected_places()?)
+    }
+
+    /// Refuses a turn with full access whose folders lie inside a protected
+    /// place: the rules that keep the place closed would keep the turn out
+    /// of its own folder. That happens only where Teamwright keeps the
+    /// folders of the projects inside its data folder, as it does when
+    /// `TEAMWRIGHT_DATA_DIR` is set for a test.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ApplicationError::FullAccessInsideProtected`] for the first
+    /// such folder.
+    pub fn refuse_full_access_inside_protected<'a>(
+        &self,
+        protected: &[ProtectedPlace],
+        folders: impl IntoIterator<Item = &'a PathBuf>,
+    ) -> Result<(), ApplicationError> {
+        for folder in folders {
+            let resolved = self.comparable(folder);
+            for place in protected.iter().filter(|place| place.is_folder) {
+                if resolved.starts_with(self.comparable(&place.path)) {
+                    return Err(ApplicationError::FullAccessInsideProtected {
+                        folder: folder.display().to_string(),
+                        place_kind: place.kind.in_words(),
+                        place: place.path.display().to_string(),
+                    });
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// The folders to write in of a project that exist on the computer now,
+    /// in the order they were added, each in its full form, as
+    /// [`Self::existing_reference_folders`].
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if storage fails.
+    pub fn existing_written_folders(
+        &self,
+        project: &Project,
+    ) -> Result<Vec<PathBuf>, ApplicationError> {
+        Ok(self
+            .places
+            .find(project.id())?
+            .written_folders
+            .into_iter()
+            .filter(|folder| self.file_system.is_folder(folder))
+            .filter_map(|folder| self.file_system.resolve(&folder).ok())
+            .collect())
     }
 
     /// Copies files into the folder `references` inside the work folder of
@@ -287,7 +476,17 @@ impl PlacesService {
             work_folder: self.work_folder_in(project, &chosen)?,
             is_work_folder_chosen: chosen.work_folder.is_some(),
             reference_folders: chosen.reference_folders,
+            written_folders: chosen.written_folders,
+            full_access: self.places.has_full_access(project.id())?,
         })
+    }
+
+    /// A folder as it is kept, with the form in which it is compared.
+    fn known(&self, folder: &Path) -> Folder {
+        Folder {
+            given: folder.to_path_buf(),
+            resolved: self.comparable(folder),
+        }
     }
 
     /// The work folder of a project with the given choice.
@@ -387,6 +586,77 @@ fn refuse_folders_that_overlap(
     Ok(())
 }
 
+/// What the work folder is called in a refusal.
+const WORK: &str = "the work folder";
+
+/// What a reference folder is called in a refusal.
+const REFERENCE: &str = "the reference folder";
+
+/// What a folder to write in is called in a refusal.
+const WRITTEN: &str = "the folder to write in";
+
+/// How one folder stands to another, compared part by part, so that `/work`
+/// does not contain `/workshop`: the same folder, inside it, around it, or
+/// apart from it.
+fn relation(folder: &Path, other: &Path) -> Option<&'static str> {
+    if folder == other {
+        Some("is")
+    } else if folder.starts_with(other) {
+        Some("lies inside")
+    } else if other.starts_with(folder) {
+        Some("contains")
+    } else {
+        None
+    }
+}
+
+/// Refuses a folder that is, lies inside or contains another folder of the
+/// project, where one of them is a folder to write in. Nested folders of two
+/// kinds would leave the manager unsure whether a file may be changed, and
+/// nested folders of one kind add nothing.
+fn refuse_overlap(
+    folder: &Folder,
+    other: &Folder,
+    other_kind: &'static str,
+) -> Result<(), ApplicationError> {
+    match relation(&folder.resolved, &other.resolved) {
+        None => Ok(()),
+        Some(relation) => Err(ApplicationError::WrittenFolderOverlaps {
+            folder: folder.given.display().to_string(),
+            relation,
+            other_kind,
+            other: other.given.display().to_string(),
+        }),
+    }
+}
+
+/// Refuses a folder to write in that is, lies inside or contains a place no
+/// specialist may change. Containing one is refused too: a folder to write
+/// in grants exactly what it names, and the one switch that grants more than
+/// that, full access, is the one that keeps the protected places closed by
+/// rule, for reading as well as writing.
+fn refuse_protected(
+    folder: &Folder,
+    place_folder: &Folder,
+    place: &ProtectedPlace,
+) -> Result<(), ApplicationError> {
+    let Some(relation) = relation(&folder.resolved, &place_folder.resolved) else {
+        return Ok(());
+    };
+    Err(ApplicationError::FolderProtected {
+        folder: folder.given.display().to_string(),
+        relation,
+        place_kind: place.kind.in_words(),
+        place: place.path.display().to_string(),
+        why: if relation == "contains" {
+            "which no specialist may change; to let the specialists write almost everywhere, \
+             switch on full access, which keeps such places closed"
+        } else {
+            "which no specialist may change"
+        },
+    })
+}
+
 /// A path without the spaces the manager may have typed around it.
 fn tidy(path: &Path) -> PathBuf {
     path.to_str()
@@ -467,7 +737,8 @@ mod tests {
         let members = Arc::new(InMemoryMemberRepository::default());
         let conversations = Arc::new(InMemoryConversationRepository::default());
         let places = Arc::new(InMemoryPlacesRepository::default());
-        let folders = Arc::new(FixedProjectFolders::inside(PROJECTS_FOLDER));
+        let folders =
+            Arc::new(FixedProjectFolders::inside(PROJECTS_FOLDER).with_protected(protected()));
         let file_system = Arc::new(PretendFileSystem::with_folders(FOLDERS));
         let clock = Arc::new(ManualClock::starting_at(
             chrono::Utc.with_ymd_and_hms(2026, 11, 12, 9, 0, 0).unwrap(),
@@ -589,6 +860,8 @@ mod tests {
                 work_folder: given_work_folder(),
                 is_work_folder_chosen: false,
                 reference_folders: Vec::new(),
+                written_folders: Vec::new(),
+                full_access: false,
             }
         );
     }
@@ -901,6 +1174,261 @@ mod tests {
         assert_eq!(
             free_name(".gitignore", &taken(&[".gitignore"])),
             ".gitignore (2)"
+        );
+    }
+
+    /// The places these tests protect, as a computer would: Teamwright's
+    /// data, the sync folder, the settings of Claude Code and the keys.
+    fn protected() -> Vec<ProtectedPlace> {
+        use crate::agent_runtime::ProtectedKind;
+        vec![
+            ProtectedPlace::folder(
+                "/Home/.local/share/teamwright",
+                ProtectedKind::TeamwrightData,
+            ),
+            ProtectedPlace::folder("/Sync", ProtectedKind::SyncFolder),
+            ProtectedPlace::folder("/Home/.claude", ProtectedKind::AgentProgramSettings),
+            ProtectedPlace::file("/Home/.claude.json", ProtectedKind::AgentProgramSettings),
+            ProtectedPlace::folder("/Home/.ssh", ProtectedKind::Keys),
+        ]
+    }
+
+    impl Workspace {
+        fn add_written_folder(&self, folder: &str) -> Result<ProjectPlaces, ApplicationError> {
+            self.places
+                .add_written_folder(self.project.id(), Path::new(folder))
+        }
+    }
+
+    #[test]
+    fn lets_the_specialists_write_in_a_further_folder_and_lists_it_once() {
+        let workspace = workspace();
+        workspace.file_system.add_folder("/Firmware");
+
+        workspace.add_written_folder(" /Firmware ").unwrap();
+        let places = workspace.add_written_folder("/firmware/").unwrap();
+
+        assert_eq!(places.written_folders, [path("/Firmware")]);
+        assert_eq!(places.reference_folders, Vec::<PathBuf>::new());
+        assert!(!places.full_access);
+    }
+
+    #[test]
+    fn takes_a_folder_to_write_in_away_and_leaves_the_folder_itself() {
+        let workspace = workspace();
+        workspace.file_system.add_folder("/Firmware");
+        workspace.add_written_folder("/Firmware").unwrap();
+
+        let still = workspace
+            .places
+            .remove_written_folder(workspace.project.id(), Path::new("/Work"))
+            .unwrap();
+        assert_eq!(still.written_folders, [path("/Firmware")]);
+        let gone = workspace
+            .places
+            .remove_written_folder(workspace.project.id(), Path::new("/Firmware/"))
+            .unwrap();
+        assert!(gone.written_folders.is_empty());
+        assert!(workspace.file_system.is_folder(Path::new("/Firmware")));
+    }
+
+    #[test]
+    fn refuses_a_folder_to_write_in_that_does_not_exist() {
+        let workspace = workspace();
+
+        let error = workspace.add_written_folder("/Missing").unwrap_err();
+
+        assert_eq!(error.code(), "folder_not_found");
+    }
+
+    #[test]
+    fn a_folder_is_never_both_read_only_and_written() {
+        let workspace = workspace();
+        workspace.add_reference_folder("/Datasheets").unwrap();
+
+        let same = workspace.add_written_folder("/datasheets").unwrap_err();
+        assert_eq!(same.code(), "rule_broken");
+        assert_eq!(
+            same.to_string(),
+            "/datasheets is the reference folder /Datasheets; a folder of a project is the work \
+             folder, a folder to write in or a folder only to read, never two of them"
+        );
+        let inside = workspace
+            .add_written_folder("/Datasheets/Bosch")
+            .unwrap_err();
+        assert_eq!(inside.code(), "rule_broken");
+        assert!(
+            inside
+                .to_string()
+                .starts_with("/Datasheets/Bosch lies inside the reference folder /Datasheets")
+        );
+
+        // The other way round: a reference folder around a written one.
+        let other = self::workspace();
+        other.add_written_folder("/Datasheets/Bosch").unwrap();
+        let around = other.add_reference_folder("/Datasheets").unwrap_err();
+        assert_eq!(around.code(), "rule_broken");
+        assert!(
+            around
+                .to_string()
+                .starts_with("/Datasheets contains the folder to write in /Datasheets/Bosch")
+        );
+    }
+
+    #[test]
+    fn a_folder_to_write_in_is_not_the_work_folder_nor_inside_or_around_it() {
+        let workspace = workspace();
+        workspace.set_work_folder("/Work/sensor-node").unwrap();
+
+        for folder in ["/Work/sensor-node", "/Work/sensor-node/docs", "/Work"] {
+            let error = workspace.add_written_folder(folder).unwrap_err();
+            assert_eq!(error.code(), "rule_broken", "{folder}");
+            assert!(error.to_string().contains("the work folder"), "{error}");
+        }
+        assert!(workspace.current().written_folders.is_empty());
+    }
+
+    #[test]
+    fn two_folders_to_write_in_do_not_lie_inside_each_other() {
+        let workspace = workspace();
+        workspace.add_written_folder("/Datasheets").unwrap();
+
+        let inside = workspace
+            .add_written_folder("/Datasheets/Bosch")
+            .unwrap_err();
+
+        assert_eq!(inside.code(), "rule_broken");
+        assert!(
+            inside
+                .to_string()
+                .contains("the folder to write in /Datasheets")
+        );
+    }
+
+    #[test]
+    fn the_work_folder_cannot_be_moved_into_or_around_a_folder_to_write_in() {
+        let workspace = workspace();
+        workspace.add_written_folder("/Work/sensor-node").unwrap();
+
+        for folder in ["/Work/sensor-node", "/Work/sensor-node/docs", "/Work"] {
+            let error = workspace.set_work_folder(folder).unwrap_err();
+            assert_eq!(error.code(), "rule_broken", "{folder}");
+        }
+        assert!(!workspace.current().is_work_folder_chosen);
+    }
+
+    #[test]
+    fn no_place_that_is_protected_can_be_a_folder_to_write_in() {
+        let workspace = workspace();
+        for folder in [
+            "/Home/.local/share/teamwright",
+            "/Home/.local/share/teamwright/skills",
+            "/Sync",
+            "/Sync/devices",
+            "/Home/.claude",
+            "/Home/.claude/skills",
+            "/Home/.ssh",
+        ] {
+            workspace.file_system.add_folder(folder);
+            let error = workspace.add_written_folder(folder).unwrap_err();
+            assert_eq!(error.code(), "rule_broken", "{folder}");
+            assert!(
+                error.to_string().contains("which no specialist may change"),
+                "{error}"
+            );
+        }
+        let sync = workspace.add_written_folder("/Sync/devices").unwrap_err();
+        assert_eq!(
+            sync.to_string(),
+            "/Sync/devices lies inside the sync folder (/Sync), which no specialist may change"
+        );
+        assert!(workspace.current().written_folders.is_empty());
+    }
+
+    #[test]
+    fn a_folder_to_write_in_that_holds_a_protected_place_is_refused_too() {
+        let workspace = workspace();
+        workspace.file_system.add_folder("/Home");
+
+        let error = workspace.add_written_folder("/Home").unwrap_err();
+
+        assert_eq!(error.code(), "rule_broken");
+        assert_eq!(
+            error.to_string(),
+            "/Home contains Teamwright's own data (/Home/.local/share/teamwright), which no \
+             specialist may change; to let the specialists write almost everywhere, switch on \
+             full access, which keeps such places closed"
+        );
+    }
+
+    #[test]
+    fn full_access_is_off_until_switched_on_and_kept_per_project() {
+        let workspace = workspace();
+        assert!(!workspace.current().full_access);
+
+        let on = workspace
+            .places
+            .set_full_access(workspace.project.id(), true)
+            .unwrap();
+        assert!(on.full_access);
+        assert!(
+            workspace
+                .places
+                .has_full_access(&workspace.project)
+                .unwrap()
+        );
+
+        let other = workspace
+            .projects
+            .create(NewProject {
+                name: "Battery charger".to_owned(),
+                workflow: WorkflowTemplate::Engineering,
+                ..NewProject::default()
+            })
+            .unwrap();
+        assert!(!workspace.places.places(other.id()).unwrap().full_access);
+
+        let off = workspace
+            .places
+            .set_full_access(workspace.project.id(), false)
+            .unwrap();
+        assert!(!off.full_access);
+    }
+
+    #[test]
+    fn a_turn_with_full_access_may_not_work_inside_a_protected_place() {
+        let workspace = workspace();
+        let inside = path("/Home/.local/share/teamwright/projects/SSN");
+        let error = workspace
+            .places
+            .refuse_full_access_inside_protected(&protected(), [&inside])
+            .unwrap_err();
+        assert_eq!(error.code(), "rule_broken");
+        assert!(
+            error
+                .to_string()
+                .starts_with("full access cannot be used here")
+        );
+        workspace
+            .places
+            .refuse_full_access_inside_protected(&protected(), [&path("/Work/sensor-node")])
+            .unwrap();
+    }
+
+    #[test]
+    fn names_only_the_folders_to_write_in_that_still_exist() {
+        let workspace = workspace();
+        workspace.file_system.add_folder("/Gone");
+        workspace.add_written_folder("/Datasheets").unwrap();
+        workspace.add_written_folder("/Gone").unwrap();
+        let places = PlacesService {
+            file_system: Arc::new(PretendFileSystem::with_folders(FOLDERS)),
+            ..workspace.places.clone()
+        };
+
+        assert_eq!(
+            places.existing_written_folders(&workspace.project).unwrap(),
+            [path("/Datasheets")]
         );
     }
 }

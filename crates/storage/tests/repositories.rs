@@ -1712,7 +1712,64 @@ fn chosen_places(work_folder: Option<&str>, reference_folders: &[&str]) -> Chose
     ChosenPlaces {
         work_folder: work_folder.map(PathBuf::from),
         reference_folders: reference_folders.iter().map(PathBuf::from).collect(),
+        written_folders: Vec::new(),
     }
+}
+
+#[test]
+fn the_folders_to_write_in_are_kept_in_order_and_logged_with_the_places() {
+    let store = Store::in_memory();
+    let project = store.project("Smart sensor node");
+    let start = store.database.operations().unwrap().len();
+    let mut places = chosen_places(Some("/sample/work"), &["/sample/datasheets"]);
+    places.written_folders = vec![
+        PathBuf::from("/sample/firmware"),
+        PathBuf::from("/sample/website"),
+    ];
+
+    store.places.save(project.id(), &places).unwrap();
+    assert_eq!(store.places.find(project.id()).unwrap(), places);
+    places.written_folders.remove(0);
+    store.places.save(project.id(), &places).unwrap();
+
+    assert_eq!(store.places.find(project.id()).unwrap(), places);
+    let log = store.database.operations().unwrap();
+    let state: serde_json::Value =
+        serde_json::from_str(log[start + 1].payload.as_deref().unwrap()).unwrap();
+    assert_eq!(
+        state["written_folders"],
+        serde_json::json!(["/sample/website"])
+    );
+}
+
+#[test]
+fn full_access_is_off_until_switched_on_kept_per_project_and_never_logged() {
+    let store = Store::in_memory();
+    let project = store.project("Smart sensor node");
+    let other = store.project("Weather station");
+    let start = store.database.operations().unwrap().len();
+    assert!(!store.places.has_full_access(project.id()).unwrap());
+
+    store.places.set_full_access(project.id(), true).unwrap();
+    assert!(store.places.has_full_access(project.id()).unwrap());
+    assert!(!store.places.has_full_access(other.id()).unwrap());
+    store.places.set_full_access(project.id(), false).unwrap();
+    assert!(!store.places.has_full_access(project.id()).unwrap());
+    store.places.set_full_access(project.id(), true).unwrap();
+
+    assert_eq!(store.database.operations().unwrap().len(), start);
+    assert!(store.database.operations_to_send(0).unwrap().len() <= start);
+}
+
+#[test]
+fn deleting_a_project_forgets_its_full_access() {
+    let store = Store::in_memory();
+    let project = store.project("Smart sensor node");
+    store.places.set_full_access(project.id(), true).unwrap();
+
+    store.projects.delete(project.id()).unwrap();
+
+    assert!(!store.places.has_full_access(project.id()).unwrap());
 }
 
 #[test]

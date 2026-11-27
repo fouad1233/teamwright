@@ -48,6 +48,9 @@ fn request(folder: &Path, prompt: &str, session: SessionChoice) -> TurnRequest {
         permissions: PermissionProfile::specialist(),
         team_tools: Vec::new(),
         readable_folders: Vec::new(),
+        written_folders: Vec::new(),
+        full_access: false,
+        protected_places: Vec::new(),
         kit: teamwright_application::TurnKit::default(),
     }
 }
@@ -429,7 +432,7 @@ fn the_own_instructions_of_a_specialist_reach_a_real_session() {
     request.extra_instructions = Some(instructions_for(
         &member,
         &project,
-        &[],
+        &teamwright_application::FoldersOfTurn::default(),
         &teamwright_domain::WordsMark::generate(),
     ));
     assert!(!request.prompt.contains("PERSIMMON"));

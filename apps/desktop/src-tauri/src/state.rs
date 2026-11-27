@@ -15,10 +15,10 @@ use teamwright_application::{
     DigestService, DiskEntry, DriveSurroundings, FieldService, FileSystem, FolderReader,
     GitHubPorts, GitHubService, GoogleDriveService, GroupingService, IntegrationSettings,
     NotificationService, OperatingSystem, PlacesService, PlanLimitService, PlanReport,
-    ProjectEvent, ProjectFilesService, ProjectFolders, ProjectService, RoundReport, SprintService,
-    StorageError, SyncPorts, SyncService, SystemClock, TagService, TaskService, TeamService,
-    UpdateService, ViewService, WorkListener, WorkPorts, WorkService, WorkbookPorts,
-    WorkbookService,
+    ProjectEvent, ProjectFilesService, ProjectFolders, ProjectService, ProtectedKind,
+    ProtectedPlace, RoundReport, SprintService, StorageError, SyncLedger, SyncPorts, SyncService,
+    SystemClock, TagService, TaskService, TeamService, UpdateService, ViewService, WorkListener,
+    WorkPorts, WorkService, WorkbookPorts, WorkbookService,
 };
 use teamwright_domain::{ComputerId, Conversation, Project, Turn};
 use teamwright_integrations::{GhCommandLine, GhLocator, GitHubReleases, HttpsSender};
@@ -286,6 +286,17 @@ impl AppState {
         let clock = Arc::new(SystemClock);
         let folders: Arc<dyn ProjectFolders> = Arc::new(FoldersOfProjects {
             root: projects_directory(app).map_err(|error| error.to_string()),
+            data_folder: data_directory.clone(),
+            ledger: sync_ledger.clone(),
+            in_home: app.path().home_dir().map_or_else(
+                |_| Vec::new(),
+                |home| {
+                    teamwright_runtime::protected_places_in_home(
+                        &home,
+                        &teamwright_runtime::Environment::inherited(),
+                    )
+                },
+            ),
         });
         let file_system: Arc<dyn FileSystem> = Arc::new(LocalFileSystem);
         let appearance = AppearanceService::new(Arc::new(SqliteThemeStore::new(database.clone())));
@@ -694,13 +705,21 @@ fn projects_directory(app: &AppHandle) -> Result<PathBuf, tauri::Error> {
     }
 }
 
-/// Gives each project a folder of its own, named by the key of the project.
+/// Gives each project a folder of its own, named by the key of the project,
+/// and knows the places no specialist may read or change (decision 0044).
 struct FoldersOfProjects {
     /// The folder that holds them, or why the operating system could not say
     /// where it is. A computer without a folder for documents can still plan
     /// a project: only the work of a specialist needs the folder, so only
     /// that work is refused.
     root: Result<PathBuf, String>,
+    /// Teamwright's own data folder.
+    data_folder: PathBuf,
+    /// The bookkeeping of syncing, which knows the sync folder now.
+    ledger: Arc<SqliteSyncLedger>,
+    /// The places of the home folder that are protected: the settings of
+    /// Claude Code and the keys. Empty if the system names no home folder.
+    in_home: Vec<ProtectedPlace>,
 }
 
 impl ProjectFolders for FoldersOfProjects {
@@ -721,6 +740,20 @@ impl ProjectFolders for FoldersOfProjects {
             )
         })?;
         Ok(folder)
+    }
+
+    fn protected_places(&self) -> Result<Vec<ProtectedPlace>, StorageError> {
+        let mut places = vec![ProtectedPlace::folder(
+            self.data_folder.clone(),
+            ProtectedKind::TeamwrightData,
+        )];
+        // The folder chosen now: a folder chosen while a turn runs is
+        // protected from the next turn on.
+        if let Some(folder) = self.ledger.settings()?.folder {
+            places.push(ProtectedPlace::folder(folder, ProtectedKind::SyncFolder));
+        }
+        places.extend(self.in_home.iter().cloned());
+        Ok(places)
     }
 }
 
