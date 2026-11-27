@@ -43,6 +43,8 @@ struct Planning {
     team: TeamService,
     work: WorkService,
     digests: Arc<crate::in_memory::InMemoryDigestRepository>,
+    places: Arc<InMemoryPlacesRepository>,
+    file_system: Arc<PretendFileSystem>,
     runtime: Arc<ScriptedRuntime>,
     listener: Arc<RecordingWorkListener>,
     clock: Arc<ManualClock>,
@@ -63,6 +65,7 @@ fn planning() -> Planning {
     let listener = Arc::new(RecordingWorkListener::default());
     let area_store = Arc::new(crate::in_memory::InMemoryAreaRepository::default());
     let digests = Arc::new(crate::in_memory::InMemoryDigestRepository::default());
+    let file_system = Arc::new(PretendFileSystem::default());
     let clock = Arc::new(ManualClock::starting_at(start_of_day()));
     let projects = ProjectService::new(
         projects_store.clone(),
@@ -110,8 +113,8 @@ fn planning() -> Planning {
         permissions: Arc::new(crate::in_memory::InMemoryPermissionRepository::default()),
         command_choice: Arc::new(crate::in_memory::InMemoryCommandChoice::default()),
         folders: Arc::new(FixedProjectFolders::inside("projects")),
-        places,
-        file_system: Arc::new(PretendFileSystem::default()),
+        places: places.clone(),
+        file_system: file_system.clone(),
         kits: Arc::new(crate::kits::InMemoryKitRepository::default()),
         shelf: Arc::new(crate::kits::PretendShelf::default()),
         marks: Arc::new(crate::marks::FixedMark::for_tests()),
@@ -134,6 +137,8 @@ fn planning() -> Planning {
         team,
         work,
         digests,
+        places,
+        file_system,
         runtime,
         listener,
         clock,
@@ -717,6 +722,47 @@ fn runs_in_the_work_folder_with_the_tools_of_the_advisor_on_the_model_of_the_con
     let instructions = request.extra_instructions.as_deref().unwrap();
     assert!(instructions.starts_with("You are the Advisor of the project \"Air quality node\""));
     assert!(instructions.contains("- Hardware engineer (AI specialist)"));
+}
+
+#[test]
+fn reads_the_work_folder_the_manager_chose_and_the_reference_folders_when_it_plans() {
+    // A manager who plans a project in a folder that holds work already, a
+    // repository or documents, chooses that folder first. The Advisor runs
+    // in it, so it reads what is there before it asks or proposes; it has
+    // no tool that writes.
+    use crate::ports::PlacesRepository;
+    let planning = planning();
+    for folder in ["/sample/existing repository", "/sample/datasheets"] {
+        planning.file_system.add_folder(folder);
+    }
+    planning
+        .places
+        .save(
+            planning.project.id(),
+            &crate::places::ChosenPlaces {
+                work_folder: Some(PathBuf::from("/sample/existing repository")),
+                reference_folders: vec![PathBuf::from("/sample/datasheets")],
+            },
+        )
+        .unwrap();
+
+    planning.advise("Add a display to the node.").unwrap();
+
+    let request = &planning.runtime.requests()[0];
+    assert_eq!(
+        request.working_folder,
+        PathBuf::from("/sample/existing repository")
+    );
+    assert_eq!(
+        request.readable_folders,
+        [PathBuf::from("/sample/datasheets")]
+    );
+    assert_eq!(request.permissions, PermissionProfile::advisor());
+    let instructions = request.extra_instructions.as_deref().unwrap();
+    assert!(instructions.contains(
+        "It may hold work that exists already, such as a repository or documents: look at what \
+         is there before you ask or propose"
+    ));
 }
 
 // The interview

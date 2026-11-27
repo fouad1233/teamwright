@@ -864,8 +864,10 @@ pub fn instructions_for_advisor(
             .to_owned(),
         String::new(),
         "How you work:".to_owned(),
-        "1. Read what the manager wrote. If the folder of the project holds material, read what \
-         matters for the plan. You can read and search files and nothing else."
+        "1. Read what the manager wrote. Then look in the folder of the project, the folder you \
+         are in. It may hold work that exists already, such as a repository or documents: look \
+         at what is there before you ask or propose, and plan from it rather than from nothing. \
+         You can read and search files and nothing else."
             .to_owned(),
         "2. Ask what you need to know with the tool interview. Ask only questions whose answer \
          changes the team or the plan: what is to be built, what \"done\" means, what is fixed \
