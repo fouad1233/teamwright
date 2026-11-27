@@ -76,6 +76,7 @@ import type {
   NewPermissionAnswer,
   PermissionRequest,
   ThemeName,
+  UpdateInstall,
   UpdateStatus,
   View,
   ViewFilter,
@@ -878,6 +879,20 @@ export interface Backend {
   lookForUpdateNow(): Promise<UpdateStatus>;
   /** Switches looking by itself on or off, on this computer. */
   switchUpdateLook(on: boolean): Promise<UpdateStatus>;
+  /** Where installing an update stands. Nothing is asked of the network. */
+  updateInstall(): Promise<UpdateInstall>;
+  /**
+   * Starts installing the newer version, because the manager pressed the
+   * button, and answers at once; `updateInstall` follows the progress. It
+   * never restarts the program.
+   */
+  installUpdate(): Promise<UpdateInstall>;
+  /**
+   * Restarts the program into the new version. Refused with words while
+   * specialists work, unless `evenWhileWorking` says the manager agreed to
+   * stop them.
+   */
+  restartForUpdate(evenWhileWorking: boolean): Promise<UpdateInstall>;
 
   /**
    * What the manager chose about notifications of the operating system on

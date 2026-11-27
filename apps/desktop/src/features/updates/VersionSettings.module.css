@@ -40,6 +40,61 @@
   line-height: 1.55;
 }
 
+/* Where the update comes from, and what waits after "Later". */
+.source {
+  color: var(--ink-soft);
+  font-size: var(--text-small);
+  line-height: 1.55;
+}
+
+/* A refused download or another failure: said plainly in ink, since nothing
+   was installed and the program goes on as it was. */
+.problem {
+  color: var(--ink);
+  line-height: 1.55;
+}
+
+/* Specialists at work: what a restart would stop. */
+.warning {
+  color: var(--danger);
+  font-size: var(--text-small);
+  line-height: 1.55;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* The download as it arrives: a line of words over a hairline, as the
+   meter of a context is. */
+.progress {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.track {
+  position: relative;
+  display: block;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--rule-strong);
+}
+
+.fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: calc(var(--share) * 100%);
+  border-radius: 1px;
+  background: var(--brass);
+  transition: width var(--duration-quick) var(--ease-settle);
+}
+
 .look {
   display: flex;
   flex-wrap: wrap;

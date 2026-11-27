@@ -2,7 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo } from 'react';
 
 import { useBackend } from '@/shared/api/BackendProvider';
-import type { UpdateStatus } from '@/shared/api/types';
+import type { UpdateInstall, UpdateStatus } from '@/shared/api/types';
 import { describeFailure, useNotifier } from '@/shared/ui/Toast';
 
 /** The name under which what is known about versions is cached. */
@@ -25,6 +25,64 @@ export function useUpdateStatus() {
     refetchInterval: ASK_EVERY_HOUR,
     refetchOnWindowFocus: false,
   });
+}
+
+/** The name under which where installing stands is cached. */
+const INSTALL_KEY = ['updates', 'install'] as const;
+
+/** How often the window asks for the progress while an install runs, in milliseconds. */
+const PROGRESS_EVERY = 400;
+
+/**
+ * Where installing an update stands (decision 0045). Asking costs nothing
+ * on the network; while an install runs the window asks often, to show its
+ * progress, and otherwise not at all.
+ */
+export function useUpdateInstall() {
+  const backend = useBackend();
+  return useQuery({
+    queryKey: INSTALL_KEY,
+    queryFn: () => backend.updateInstall(),
+    refetchInterval: (query) => {
+      const phase = query.state.data?.progress.phase;
+      return phase === 'looking' || phase === 'downloading' ? PROGRESS_EVERY : false;
+    },
+    refetchOnWindowFocus: false,
+  });
+}
+
+/** What the manager can do about installing. A refusal is shown to the manager. */
+export interface InstallCommands {
+  /** Starts installing the newer version. */
+  install(): Promise<void>;
+  /**
+   * Restarts into the new version. While specialists work it is refused
+   * unless `evenWhileWorking` says the manager agreed to stop them.
+   */
+  restart(evenWhileWorking: boolean): Promise<void>;
+}
+
+/** The commands of installing. Each one shows the state it answers with. */
+export function useInstallCommands(): InstallCommands {
+  const backend = useBackend();
+  const queryClient = useQueryClient();
+  const notifier = useNotifier();
+
+  return useMemo(() => {
+    const change = async (request: () => Promise<UpdateInstall>) => {
+      try {
+        queryClient.setQueryData<UpdateInstall>(INSTALL_KEY, await request());
+      } catch (failure) {
+        notifier.showError(describeFailure(failure));
+        // What changed meanwhile, such as specialists that started, shows.
+        await queryClient.invalidateQueries({ queryKey: INSTALL_KEY });
+      }
+    };
+    return {
+      install: () => change(() => backend.installUpdate()),
+      restart: (evenWhileWorking) => change(() => backend.restartForUpdate(evenWhileWorking)),
+    };
+  }, [backend, queryClient, notifier]);
 }
 
 /** What the manager can do about versions. A refusal is shown to the manager. */

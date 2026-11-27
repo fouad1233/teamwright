@@ -17,6 +17,7 @@ mod events;
 mod plan_limit;
 mod skill_shelf;
 mod state;
+mod updating;
 
 use std::ffi::OsStr;
 use std::process::ExitCode;
@@ -43,6 +44,10 @@ fn main() -> ExitCode {
         // Lets the shell send the notifications of the operating system.
         // The interface has no part of it: what is sent is decided here.
         .plugin(tauri_plugin_notification::init())
+        // Downloads a signed update and installs it, only when the manager
+        // asks (decision 0045). The window has no permission of its own for
+        // it: the shell calls it, so the capabilities do not name it.
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             let state = AppState::open(app.handle())?;
             // A limit reached before the program was closed may reset
@@ -234,6 +239,9 @@ fn main() -> ExitCode {
             commands::updates::look_for_update_if_due,
             commands::updates::look_for_update_now,
             commands::updates::switch_update_look,
+            commands::updates::update_install,
+            commands::updates::install_update,
+            commands::updates::restart_for_update,
             commands::web::open_web_address,
             commands::github::github_sign_in,
             commands::github::set_github_program,

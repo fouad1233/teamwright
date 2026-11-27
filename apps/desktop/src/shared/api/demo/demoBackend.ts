@@ -92,6 +92,7 @@ import type {
   PermissionRequest,
   ThemeName,
   TokenCounts,
+  UpdateInstall,
   UpdateStatus,
   Turn,
   View,
@@ -182,6 +183,7 @@ import {
   withoutValue,
 } from './fields';
 import { historyOf, pretendedPastOf, projectHistoryOf } from './taskHistory';
+import { PretendedInstall } from './updateInstall';
 import { contextAfter, usageOfConversations } from './usage';
 import {
   SIMULATED_MODEL,
@@ -421,6 +423,8 @@ export class DemoBackend implements Backend {
     lastLookFailed: false,
     newer: null,
   };
+  /** Installing the newer version, pretended (decision 0045). */
+  private readonly install = new PretendedInstall();
   /**
    * Whether command permissions are switched on. The demo has a sandbox
    * and no sign-in with a variable, so nothing else holds commands back.
@@ -2300,6 +2304,27 @@ export class DemoBackend implements Backend {
       this.updates = { ...this.updates, isOn: on };
       return { ...this.updates };
     });
+  }
+
+  updateInstall(): Promise<UpdateInstall> {
+    return this.answer(() => this.install.state(this.turnsRunning()));
+  }
+
+  installUpdate(): Promise<UpdateInstall> {
+    return this.answer(() =>
+      this.install.start(this.updates.newer?.version ?? '0.2.0', this.turnsRunning()),
+    );
+  }
+
+  restartForUpdate(evenWhileWorking: boolean): Promise<UpdateInstall> {
+    return this.answer(() => this.install.restart(this.turnsRunning(), evenWhileWorking));
+  }
+
+  /** How many turns run now, as the program counts the specialists at work. */
+  private turnsRunning(): number {
+    return [...this.conversations.values()].filter((conversation) =>
+      conversation.turns.some((turn) => turn.state === 'running'),
+    ).length;
   }
 
   notificationChoice(): Promise<NotificationChoice> {

@@ -81,6 +81,7 @@ import type {
   NewPermissionAnswer,
   PermissionRequest,
   ThemeName,
+  UpdateInstall,
   UpdateStatus,
   View,
   ViewFilter,
@@ -793,6 +794,18 @@ export class TauriBackend implements Backend {
 
   switchUpdateLook(on: boolean): Promise<UpdateStatus> {
     return call('switch_update_look', { on });
+  }
+
+  updateInstall(): Promise<UpdateInstall> {
+    return call('update_install');
+  }
+
+  installUpdate(): Promise<UpdateInstall> {
+    return call('install_update');
+  }
+
+  restartForUpdate(evenWhileWorking: boolean): Promise<UpdateInstall> {
+    return call('restart_for_update', { evenWhileWorking });
   }
 
   notificationChoice(): Promise<NotificationChoice> {

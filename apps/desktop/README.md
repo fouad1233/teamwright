@@ -356,8 +356,33 @@ The shell is where the work of an AI specialist meets the outside world
   not an error. `features/updates` has the part Version on the page
   Computers (`VersionSettings`) and the small mark under the Computers line
   of the navigation (`UpdateMark`); the release page opens through
-  `open_web_address`. Nothing is installed from inside the program. The
-  demo backend starts with looking off, and a look says that 0.2.0 is out.
+  `open_web_address`. The demo backend starts with looking off, and a look
+  says that 0.2.0 is out.
+- **Installing an update**
+  ([decision 0045](../../docs/decisions/0045-installing-updates-from-inside.md)).
+  `tauri-plugin-updater` is registered in `main.rs`; its address of updates
+  (the release `updates` of the repository), its public key and
+  `requireSignedVersion` are in `tauri.conf.json`, and
+  `bundle.createUpdaterArtifacts` makes the bundler sign the update files
+  (so a build of installers needs `TAURI_SIGNING_PRIVATE_KEY`; `--no-bundle`
+  does not). The window has no permission for the plugin: `updating.rs`
+  implements `UpdatePackages` with it in the shell, gives it the domain's
+  `is_installable` as comparator, reads how the copy was installed from the
+  bundler's mark (an AppImage only when it runs as one), and turns the
+  plugin's errors into what they mean (a signature that does not match is
+  `signatureRefused`). `commands/updates.rs`: `update_install` (where it
+  stands; nothing is asked of the network), `install_update` (starts on a
+  thread of the operating system and answers at once) and
+  `restart_for_update` (`evenWhileWorking`), with `UpdateInstallDto` in
+  `dto/installing.rs`. `NewerVersionCard` in `features/updates` offers
+  *Install*, shows the download as a hairline meter while the window asks
+  for the progress every 400 ms, says a refusal in words, and asks
+  *Restart now* / *Later* (*Stop them and restart* while specialists work).
+  The demo backend pretends an install (`demo/updateInstall.ts`): a look, a
+  download of six seconds, a version ready to restart. The program's
+  version for the notice and the installer is `package_info().version`,
+  the one in `tauri.conf.json`. `TEAMWRIGHT_RELEASES_ADDRESS` points the
+  notice at another list of releases, for `tools/smoke/update-linux.mjs`.
 - **Opening a web address.** `open_web_address` in `commands/web.rs` opens
   an address in the manager's own browser. The pure `checked_web_address`
   refuses anything that is not `https` with a host (and an address with a

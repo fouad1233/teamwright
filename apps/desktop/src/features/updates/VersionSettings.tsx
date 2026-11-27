@@ -4,29 +4,28 @@ import { useState } from 'react';
 import { Button } from '@/shared/ui/Button';
 import { Switch } from '@/shared/ui/Switch';
 
-import { useSyncCommands } from '../sync/syncQueries';
 import { useNow } from '../sync/useNow';
+import { NewerVersionCard } from './NewerVersionCard';
 import styles from './VersionSettings.module.css';
-import { lastLookInWords, newerInWords } from './updateModel';
-import { useUpdateCommands, useUpdateStatus } from './updateQueries';
+import { lastLookInWords } from './updateModel';
+import { useUpdateCommands, useUpdateInstall, useUpdateStatus } from './updateQueries';
 
 /**
  * The version of this program, and whether a newer one is out. Looking by
  * itself is off until the manager switches it on; "Look now" looks once
- * either way. Installing from inside the program is not built: the part
- * only says where the release is.
+ * either way. A newer version is installed when the manager presses its
+ * button, and the program restarts when the manager says so (decision 0045).
  */
 export function VersionSettings() {
   const status = useUpdateStatus().data;
+  const install = useUpdateInstall().data;
   const commands = useUpdateCommands();
-  const web = useSyncCommands();
   const now = useNow();
   const [isLooking, setIsLooking] = useState(false);
 
   if (!status) {
     return null;
   }
-  const newer = newerInWords(status);
 
   async function lookNow() {
     setIsLooking(true);
@@ -40,19 +39,8 @@ export function VersionSettings() {
       <p className={styles.version}>
         Teamwright <span className={styles.number}>{status.thisVersion}</span>
       </p>
-      {status.newer !== null && newer !== null && (
-        <div className={styles.newer} role="status">
-          <p className={styles.newerText}>{newer}</p>
-          <div>
-            <Button
-              onClick={() => {
-                if (status.newer !== null) void web.openWebAddress(status.newer.address);
-              }}
-            >
-              Open the release page
-            </Button>
-          </div>
-        </div>
+      {install !== undefined && (status.newer !== null || install.progress.phase !== 'idle') && (
+        <NewerVersionCard status={status} install={install} />
       )}
       <Switch
         on={status.isOn}

@@ -24,9 +24,22 @@
       "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-src https:; connect-src ipc: http://ipc.localhost"
     }
   },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDdFOUY5ODMyODYzMzFBNTcKUldSWEdqT0dNcGlmZmtMTStldnF6NU9jeDM0c2dqNzRHTFFNV3pPUEdYRVJOOWh1bUwzYm4wZXYK",
+      "endpoints": [
+        "https://github.com/fouad1233/teamwright/releases/download/updates/latest.json"
+      ],
+      "requireSignedVersion": true,
+      "windows": {
+        "installMode": "passive"
+      }
+    }
+  },
   "bundle": {
     "active": true,
     "targets": "all",
+    "createUpdaterArtifacts": true,
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

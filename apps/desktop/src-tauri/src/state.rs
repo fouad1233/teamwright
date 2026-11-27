@@ -13,9 +13,9 @@ use teamwright_application::{
     AgentRuntime, AppearanceService, ApplicationError, AreaService, ChecklistService,
     CoordinatorPorts, CoordinatorService, DeliveryPorts, DeliveryService, DigestRepository,
     DigestService, DiskEntry, DriveSurroundings, FieldService, FileSystem, FolderReader,
-    GitHubPorts, GitHubService, GoogleDriveService, GroupingService, IntegrationSettings,
-    NotificationService, OperatingSystem, PlacesService, PlanLimitService, PlanReport,
-    ProjectEvent, ProjectFilesService, ProjectFolders, ProjectService, ProtectedKind,
+    GitHubPorts, GitHubService, GoogleDriveService, GroupingService, InstallService,
+    IntegrationSettings, NotificationService, OperatingSystem, PlacesService, PlanLimitService,
+    PlanReport, ProjectEvent, ProjectFilesService, ProjectFolders, ProjectService, ProtectedKind,
     ProtectedPlace, RoundReport, SprintService, StorageError, SyncLedger, SyncPorts, SyncService,
     SystemClock, TagService, TaskService, TeamService, UpdateService, ViewService, WorkListener,
     WorkPorts, WorkService, WorkbookPorts, WorkbookService,
@@ -40,6 +40,7 @@ use crate::error::CommandError;
 use crate::events;
 use crate::plan_limit;
 use crate::skill_shelf::LocalSkillShelf;
+use crate::updating::TauriUpdatePackages;
 
 /// The name of the database file inside the application's data directory.
 const DATABASE_FILE_NAME: &str = "teamwright.db";
@@ -79,6 +80,24 @@ const DATA_DIRECTORY_VARIABLE: &str = "TEAMWRIGHT_DATA_DIR";
 /// not depend on what is installed on the computer they run on, and never
 /// shows how its user is signed in.
 const AGENT_PROGRAM_VARIABLE: &str = "TEAMWRIGHT_AGENT_PROGRAM";
+
+/// Names another address for the list of releases than GitHub's own, in
+/// the form `http://127.0.0.1:8123`. Only the test of updating uses it
+/// (`tools/smoke/update-linux.mjs`), so that the notice hears of a release
+/// that a server on the same computer serves. The address of the updates
+/// themselves cannot be changed this way: it is built into the program,
+/// and every update is checked against the key built in beside it.
+const RELEASES_ADDRESS_VARIABLE: &str = "TEAMWRIGHT_RELEASES_ADDRESS";
+
+/// The list of releases the notice reads (decision 0043).
+fn release_source() -> GitHubReleases {
+    match env::var(RELEASES_ADDRESS_VARIABLE) {
+        Ok(address) if !address.is_empty() => {
+            GitHubReleases::of_repository(&address, teamwright_integrations::REPOSITORY)
+        }
+        _ => GitHubReleases::of_teamwright(),
+    }
+}
 
 /// The argument with which this program serves the team bus instead of
 /// opening its window. Claude Code starts it that way for every turn of a
@@ -199,6 +218,8 @@ pub struct AppState {
     pub appearance: AppearanceService,
     /// Noticing that a newer version of the program is out.
     pub updates: UpdateService,
+    /// Installing a newer version, when the manager asks.
+    pub installing: InstallService,
     /// What this computer knows about the limits of its Claude plan.
     pub plan_limit: PlanLimitService,
     /// The settings of the integrations of each project on this computer.
@@ -303,11 +324,18 @@ impl AppState {
         let command_choice = Arc::new(SqliteCommandChoice::new(database.clone()));
         let notifications =
             NotificationService::new(Arc::new(SqliteNotificationChoice::new(database.clone())));
+        // The version the bundles carry, from tauri.conf.json: the one the
+        // updater compares with, so the notice uses it too.
+        let this_version = app.package_info().version.to_string();
         let updates = UpdateService::new(
-            env!("CARGO_PKG_VERSION"),
+            &this_version,
             Arc::new(SqliteUpdateChoice::new(database.clone())),
-            Arc::new(GitHubReleases::of_teamwright()),
+            Arc::new(release_source()),
             clock.clone(),
+        );
+        let installing = InstallService::new(
+            &this_version,
+            Arc::new(TauriUpdatePackages::new(app.clone())),
         );
         let plan_limit = PlanLimitService::new(
             Arc::new(SqlitePlanLimitStore::new(database.clone())),
@@ -534,6 +562,7 @@ impl AppState {
             notifications,
             appearance,
             updates,
+            installing,
             plan_limit,
             integrations,
             exported_workbooks: Mutex::new(Vec::new()),

@@ -25,6 +25,9 @@ tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
 # The notifications of the operating system, sent from the shell.
 tauri-plugin-notification = "2"
+# Downloads a signed update, checks its signature against the public key in
+# tauri.conf.json, and installs it (decision 0045).
+tauri-plugin-updater = "2"
 thiserror.workspace = true
 
 [dev-dependencies]

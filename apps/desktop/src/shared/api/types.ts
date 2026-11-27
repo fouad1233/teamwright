@@ -1597,6 +1597,58 @@ export interface UpdateStatus {
   newer: NewerVersion | null;
 }
 
+/**
+ * Why the last try to install an update did not succeed (decision 0045).
+ * `nothingNewer`: the address of updates offers nothing newer for this
+ * computer yet. `noAnswer`: it could not be reached. `notForThisComputer`:
+ * it has no update for this kind of computer. `signatureRefused`: the
+ * download was not signed with the key built into the program and was
+ * thrown away. `notInstalled`: it could not be put in place. `byHand`: this
+ * copy cannot install its own updates.
+ */
+export type InstallFailureKind =
+  | 'nothingNewer'
+  | 'noAnswer'
+  | 'notForThisComputer'
+  | 'signatureRefused'
+  | 'notInstalled'
+  | 'byHand';
+
+/** Where installing an update stands, told by its phase (decision 0045). */
+export type InstallProgress =
+  | { phase: 'idle' }
+  | { phase: 'looking' }
+  | {
+      phase: 'downloading';
+      version: string;
+      /** Bytes received so far. */
+      received: number;
+      /** The whole size in bytes, when the address said it. */
+      total: number | null;
+    }
+  | { phase: 'ready'; version: string }
+  | { phase: 'failed'; failure: InstallFailureKind; detail: string | null };
+
+/**
+ * Installing a newer version from inside the program (decision 0045). The
+ * program installs only when the manager presses the button, and restarts
+ * only when the manager says so.
+ */
+export interface UpdateInstall {
+  /** Whether this copy installs its own updates. */
+  updatesItself: boolean;
+  /** Why not: a package of the Linux system, or a copy built from the source. */
+  byHandReason: 'systemPackage' | 'notInstalled' | null;
+  /** Whether the new version is put in place only at the restart, as on Windows. */
+  installsOnRestart: boolean;
+  /** Where updates come from, such as `github.com/fouad1233/teamwright`. */
+  source: string;
+  /** How many specialists work on this computer now; a restart would stop them. */
+  specialistsAtWork: number;
+  /** Where the install stands. */
+  progress: InstallProgress;
+}
+
 /** Whether the manager has allowed notifications of the operating system on this computer. */
 export type NotificationPermission = 'not_asked' | 'allowed' | 'declined';
 
