@@ -1,5 +1,5 @@
 import { ChevronRight, X } from 'lucide-react';
-import { useState, type KeyboardEvent } from 'react';
+import { useState, type CSSProperties, type KeyboardEvent } from 'react';
 
 import type {
   ApprovedProposal,
@@ -32,7 +32,9 @@ import {
   isOnTeam,
   ownerChoices,
   ownerInWords,
+  partOfChoices,
   planInWords,
+  planRows,
   teamInWords,
   valueOfOwner,
   waitChoices,
@@ -82,14 +84,19 @@ interface ProposalCardProps {
  * project in the Advisor's words, the specialists to add, and the tasks.
  *
  * Every task is changed in place: its title, its owner and its size in its
- * row, and its description, priority and the tasks it waits for under it.
- * The manager can take a member or a task out, add a task, and choose the
- * model and the effort of a member. Each change is stored as it is made,
- * and a change that breaks a rule is refused with the reason beside it.
- * Nothing here exists in the project before it is approved.
+ * row, and its description, priority, the tasks it waits for and the task
+ * it is a part of under it. A part stands under its task, set in, as a
+ * subtask does on the board, and the parts of a task can be folded away.
+ * The manager can take a member or a task out, add a task or a part, and
+ * choose the model and the effort of a member. Each change is stored as it
+ * is made, and a change that breaks a rule is refused with the reason
+ * beside it. Nothing here exists in the project before it is approved.
  */
 export function ProposalCard({ proposal, team, onChange, onApprove }: ProposalCardProps) {
   const [shownTask, setShownTask] = useState<number | null>(null);
+  // The tasks whose parts are folded away. All are shown at first: the
+  // manager approves what is in the plan, so nothing starts hidden.
+  const [folded, setFolded] = useState<ReadonlySet<number>>(new Set());
   const [refusal, setRefusal] = useState<Refusal | null>(null);
   const [isApproving, setIsApproving] = useState(false);
   const owners = ownerChoices(proposal, team);
@@ -221,22 +228,58 @@ export function ProposalCard({ proposal, team, onChange, onApprove }: ProposalCa
         <h4 className="label">Plan · {planInWords(proposal.tasks)}</h4>
         {proposal.tasks.length > 0 && (
           <ol className={styles.tasks}>
-            {proposal.tasks.map((task, place) => {
+            {planRows(proposal.tasks, folded).map(({ place, depth, parts }) => {
+              const task = proposal.tasks[place];
+              if (!task) {
+                return null;
+              }
               const where: Place = `task ${place.toString()}`;
               const priority = PRIORITY_LABELS[task.priority];
               const isShown = shownTask === place;
               const number = (place + 1).toString();
+              const isFolded = folded.has(place);
               return (
                 // A row stays at its place. The fields in it are keyed by
-                // their values, so a stored change shows at once.
-                <li key={place} className={styles.task}>
+                // their values, so a stored change shows at once. A part is
+                // set in by how deep it lies.
+                <li
+                  key={place}
+                  className={classNames(styles.task, depth > 0 && styles.isPart)}
+                  style={{ '--depth': depth } as CSSProperties}
+                >
                   <span className={styles.place}>{number}</span>
-                  <TitleField
-                    key={task.title}
-                    title={task.title}
-                    label={`Title of task ${number}`}
-                    onRename={(title) => change(where, { kind: 'retitle', task: place, title })}
-                  />
+                  <span className={styles.titleCell}>
+                    <TitleField
+                      key={task.title}
+                      title={task.title}
+                      label={`Title of task ${number}`}
+                      onRename={(title) => change(where, { kind: 'retitle', task: place, title })}
+                    />
+                    {parts > 0 && (
+                      <button
+                        type="button"
+                        className={styles.fold}
+                        aria-expanded={!isFolded}
+                        title={
+                          isFolded
+                            ? `Show the parts of "${task.title}"`
+                            : `Fold the parts of "${task.title}" away`
+                        }
+                        onClick={() => {
+                          const next = new Set(folded);
+                          if (isFolded) {
+                            next.delete(place);
+                          } else {
+                            next.add(place);
+                          }
+                          setFolded(next);
+                        }}
+                      >
+                        <ChevronRight className={styles.foldMark} aria-hidden />
+                        {parts === 1 ? '1 part' : `${parts.toString()} parts`}
+                      </button>
+                    )}
+                  </span>
                   <ChoiceMenu
                     label={`Who does "${task.title}"`}
                     choices={owners}
@@ -301,9 +344,11 @@ export function ProposalCard({ proposal, team, onChange, onApprove }: ProposalCa
                       label={`Take "${task.title}" out of the proposal`}
                       onClick={() => {
                         void change(where, { kind: 'removeTask', task: place }).then((wasTaken) => {
-                          // The places of the tasks after it move up, so no details stay open.
+                          // The places of the tasks after it move up, so no
+                          // details stay open and nothing stays folded.
                           if (wasTaken) {
                             setShownTask(null);
+                            setFolded(new Set());
                           }
                         });
                       }}
@@ -449,11 +494,14 @@ interface TaskDetailsProps {
 
 /**
  * What is under a proposed task when it is opened: what the Advisor wrote
- * about it, its priority, and the tasks of the plan it waits for.
+ * about it, its priority, the tasks of the plan it waits for, the task it
+ * is a part of, and a line to add a part to it.
  */
 function TaskDetails({ tasks, place, task, onChange }: TaskDetailsProps) {
   const waits = waitedFor(tasks, place);
   const choices = waitChoices(tasks, place);
+  const whole = task.partOf === null ? undefined : tasks[task.partOf];
+  const wholes = partOfChoices(tasks, place);
 
   return (
     <div className={styles.details}>
@@ -514,6 +562,51 @@ function TaskDetails({ tasks, place, task, onChange }: TaskDetailsProps) {
               }}
             />
           )}
+        </dd>
+        <dt className="label">Part of</dt>
+        <dd className={styles.waits}>
+          {whole === undefined || task.partOf === null ? (
+            <span className={styles.nothing}>Nothing. It is a task of its own.</span>
+          ) : (
+            <ul className={styles.waitList}>
+              <li className={styles.wait}>
+                <span className={styles.place}>{(task.partOf + 1).toString()}</span>
+                <span className={styles.waitTitle}>{whole.title}</span>
+                <IconButton
+                  label={`Make "${task.title}" a task of its own`}
+                  onClick={() => {
+                    void onChange({ kind: 'makePartOf', task: place, partOf: null });
+                  }}
+                >
+                  <X />
+                </IconButton>
+              </li>
+            </ul>
+          )}
+          {wholes.length > 0 && (
+            <Picker
+              label={
+                whole === undefined
+                  ? `Make "${task.title}" a part of a task`
+                  : `Move "${task.title}" to another task`
+              }
+              entries={wholes.map((choice) => ({
+                key: choice.place.toString(),
+                reference: (choice.place + 1).toString(),
+                title: choice.title,
+              }))}
+              onPick={(key) => {
+                void onChange({ kind: 'makePartOf', task: place, partOf: Number(key) });
+              }}
+            />
+          )}
+        </dd>
+        <dt className="label">Parts</dt>
+        <dd className={styles.parts}>
+          <TaskComposer
+            label="Add a part"
+            onCreate={(title) => onChange({ kind: 'addTask', title, partOf: place })}
+          />
         </dd>
       </dl>
     </div>

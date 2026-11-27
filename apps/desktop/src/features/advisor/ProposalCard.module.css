@@ -135,14 +135,71 @@
   background: var(--ground);
 }
 
+/* The title of a task, set in by how deep it lies, as subtasks are on the
+   board, and the fold of its parts after it. */
+.titleCell {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  padding-left: calc(var(--depth, 0) * var(--space-5));
+}
+
 /* A long title is cut where its column ends while it is not edited; the
    whole of it is in the tooltip, and in the field once it has the focus. */
 .title {
+  flex: 1;
   width: 100%;
   overflow: hidden;
   font-weight: 550;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* A part says less loudly what it is: its task carries the weight. */
+.isPart .title {
+  font-weight: 450;
+}
+
+/* How many parts a task has, behind an arrow that turns down while they
+   are shown: set like the fold of subtasks on the board. */
+.fold {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-control);
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  transition:
+    color 100ms ease,
+    background-color 100ms ease;
+}
+
+.fold:hover {
+  background: var(--hover);
+  color: var(--ink-soft);
+}
+
+.foldMark {
+  width: 12px;
+  height: 12px;
+  stroke-width: 2;
+  transition: transform 120ms ease;
+}
+
+.fold[aria-expanded='true'] .foldMark {
+  transform: rotate(90deg);
+}
+
+/* The line on which the manager adds a part, inside the details. */
+.parts {
+  min-width: 0;
 }
 
 .estimate {
@@ -203,12 +260,14 @@
 
   /* The title has the whole first line of its row, so that a long one
      keeps its words; who does it and the rest go on the line below. */
-  .title {
+  .titleCell {
     grid-column: 2 / -1;
   }
 
+  /* The second line of a part is set in as far as its title. */
   .owner {
     grid-column: 2;
+    margin-left: calc(var(--depth, 0) * var(--space-5));
   }
 }
 

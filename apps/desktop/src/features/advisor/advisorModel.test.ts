@@ -15,6 +15,7 @@ import {
   answerInWords,
   answersOf,
   approvalInWords,
+  countParts,
   countWithoutOwner,
   emptyAnswers,
   isAnswered,
@@ -22,7 +23,9 @@ import {
   openProposal,
   ownerChoices,
   ownerInWords,
+  partOfChoices,
   planInWords,
+  planRows,
   proposalInWords,
   valueOfOwner,
   waitChoices,
@@ -255,6 +258,52 @@ describe('what a proposed task can wait for', () => {
   it('counts the tasks that are given to nobody', () => {
     expect(countWithoutOwner(DRAFT.tasks)).toBe(0);
     expect(countWithoutOwner([...DRAFT.tasks, task('Order the parts')])).toBe(1);
+  });
+});
+
+describe('the parts of a plan', () => {
+  // 0 has the parts 3 and 1; 1 has the part 4; 2 is a task of its own.
+  const tasks = [
+    task('Build the board'),
+    task('Route the board', { partOf: 0 }),
+    task('Write the manual'),
+    task('Draw the schematic', { partOf: 0 }),
+    task('Check the clearances', { partOf: 1 }),
+  ];
+
+  it('shows each part under its task, in the order of the plan, set in by its depth', () => {
+    expect(planRows(tasks)).toEqual([
+      { place: 0, depth: 0, parts: 2 },
+      { place: 1, depth: 1, parts: 1 },
+      { place: 4, depth: 2, parts: 0 },
+      { place: 3, depth: 1, parts: 0 },
+      { place: 2, depth: 0, parts: 0 },
+    ]);
+  });
+
+  it('leaves out the parts of a folded task, at every depth', () => {
+    expect(planRows(tasks, new Set([0])).map((row) => row.place)).toEqual([0, 2]);
+    expect(planRows(tasks, new Set([1])).map((row) => row.place)).toEqual([0, 1, 3, 2]);
+  });
+
+  it('shows a task whose whole is not there as a task of its own', () => {
+    expect(planRows([task('Alone', { partOf: 7 }), task('Itself', { partOf: 1 })])).toEqual([
+      { place: 0, depth: 0, parts: 0 },
+      { place: 1, depth: 0, parts: 0 },
+    ]);
+  });
+
+  it('offers as a whole every other task but the one it is in and its own parts', () => {
+    expect(partOfChoices(tasks, 1).map((choice) => choice.place)).toEqual([2, 3]);
+    expect(partOfChoices(tasks, 0).map((choice) => choice.place)).toEqual([2]);
+    expect(partOfChoices(tasks, 2).map((choice) => choice.place)).toEqual([0, 1, 3, 4]);
+  });
+
+  it('says on approving that the parts become subtasks', () => {
+    expect(countParts(tasks)).toBe(3);
+    expect(approvalInWords({ members: [], tasks }, [])).toBe(
+      'Adds 5 tasks to the project. The parts become subtasks of their tasks. No work starts before you start it.',
+    );
   });
 });
 

@@ -8,6 +8,8 @@ import styles from './TaskComposer.module.css';
 interface TaskComposerProps {
   /** Opens a task with the given title. Resolves to whether it was opened. */
   onCreate: (title: string) => Promise<boolean>;
+  /** What the closed line says, "Add task" unless another word fits better. */
+  label?: string;
 }
 
 /**
@@ -15,7 +17,7 @@ interface TaskComposerProps {
  * line stays open for the next one, so a list of tasks can be typed in one
  * go. Escape, or leaving the empty line, closes it.
  */
-export function TaskComposer({ onCreate }: TaskComposerProps) {
+export function TaskComposer({ onCreate, label = 'Add task' }: TaskComposerProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [title, setTitle] = useState('');
 
@@ -62,7 +64,7 @@ export function TaskComposer({ onCreate }: TaskComposerProps) {
         }}
       >
         <Plus />
-        Add task
+        {label}
       </button>
     );
   }

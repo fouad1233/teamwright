@@ -130,6 +130,92 @@ export function waitedFor(tasks: readonly ProposedTask[], place: number): WaitCh
     });
 }
 
+/** One row of the plan as the review shows it: a task, set in as deep as it lies. */
+export interface PlanRow {
+  /** The place of the task in the plan, from 0. */
+  place: number;
+  /** How many tasks it lies under: 0 for a task of its own, 1 for a part. */
+  depth: number;
+  /** How many parts it has, directly. */
+  parts: number;
+}
+
+/**
+ * The rows of a plan in the order the review shows them, like subtasks on
+ * the board: each task of its own in the order of the plan, and under it
+ * its parts, in the order of the plan, each with its own parts under it.
+ * The parts of a folded task are left out. A task whose whole is not in
+ * the plan is shown as a task of its own, so that nothing is lost.
+ */
+export function planRows(
+  tasks: readonly ProposedTask[],
+  folded: ReadonlySet<number> = new Set(),
+): PlanRow[] {
+  const isTop = (task: ProposedTask, place: number) =>
+    task.partOf === null || task.partOf === place || tasks[task.partOf] === undefined;
+  const partsOf = (whole: number) =>
+    tasks.flatMap((task, place) => (task.partOf === whole && !isTop(task, place) ? [place] : []));
+  const rows: PlanRow[] = [];
+  const placed = new Set<number>();
+  const add = (place: number, depth: number) => {
+    if (placed.has(place)) {
+      return;
+    }
+    placed.add(place);
+    const parts = partsOf(place);
+    rows.push({ place, depth, parts: parts.length });
+    if (!folded.has(place)) {
+      for (const part of parts) {
+        add(part, depth + 1);
+      }
+    }
+  };
+  tasks.forEach((task, place) => {
+    if (isTop(task, place)) {
+      add(place, 0);
+    }
+  });
+  return rows;
+}
+
+/** Whether a task of a plan lies below another, as its part or further down. */
+function liesBelow(tasks: readonly ProposedTask[], place: number, whole: number): boolean {
+  const seen = new Set<number>();
+  for (
+    let above = tasks[place]?.partOf ?? null;
+    above !== null;
+    above = tasks[above]?.partOf ?? null
+  ) {
+    if (above === whole) {
+      return true;
+    }
+    if (seen.has(above)) {
+      return false;
+    }
+    seen.add(above);
+  }
+  return false;
+}
+
+/**
+ * The tasks of a plan that a task could be made a part of: the others,
+ * without the one it is a part of already and without its own parts, at
+ * any depth. Whether that breaks another rule is for the backend to say.
+ */
+export function partOfChoices(tasks: readonly ProposedTask[], place: number): WaitChoice[] {
+  const task = tasks[place];
+  return tasks.flatMap((other, whole) =>
+    whole === place || task?.partOf === whole || liesBelow(tasks, whole, place)
+      ? []
+      : [{ place: whole, title: other.title }],
+  );
+}
+
+/** How many tasks of a plan are a part of another one. */
+export function countParts(tasks: readonly ProposedTask[]): number {
+  return tasks.filter((task) => task.partOf !== null).length;
+}
+
 /** One of the people a proposed task can be given to. */
 export interface OwnerChoice {
   /** What the menu of owners knows the choice by. */
@@ -248,7 +334,8 @@ export function approvalInWords(draft: ApprovedProposal, team: readonly Member[]
   const added = countNewMembers(draft, team);
   const tasks = count(draft.tasks.length, 'task', 'tasks');
   const what = added === 0 ? tasks : `${teamInWords(added)} and ${tasks}`;
-  return `Adds ${what} to the project. No work starts before you start it.`;
+  const parts = countParts(draft.tasks) === 0 ? '' : ' The parts become subtasks of their tasks.';
+  return `Adds ${what} to the project.${parts} No work starts before you start it.`;
 }
 
 /**
