@@ -112,6 +112,35 @@ fn a_skill_is_added_from_its_folder_and_kept_on_this_computer() {
 }
 
 #[test]
+fn a_folder_that_cannot_be_looked_at_is_the_managers_choice_not_a_storage_failure() {
+    let space = workspace();
+
+    let missing = space
+        .service
+        .add_skill(space.project.id(), Path::new("/skills/nowhere"))
+        .unwrap_err();
+
+    assert_eq!(missing.code(), "folder_missing");
+    assert_eq!(missing.to_string(), "That folder does not exist.");
+    for (problem, code, words) in [
+        (
+            ChosenFolderProblem::NotAFolder,
+            "not_a_folder",
+            "That is not a folder.",
+        ),
+        (
+            ChosenFolderProblem::NotAllowed,
+            "folder_not_readable",
+            "Teamwright may not read that folder.",
+        ),
+    ] {
+        let error = ApplicationError::ChosenFolder(problem);
+        assert_eq!(error.code(), code);
+        assert_eq!(error.to_string(), words);
+    }
+}
+
+#[test]
 fn a_folder_that_is_no_skill_is_refused_with_its_reason() {
     let space = workspace();
     let refused = |path: &str| {

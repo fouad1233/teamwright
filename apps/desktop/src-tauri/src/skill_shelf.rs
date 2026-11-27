@@ -20,8 +20,8 @@ use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 
 use teamwright_application::{
-    KeptLayout, KeptSkill, MANIFEST_FILE, MANIFEST_FOLDER, MAX_SKILL_BYTES, MAX_SKILL_FILES,
-    SKILL_FILE, SKILLS_FOLDER, SkillFolder, SkillShelf, StorageError,
+    ChosenFolderProblem, KeptLayout, KeptSkill, MANIFEST_FILE, MANIFEST_FOLDER, MAX_SKILL_BYTES,
+    MAX_SKILL_FILES, SKILL_FILE, SKILLS_FOLDER, SkillFolder, SkillShelf, StorageError,
 };
 use teamwright_domain::{Skill, SkillId, VariableName};
 
@@ -51,23 +51,13 @@ fn failed(what: String) -> impl FnOnce(io::Error) -> StorageError {
 
 /// Counts the files of a folder and their bytes, and notes links, without
 /// following any. Counting stops a little past the limits.
-fn measure(folder: &Path, found: &mut SkillFolder) -> Result<(), StorageError> {
-    let entries = fs::read_dir(folder).map_err(failed(format!(
-        "the folder {} could not be read",
-        folder.display()
-    )))?;
-    for entry in entries {
+fn measure(folder: &Path, found: &mut SkillFolder) -> io::Result<()> {
+    for entry in fs::read_dir(folder)? {
         if found.files > MAX_SKILL_FILES || found.bytes > MAX_SKILL_BYTES || found.has_links {
             return Ok(());
         }
-        let entry = entry.map_err(failed(format!(
-            "the folder {} could not be read",
-            folder.display()
-        )))?;
-        let kind = entry.file_type().map_err(failed(format!(
-            "{} could not be read",
-            entry.path().display()
-        )))?;
+        let entry = entry?;
+        let kind = entry.file_type()?;
         if kind.is_symlink() {
             found.has_links = true;
         } else if kind.is_dir() {
@@ -78,6 +68,17 @@ fn measure(folder: &Path, found: &mut SkillFolder) -> Result<(), StorageError> {
         }
     }
     Ok(())
+}
+
+/// What went wrong with a folder the manager chose, from the error of the
+/// disk. Anything that is not "there is nothing" is taken as the folder
+/// not being allowed to be read: it is the manager's folder either way,
+/// never the shelf of Teamwright.
+fn problem_with(error: &io::Error) -> ChosenFolderProblem {
+    match error.kind() {
+        io::ErrorKind::NotFound | io::ErrorKind::NotADirectory => ChosenFolderProblem::Missing,
+        _ => ChosenFolderProblem::NotAllowed,
+    }
 }
 
 /// What a copy may still take: files and bytes.
@@ -236,16 +237,10 @@ fn read_skill_file(path: &Path) -> Option<String> {
 }
 
 impl SkillShelf for LocalSkillShelf {
-    fn read_folder(&self, folder: &Path) -> Result<SkillFolder, StorageError> {
-        let metadata = fs::symlink_metadata(folder).map_err(failed(format!(
-            "the folder {} could not be read",
-            folder.display()
-        )))?;
+    fn read_folder(&self, folder: &Path) -> Result<SkillFolder, ChosenFolderProblem> {
+        let metadata = fs::symlink_metadata(folder).map_err(|error| problem_with(&error))?;
         if !metadata.is_dir() {
-            return Err(StorageError::new(format!(
-                "{} is not a folder",
-                folder.display()
-            )));
+            return Err(ChosenFolderProblem::NotAFolder);
         }
         let mut found = SkillFolder {
             folder_name: folder
@@ -257,7 +252,7 @@ impl SkillShelf for LocalSkillShelf {
             bytes: 0,
             has_links: false,
         };
-        measure(folder, &mut found)?;
+        measure(folder, &mut found).map_err(|error| problem_with(&error))?;
         Ok(found)
     }
 
@@ -542,7 +537,16 @@ mod tests {
         let ground = tempfile::tempdir().unwrap();
         let shelf = LocalSkillShelf::new(ground.path().join("shelf"));
         fs::write(ground.path().join("note.txt"), "x").unwrap();
-        assert!(shelf.read_folder(&ground.path().join("note.txt")).is_err());
+        assert_eq!(
+            shelf
+                .read_folder(&ground.path().join("note.txt"))
+                .unwrap_err(),
+            ChosenFolderProblem::NotAFolder
+        );
+        assert_eq!(
+            shelf.read_folder(&ground.path().join("gone")).unwrap_err(),
+            ChosenFolderProblem::Missing
+        );
         fs::create_dir(ground.path().join("empty")).unwrap();
         assert_eq!(
             shelf
@@ -551,6 +555,25 @@ mod tests {
                 .skill_text,
             None
         );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_folder_that_may_not_be_read_is_not_allowed_and_not_a_storage_failure() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let ground = tempfile::tempdir().unwrap();
+        let shelf = LocalSkillShelf::new(ground.path().join("shelf"));
+        let closed = skill_folder(ground.path());
+        fs::set_permissions(&closed, fs::Permissions::from_mode(0o000)).unwrap();
+        let outcome = shelf.read_folder(&closed);
+        fs::set_permissions(&closed, fs::Permissions::from_mode(0o755)).unwrap();
+
+        // A program that runs as the owner of everything, such as root,
+        // can read a closed folder; there is nothing to see then.
+        if let Err(problem) = outcome {
+            assert_eq!(problem, ChosenFolderProblem::NotAllowed);
+        }
     }
 
     #[test]

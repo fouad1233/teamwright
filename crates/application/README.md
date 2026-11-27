@@ -603,7 +603,12 @@ kit of each specialist (`set_kit`: skills of its own project, connectors
 tool by tool, only tools the connector lists, never for a person). Its two
 ports live in `kits.rs`: `KitRepository` (logged storage) and `SkillShelf`
 (this computer: reads a chosen folder, keeps a copy of a skill, says
-whether an environment variable is set; it never reads a value).
+whether an environment variable is set; it never reads a value). A chosen
+folder that cannot be looked at is answered with a `ChosenFolderProblem`,
+not a storage error: `folder_missing` ("That folder does not exist."),
+`not_a_folder` ("That is not a folder.") or `folder_not_readable` ("Teamwright
+may not read that folder."). `storage_failed` stays for the shelf of
+Teamwright itself.
 `turn_kit_of` gives a turn of a specialist only what this computer has: a
 kept copy that still passes the check, a connector whose variables are all
 set and that breaks no newer rule (`ConnectorStart::problem`: a program named

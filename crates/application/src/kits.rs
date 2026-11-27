@@ -110,6 +110,41 @@ pub trait KitRepository: Send + Sync {
     fn remove_connector(&self, id: ConnectorId, kits: &[MemberKit]) -> Result<(), StorageError>;
 }
 
+/// Why a folder the manager chose cannot be looked at. It is the choice
+/// that is wrong, or the permission of the folder; it is not a failure of
+/// the storage of Teamwright.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ChosenFolderProblem {
+    /// There is nothing at that path.
+    Missing,
+    /// There is something, but it is not a folder.
+    NotAFolder,
+    /// The folder, or something in it, is not allowed to be read.
+    NotAllowed,
+}
+
+impl ChosenFolderProblem {
+    /// What to tell the manager, in words they can act on.
+    #[must_use]
+    pub const fn message(self) -> &'static str {
+        match self {
+            Self::Missing => "That folder does not exist.",
+            Self::NotAFolder => "That is not a folder.",
+            Self::NotAllowed => "Teamwright may not read that folder.",
+        }
+    }
+
+    /// A code to decide by, stable.
+    #[must_use]
+    pub const fn code(self) -> &'static str {
+        match self {
+            Self::Missing => "folder_missing",
+            Self::NotAFolder => "not_a_folder",
+            Self::NotAllowed => "folder_not_readable",
+        }
+    }
+}
+
 /// What a folder the manager points at holds, as far as the check of a
 /// skill needs it.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -241,8 +276,9 @@ pub trait SkillShelf: Send + Sync {
     ///
     /// # Errors
     ///
-    /// Returns an error if it is not a folder or cannot be read.
-    fn read_folder(&self, folder: &Path) -> Result<SkillFolder, StorageError>;
+    /// Returns the problem with the folder if it does not exist, is not a
+    /// folder, or cannot be read.
+    fn read_folder(&self, folder: &Path) -> Result<SkillFolder, ChosenFolderProblem>;
 
     /// Copies a skill's folder onto the shelf of this computer, in the form
     /// the agent program loads for one session, replacing an earlier copy.
@@ -571,7 +607,9 @@ impl KitService {
     ///
     /// # Errors
     ///
-    /// Returns an error if there is no such project; if the folder is not a
+    /// Returns an error if there is no such project; if the folder does not
+    /// exist, is not a folder, or may not be read (`folder_missing`,
+    /// `not_a_folder`, `folder_not_readable`); if the folder is not a
     /// skill, holds a link, or is too large; if the library already has a
     /// skill of that name that this computer keeps; or if storage fails.
     pub fn add_skill(
@@ -580,7 +618,10 @@ impl KitService {
         folder: &Path,
     ) -> Result<Skill, ApplicationError> {
         self.require_project(project_id)?;
-        let found = self.shelf.read_folder(folder)?;
+        let found = self
+            .shelf
+            .read_folder(folder)
+            .map_err(ApplicationError::ChosenFolder)?;
         let Some(text) = &found.skill_text else {
             return Err(not_a_skill(&format!(
                 "the folder {} has no {SKILL_FILE} directly inside",
@@ -1322,15 +1363,17 @@ impl PretendShelf {
 }
 
 impl SkillShelf for PretendShelf {
-    fn read_folder(&self, folder: &Path) -> Result<SkillFolder, StorageError> {
+    fn read_folder(&self, folder: &Path) -> Result<SkillFolder, ChosenFolderProblem> {
         lock(&self.folders)
             .get(folder)
             .cloned()
-            .ok_or_else(|| StorageError::new(format!("{} is not a folder", folder.display())))
+            .ok_or(ChosenFolderProblem::Missing)
     }
 
     fn keep(&self, from: &Path, skill: &Skill) -> Result<(), StorageError> {
-        let found = self.read_folder(from)?;
+        let found = self.read_folder(from).map_err(|problem| {
+            StorageError::new(format!("{}: {}", from.display(), problem.message()))
+        })?;
         lock(&self.kept).insert(
             skill.id(),
             KeptSkill {

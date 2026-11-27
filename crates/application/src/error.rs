@@ -3,6 +3,7 @@
 use teamwright_domain::{ComputerId, DomainError};
 
 use crate::agent_runtime::AgentRuntimeError;
+use crate::kits::ChosenFolderProblem;
 use crate::ports::StorageError;
 
 /// Why a use case could not be carried out.
@@ -556,6 +557,12 @@ pub enum ApplicationError {
         count: usize,
     },
 
+    /// A folder the manager chose cannot be used: it does not exist, is not
+    /// a folder, or may not be read. The choice is wrong, or the folder is
+    /// closed to Teamwright; its own storage did not fail.
+    #[error("{}", .0.message())]
+    ChosenFolder(ChosenFolderProblem),
+
     /// Stored data could not be read or written.
     #[error("the data could not be read or written: {0}")]
     Storage(#[from] StorageError),
@@ -662,6 +669,7 @@ impl ApplicationError {
             Self::NoChannel => "no_channel",
             Self::UpdateNotReady => "update_not_ready",
             Self::SpecialistsAtWork { .. } => "specialists_at_work",
+            Self::ChosenFolder(problem) => problem.code(),
             Self::Storage(_) => "storage_failed",
         }
     }

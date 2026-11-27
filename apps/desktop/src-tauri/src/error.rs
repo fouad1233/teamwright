@@ -87,6 +87,12 @@ mod tests {
                 },
                 "runs_elsewhere",
             ),
+            (
+                ApplicationError::ChosenFolder(
+                    teamwright_application::ChosenFolderProblem::Missing,
+                ),
+                "folder_missing",
+            ),
         ];
 
         for (error, code) in cases {

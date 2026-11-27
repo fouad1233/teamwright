@@ -552,7 +552,9 @@ in the browser the demo is `window.teamwrightDemo`.
 
 ### Skills and connectors
 
-`skill_shelf.rs` implements `SkillShelf`: copies of skills in `skills/<id>/`
+`skill_shelf.rs` implements `SkillShelf` (a chosen folder that is missing,
+is no folder or may not be read is the manager's choice, with its own codes
+and words, never `storage_failed`): copies of skills in `skills/<id>/`
 of the data folder, in the form of a plugin, links refused, the limits of
 size counted while the copy is made; `kept` reports what a copy holds for the
 check before every turn. Program connectors start through this program with

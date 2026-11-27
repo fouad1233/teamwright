@@ -46,6 +46,13 @@ describe('the library of skills and connectors in the DemoBackend', () => {
     expect(twice.message).toContain('already has');
   });
 
+  it('says that a folder that does not exist does not exist, not that storage failed', async () => {
+    const missing = await refusal(backend.addSkill(project.id, 'C:\\Users\\you\\skills\\nowhere'));
+
+    expect(missing.code).toBe('folder_missing');
+    expect(missing.message).toBe('That folder does not exist.');
+  });
+
   it('keeps a connector with the names of its variables and never a secret in the address', async () => {
     const library = await backend.addConnector(project.id, parts);
     expect(library.connectors[0]?.missingVariables).toEqual([]);

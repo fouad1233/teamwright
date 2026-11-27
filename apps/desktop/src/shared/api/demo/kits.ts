@@ -288,7 +288,8 @@ export class PretendedLibrary {
   addSkill(projectId: Id, folder: string): void {
     const found = SAMPLE_SKILL_FOLDERS[folder];
     if (found === undefined) {
-      rule(`this cannot be a skill: the folder ${folder} has no SKILL.md directly inside`);
+      // The demo has no disk: a folder it does not know is one that is not there.
+      throw new BackendError('folder_missing', 'That folder does not exist.');
     }
     if (typeof found === 'string') rule(`this cannot be a skill: ${found}`);
     const skills = this.skills.get(projectId) ?? [];
