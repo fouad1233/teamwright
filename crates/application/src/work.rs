@@ -932,6 +932,14 @@ impl WorkService {
         self.inner.end_turns_nothing_runs()
     }
 
+    /// How many turns run on this computer now, so that a restart for an
+    /// update can say that it would stop them
+    /// ([decision 0045](../../../docs/decisions/0045-installing-updates-from-inside.md)).
+    #[must_use]
+    pub fn turns_running_here(&self) -> usize {
+        lock(&self.inner.running).len()
+    }
+
     /// Stops every turn that is running here, because Teamwright is
     /// closing: a specialist must not go on working with nobody to follow
     /// it. Each turn ends as failed, with a text that says so. Call it once,

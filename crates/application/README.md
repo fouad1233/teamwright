@@ -725,8 +725,22 @@ off until the manager switches it on; `look_if_due` looks at most once in
 `LOOK_EVERY` (a day), `look_now` looks once whatever the switch says. A
 look that gets no answer is not an error: `UpdateStatus` says
 `last_look_failed` and keeps what was offered before. Like the theme, the
-choice is a fact about one computer, not logged and never synced. Nothing
-here installs anything.
+choice is a fact about one computer, not logged and never synced.
+
+`update_install.rs` installs the newer version when the manager presses the
+button ([decision 0045](../../docs/decisions/0045-installing-updates-from-inside.md)).
+`InstallService` works through the port `UpdatePackages` (the desktop shell
+implements it with the updater plugin of Tauri): `begin` marks the press,
+`carry_on` asks the address of updates, downloads with a progress that
+`state` reads meanwhile, has the signature checked and, except on Windows,
+puts the version in place. What the address offers decides what is
+installed; `is_installable` of the domain decides whether it is newer. A
+failure is a phase, `Failed`, with its `InstallFailure` (nothing newer, no
+answer, not for this computer, signature refused, not installed, by hand),
+never an error. `restart` refuses with `UpdateNotReady` before an update is
+ready, and with `SpecialistsAtWork` while turns run unless the manager said
+yes; on Windows it starts the installer there. Nothing is stored: a download
+lives as long as the program.
 
 ## The limit of the Claude plan
 

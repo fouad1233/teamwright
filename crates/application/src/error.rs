@@ -540,9 +540,34 @@ pub enum ApplicationError {
     #[error("no Slack channel is set for this project")]
     NoChannel,
 
+    /// The program was to restart into a new version that is not ready.
+    #[error("no update is downloaded and ready yet")]
+    UpdateNotReady,
+
+    /// The program was to restart for an update while specialists work,
+    /// and the manager had not said yes to stopping them.
+    #[error(
+        "{} at work; restarting now would stop {}",
+        specialists_in_words(*.count),
+        if *.count == 1 { "it" } else { "them" }
+    )]
+    SpecialistsAtWork {
+        /// How many turns run on this computer.
+        count: usize,
+    },
+
     /// Stored data could not be read or written.
     #[error("the data could not be read or written: {0}")]
     Storage(#[from] StorageError),
+}
+
+/// Writes how many specialists work: "1 specialist is", "3 specialists are".
+fn specialists_in_words(count: usize) -> String {
+    if count == 1 {
+        "1 specialist is".to_owned()
+    } else {
+        format!("{count} specialists are")
+    }
 }
 
 /// Writes a number of tasks: "1 task", "3 tasks".
@@ -635,6 +660,8 @@ impl ApplicationError {
             Self::GitHubUnavailable { .. } => "github_unavailable",
             Self::NoRepository => "no_repository",
             Self::NoChannel => "no_channel",
+            Self::UpdateNotReady => "update_not_ready",
+            Self::SpecialistsAtWork { .. } => "specialists_at_work",
             Self::Storage(_) => "storage_failed",
         }
     }

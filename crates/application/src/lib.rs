@@ -48,6 +48,7 @@ pub mod tags;
 pub mod tasks;
 pub mod team;
 pub mod teamwork;
+pub mod update_install;
 pub mod updates;
 pub mod usage;
 pub mod views;
@@ -160,6 +161,9 @@ pub use team::{NewMember, TeamService};
 pub use teamwork::{
     TeamTalk, TeamworkService, handoffs_in_words, latest_handoff_of, messages_in_words,
     messages_waiting_for,
+};
+pub use update_install::{
+    InstallFailure, InstallPhase, InstallService, InstallState, UpdatePackages, UpdateProblem,
 };
 pub use updates::{
     LOOK_EVERY, ReleaseSource, UpdateChoice, UpdateChoiceStore, UpdateService, UpdateStatus,
