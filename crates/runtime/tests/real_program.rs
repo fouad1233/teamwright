@@ -529,6 +529,104 @@ fn a_real_session_hands_its_result_over_through_the_team_bus() {
 
 #[test]
 #[ignore = "needs the real Claude Code, signed in, the built program, and spends one turn"]
+fn a_real_advisor_reads_the_work_folder_and_proposes_a_plan_with_parts() {
+    // A work folder with a project in it already: the Advisor is to read
+    // it before it plans, and to split one task into parts.
+    let folder = tempfile::tempdir().unwrap();
+    let folder = teamwright_runtime::full_form(folder.path()).unwrap();
+    std::fs::write(
+        folder.join("README.md"),
+        "# Weather station\n\nThe station runs on the microcontroller QUINCE-7. The firmware is \
+         not written yet.\n",
+    )
+    .unwrap();
+    let project = Project::create(
+        ProjectName::parse("Weather station").unwrap(),
+        ProjectKey::parse("WS").unwrap(),
+        String::new(),
+        Workflow::standard(),
+        chrono::Utc::now(),
+    );
+    let mut request = request(
+        &folder,
+        "This is a test of planning. Plan the firmware of the weather station in this folder. \
+         Read the README in the folder first. Ask nothing: call propose_plan at once, with one \
+         member, \"Firmware engineer\", and at most five tasks. Name the microcontroller of the \
+         README in the summary. Make one task \"Write the drivers\", and split it into two parts \
+         with part_of: \"Write the driver of the temperature sensor\" and \"Write the driver of \
+         the wind sensor\". Then end your turn with one sentence.",
+        SessionChoice::New,
+    );
+    request.permissions = PermissionProfile::advisor();
+    request.extra_instructions = Some(teamwright_application::instructions_for_advisor(
+        &project,
+        &[],
+        &[],
+        &[],
+    ));
+    request.team_tools = vec![teamwright_application::TeamTool::ProposePlan { team: Vec::new() }];
+    let events = Arc::new(Mutex::new(Vec::new()));
+    let collected = Arc::clone(&events);
+
+    let turn = runtime()
+        .with_team_bus(bus_program(), vec!["--team-bus".to_owned()])
+        .start_turn(
+            request,
+            Box::new(move |event| collected.lock().unwrap().push(event)),
+        )
+        .unwrap();
+    let outcome = turn.wait().unwrap();
+    let events = events.lock().unwrap().clone();
+    for event in &events {
+        println!("{event:?}");
+    }
+    println!("{}", outcome.final_text);
+    print_usage(&outcome);
+
+    assert_eq!(outcome.failure, None);
+    // It looked at the folder before it proposed.
+    let uses = tool_uses(&events);
+    assert!(
+        uses.iter().any(|(tool, _, _)| tool == "Read"),
+        "the Advisor did not read: {uses:?}"
+    );
+    let proposals: Vec<_> = events
+        .iter()
+        .filter_map(|event| match event {
+            AgentEvent::PlanProposed(proposal) => Some(proposal),
+            _ => None,
+        })
+        .collect();
+    let [proposal] = proposals.as_slice() else {
+        panic!("one proposal was expected: {events:?}");
+    };
+    assert!(
+        proposal.summary.contains("QUINCE-7"),
+        "the summary does not name what the README says: {}",
+        proposal.summary
+    );
+    // The decoder took the parts: two tasks name the task they belong to,
+    // which is a task of the same plan and a task of its own.
+    let parts: Vec<_> = proposal
+        .tasks
+        .iter()
+        .filter_map(|task| task.part_of)
+        .collect();
+    assert_eq!(parts.len(), 2, "two parts were expected: {proposal:?}");
+    assert_eq!(parts[0], parts[1]);
+    let whole = &proposal.tasks[parts[0]];
+    assert_eq!(whole.part_of, None);
+    assert!(whole.title.to_lowercase().contains("driver"), "{whole:?}");
+    // The program changed nothing in the folder.
+    let names: Vec<_> = std::fs::read_dir(&folder)
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name())
+        .collect();
+    assert_eq!(names, ["README.md"]);
+}
+
+#[test]
+#[ignore = "needs the real Claude Code, signed in, the built program, and spends one turn"]
 fn a_real_session_searches_the_memory_and_remembers_a_fact_through_the_team_bus() {
     use chrono::TimeZone;
     use teamwright_application::{MemoryKind, RememberedEntry, TeamTool};
