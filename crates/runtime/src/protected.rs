@@ -74,33 +74,20 @@ mod tests {
     #[test]
     fn the_settings_of_claude_code_and_the_keys_are_protected() {
         let home = Path::new("/home/sample");
+        // Without APPDATA, as on Linux and macOS, also when this runs on
+        // Windows.
         let places = protected_places_in_home(home, &Environment::empty());
 
-        let named: Vec<(String, bool, ProtectedKind)> = places
-            .iter()
-            .map(|place| {
-                (
-                    place.path.display().to_string(),
-                    place.is_folder,
-                    place.kind,
-                )
-            })
-            .collect();
         assert_eq!(
-            named,
+            places,
             [
-                (
-                    "/home/sample/.claude".to_owned(),
-                    true,
+                ProtectedPlace::folder(home.join(".claude"), ProtectedKind::AgentProgramSettings),
+                ProtectedPlace::file(
+                    home.join(".claude.json"),
                     ProtectedKind::AgentProgramSettings
                 ),
-                (
-                    "/home/sample/.claude.json".to_owned(),
-                    false,
-                    ProtectedKind::AgentProgramSettings
-                ),
-                ("/home/sample/.ssh".to_owned(), true, ProtectedKind::Keys),
-                ("/home/sample/.gnupg".to_owned(), true, ProtectedKind::Keys),
+                ProtectedPlace::folder(home.join(".ssh"), ProtectedKind::Keys),
+                ProtectedPlace::folder(home.join(".gnupg"), ProtectedKind::Keys),
             ]
         );
     }
