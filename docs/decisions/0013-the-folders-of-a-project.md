@@ -112,3 +112,32 @@ written as `?`, which matches any one character, except `*`, `[`, `]` and
 `\`, which are escaped (each was seen working). The rule can forbid more
 than the folder (a folder `a b` also covers `a-b`), never less. So no
 folder name is refused: a folder with parentheses and spaces is protected.
+
+## Note, 27 November 2026: the work folder is chosen where a project is planned
+
+**What was missing.** The founder wrote that the Advisor "is not able to
+select a working path". The work folder could be chosen only in the
+dialog of the folders, which a manager who starts planning does not open.
+
+**What it is now.** The place of the Advisor shows the work folder of the
+project before the first message is sent, and again under the head of the
+conversation, with a sentence that says what it means: the team works
+there, and the Advisor reads what is in it before it plans. A folder that
+was not chosen is named as the one Teamwright made. "Choose a folder"
+opens the system's folder window and sets the work folder with the same
+command and the same rules as the dialog; nothing else of the folders is
+offered there.
+
+**The Advisor reads it.** It already ran in the work folder with the tools
+that read ([decision 0014](0014-the-advisor-plans-through-two-tools.md)),
+so a chosen folder with a repository or documents in it was open to it;
+no test had said so. One does now, and its instructions say plainly that
+the folder may hold work that exists and that it looks at it before it
+asks or proposes. A real Advisor on the cheapest model, in a folder with a
+README, read it and named in its summary what the README says.
+
+**Not in the dialog of a new project.** Creating a project opens the
+Advisor, where the folder is the first thing under the title. Choosing it
+in the dialog would need the folder before the project exists, a second
+way to set it, and a way to undo half a creation when the folder is
+refused.

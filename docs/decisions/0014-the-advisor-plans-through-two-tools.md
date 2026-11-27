@@ -146,3 +146,40 @@ five sentences about a small device that measures the air.
   were approved, with their owners, sizes and what they wait for, and
   says that what it proposed and does not find there was left out on
   purpose.
+
+## Note of 27 November 2026: a proposed task may be split into parts
+
+- **What was missing.** The founder wrote that the Advisor "is not able to
+  create subtask". A proposal could say who does a task and what it waits
+  for, not that one task is a part of another, so a plan arrived flat.
+- **A part names its task.** A task of `propose_plan` may say `part_of`:
+  the place of another task of the same list. The rule is the one of the
+  subtasks of the board: a part may have parts, at any depth, and no task
+  is a part of itself, directly or further down. The coordinator starts a
+  task with parts only once its parts are finished, so a part may not wait
+  for its own task, directly or through others; that is refused as a
+  circle. The domain checks it for what is proposed, for each change and
+  for what is approved, and the team bus before the call is taken, with
+  the reason in words the model reads.
+- **When to split.** The tool and the instructions say: a task too large
+  for one piece of work is split into parts; most tasks have none.
+- **The manager changes parts as tasks.** A part is changed like any task;
+  it can be moved to another task, made a task of its own, and added.
+  **Taking out a task with parts keeps the parts**, where the task was:
+  their work is still to be done, as the tasks of a member taken out stay.
+  Deleting a task on the board deletes its subtasks; a proposal has no
+  undo, so the gentler rule was chosen here. Each part has its own cross.
+- **The review shows parts under their task**, set in, unfolded at first:
+  the manager approves what is in the plan, so nothing starts hidden.
+- **Approving creates real subtasks** under the tasks created for their
+  wholes, with their owners, sizes and dependencies, in the same write. The
+  Advisor is told after approval which task is a part of which.
+- **Only parts of the same proposal.** A proposal names tasks by their
+  places in it and cannot refer to a task that exists, so a later round
+  cannot add parts to a task on the board. The instructions say so. Letting
+  it would need a second kind of reference in the proposal; it was left.
+- **Storage** keeps the place of the whole in a column of its own
+  (migration 31). The proposal is still logged whole; a state logged
+  before has no `part_of` and reads as a plan without parts.
+- A real Advisor on the cheapest model, asked to split one task in two,
+  called `propose_plan` with two parts at the first attempt.

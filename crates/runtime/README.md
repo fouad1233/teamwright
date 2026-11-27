@@ -190,10 +190,14 @@ arguments):
   (a name, a responsibility, a reason, a `model` of one word and an
   `effort` of `low`, `medium`, `high`, `xhigh` or `max`), and one to forty
   `tasks` (a title, a description, an `owner`, `estimate_hours`, a
-  `priority`, normal unless said, and the tasks it `waits_for`). An owner
+  `priority`, normal unless said, the tasks it `waits_for`, and, for a part
+  of a larger task, the task it is `part_of`). An owner
   is `manager`, a proposed member, or a member the project has, whatever
   the capitals. A task waits only for other tasks of the list, and not in a
-  circle. A member the project has is not proposed again: the call is
+  circle. A part names another task of the list, the tasks are not parts
+  of each other in a circle, and a part does not wait for the task it is a
+  part of, directly or through others (that task starts only once its
+  parts are finished). A member the project has is not proposed again: the call is
   refused with the names and with what to leave out, because a model that
   planned a project once tends to hand in the whole plan a second time.
 
@@ -244,7 +248,7 @@ handoff is recorded, that the message is on its way, that the fact is
 remembered or what the search found, and the session goes on
 ([decision 0029](../../docs/decisions/0029-handoffs-and-messages-between-specialists.md)).
 
-A model counts from 1, so `recommended` and `waits_for` do; what comes out
+A model counts from 1, so `recommended`, `waits_for` and `part_of` do; what comes out
 counts from 0. An estimate in hours becomes minutes. Texts are trimmed, and
 names and titles follow the rules of members and tasks. The names, the
 descriptions and the schemas are those of the stand-in that was tried

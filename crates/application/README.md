@@ -507,9 +507,14 @@ start or end.
   model and at the effort of the conversation, and with the instructions of
   `instructions_for_advisor`: who the Advisor is and how it plans, the
   reference folders, what the project has already when it has members or
-  tasks (it then proposes only what is to be added), and the rules not to
-  ask what a specialist works out itself and not to write "recommended"
-  into an option.
+  tasks (it then proposes only what is to be added; a task that exists is
+  listed with the task it is a part of), and the rules not to ask what a
+  specialist works out itself and not to write "recommended" into an
+  option. The instructions tell it to look at what the work folder holds
+  before it asks or proposes, and when to split a task into parts (one too
+  large for one piece of work; not everything); a part names only a task of
+  the same proposal, so a later round cannot add parts to a task that
+  exists.
 - What the Advisor asks (`AgentEvent::InterviewAsked`) and proposes
   (`PlanProposed`) is recorded on its turn. An interview or a proposal is
   open while it belongs to the latest turn, that turn has ended, and the
@@ -527,8 +532,9 @@ start or end.
   session of the Advisor does not see an approval happen. So a reply that
   follows one reaches the Advisor as `message_after_approval`: the words of
   the manager with the news that the proposal was approved, what was
-  approved as it was approved (members, and tasks with owners, sizes and
-  what they wait for, so that a task the manager renamed or took out is
+  approved as it was approved (members, and tasks with owners, sizes, the
+  task each is a part of and what they wait for, so that a task the
+  manager renamed or took out is
   not proposed again), and that a proposal from then on holds only what is
   to be added. The turn keeps the words of the manager alone.
 - `change_proposal` makes one change of the manager's (`ProposalEdit`) to
@@ -547,7 +553,8 @@ start or end.
   team as AI specialists with the colors newcomers get, except a member
   whose name the team has, whatever the capitals; tasks go into the first
   status of the workflow, after the tasks there, numbered on, each waiting
-  for the tasks the proposal says. The project, the members, the tasks and
+  for the tasks the proposal says, and a part becomes a subtask of the task
+  created for its whole. The project, the members, the tasks and
   the turn with the approved proposal go to `PlanningRepository` in one
   write, or nothing does. The proposal keeps what was approved, with the
   moment.

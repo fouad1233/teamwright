@@ -12,6 +12,22 @@ The Advisor can read the [folders](first-project.md#folders) of the project
 and cannot change anything in them. Put what it should know there before you
 start.
 
+## Choose the work folder
+
+Above *What you want*, the row *Work folder* shows the folder the team
+works in. The Advisor reads what is in it before it plans, so if the
+project exists already, a repository or a folder of documents, choose
+that folder first: press *Choose a folder* and pick it in the window of
+your system. If you choose nothing, the work goes into a folder Teamwright
+made for the project, and the row says so. The row stays under the head of
+the conversation, so you can change the folder later too, while no
+specialist is working. The other folders, those the team may only read,
+are in the menu of the project under *Folders*.
+
+This was tested at every layer and seen in the demo. A real Advisor on the
+lightest model read a README in its folder before it proposed. It was not
+tried in the installed program or on a Mac.
+
 ## Say what you want
 
 1. Open the tab *Advisor*. It says "Plan this project with the Advisor".
@@ -47,7 +63,10 @@ The Advisor proposes three things:
   why the project needs it, and the model and the effort it runs on. If the
   team already covers the work, it says "Team: nobody new".
 - **The tasks.** Each has who does it, its size, and the tasks it waits for.
-  Press the title of a task to read what the Advisor wrote about it.
+  Press the title of a task to read what the Advisor wrote about it. A task
+  that is too large for one piece of work may come in parts: the parts
+  stand under it, set in, and *3 parts* next to its title folds them away
+  and back.
 
 The size of a task is the Advisor's estimate of the hours a skilled person
 would need. It says how large the task is. It does not say how long a
@@ -69,6 +88,12 @@ does not fit first.
   the effort of a specialist to choose another.
 - Open the details of a task to change its title, size, description,
   priority and what it waits for.
+- In the details, *Part of* says which task it is a part of. The cross makes
+  it a task of its own; the plus moves it to another task. *Add a part*
+  adds a part of your own to it. A part cannot wait for its own task, since
+  that task starts only once its parts are finished.
+- The cross on a task with parts takes out only that task. Its parts stay,
+  where it was. Take a part out with its own cross.
 - *Add task* adds a task of your own.
 - For anything larger, write to the Advisor under the proposal what to
   change, and press *Send*. It proposes again.
@@ -77,12 +102,16 @@ Each change is stored, and reaches your other computers. There is no way to
 go back to the Advisor's first version after you changed it: it is not kept.
 This was tested at every layer and seen in the demo with its pretended
 Advisor. It was not tried in the installed program or with a real Advisor.
+Parts were tested and seen the same way; a real Advisor on the lightest
+model proposed a task in two parts at its first attempt. Changing and
+approving parts was not tried in the installed program or on a Mac.
 
 ## Approve it
 
 Press *Approve*. The specialists join the team, and the tasks appear in the
-first status of the board, each given to its owner. No work starts by
-itself: you start a task when you want it started. A specialist the team
+first status of the board, each given to its owner. A part becomes a
+subtask of its task. No work starts by itself: you start a task when you
+want it started. A specialist the team
 already has is not added a second time. The Advisor is told that you approved
 the plan, as you approved it.
 
@@ -94,7 +123,9 @@ the plan, as you approved it.
 ## Later
 
 Write to the Advisor again when the project needs more. It knows who is on
-the team and which tasks exist, and proposes what is to be added. It is told
+the team and which tasks exist, and proposes what is to be added. It can
+split the tasks it proposes into parts, but it cannot add parts to a task
+that exists already; add those by hand under *Subtasks* in the task. It is told
 not to repeat a task, but Teamwright cannot tell a task that says the same
 thing in other words, so read what it adds. *Plan something new* starts a new
 conversation. What the Advisor waits for, answers to its questions or a word

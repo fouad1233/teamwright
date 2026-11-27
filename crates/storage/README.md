@@ -133,7 +133,9 @@ involved.
 - **The interview and the proposal of a turn of the Advisor** have rows of
   their own, keyed by the turn: `turn_interviews` with its questions (each
   with its answer) and their options, and `turn_proposals` with its members,
-  its tasks and what each task waits for. Each is written only when it
+  its tasks, what each task waits for and the task it is a part of
+  (`part_of`, version 31; a state logged before has none and reads as a
+  plan without parts). Each is written only when it
   differs from what is stored: when it is made, when the manager changes a
   proposal before approving it (each change is one logged state), and when
   it is answered or approved. They are logged as the entities `interview` and `proposal` with
@@ -288,7 +290,8 @@ involved.
   November 2026).
 - **An approved plan is one transaction.** `SqlitePlanningRepository`
   writes the project (with its next task number), every new member, every
-  new task with what it waits for, and the turn with its approved proposal,
+  new task with what it waits for and the task it is a part of, and the
+  turn with its approved proposal,
   each logged as usual (`project`, `member`, `task`, `proposal`), or
   nothing. Each turn is deleted
   and logged, which stands for its steps and its question, and then the

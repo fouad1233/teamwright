@@ -371,8 +371,15 @@ The shell is where the work of an AI specialist meets the outside world
   the rule it breaks. A change of a proposal (`ProposalChange` in
   `types.ts`, `ProposalEditInput` in `dto.rs`) is tagged by its `kind`
   (`retitle`, `describe`, `estimate`, `prioritize`, `giveTo`, `addWait`,
-  `removeWait`, `addTask`, `removeTask`, `removeMember`, `setProfile`) and
-  names tasks and members by their places.
+  `removeWait`, `addTask` with an optional `partOf`, `makePartOf`,
+  `removeTask`, `removeMember`, `setProfile`) and names tasks and members
+  by their places. A proposed task carries `partOf`, the place of the task
+  it is a part of, or null. The review shows a part under its task, set in,
+  with a fold for the parts of a task (`planRows` in `advisorModel.ts`).
+  The Advisor's place shows the work folder of the project before the first
+  message and under the head of the conversation (`WorkFolderRow.tsx`),
+  and chooses another one through `usePlacesCommands`, the same hook and
+  command (`set_work_folder`) as the dialog of the folders.
 - **Instructions and ready-made specialists**
   ([decision 0031](../../docs/decisions/0031-instructions-and-ready-made-specialists.md)).
   A member on the wire carries its `instructions`. The commands

@@ -194,6 +194,14 @@ done with them. It does no input or output.
   outline", which waits for it already`). Taking a task out takes out what
   waited for it and moves the places after it up by one; taking a member
   out leaves its tasks to nobody. Nothing is ever left empty.
+- A task of a proposal may be a part of another task of the same proposal
+  (`ProposedTask::part_of`), as a subtask is on the board, at any depth.
+  No task is a part of itself, directly or further down (`the tasks of the
+  proposal are parts of each other in a circle`), and because a task with
+  parts starts only once its parts are finished, a part does not wait for
+  its own task, directly or through others. The changes `MakePartOf` and
+  `AddTask { part_of }` move a part, make it a task of its own, and add
+  one; taking out a task with parts puts its parts where it was.
 - Tasks never wait for each other in a circle. `DependencyGraph` holds the
   rule once, for the tasks of a project (by identifier) and for those of a
   proposal (by place): `would_create_cycle` for one more dependency,
