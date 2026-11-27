@@ -84,7 +84,19 @@ A single specialist that really works through Claude Code.
   It had passed on Windows, and version 0.1.0 has the fault on the other
   two. The rule is now written as an absolute path, and a real session was
   refused in fourteen read-only folders with spaces, parentheses, brackets
-  and stars in their names. Not run on macOS, and not run again on Windows
+  and stars in their names. Not run on macOS, and not run again on Windows.
+  Since 27 November 2026 a project can also have further folders its
+  specialists may write in, and a switch, full access, kept for one
+  computer and off until the manager turns it on: its specialists may then
+  read and write wherever the user's account can ([decision
+  0044](../decisions/0044-folders-to-write-in-and-full-access.md)).
+  Teamwright's own data, the sync folder, the settings of Claude Code and
+  the SSH and GnuPG keys stay closed even then, and a project with full
+  access can be allowed no command. Real sessions on Linux wrote in an
+  added folder and nowhere else, wrote and read outside every folder with
+  full access, were refused in every protected place, had no shell and
+  nothing of the user's own setup. Not run on macOS or Windows, nor in the
+  built program
 - 🚧 Open the session of a specialist in the Claude desktop app: built, not
   yet run against the real app
 - ⬜ Run a Claude Code that npm installed. On Windows that is a script,
@@ -154,7 +166,11 @@ A single specialist that really works through Claude Code.
 
 From a conversation to an approved team and plan.
 
-- ✅ Interview with structured, clickable questions
+- ✅ Interview with structured, clickable questions.
+  Since 27 November 2026 the work folder of the project is shown and
+  chosen in the Advisor's place before planning, and the Advisor is told
+  to look at what is in it; a real Advisor read a file in its folder and
+  named what it found
 - ✅ Project brief: the project in the Advisor's words, for the manager to
   check
 - ✅ Staffing proposal with a reason, model and effort level per member
@@ -170,7 +186,13 @@ From a conversation to an approved team and plan.
   Advisor is told the plan as it was approved. Tested at each layer and
   seen in a browser on the demo's simulated Advisor; not tried in the
   built program or with a real Advisor. The Advisor's first version is
-  not kept once it was changed, so there is no "undo my changes"
+  not kept once it was changed, so there is no "undo my changes".
+  Since 27 November 2026 a proposed task can be split into parts, which
+  become subtasks when the plan is approved, and the manager can move, add
+  and remove them ([a note in decision
+  0014](../decisions/0014-the-advisor-plans-through-two-tools.md)). A real
+  Advisor proposed parts at its first attempt; seen in the demo, not tried
+  in the built program or on a Mac
 - ✅ Import earlier Claude Code conversations as context digests
   ([decision 0041](../decisions/0041-earlier-conversations-as-digests.md)):
   the conversations found on this computer, by folder, the folders of the
@@ -527,7 +549,7 @@ Several specialists working together with the manager in the loop.
   run the job for Macs with Apple silicon built its installer and then
   failed, because two jobs tried to create the release in the same
   second; it was run a second time and its files were added. The
-  workflow still has that fault. The installers are
+  workflow now creates the release once, before the builds. The installers are
   not signed, so Windows and macOS warn before they open; none of them
   was installed and started by anybody yet, and the macOS and Linux
   builds were never run at all. The program tells the manager when a
@@ -537,9 +559,16 @@ Several specialists working together with the manager in the loop.
   mark at the foot of the navigation. The rule, the reading of GitHub's
   list against a listener on the same computer and the interface on the
   demo were verified; and "Look now" in the built program on Linux asked GitHub once and
-  found nothing newer than 0.1.0. Installing
-  an update from inside the program is still not built: it needs signed
-  update files and a signing key only the founder can make
+  found nothing newer than 0.1.0. The program installs an update itself
+  ([decision 0045](../decisions/0045-installing-updates-from-inside.md)):
+  the manager presses Install, the signature of the download is checked
+  against a key built into the program, and the program restarts only
+  when the manager says so. Proven on Linux with throwaway keys and a
+  local server: an older AppImage found a newer one, refused a copy
+  signed with another key, installed the right one and restarted as the
+  newer version. Version 0.2.0 has no updater in it and is replaced by
+  hand once. A copy installed from a `.deb` or `.rpm` keeps the notice
+  and the release page. Not tried on Windows or on a Mac
 - ✅ [User manual](../user-manual/README.md): a table of contents and
   fifteen pages, written from the decision records, the roadmap and the
   interface running on demo data, with eleven pictures from the demo.
