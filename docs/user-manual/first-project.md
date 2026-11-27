@@ -162,7 +162,8 @@ shows the tasks of that area, and its burndown still counts all of them.
 ## Folders
 
 *Folders* in the menu of a project says where its specialists work on this
-computer, and what else they may read.
+computer, and what else they may read or change. Each folder is listed with
+its kind at the end of its line: *work*, *written* or *read only*.
 
 - **Work folder.** Here the specialists read, create and change files.
   Teamwright makes a folder for every project. *Choose another folder* lets
@@ -170,6 +171,18 @@ computer, and what else they may read.
   project. What they change there is changed for real. *Use the folder of
   Teamwright* goes back. The work folder cannot change while a specialist
   works in the project.
+- **Folders to write in.** Further folders the specialists may read and
+  change as they do the work folder, for example the repository of the
+  firmware next to the one of the board. *Add a folder to write in* asks
+  for the folder; the bin at the end of its line takes it away again, and
+  leaves the folder itself where it is. The specialists are told which
+  folders these are. A folder to write in cannot be the work folder, a
+  reference folder or another folder to write in, nor lie inside or around
+  one of them: a folder has one kind. It can never be, lie inside or hold
+  Teamwright's own data, the sync folder, the settings of Claude Code
+  (`.claude` in your home folder) or the folders of your SSH and GnuPG
+  keys. So your whole home folder cannot be one; *full access*, below, is
+  the switch for that.
 - **Reference folders.** Folders with material the specialists should know:
   data sheets, an earlier design, a standard. They can read everything in
   these folders, PDF files included, and cannot change anything in them. A
@@ -177,6 +190,20 @@ computer, and what else they may read.
 - **Reference files.** *Add files* copies single files into the folder
   `references` inside the work folder. The specialists see the copies, and
   nothing else of the folder a file came from.
+- **Full access.** A switch, off until you switch it on. When it is on, the
+  specialists of this project may read and change files anywhere your
+  account can, not only in the folders above: a specialist can then change
+  or delete any of your files. Switching it on asks you once to confirm.
+  Even then, Teamwright's own data, the sync folder, the settings of Claude
+  Code and your SSH and GnuPG keys stay closed, for reading too, reference
+  folders stay read only, and no command can be allowed in the project. The
+  choice is kept for this computer only; your other computers keep their
+  own. While it is on, *Full access* stands quietly above the team and at
+  the head of a specialist's conversation. See
+  [what a specialist may do](safety-and-trust.md#full-access).
+
+Folders to write in, like the other folders, are facts of this computer:
+they are not synced, and another computer of yours has its own.
 
 Teamwright never deletes a folder or a file of yours, also not when you
 delete the project. What a specialist reads is sent to Anthropic under your

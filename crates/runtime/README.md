@@ -60,6 +60,21 @@ folder", and `Edit(C:/x/**)` on Windows. Characters a rule could misread
 (spaces, commas, parentheses) are written as `?` (`write_rule_path` in
 `arguments.rs`; decision 0013).
 
+A folder to write in (`TurnRequest::written_folders`) is resolved the same
+way and added with `--add-dir`, with no rule against writing. A turn with
+full access (`TurnRequest::full_access`) keeps every other option of a
+confined turn and adds the root as a working folder (`--add-dir /`; on
+Windows each drive that exists). Each protected place
+(`TurnRequest::protected_places`, in its full form, also when it does not
+exist) is denied with `Read(…)` and `Edit(…)` in the same form, a folder
+with `/**` and a file alone: every one of them with full access, and
+without it those that lie inside a folder of the turn. A turn with full
+access and a command is refused. `protected_places_in_home` names the
+places of the home folder: `~/.claude`, `~/.claude.json`, the folder of
+`CLAUDE_CONFIG_DIR`, `~/.ssh`, `~/.gnupg` and on Windows `%APPDATA%\gnupg`
+([decision 0044](../../docs/decisions/0044-folders-to-write-in-and-full-access.md)).
+The ignored tests in `tests/real_program.rs` proved both on Linux.
+
 The prompt goes to standard input, never onto the command line: Windows
 limits the length of a command line, and quoting would differ per system.
 Standard output is read line by line on a thread of its own; every line is

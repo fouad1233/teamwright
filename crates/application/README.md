@@ -17,7 +17,7 @@ window or agent runtime.
 | `checklists` | `ChecklistService`: add, rename, tick, move and remove the items of the checklist of a task, each answering with the task |
 | `fields` | `FieldService`: list, add, rename, set the unit of, move and remove the custom fields of a project, add, rename, recolor and remove the choices of a choice field, and set or clear the value of a field on a task ([decision 0035](../../docs/decisions/0035-custom-fields.md)). Removing a field or a choice clears the tasks first and forgets the filters of views by it. `ViewService::new` takes the fields to check a filter by a field (`not_found`, `different_projects`, `rule_broken` for a field that cannot filter); `WorkbookService` writes a column per field at the end of the Tasks sheet, a number as a number (`Cell::Number`) and a date as a date. `demoFields.test.ts` and `fields/tests.rs` follow the same cases. |
 | `team` | `TeamService`: put members on the team of a project, change them, take them off |
-| `places` | `PlacesService`: the folders of a project: choose its work folder, add and take away reference folders, copy reference files into it |
+| `places` | `PlacesService`: the folders of a project: choose its work folder, add and take away folders to write in and reference folders, copy reference files into it, and switch full access on and off (decision 0044) |
 | `files` | `ProjectFilesService`: what lies in the folders of a project, for the files view: `list` a folder at a path inside it, `locate` an entry to open or show, each path checked first |
 | `work` | `WorkService`: let AI specialists work: start on a task, ask, reply, answer a specialist's question, list what waits for the manager, stop, follow every event, open a session in the desktop app, recover after a restart; `brief_for` and `instructions_for`. Its part `advisor`: plan a project with the Advisor (`advise`, `answer_interview`, `change_proposal`, `approve_proposal`); `ProposalEdit`, `ApprovedProposal`, `answers_in_words` and `instructions_for_advisor` |
 | `digests` | `DigestService`: earlier conversations as digests ([decision 0041](../../docs/decisions/0041-earlier-conversations-as-digests.md)): `find_earlier` (grouped by folder, the folders of the project first), `draft`, `keep` (once per conversation), `digests_of`, `remove`; `group_by_folder`. The Advisor's first turn carries the kept digests (`digests_for_advisor`, at most `ADVISOR_DIGESTS_LENGTH` characters) |
@@ -310,6 +310,26 @@ manager sees; `ChosenPlaces` is what `PlacesRepository` stores.
   anything is copied (`rule_broken`); a file that cannot be read fails as
   storage (`storage_failed`) with its path in the message.
 - Teamwright never removes a file or folder of the manager.
+- **Folders to write in** ([decision 0044](../../docs/decisions/0044-folders-to-write-in-and-full-access.md)):
+  `add_written_folder` and `remove_written_folder`. A folder to write in is
+  kept once; it is refused (`rule_broken`) if it is, lies inside or contains
+  the work folder, a reference folder or another folder to write in
+  (`WrittenFolderOverlaps`), or a protected place (`FolderProtected`). The
+  work folder and a reference folder are refused the same way against the
+  folders to write in. `existing_written_folders` gives those that exist,
+  in their full form, to a turn.
+- **Protected places** come from `ProjectFolders::protected_places`:
+  Teamwright's data folder, the sync folder, the settings of the agent
+  program and the keys of the system (`ProtectedPlace`, `ProtectedKind`). No
+  specialist may read or change them.
+- **Full access** is a switch per project, on this computer
+  (`set_full_access`, `has_full_access`), kept by `PlacesRepository` outside
+  the log. A specialist's turn gets the folders to write in, full access and
+  the protected places (`TurnRequest::written_folders`, `full_access`,
+  `protected_places`); its instructions name them (`FoldersOfTurn`). The
+  Advisor gets neither. A project with full access is allowed no command
+  (`NoCommands::FullAccess`), and a turn with full access whose folder lies
+  inside a protected place is refused (`FullAccessInsideProtected`).
 
 `ProjectFilesService` shows what lies in these folders, for the view of
 the kind `files`. It only reads, through `FolderReader`.

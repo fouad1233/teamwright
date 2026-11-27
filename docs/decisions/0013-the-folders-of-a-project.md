@@ -141,3 +141,26 @@ Advisor, where the folder is the first thing under the title. Choosing it
 in the dialog would need the folder before the project exists, a second
 way to set it, and a way to undo half a creation when the folder is
 refused.
+
+## Note, 27 November 2026: folders to write in
+
+A project can now also have **folders to write in**: further folders the
+specialists read and write like the work folder
+([decision 0044](0044-folders-to-write-in-and-full-access.md)). They are
+kept and synced as the reference folders are: in `project_written_folders`
+(migration 30), logged in the state of `project_places`, which never leaves
+this computer. A folder has one kind: a folder to write in is not the work
+folder, a reference folder or another folder to write in, and lies neither
+inside nor around one of them; and it is never, nor lies inside or holds,
+Teamwright's data folder, the sync folder, the settings of Claude Code or
+the keys of the system. A turn names it with `--add-dir` and no rule against
+writing. The switch *full access* is kept outside the log, in `meta`.
+
+The rule against writing in a reference folder, written as the note of 22
+November says, also stands in a turn with full access, where the root is a
+working folder. The same form is used for the rules that keep the protected
+places closed, with `Read(...)` beside `Edit(...)`, and those were seen
+working in a real run on Linux with the root as a working folder. A
+reference folder was not part of that run: that it stays read only under
+full access rests on the same form of rule and on the order of Claude Code,
+in which a rule that denies always wins.

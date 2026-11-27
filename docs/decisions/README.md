@@ -59,6 +59,7 @@ was considered.
 | [0041](0041-earlier-conversations-as-digests.md) | Import earlier Claude Code conversations as digests made by rules, kept by the manager, read by the Advisor only | Accepted |
 | [0042](0042-the-report-of-a-whole-project.md) | The report of a whole project, offered at any time and called complete when every task is done, and the latest activity from the log | Accepted |
 | [0043](0043-a-notice-of-newer-versions.md) | Tell the manager when a newer version is out, looking only when allowed; installing from inside the program is not built | Accepted |
+| [0044](0044-folders-to-write-in-and-full-access.md) | Folders to write in, and full access per project and computer, with Teamwright's data, the sync folder, the settings of Claude Code and the keys always closed | Accepted |
 
 ## Template
 

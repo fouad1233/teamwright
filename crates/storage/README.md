@@ -40,6 +40,7 @@ involved.
 | `notices` | What syncing tells the manager, kept on this computer |
 | `folder` | `FolderOfComputers`: the files in the sync folder, which implements the port `SyncFolder` |
 | `ledger` | `SqliteSyncLedger`: the bookkeeping of syncing, which implements the port `SyncLedger` |
+| `places` (full access) | `SqlitePlacesRepository` also keeps whether a project has full access, in the key `full_access:<project>` of `meta`; off until switched on; not logged, so never synced; removed with its project ([decision 0044](../../docs/decisions/0044-folders-to-write-in-and-full-access.md)) |
 | `command_choice` | `SqliteCommandChoice`: whether command permissions are switched on, on this computer, in the key `command_permissions` of `meta`; off until switched on; not logged, so never synced ([decision 0038](../../docs/decisions/0038-permission-requests-routed-to-the-manager.md), note of 22 November 2026) |
 | `notification_choice` | `SqliteNotificationChoice`: whether this computer shows notifications, and which, in the keys `notifications`, `notify_waiting`, `notify_finished` and `notify_stopped` of `meta`; not logged, so never synced |
 | `plan_limit` | `SqlitePlanLimitStore`: what this computer knows about the limits of its Claude plan, as one JSON value in the key `plan_limit` of `meta`; what cannot be read back is forgotten; not logged, so never synced (decision 0040) |
@@ -111,7 +112,9 @@ involved.
   folder the manager chose is a row in `project_places` (NULL for the
   folder Teamwright gives the project), and the reference folders a row
   each in `project_reference_folders`, keyed by project and position (version
-  6). Paths are kept as text, as the manager gave them. Saving updates the
+  6). The folders to write in are rows of `project_written_folders` in the
+  same way (version 30, decision 0044), and are part of the same logged
+  state. Paths are kept as text, as the manager gave them. Saving updates the
   rows in place and deletes the positions the list no longer has. Every
   write is logged as the entity `project_places` with the identifier of the
   project and the complete state: the work folder and the whole list. A path

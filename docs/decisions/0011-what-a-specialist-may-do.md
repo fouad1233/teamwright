@@ -109,3 +109,21 @@ parentheses and other special characters are written so that they stay
 protected. The reasons, the pages of the documentation and the real runs are
 in [decision 0013](0013-the-folders-of-a-project.md). The rest of this
 profile is unchanged.
+
+## Note, 27 November 2026: full access
+
+The founder asked to be able to give a project full access. A project can
+now have folders to write in besides its work folder, and a switch, *full
+access*, kept for one computer, with which its specialists read and write
+wherever the manager's account can
+([decision 0044](0044-folders-to-write-in-and-full-access.md)). The first
+promise of this profile, "inside the folder of its project, and nothing
+else", then no longer holds for that project, on that computer, by the
+manager's choice. Everything else of the profile does: restricted mode, no
+shell, no setting source, the settings object of decision 0039, only the
+tool servers Teamwright names, denying instead of asking. A turn with full
+access is given the root as a working folder, and is denied by rule,
+for reading and for writing, Teamwright's data folder, the sync folder, the
+settings of Claude Code and the keys of the system. No command is allowed
+in a project with full access. A real run on Linux proved it; it was not
+run on macOS or Windows.

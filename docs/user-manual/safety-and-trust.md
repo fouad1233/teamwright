@@ -16,6 +16,8 @@ loosened from the interface. That is on purpose.
   By default that is `Teamwright\<key of the project>` in your documents. If
   you chose another folder for the project, it works there, and what it
   changes there is changed for real.
+- **Read, create and change files in the folders to write in** you gave the
+  project, as in its work folder.
 - **Read the reference folders** you gave the project, PDF files included. It
   cannot change anything in them.
 - **Use the skills and connector tools you gave it**, and only those. See
@@ -33,7 +35,8 @@ loosened from the interface. That is on purpose.
 - It cannot fetch anything from the internet on its own, unless you allow one
   web domain, and it cannot order parts or publish anything.
 - It can neither read nor change a file anywhere else on your computer. The
-  session is confined to its folders.
+  session is confined to its folders, unless you give the project
+  [full access](#full-access).
 - It does not see what you have set up in your own Claude Code: your skills,
   plugins, connectors, hooks and settings stay yours. Every turn is started so
   that none of them is loaded.
@@ -179,6 +182,62 @@ was tried on (Ubuntu 24.04) could not start the sandbox. That is why command per
 are off until you switch them on. Until a real run has shown it, allow a
 command only as if there were no sandbox.
 
+## Full access
+
+*Full access* is a switch of each project, in its *Folders*. It is off until
+you switch it on, and it is kept for this computer only: your other
+computers keep their own choice, and nothing of it travels through the sync
+folder.
+
+**What it gives.** When it is on, the specialists of the project may read
+and change files anywhere your account can: your documents, your other
+projects, your downloads. A specialist can change or delete any of your
+files, as you could. It holds from the next turn, for every turn of a
+specialist of the project on this computer, also the turns the coordinator
+starts by itself (the folders dialog and the coordinator say so). Only you
+can switch it on, and it asks you once to confirm.
+
+**What stays closed, even then.** These places can neither be read nor
+changed by a specialist, whatever you allowed:
+
+- Teamwright's own data folder: the database, the log of what happened, and
+  while a turn runs the values of your connectors' variables. A specialist
+  that rewrote it could forge the record of your projects.
+- The sync folder, if you chose one: it holds the log of every project.
+- The settings of Claude Code: `.claude` and `.claude.json` in your home
+  folder (and the folder `CLAUDE_CONFIG_DIR` names, if you set it). They hold
+  your own skills, hooks and connectors, and on Linux the sign-in itself.
+- The keys of your system: `.ssh` and `.gnupg` in your home folder. Reading
+  a private key would hand it to a model.
+
+Besides, the reference folders stay read only, the specialist still has no
+shell, no command can be allowed in a project with full access (its sandbox
+would reach the whole disk), your own skills, plugins, hooks and connectors
+are still shut out, and Claude Code itself, as its documentation says,
+refuses writes to the files that hold the state of a repository or the
+settings of programs (such as `.git`, `.bashrc` or `.npmrc`) when nobody can
+be asked; that was not tried.
+
+**What is not closed.** Everything else your account can read or change:
+other keys and tokens your programs keep in files (a cloud's credentials,
+the token of `gh`, the profiles of your browsers), and every document. Use
+full access only for a project whose specialists you would let work at your
+own desk.
+
+**Prefer folders to write in.** When the work needs one or two folders more,
+add them as folders to write in instead: they give exactly those folders.
+
+**What was proven.** On Linux (Ubuntu 24.04, Claude Code 2.1.330), a real
+specialist with full access wrote and read a file outside every folder it
+was given, was refused every read and write in stand-ins for the data
+folder, the settings of Claude Code and the keys, found nothing of them by
+a search of the folder around them, had no shell and none of your own
+skills, plugins or connectors, and could still use the tools of the team.
+It was not tried on a Mac or on Windows. On a Mac the rules are written the
+same way, as the documentation of Claude Code describes; on Windows the
+folder of each drive is given and the rules take the form that was seen
+working there for the read-only folders.
+
 ## A connector is a way out of the folder
 
 A connector reaches something outside the folder of the project: a ticket
@@ -239,4 +298,7 @@ rule was written. After the later changes (skills and connectors, and the
 settings that shut out your own hooks and connectors), the tests against the
 real Claude Code were written but have not passed yet, because Claude Code was
 not signed in on the computer where they were built. They must be run again
-before you rely on the new parts.
+before you rely on the new parts. On 27 November 2026 the test that asks a
+specialist to read and write outside its folders passed again on Linux, with
+those settings, together with the tests of folders to write in and of full
+access.

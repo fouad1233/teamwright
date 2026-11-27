@@ -145,9 +145,18 @@ The shell is where the work of an AI specialist meets the outside world
   `TEAMWRIGHT_DATA_DIR` names a data folder, the folders Teamwright gives the
   projects are in `projects` inside it instead, so a test never writes into
   the user's documents. The reference folders of the project are given to
-  each turn to read. `state.rs` reaches the disk for the application through
+  each turn to read, and its folders to write in to read and write
+  ([decision 0044](../../docs/decisions/0044-folders-to-write-in-and-full-access.md)).
+  `FoldersOfProjects` also names the places no specialist may read or
+  change: the data folder, the sync folder as the ledger has it now, and
+  those of the home folder. The folders dialog lists every folder with its
+  kind and holds the switch *Full access*, which asks once to confirm;
+  `FullAccessMark` shows it quietly in the Team place and at the head of a
+  specialist's conversation. `state.rs` reaches the disk for the application through
   `LocalFileSystem`, on the standard library. The commands in
-  `commands/places.rs` choose the folders and copy reference files;
+  `commands/places.rs` choose the folders, copy reference files and switch
+  full access (`add_written_folder`, `remove_written_folder`,
+  `set_full_access`);
   `show_work_folder` opens the work folder in the file manager of the
   operating system (`explorer`, `open` or `xdg-open`) without waiting for
   it, and reports a chosen folder that is gone as `folder_not_found`.
