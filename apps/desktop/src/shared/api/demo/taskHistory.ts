@@ -22,6 +22,14 @@ export function changesBetween(before: Task, after: Task): TaskChange[] {
   if (before.statusId !== after.statusId) {
     changes.push({ at, kind: 'moved', fromStatusId: before.statusId, toStatusId: after.statusId });
   }
+  if (before.parentId !== after.parentId) {
+    changes.push({
+      at,
+      kind: 'made_part_of',
+      fromTaskId: before.parentId,
+      toTaskId: after.parentId,
+    });
+  }
   if (JSON.stringify(before.assignee) !== JSON.stringify(after.assignee)) {
     changes.push({ at, kind: 'assigned', from: before.assignee, to: after.assignee });
   }

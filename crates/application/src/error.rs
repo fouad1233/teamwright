@@ -42,6 +42,48 @@ pub enum ApplicationError {
         blocker: String,
     },
 
+    /// A task was to be made a part of itself.
+    #[error("{task} cannot be a part of itself")]
+    PartOfItself {
+        /// The task, as the manager knows it (`IOT-4`), or its title in
+        /// quotes if it is a new task of a proposal.
+        task: String,
+    },
+
+    /// A task was to be made a part of one of its own parts, directly or
+    /// further down.
+    #[error("{task} cannot be a part of {whole}, which is a part of {task} already")]
+    PartOfItsOwnPart {
+        /// The task, as the manager knows it (`IOT-4`), or its title in
+        /// quotes if it is a new task of a proposal.
+        task: String,
+        /// The task it was to be a part of, named the same way.
+        whole: String,
+    },
+
+    /// A task was to be made a part of a task it waits for, directly or
+    /// through other tasks. A task with parts starts only once its parts
+    /// are finished, so neither could ever start.
+    #[error(
+        "{task} cannot be a part of {whole}, because {task} or one of its parts waits for \
+         {whole}, and a task with parts starts only once its parts are finished"
+    )]
+    PartWaitsForWhole {
+        /// The task, as the manager knows it (`IOT-4`), or its title in
+        /// quotes if it is a new task of a proposal.
+        task: String,
+        /// The task it was to be a part of, named the same way.
+        whole: String,
+    },
+
+    /// A proposal names a task that is no longer in the project: it was
+    /// deleted, or the proposal names a task of another project.
+    #[error(
+        "a task this proposal moves or adds a part to is no longer in the project; take that out \
+         of the proposal, or ask the Advisor to propose again"
+    )]
+    ProposedTaskGone,
+
     /// Another member of the team already has the requested name.
     #[error("the team already has a member called \"{name}\"")]
     MemberNameTaken {
@@ -641,6 +683,10 @@ impl ApplicationError {
             Self::FieldNameTaken { .. } => "field_name_taken",
             Self::SubtaskMovedAlone { .. } => "subtask_moved_alone",
             Self::DependencyCycle { .. } => "dependency_cycle",
+            Self::PartOfItself { .. }
+            | Self::PartOfItsOwnPart { .. }
+            | Self::PartWaitsForWhole { .. } => "part_in_circle",
+            Self::ProposedTaskGone => "rule_broken",
             Self::MemberNameTaken { .. } => "member_name_taken",
             Self::AssigneeFromAnotherTeam => "assignee_from_another_team",
             Self::StatusInUse { .. } => "status_in_use",

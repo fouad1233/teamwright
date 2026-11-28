@@ -194,6 +194,10 @@ export class TauriBackend implements Backend {
     return call('move_task', { taskId, statusId, index });
   }
 
+  makeTaskPartOf(taskId: Id, wholeId: Id | null): Promise<Task> {
+    return call('make_task_part_of', { taskId, wholeId });
+  }
+
   addTaskDependency(taskId: Id, blockerId: Id): Promise<Task> {
     return call('add_task_dependency', { taskId, blockerId });
   }

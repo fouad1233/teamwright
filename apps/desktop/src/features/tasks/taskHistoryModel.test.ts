@@ -146,6 +146,18 @@ describe('changeInWords', () => {
     ).toBe('Dates cleared');
   });
 
+  it('says which task a task was made a part of, or that it became a task of its own', () => {
+    expect(words({ kind: 'made_part_of', fromTaskId: null, toTaskId: 'pins' })).toBe(
+      'Made a part of SSN-3',
+    );
+    expect(words({ kind: 'made_part_of', fromTaskId: 'pins', toTaskId: null })).toBe(
+      'Made a task of its own, out of SSN-3',
+    );
+    expect(words({ kind: 'made_part_of', fromTaskId: 'gone', toTaskId: 'pins' })).toBe(
+      'Moved to SSN-3, out of a task that was removed',
+    );
+  });
+
   it('names the tasks a task waits for, or says that one is gone', () => {
     expect(words({ kind: 'now_waits_for', taskId: 'pins' })).toBe('Now waits for SSN-3');
     expect(words({ kind: 'no_longer_waits_for', taskId: 'pins' })).toBe(

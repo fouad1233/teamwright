@@ -369,3 +369,30 @@
   font-size: 11px;
   letter-spacing: 0.02em;
 }
+
+/* The task a task is a part of: its reference and title, which give way to
+   the cross that makes it a task of its own. */
+.whole {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.wholeValue {
+  flex: 0 1 auto;
+}
+
+.wholeReference {
+  flex: none;
+  color: var(--ink-soft);
+  font-family: var(--font-mono);
+  font-size: var(--text-small);
+  letter-spacing: 0.02em;
+}
+
+.wholeTitle {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

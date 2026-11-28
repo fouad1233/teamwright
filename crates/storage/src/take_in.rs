@@ -1378,6 +1378,57 @@ impl Round {
                 tasks::store_task(transaction, operations, &task)?;
             }
         }
+        // A task with parts starts only once its parts are finished, so it
+        // waits for them. A part that waits for its own task, directly or
+        // through others, closes a circle that neither chain shows alone:
+        // one computer made a task a part of another while the other let
+        // it wait for that task. Of the links of the circle, the one set
+        // last gives way, whether it is a wait or a part.
+        loop {
+            let tasks = tasks::tasks_of_project(transaction, project_id)?;
+            let Some(cycle) = cycle_in(&links_with_parts(&tasks)) else {
+                break;
+            };
+            let mut latest: Option<(String, TaskId, TaskId, bool)> = None;
+            for (from, to) in cycle {
+                let is_part = tasks
+                    .iter()
+                    .any(|task| task.id() == to && task.parent_id() == Some(from));
+                let is_wait = tasks
+                    .iter()
+                    .any(|task| task.id() == from && task.blocked_by().contains(&to));
+                for (part, holds) in [(true, is_part), (false, is_wait)] {
+                    if !holds {
+                        continue;
+                    }
+                    let (owner, field) = if part {
+                        (to, "parent")
+                    } else {
+                        (from, "waits_for")
+                    };
+                    let stamp =
+                        self.field_stamp(transaction, Entity::Task, &owner.to_string(), field)?;
+                    if latest.as_ref().is_none_or(|(kept, ..)| stamp > *kept) {
+                        latest = Some((stamp, from, to, part));
+                    }
+                }
+            }
+            let Some((_, from, to, part)) = latest else {
+                break;
+            };
+            let changed = if part { to } else { from };
+            let Some(mut task) = tasks.into_iter().find(|task| task.id() == changed) else {
+                break;
+            };
+            if part {
+                task.set_parent(None, now).map_err(|reason| {
+                    codec::damaged_record("task", &changed.to_string(), &reason)
+                })?;
+            } else {
+                task.unblock_from(to, now);
+            }
+            tasks::store_task(transaction, operations, &task)?;
+        }
 
         self.repair_views(transaction, operations, project_id)?;
         self.give_a_board_if_no_view_is_left(transaction, operations, project_id)?;
@@ -1922,6 +1973,27 @@ fn find_cycle(tasks: &[Task], field: &str) -> Option<Vec<(TaskId, TaskId)>> {
             (task.id(), targets)
         })
         .collect();
+    cycle_in(&links)
+}
+
+/// What each task waits for once a task with parts waits for its parts, as
+/// the coordinator reads it: the tasks it names, and its parts.
+fn links_with_parts(tasks: &[Task]) -> BTreeMap<TaskId, Vec<TaskId>> {
+    let mut links: BTreeMap<TaskId, Vec<TaskId>> = tasks
+        .iter()
+        .map(|task| (task.id(), task.blocked_by().iter().copied().collect()))
+        .collect();
+    for task in tasks {
+        if let Some(targets) = task.parent_id().and_then(|whole| links.get_mut(&whole)) {
+            targets.push(task.id());
+        }
+    }
+    links
+}
+
+/// One circle of links, each from a task to a task it points at, if the
+/// links hold one.
+fn cycle_in(links: &BTreeMap<TaskId, Vec<TaskId>>) -> Option<Vec<(TaskId, TaskId)>> {
     // A depth-first search that remembers the path it is on.
     let mut finished: BTreeSet<TaskId> = BTreeSet::new();
     for start in links.keys() {

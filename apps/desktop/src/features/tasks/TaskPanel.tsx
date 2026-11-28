@@ -40,7 +40,7 @@ import { TaskComposer } from './TaskComposer';
 import { TaskHistory } from './TaskHistory';
 import styles from './TaskPanel.module.css';
 import { TaskPicker } from './TaskPicker';
-import { indexById, statusOf, subtasksOf } from './taskModel';
+import { indexById, possibleWholesOf, statusOf, subtasksOf } from './taskModel';
 import { useTaskCommands } from './taskQueries';
 
 /** The value of the assignee menu that stands for "nobody". */
@@ -257,6 +257,18 @@ export function TaskPanel({ project, task, tasks, onClose }: TaskPanelProps) {
             />
           </Property>
 
+          <Property label="Part of">
+            <WholeChoice
+              project={project}
+              task={task}
+              parent={parent}
+              candidates={possibleWholesOf(tasks, task)}
+              onChoose={(wholeId) => {
+                void commands.makePartOf(task.id, wholeId);
+              }}
+            />
+          </Property>
+
           {showsAreas(areas) && (
             <Property label="Area">
               <AreaChoice project={project} areas={areas} task={task} parent={parent} />
@@ -410,6 +422,66 @@ function ChecklistCount({ task }: { task: Task }) {
   return (
     <span className={styles.count} title={progressInWords(progress)}>
       {progress.done} of {progress.total}
+    </span>
+  );
+}
+
+interface WholeChoiceProps {
+  project: Project;
+  task: Task;
+  /** The task this one is a part of now, if any. */
+  parent: Task | undefined;
+  /** The tasks it can be moved under. */
+  candidates: Task[];
+  /** Moves it under a task, or with nothing makes it a task of its own. */
+  onChoose: (wholeId: Id | null) => void;
+}
+
+/**
+ * The task a task is a part of, picked from the tasks of the project, with
+ * a cross that makes it a task of its own. Its parts go with it.
+ */
+function WholeChoice({ project, task, parent, candidates, onChoose }: WholeChoiceProps) {
+  const reference = taskReference(project, task);
+  return (
+    <span className={styles.whole}>
+      <TaskPicker
+        label={
+          parent === undefined
+            ? `Make ${reference} a part of another task`
+            : `Move ${reference} under another task`
+        }
+        project={project}
+        candidates={candidates}
+        onPick={onChoose}
+        trigger={
+          <ValueButton
+            aria-label="Part of"
+            isEmpty={parent === undefined}
+            className={styles.wholeValue}
+            title={parent === undefined ? undefined : parent.title}
+          >
+            {parent === undefined ? (
+              'A task of its own'
+            ) : (
+              <>
+                <span className={styles.wholeReference}>{taskReference(project, parent)}</span>
+                <span className={styles.wholeTitle}>{parent.title}</span>
+              </>
+            )}
+          </ValueButton>
+        }
+      />
+      {parent !== undefined && (
+        <IconButton
+          label={`Make ${reference} a task of its own`}
+          onClick={() => {
+            onChoose(null);
+          }}
+        >
+          <X />
+        </IconButton>
+      )}
     </span>
   );
 }

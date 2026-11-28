@@ -5,9 +5,10 @@ use std::sync::Arc;
 
 use teamwright_domain::{ActualDates, Timing, actual_dates_of, timing_of};
 use teamwright_domain::{
-    AreaId, Assignee, CalendarDate, ComputerId, DependencyGraph, Priority, Project, ProjectId,
-    Rank, Schedule, SprintId, Status, StatusId, StoryPoints, Task, TaskChange, TaskDraft, TaskId,
-    TaskTitle, Timestamp, changes_between, history_of,
+    AreaId, Assignee, CalendarDate, ComputerId, DependencyGraph, Outline, PartMove, Priority,
+    Project, ProjectId, Rank, RegroupingProblem, Schedule, SprintId, Status, StatusId, StoryPoints,
+    Task, TaskChange, TaskDraft, TaskId, TaskInPlan, TaskTitle, Timestamp, changes_between,
+    check_regrouping, history_of,
 };
 
 /// What really happened to a task, against its plan.
@@ -684,7 +685,81 @@ impl TaskService {
         self.require_task(id)
     }
 
-    /// Makes a task wait until another task is finished.
+    /// Makes a task a part of another task of its project, or, with
+    /// `None`, a task of its own. Its own parts go with it. As a subtask is
+    /// in the area and the sprint of the task it is a part of, the task and
+    /// its parts go into the area and the sprint of their new whole; a task
+    /// made one of its own keeps them. Nothing else of the tasks changes,
+    /// and all of it is stored in one write.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if either task does not exist, if they belong to
+    /// different projects, if the task would be a part of itself or of one
+    /// of its own parts (`part_in_circle`), if it or one of its parts waits
+    /// for the new whole, directly or through other tasks, which would then
+    /// wait for it in turn (`part_in_circle`), or if storage fails.
+    pub fn make_part_of(
+        &self,
+        id: TaskId,
+        whole_id: Option<TaskId>,
+    ) -> Result<Task, ApplicationError> {
+        let task = self.require_task(id)?;
+        let whole = whole_id
+            .map(|whole_id| self.require_task(whole_id))
+            .transpose()?;
+        if whole
+            .as_ref()
+            .is_some_and(|whole| whole.project_id() != task.project_id())
+        {
+            return Err(ApplicationError::DifferentProjects);
+        }
+        let project = self.require_project(task.project_id())?;
+        let mut tasks_of_project = self.tasks.list_for_project(project.id())?;
+        check_regrouping(
+            &Outline::of_tasks(&tasks_of_project),
+            &[],
+            &[PartMove {
+                task: id,
+                part_of: whole_id.map(TaskInPlan::Existing),
+            }],
+        )
+        .map_err(|problem| {
+            regrouping_error(problem, |named| match named {
+                TaskInPlan::Existing(other) => tasks_of_project
+                    .iter()
+                    .find(|known| known.id() == other)
+                    .map_or_else(
+                        || "a task that is gone".to_owned(),
+                        |known| reference(&project, known),
+                    ),
+                TaskInPlan::Proposed(place) => format!("task {}", place + 1),
+            })
+        })?;
+        if task.parent_id() == whole_id {
+            return Ok(task);
+        }
+
+        let now = self.clock.now();
+        let before = tasks_of_project.clone();
+        if let Some(moved) = tasks_of_project.iter_mut().find(|other| other.id() == id) {
+            moved.set_parent(whole_id, now)?;
+        }
+        follow_tops(&mut tasks_of_project, &subtree_of(id, &before), now);
+        let changed: Vec<Task> = tasks_of_project
+            .into_iter()
+            .filter(|after| !before.contains(after))
+            .collect();
+        self.tasks.save_all(&changed)?;
+        changed
+            .into_iter()
+            .find(|moved| moved.id() == id)
+            .map_or_else(|| self.require_task(id), Ok)
+    }
+
+    /// Makes a task wait until another task is finished. A part does not
+    /// wait for the task it is a part of, directly or through other tasks:
+    /// that task waits for its parts.
     ///
     /// # Errors
     ///
@@ -699,7 +774,7 @@ impl TaskService {
         }
 
         let tasks_of_project = self.tasks.list_for_project(task.project_id())?;
-        let dependencies = DependencyGraph::from_tasks(&tasks_of_project);
+        let dependencies = DependencyGraph::from_tasks_and_parts(&tasks_of_project);
         if id != blocker_id && dependencies.would_create_cycle(id, blocker_id) {
             let project = self.require_project(task.project_id())?;
             return Err(ApplicationError::DependencyCycle {
@@ -883,6 +958,73 @@ pub(crate) fn subtree_of(root: TaskId, tasks: &[Task]) -> BTreeSet<TaskId> {
     }
 }
 
+/// Puts each of the `regrouped` tasks into the area and the sprint of the
+/// top of its chain of wholes, as a subtask goes where the task it is a
+/// part of goes. A top keeps its own. Only what differs is changed.
+pub(crate) fn follow_tops(tasks: &mut [Task], regrouped: &BTreeSet<TaskId>, now: Timestamp) {
+    let wholes: std::collections::HashMap<TaskId, Option<TaskId>> = tasks
+        .iter()
+        .map(|task| (task.id(), task.parent_id()))
+        .collect();
+    let places: std::collections::HashMap<TaskId, (AreaId, Option<SprintId>)> = tasks
+        .iter()
+        .map(|task| (task.id(), (task.area_id(), task.sprint_id())))
+        .collect();
+    for task in tasks
+        .iter_mut()
+        .filter(|task| regrouped.contains(&task.id()))
+    {
+        // The chains are free of circles, which was checked; the count only
+        // guards against damaged data.
+        let mut top = task.id();
+        for _ in 0..wholes.len() {
+            match wholes.get(&top).copied().flatten() {
+                Some(whole) if wholes.contains_key(&whole) => top = whole,
+                _ => break,
+            }
+        }
+        let Some(&(area_id, sprint_id)) = places.get(&top) else {
+            continue;
+        };
+        if task.area_id() != area_id {
+            task.put_into_area(area_id, now);
+        }
+        if task.sprint_id() != sprint_id {
+            task.plan_into(sprint_id, now);
+        }
+    }
+}
+
+/// The error of a regrouping that breaks a rule of parts, with the tasks
+/// named by `name`: a task of the project by its reference, a new task of
+/// a proposal by its title.
+pub(crate) fn regrouping_error<Key: PartialEq>(
+    problem: RegroupingProblem<Key>,
+    name: impl Fn(TaskInPlan<Key>) -> String,
+) -> ApplicationError {
+    match problem {
+        RegroupingProblem::NotThere(_) | RegroupingProblem::NoSuchPlace(_) => {
+            ApplicationError::ProposedTaskGone
+        }
+        RegroupingProblem::MovedTwice(_) => {
+            ApplicationError::Rule(teamwright_domain::DomainError::TaskMovedTwice)
+        }
+        RegroupingProblem::PartOfItsOwnPart { task, whole } if task == whole => {
+            ApplicationError::PartOfItself { task: name(task) }
+        }
+        RegroupingProblem::PartOfItsOwnPart { task, whole } => ApplicationError::PartOfItsOwnPart {
+            task: name(task),
+            whole: name(whole),
+        },
+        RegroupingProblem::PartWaitsForWhole { task, whole } => {
+            ApplicationError::PartWaitsForWhole {
+                task: name(task),
+                whole: name(whole),
+            }
+        }
+    }
+}
+
 /// The name a manager knows a task by, such as `IOT-12`.
 pub(crate) fn reference(project: &Project, task: &Task) -> String {
     format!("{}-{}", project.key(), task.number())
@@ -908,6 +1050,8 @@ mod tests {
         projects: ProjectService,
         tasks: TaskService,
         team: TeamService,
+        sprints: crate::sprints::SprintService,
+        areas: crate::areas::AreaService,
         clock: Arc<ManualClock>,
     }
 
@@ -926,14 +1070,27 @@ mod tests {
         let conversation_repository = Arc::new(InMemoryConversationRepository::default());
         let area_store = Arc::new(crate::in_memory::InMemoryAreaRepository::default());
         let clock = Arc::new(ManualClock::starting_at(start_of_day()));
+        let sprint_store = Arc::new(InMemorySprintRepository::new(task_repository.clone()));
         Workspace {
+            sprints: crate::sprints::SprintService::new(
+                project_repository.clone(),
+                task_repository.clone(),
+                sprint_store.clone(),
+                clock.clone(),
+            ),
+            areas: crate::areas::AreaService::new(
+                project_repository.clone(),
+                task_repository.clone(),
+                area_store.clone(),
+                clock.clone(),
+            ),
             projects: ProjectService::new(
                 project_repository.clone(),
                 task_repository.clone(),
                 member_repository.clone(),
                 conversation_repository.clone(),
                 Arc::new(InMemoryPlacesRepository::default()),
-                Arc::new(InMemorySprintRepository::new(task_repository.clone())),
+                sprint_store.clone(),
                 Arc::new(crate::in_memory::InMemoryViewRepository::default()),
                 area_store.clone(),
                 clock.clone(),
@@ -943,7 +1100,7 @@ mod tests {
                 task_repository.clone(),
                 member_repository.clone(),
                 conversation_repository.clone(),
-                Arc::new(InMemorySprintRepository::new(task_repository.clone())),
+                sprint_store.clone(),
                 area_store.clone(),
                 clock.clone(),
             ),
@@ -1652,6 +1809,194 @@ mod tests {
                 .blocked_by()
                 .is_empty()
         );
+    }
+
+    #[test]
+    fn a_part_cannot_wait_for_the_task_it_is_a_part_of() {
+        let workspace = workspace();
+        let project = workspace.project("Smart sensor node");
+        let board = workspace.task(&project, "Design the board");
+        let schematic = workspace
+            .tasks
+            .create(NewTask {
+                parent_id: Some(board.id()),
+                ..NewTask::titled(project.id(), "Draw the schematic")
+            })
+            .unwrap();
+
+        let error = workspace
+            .tasks
+            .add_dependency(schematic.id(), board.id())
+            .unwrap_err();
+
+        // The board waits for its part, so the part cannot wait for it.
+        assert_eq!(
+            error.to_string(),
+            "SSN-2 cannot wait for SSN-1, because SSN-1 already waits for SSN-2"
+        );
+        assert_eq!(error.code(), "dependency_cycle");
+    }
+
+    /// A project with a board of two parts and a task of its own after it.
+    fn board_with_parts(workspace: &Workspace) -> (Project, Task, Task, Task, Task) {
+        let project = workspace.project("Smart sensor node");
+        let board = workspace.task(&project, "Design the board");
+        let part = |title: &str, whole: &Task| {
+            workspace
+                .tasks
+                .create(NewTask {
+                    parent_id: Some(whole.id()),
+                    ..NewTask::titled(project.id(), title)
+                })
+                .unwrap()
+        };
+        let schematic = part("Draw the schematic", &board);
+        let symbols = part("Draw the symbols", &schematic);
+        let manual = workspace.task(&project, "Write the manual");
+        (project, board, schematic, symbols, manual)
+    }
+
+    #[test]
+    fn a_task_moved_under_another_takes_its_parts_into_its_area_and_its_sprint() {
+        let workspace = workspace();
+        let (project, board, schematic, symbols, manual) = board_with_parts(&workspace);
+        let documents = workspace.areas.add(project.id(), "Documents").unwrap();
+        workspace
+            .areas
+            .move_task(manual.id(), documents.id())
+            .unwrap();
+        let sprint = workspace
+            .sprints
+            .create(crate::sprints::NewSprint::in_project(project.id()))
+            .unwrap();
+        workspace
+            .tasks
+            .plan(manual.id(), Some(sprint.id()))
+            .unwrap();
+        workspace.clock.advance(TimeDelta::hours(1));
+
+        let moved = workspace
+            .tasks
+            .make_part_of(schematic.id(), Some(manual.id()))
+            .unwrap();
+
+        assert_eq!(moved.parent_id(), Some(manual.id()));
+        for task in [moved, workspace.tasks.get(symbols.id()).unwrap()] {
+            assert_eq!(task.area_id(), documents.id());
+            assert_eq!(task.sprint_id(), Some(sprint.id()));
+        }
+        assert_eq!(
+            workspace.tasks.get(symbols.id()).unwrap().parent_id(),
+            Some(schematic.id()),
+            "its own parts stay its parts"
+        );
+        let history = workspace.tasks.history(schematic.id()).unwrap();
+        assert!(history.iter().any(|change| change.kind
+            == teamwright_domain::TaskChangeKind::MadePartOf {
+                from: Some(board.id()),
+                to: Some(manual.id()),
+            }));
+    }
+
+    #[test]
+    fn a_part_made_a_task_of_its_own_keeps_its_area_and_its_sprint() {
+        let workspace = workspace();
+        let (project, board, schematic, symbols, _) = board_with_parts(&workspace);
+        let sprint = workspace
+            .sprints
+            .create(crate::sprints::NewSprint::in_project(project.id()))
+            .unwrap();
+        workspace.tasks.plan(board.id(), Some(sprint.id())).unwrap();
+
+        let alone = workspace.tasks.make_part_of(schematic.id(), None).unwrap();
+
+        assert_eq!(alone.parent_id(), None);
+        assert_eq!(alone.sprint_id(), Some(sprint.id()));
+        assert_eq!(alone.area_id(), board.area_id());
+        assert_eq!(
+            workspace.tasks.get(symbols.id()).unwrap().parent_id(),
+            Some(schematic.id())
+        );
+        // It can now be planned by itself.
+        workspace.tasks.plan(schematic.id(), None).unwrap();
+    }
+
+    #[test]
+    fn a_task_is_not_made_a_part_of_itself_or_of_its_own_parts() {
+        let workspace = workspace();
+        let (_, board, _, symbols, _) = board_with_parts(&workspace);
+
+        let itself = workspace
+            .tasks
+            .make_part_of(board.id(), Some(board.id()))
+            .unwrap_err();
+        assert_eq!(itself.to_string(), "SSN-1 cannot be a part of itself");
+        assert_eq!(itself.code(), "part_in_circle");
+
+        let below = workspace
+            .tasks
+            .make_part_of(board.id(), Some(symbols.id()))
+            .unwrap_err();
+        assert_eq!(
+            below.to_string(),
+            "SSN-1 cannot be a part of SSN-3, which is a part of SSN-1 already"
+        );
+        assert_eq!(workspace.tasks.get(board.id()).unwrap().parent_id(), None);
+    }
+
+    #[test]
+    fn a_task_is_not_made_a_part_of_a_task_it_waits_for() {
+        let workspace = workspace();
+        let (_, board, schematic, symbols, manual) = board_with_parts(&workspace);
+        workspace
+            .tasks
+            .add_dependency(manual.id(), board.id())
+            .unwrap();
+        workspace
+            .tasks
+            .add_dependency(symbols.id(), manual.id())
+            .unwrap_err();
+
+        let error = workspace
+            .tasks
+            .make_part_of(manual.id(), Some(schematic.id()))
+            .unwrap_err();
+
+        assert_eq!(
+            error.to_string(),
+            "SSN-4 cannot be a part of SSN-2, because SSN-4 or one of its parts waits for SSN-2, \
+             and a task with parts starts only once its parts are finished"
+        );
+        assert_eq!(error.code(), "part_in_circle");
+    }
+
+    #[test]
+    fn a_task_is_not_made_a_part_of_a_task_of_another_project() {
+        let workspace = workspace();
+        let (_, board, ..) = board_with_parts(&workspace);
+        let other = workspace.project("Display driver");
+        let driver = workspace.task(&other, "Write the driver");
+
+        let error = workspace
+            .tasks
+            .make_part_of(board.id(), Some(driver.id()))
+            .unwrap_err();
+
+        assert!(matches!(error, ApplicationError::DifferentProjects));
+    }
+
+    #[test]
+    fn moving_a_task_where_it_is_changes_nothing() {
+        let workspace = workspace();
+        let (_, board, schematic, ..) = board_with_parts(&workspace);
+        workspace.clock.advance(TimeDelta::hours(1));
+
+        let same = workspace
+            .tasks
+            .make_part_of(schematic.id(), Some(board.id()))
+            .unwrap();
+
+        assert_eq!(same, schematic);
     }
 
     #[test]

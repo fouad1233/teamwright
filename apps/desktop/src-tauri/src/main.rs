@@ -110,6 +110,7 @@ fn main() -> ExitCode {
             commands::tasks::estimate_task,
             commands::tasks::reschedule_task,
             commands::tasks::move_task,
+            commands::tasks::make_task_part_of,
             commands::tasks::add_task_dependency,
             commands::tasks::remove_task_dependency,
             commands::tasks::delete_task,

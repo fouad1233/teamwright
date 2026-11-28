@@ -87,6 +87,12 @@ export interface TaskCommands {
   reschedule(taskId: Id, startOn: CalendarDate | null, dueOn: CalendarDate | null): Promise<void>;
   /** Moves a task to a status and a position there. The move shows at once. */
   move(taskId: Id, statusId: Id, index: number): Promise<void>;
+  /**
+   * Makes a task a part of another task, or with nothing a task of its own.
+   * Its parts go with it, and the whole list is loaded again, because their
+   * areas and sprints may change too.
+   */
+  makePartOf(taskId: Id, wholeId: Id | null): Promise<void>;
   addDependency(taskId: Id, blockerId: Id): Promise<void>;
   removeDependency(taskId: Id, blockerId: Id): Promise<void>;
   /** Removes a task together with its subtasks. Resolves to whether it was removed. */
@@ -182,6 +188,13 @@ export function useTaskCommands(projectId: Id): TaskCommands {
         // When two ranks get too close, the backend spaces the whole status
         // out again. The other ranks on screen are then out of date.
         if (task.rank !== expectedRank) {
+          await reload();
+        }
+      },
+      makePartOf: async (taskId, wholeId) => {
+        const task = await attempt(() => backend.makeTaskPartOf(taskId, wholeId));
+        if (task) {
+          show(task);
           await reload();
         }
       },

@@ -78,6 +78,23 @@ function wordingOf(change: TaskChange, names: HistoryNames): Wording {
         joinedBy: null,
         words: `moved from ${statusName(names, change.fromStatusId)} to ${statusName(names, change.toStatusId)}`,
       };
+    case 'made_part_of':
+      if (change.toTaskId === null) {
+        return {
+          joinedBy: 'was',
+          words:
+            change.fromTaskId === null
+              ? 'made a task of its own'
+              : `made a task of its own, out of ${taskName(names, change.fromTaskId)}`,
+        };
+      }
+      return {
+        joinedBy: 'was',
+        words:
+          change.fromTaskId === null
+            ? `made a part of ${taskName(names, change.toTaskId)}`
+            : `moved to ${taskName(names, change.toTaskId)}, out of ${taskName(names, change.fromTaskId)}`,
+      };
     case 'assigned':
       return { joinedBy: 'was', words: `given to ${assigneeName(names, change.to)}` };
     case 'prioritized':

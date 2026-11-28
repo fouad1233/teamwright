@@ -281,7 +281,21 @@ export interface Backend {
    * Index 0 is the top; an index past the end means the bottom.
    */
   moveTask(taskId: Id, statusId: Id, index: number): Promise<Task>;
-  /** Makes a task wait until another task is finished. */
+  /**
+   * Makes a task a part of another task of its project, or, with nothing, a
+   * task of its own. Its own parts go with it. As a subtask goes where its
+   * task goes, the task and its parts go into the area and the sprint of
+   * their new whole; a task made one of its own keeps them. A task is not a
+   * part of itself or of one of its own parts, and a part does not wait for
+   * the task it is a part of, directly or through others (`part_in_circle`,
+   * with the reason in words). Answers with the task.
+   */
+  makeTaskPartOf(taskId: Id, wholeId: Id | null): Promise<Task>;
+  /**
+   * Makes a task wait until another task is finished. A part does not wait
+   * for the task it is a part of, which waits for its parts
+   * (`dependency_cycle`).
+   */
   addTaskDependency(taskId: Id, blockerId: Id): Promise<Task>;
   removeTaskDependency(taskId: Id, blockerId: Id): Promise<Task>;
   /** Removes a task together with its subtasks. They leave their sprint with it. */

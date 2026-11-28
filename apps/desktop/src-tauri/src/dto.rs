@@ -1104,6 +1104,13 @@ pub enum TaskChangeKindDto {
         /// The dates since.
         to: TaskDatesDto,
     },
+    /// It was made a part of another task, or a task of its own.
+    MadePartOf {
+        /// The task it was a part of, which may have been removed since.
+        from_task_id: Option<String>,
+        /// The task it is a part of since, or nothing.
+        to_task_id: Option<String>,
+    },
     /// It began to wait for another task.
     NowWaitsFor {
         /// The task it waits for.
@@ -1174,6 +1181,10 @@ impl From<&TaskChange> for TaskChangeDto {
             TaskChangeKind::Moved { from, to } => TaskChangeKindDto::Moved {
                 from_status_id: from.to_string(),
                 to_status_id: to.to_string(),
+            },
+            TaskChangeKind::MadePartOf { from, to } => TaskChangeKindDto::MadePartOf {
+                from_task_id: from.map(|id| id.to_string()),
+                to_task_id: to.map(|id| id.to_string()),
             },
             TaskChangeKind::Assigned { from, to } => TaskChangeKindDto::Assigned {
                 from: from.map(AssigneeDto::from),

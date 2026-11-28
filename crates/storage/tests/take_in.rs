@@ -652,6 +652,101 @@ fn a_chain_of_waiting_closed_by_two_computers_is_opened_again() {
 }
 
 #[test]
+fn a_task_moved_under_another_on_one_computer_is_under_it_on_the_other() {
+    let (desk, laptop, project, board) = desk_and_laptop();
+    let firmware = desk
+        .tasks
+        .create(NewTask::titled(project.id(), "Write the firmware"))
+        .unwrap();
+    laptop.take_in_from(&desk);
+
+    desk.tasks
+        .make_part_of(firmware.id(), Some(board.id()))
+        .unwrap();
+    keep_in_step(&desk, &laptop);
+
+    assert_eq!(
+        laptop.task(&firmware).unwrap().parent_id(),
+        Some(board.id())
+    );
+    assert_eq!(laptop.everything(), desk.everything());
+}
+
+#[test]
+fn a_chain_of_parts_closed_by_two_computers_is_opened_again() {
+    let (desk, laptop, project, board) = desk_and_laptop();
+    let firmware = desk
+        .tasks
+        .create(NewTask::titled(project.id(), "Write the firmware"))
+        .unwrap();
+    laptop.take_in_from(&desk);
+    desk.tasks
+        .make_part_of(firmware.id(), Some(board.id()))
+        .unwrap();
+    laptop
+        .tasks
+        .make_part_of(board.id(), Some(firmware.id()))
+        .unwrap();
+
+    keep_in_step(&desk, &laptop);
+
+    assert_eq!(desk.task(&firmware).unwrap().parent_id(), Some(board.id()));
+    assert_eq!(
+        desk.task(&board).unwrap().parent_id(),
+        None,
+        "the part set last gives way"
+    );
+    assert_eq!(laptop.everything(), desk.everything());
+}
+
+#[test]
+fn a_part_left_waiting_for_its_own_task_by_two_computers_is_freed() {
+    for wait_first in [true, false] {
+        let (desk, laptop, project, board) = desk_and_laptop();
+        let firmware = desk
+            .tasks
+            .create(NewTask::titled(project.id(), "Write the firmware"))
+            .unwrap();
+        laptop.take_in_from(&desk);
+        // One computer lets the firmware wait for the board; the other makes
+        // it a part of the board, which then waits for it.
+        let wait = || {
+            desk.tasks
+                .add_dependency(firmware.id(), board.id())
+                .unwrap();
+        };
+        let part = || {
+            laptop
+                .tasks
+                .make_part_of(firmware.id(), Some(board.id()))
+                .unwrap();
+        };
+        if wait_first {
+            wait();
+            part();
+        } else {
+            part();
+            wait();
+        }
+
+        keep_in_step(&desk, &laptop);
+
+        let merged = desk.task(&firmware).unwrap();
+        if wait_first {
+            assert_eq!(merged.parent_id(), None, "the part set last gives way");
+            assert!(merged.blocked_by().contains(&board.id()));
+        } else {
+            assert_eq!(merged.parent_id(), Some(board.id()));
+            assert!(
+                merged.blocked_by().is_empty(),
+                "the wait set last gives way"
+            );
+        }
+        assert_eq!(laptop.everything(), desk.everything());
+    }
+}
+
+#[test]
 fn of_two_sprints_started_apart_the_one_started_later_goes_back_to_planned() {
     let (desk, laptop, project, board) = desk_and_laptop();
     let firmware = desk
@@ -1046,7 +1141,14 @@ fn random_change(computer: &Computer, project: &Project, dice: &mut Dice) {
         .list_for_project(project.id())
         .unwrap_or_default();
     let area_of = |dice: &mut Dice| areas.get(dice.roll(areas.len().max(1))).map(Area::id);
-    let _ = match dice.roll(12) {
+    let _ = match dice.roll(13) {
+        12 => match (pick(dice), pick(dice)) {
+            (Some(task), whole) => computer
+                .tasks
+                .make_part_of(task.id(), whole.filter(|_| dice.roll(4) != 0).map(Task::id))
+                .map(|_| ()),
+            _ => Ok(()),
+        },
         9 => computer
             .areas
             .add(project.id(), &format!("Area {}", dice.roll(1000)))
@@ -1164,6 +1266,10 @@ fn two_computers_that_change_things_at_random_end_up_equal() {
         numbers.len(),
         tasks.len(),
         "every task has a number of its own"
+    );
+    assert!(
+        !teamwright_domain::DependencyGraph::from_tasks_and_parts(&tasks).has_cycle(),
+        "no task waits for itself, through its parts or otherwise"
     );
 }
 

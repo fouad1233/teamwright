@@ -1302,6 +1302,11 @@ export type TaskChange = {
   /** Its story points changed, or it got or lost them. */
   | { kind: 'pointed'; from: number | null; to: number | null }
   | { kind: 'rescheduled'; from: TaskDates; to: TaskDates }
+  /**
+   * The task was made a part of another task, or a task of its own. Either
+   * task may have been removed since.
+   */
+  | { kind: 'made_part_of'; fromTaskId: Id | null; toTaskId: Id | null }
   /** The task began to wait for another task, which may have been removed since. */
   | { kind: 'now_waits_for'; taskId: Id }
   | { kind: 'no_longer_waits_for'; taskId: Id }

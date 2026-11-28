@@ -42,6 +42,14 @@ pub enum TaskChangeKind {
         /// The status since.
         to: StatusId,
     },
+    /// It was made a part of another task, or a task of its own. The task
+    /// it was or is a part of may have been removed since.
+    MadePartOf {
+        /// The task it was a part of before, or nothing.
+        from: Option<TaskId>,
+        /// The task it is a part of since, or nothing.
+        to: Option<TaskId>,
+    },
     /// It was given to someone else, or to nobody.
     Assigned {
         /// Who was responsible before.
@@ -151,6 +159,12 @@ pub fn changes_between(before: &Task, after: &Task) -> Vec<TaskChange> {
         kinds.push(TaskChangeKind::Moved {
             from: before.status_id(),
             to: after.status_id(),
+        });
+    }
+    if before.parent_id() != after.parent_id() {
+        kinds.push(TaskChangeKind::MadePartOf {
+            from: before.parent_id(),
+            to: after.parent_id(),
         });
     }
     if before.assignee() != after.assignee() {
@@ -391,6 +405,16 @@ mod tests {
                 &|task| task.describe("Two sheets.".to_owned(), moment(10))
             )),
             [&TaskChangeKind::Described]
+        );
+        let whole = crate::ids::TaskId::generate();
+        assert_eq!(
+            kinds(&change(&|task| task
+                .set_parent(Some(whole), moment(10))
+                .unwrap())),
+            [&TaskChangeKind::MadePartOf {
+                from: None,
+                to: Some(whole)
+            }]
         );
         assert_eq!(
             kinds(&change(&|task| task.move_to(

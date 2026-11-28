@@ -1,6 +1,6 @@
 import { Plus } from 'lucide-react';
 import { Popover } from 'radix-ui';
-import { useState, type KeyboardEvent, type ReactNode } from 'react';
+import { useState, type KeyboardEvent, type ReactElement, type ReactNode } from 'react';
 
 import type { Id, Project, Task } from '@/shared/api/types';
 import { classNames } from '@/shared/lib/classNames';
@@ -32,6 +32,11 @@ interface PickerProps {
   /** The tasks that can be picked. */
   entries: readonly PickerEntry[];
   onPick: (key: string) => void;
+  /**
+   * What opens the list, such as the value a task has now. Left out, it is
+   * a button with a plus.
+   */
+  trigger?: ReactElement;
 }
 
 /**
@@ -40,7 +45,7 @@ interface PickerProps {
  * keyboard. It works on any list of tasks: those of a project, or those of
  * a plan that is not approved yet.
  */
-export function Picker({ label, entries, onPick }: PickerProps) {
+export function Picker({ label, entries, onPick, trigger }: PickerProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [highlighted, setHighlighted] = useState(0);
@@ -84,12 +89,20 @@ export function Picker({ label, entries, onPick }: PickerProps) {
   return (
     <Popover.Root open={isOpen} onOpenChange={changeOpen}>
       <Popover.Trigger asChild>
-        <IconButton label={label}>
-          <Plus />
-        </IconButton>
+        {trigger ?? (
+          <IconButton label={label}>
+            <Plus />
+          </IconButton>
+        )}
       </Popover.Trigger>
       <Popover.Portal>
-        <Popover.Content className={styles.picker} align="end" sideOffset={4}>
+        <Popover.Content
+          className={styles.picker}
+          // A list opened from a value lines up with it; one opened from
+          // the button with a plus at the end of a heading, with that end.
+          align={trigger ? 'start' : 'end'}
+          sideOffset={4}
+        >
           <TextInput
             value={query}
             placeholder="Find a task…"
@@ -142,10 +155,12 @@ interface TaskPickerProps {
   /** The tasks that can be picked. */
   candidates: Task[];
   onPick: (taskId: Id) => void;
+  /** What opens the list, if not a button with a plus. */
+  trigger?: ReactElement;
 }
 
 /** A picker of the tasks of a project, each with the mark of its status. */
-export function TaskPicker({ label, project, candidates, onPick }: TaskPickerProps) {
+export function TaskPicker({ label, project, candidates, onPick, trigger }: TaskPickerProps) {
   const entries = candidates.map((task): PickerEntry => {
     const status = statusOf(project, task);
     return {
@@ -155,5 +170,5 @@ export function TaskPicker({ label, project, candidates, onPick }: TaskPickerPro
       mark: status && <StatusMark status={status} />,
     };
   });
-  return <Picker label={label} entries={entries} onPick={onPick} />;
+  return <Picker label={label} entries={entries} onPick={onPick} trigger={trigger} />;
 }

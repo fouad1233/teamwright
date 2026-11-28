@@ -182,6 +182,7 @@ import {
   tidyUnit,
   withoutValue,
 } from './fields';
+import { checkRegrouping, followTops, regroupingError } from './parts';
 import { historyOf, pretendedPastOf, projectHistoryOf } from './taskHistory';
 import { PretendedInstall } from './updateInstall';
 import { contextAfter, usageOfConversations } from './usage';
@@ -1289,6 +1290,42 @@ export class DemoBackend implements Backend {
           member.updatedAt = now;
         });
       }
+      return this.nudged(task);
+    });
+  }
+
+  makeTaskPartOf(taskId: Id, wholeId: Id | null): Promise<Task> {
+    return this.answer(() => {
+      const task = this.requireTask(taskId);
+      const whole = wholeId === null ? undefined : this.requireTask(wholeId);
+      if (whole && whole.projectId !== task.projectId) {
+        throw new BackendError(
+          'different_projects',
+          'tasks of different projects cannot be connected',
+        );
+      }
+      const project = this.requireProject(task.projectId);
+      const tasks = this.tasksOfProject(project.id);
+      const problem = checkRegrouping(
+        tasks,
+        [],
+        [{ taskId, partOf: whole ? { kind: 'existing', id: whole.id } : null }],
+      );
+      if (problem) {
+        throw regroupingError(problem, (named) => {
+          const known = named.kind === 'existing' ? this.tasks.get(named.id) : undefined;
+          return known ? referenceOf(project, known) : 'a task that is gone';
+        });
+      }
+      if (task.parentId === (whole?.id ?? null)) {
+        return task;
+      }
+      const moving = this.subtreeOf(task);
+      const now = this.nowAsText();
+      task.parentId = whole?.id ?? null;
+      task.updatedAt = now;
+      // The task and its parts go where their new whole goes.
+      followTops(tasks, moving, now);
       return this.nudged(task);
     });
   }
@@ -4535,7 +4572,10 @@ export class DemoBackend implements Backend {
     return [...this.projects.values()].some((project) => project.key === key);
   }
 
-  /** Tells whether one task waits for another, directly or through others. */
+  /**
+   * Tells whether one task waits for another, directly or through others. A
+   * task with parts waits for its parts, as the coordinator reads it.
+   */
   private waitsFor(waitingId: Id, targetId: Id): boolean {
     const toVisit = [waitingId];
     const visited = new Set<Id>();
@@ -4544,7 +4584,10 @@ export class DemoBackend implements Backend {
         continue;
       }
       visited.add(current);
-      for (const blockerId of this.tasks.get(current)?.blockedBy ?? []) {
+      const parts = [...this.tasks.values()]
+        .filter((task) => task.parentId === current)
+        .map((task) => task.id);
+      for (const blockerId of [...(this.tasks.get(current)?.blockedBy ?? []), ...parts]) {
         if (blockerId === targetId) {
           return true;
         }

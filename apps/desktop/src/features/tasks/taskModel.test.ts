@@ -8,6 +8,7 @@ import {
   mainTasksOfStatus,
   nextHistoryPage,
   outlineRows,
+  possibleWholesOf,
   subtasksOf,
   tasksOfStatus,
   unfinishedBlockers,
@@ -211,6 +212,21 @@ describe('subtasksOf', () => {
     ];
 
     expect(ids(subtasksOf(tasks, 'parent'))).toEqual(['earlier', 'later']);
+  });
+});
+
+describe('possibleWholesOf', () => {
+  it('leaves out the task, its whole now and its own parts at any depth', () => {
+    const tasks = [
+      task({ id: 'manual', number: 5 }),
+      task({ id: 'board', number: 1 }),
+      task({ id: 'schematic', number: 2, parentId: 'board' }),
+      task({ id: 'symbols', number: 3, parentId: 'schematic' }),
+      task({ id: 'routing', number: 4, parentId: 'board' }),
+    ];
+    const schematic = tasks[2] as Task;
+
+    expect(ids(possibleWholesOf(tasks, schematic))).toEqual(['routing', 'manual']);
   });
 });
 

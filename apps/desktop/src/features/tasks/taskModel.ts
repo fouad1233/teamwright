@@ -100,6 +100,27 @@ export function subtasksOf(tasks: readonly Task[], parentId: Id): Task[] {
 }
 
 /**
+ * The tasks a task can be made a part of: the other tasks of the project,
+ * leaving out the task it is a part of now and its own parts at any depth,
+ * under which it cannot go. The backend says why any other move is
+ * refused. In the order of their numbers.
+ */
+export function possibleWholesOf(tasks: readonly Task[], task: Task): Task[] {
+  const below = new Set<Id>([task.id]);
+  for (let sizeBefore = 0; sizeBefore !== below.size;) {
+    sizeBefore = below.size;
+    for (const other of tasks) {
+      if (other.parentId !== null && below.has(other.parentId)) {
+        below.add(other.id);
+      }
+    }
+  }
+  return tasks
+    .filter((other) => !below.has(other.id) && other.id !== task.parentId)
+    .sort((first, second) => first.number - second.number);
+}
+
+/**
  * The direct subtasks of every task that has some, by the identifier of the
  * parent and in the order of their numbers. A view that shows many tasks
  * builds this once instead of searching the whole list for every task.

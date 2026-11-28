@@ -160,6 +160,21 @@ pub async fn move_task(
     Ok(TaskDto::from(&task))
 }
 
+/// Makes a task a part of another task of its project, or, without one, a
+/// task of its own. Its parts go with it, into the area and the sprint of
+/// the task it now belongs to.
+#[tauri::command]
+pub async fn make_task_part_of(
+    state: State<'_, AppState>,
+    task_id: String,
+    whole_id: Option<String>,
+) -> Result<TaskDto, CommandError> {
+    let whole_id = whole_id.as_deref().map(parse_id).transpose()?;
+    let task = state.tasks.make_part_of(parse_id(&task_id)?, whole_id)?;
+    state.coordinator_nudge.nudge(task.project_id());
+    Ok(TaskDto::from(&task))
+}
+
 /// Makes a task wait until another task is finished.
 #[tauri::command]
 pub async fn add_task_dependency(
