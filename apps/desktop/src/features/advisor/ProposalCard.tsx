@@ -1,17 +1,20 @@
-import { ChevronRight, X } from 'lucide-react';
-import { useState, type CSSProperties, type KeyboardEvent } from 'react';
+import { ArrowRightLeft, ChevronRight, CornerDownRight, X } from 'lucide-react';
+import { useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react';
 
 import type {
   ApprovedProposal,
   Effort,
   Member,
   Priority,
+  Project,
   Proposal,
   ProposalChange,
+  ProposedMove,
   ProposedTask,
+  Task,
 } from '@/shared/api/types';
 import { classNames } from '@/shared/lib/classNames';
-import { formatEstimate, parseEstimate } from '@/shared/lib/format';
+import { formatEstimate, parseEstimate, taskReference } from '@/shared/lib/format';
 import { Button, IconButton, ValueButton } from '@/shared/ui/Button';
 import { TextArea } from '@/shared/ui/Field';
 import { ChoiceMenu } from '@/shared/ui/Menu';
@@ -26,10 +29,15 @@ import { effortLabel, modelLabel } from '../team/teamModel';
 import { appearsAt, waitsForManager } from '../work/waitsForManager';
 import {
   approvalInWords,
+  boardWholeChoices,
   countNewMembers,
   countWithoutOwner,
   draftOf,
   isOnTeam,
+  keyOfPlace,
+  moveChoices,
+  movesElsewhere,
+  movesUnder,
   ownerChoices,
   ownerInWords,
   partOfChoices,
@@ -40,6 +48,7 @@ import {
   waitChoices,
   waitedFor,
   waitsForInWords,
+  wholeOfKey,
 } from './advisorModel';
 import styles from './ProposalCard.module.css';
 
@@ -68,6 +77,10 @@ interface Refusal {
 interface ProposalCardProps {
   /** The proposal that waits for the manager, with the changes made so far. */
   proposal: Proposal;
+  /** The project, to name its tasks as the manager knows them. */
+  project: Project;
+  /** The tasks the project has, which the proposal may name and move. */
+  board: readonly Task[];
   /** The team the project has already. */
   team: readonly Member[];
   /**
@@ -88,11 +101,22 @@ interface ProposalCardProps {
  * it is a part of under it. A part stands under its task, set in, as a
  * subtask does on the board, and the parts of a task can be folded away.
  * The manager can take a member or a task out, add a task or a part, and
- * choose the model and the effort of a member. Each change is stored as it
- * is made, and a change that breaks a rule is refused with the reason
- * beside it. Nothing here exists in the project before it is approved.
+ * choose the model and the effort of a member. When the manager asked to
+ * regroup tasks that exist, the tasks moved under a new task stand under it
+ * ("moves here"), and those moved under another task of the project, or
+ * out from under one, are listed after the plan; each move can be sent
+ * elsewhere or taken out. Each change is stored as it is made, and a change
+ * that breaks a rule is refused with the reason beside it. Nothing here
+ * exists in the project, and nothing is moved, before it is approved.
  */
-export function ProposalCard({ proposal, team, onChange, onApprove }: ProposalCardProps) {
+export function ProposalCard({
+  proposal,
+  project,
+  board,
+  team,
+  onChange,
+  onApprove,
+}: ProposalCardProps) {
   const [shownTask, setShownTask] = useState<number | null>(null);
   // The tasks whose parts are folded away. All are shown at first: the
   // manager approves what is in the plan, so nothing starts hidden.
@@ -225,7 +249,11 @@ export function ProposalCard({ proposal, team, onChange, onApprove }: ProposalCa
       </div>
 
       <div className={classNames(waitsForManager.part, styles.part)} style={appearsAt(2)}>
-        <h4 className="label">Plan · {planInWords(proposal.tasks)}</h4>
+        <h4 className="label">
+          Plan · {planInWords(proposal.tasks)}
+          {proposal.moves.length > 0 &&
+            ` · ${proposal.moves.length.toString()} ${proposal.moves.length === 1 ? 'task' : 'tasks'} moved`}
+        </h4>
         {proposal.tasks.length > 0 && (
           <ol className={styles.tasks}>
             {planRows(proposal.tasks, folded).map(({ place, depth, parts }) => {
@@ -362,8 +390,33 @@ export function ProposalCard({ proposal, team, onChange, onApprove }: ProposalCa
                       tasks={proposal.tasks}
                       place={place}
                       task={task}
+                      project={project}
+                      board={board}
                       onChange={(proposalChange) => change(where, proposalChange)}
                     />
+                  )}
+                  {movesUnder(proposal.moves, place).length > 0 && (
+                    <ul
+                      className={styles.movesHere}
+                      aria-label={`Tasks that exist moved under "${task.title}"`}
+                    >
+                      {movesUnder(proposal.moves, place).map((move, index) => (
+                        <MoveRow
+                          key={move.taskId}
+                          move={move}
+                          proposal={proposal}
+                          project={project}
+                          board={board}
+                          isHere
+                          // Said once, on the first of the tasks moved here.
+                          isFirst={index === 0}
+                          onChange={(proposalChange) =>
+                            change(`move ${move.taskId}`, proposalChange)
+                          }
+                          refusal={refusalAt(`move ${move.taskId}`)}
+                        />
+                      ))}
+                    </ul>
                   )}
                 </li>
               );
@@ -375,6 +428,27 @@ export function ProposalCard({ proposal, team, onChange, onApprove }: ProposalCa
           {refusalAt('new task')}
         </div>
       </div>
+
+      {movesElsewhere(proposal.moves).length > 0 && (
+        <div className={classNames(waitsForManager.part, styles.part)} style={appearsAt(2)}>
+          <h4 className="label">Tasks that exist · moved elsewhere</h4>
+          <ul className={styles.moves}>
+            {movesElsewhere(proposal.moves).map((move) => (
+              <MoveRow
+                key={move.taskId}
+                move={move}
+                proposal={proposal}
+                project={project}
+                board={board}
+                isHere={false}
+                isFirst={false}
+                onChange={(proposalChange) => change(`move ${move.taskId}`, proposalChange)}
+                refusal={refusalAt(`move ${move.taskId}`)}
+              />
+            ))}
+          </ul>
+        </div>
+      )}
 
       <footer className={classNames(waitsForManager.part, styles.footer)} style={appearsAt(3)}>
         <p className={styles.effect}>
@@ -485,10 +559,92 @@ function SizeField({ minutes, label, onEstimate, onNotUnderstood }: SizeFieldPro
   );
 }
 
+interface MoveRowProps {
+  move: ProposedMove;
+  proposal: Proposal;
+  project: Project;
+  board: readonly Task[];
+  /** Whether the row stands under the task of the proposal it moves under. */
+  isHere: boolean;
+  /** Whether it is the first of the tasks moved under one task, which says "moves here". */
+  isFirst: boolean;
+  onChange: (change: ProposalChange) => Promise<boolean>;
+  /** Why the latest change of this move was refused, if it was. */
+  refusal: ReactNode;
+}
+
+/**
+ * One task of the project that the proposal moves: its reference and its
+ * title, where it goes (unless it stands under that task already), a
+ * picker that sends it elsewhere, and a cross that leaves it where it is.
+ */
+function MoveRow({
+  move,
+  proposal,
+  project,
+  board,
+  isHere,
+  isFirst,
+  onChange,
+  refusal,
+}: MoveRowProps) {
+  const moved = board.find((task) => task.id === move.taskId);
+  const reference = moved ? taskReference(project, moved) : 'A task that is gone';
+  const target =
+    move.partOfTask !== null ? board.find((task) => task.id === move.partOfTask) : undefined;
+  const whereTo =
+    move.partOfTask !== null
+      ? target
+        ? `under ${taskReference(project, target)} ${target.title}`
+        : 'under a task that is gone'
+      : move.partOf === null
+        ? 'a task of its own'
+        : `under ${(move.partOf + 1).toString()} ${proposal.tasks[move.partOf]?.title ?? ''}`;
+  return (
+    <li className={styles.move}>
+      <CornerDownRight className={styles.moveMark} aria-hidden />
+      <span className={styles.moveReference}>{reference}</span>
+      <span className={styles.moveTitle} title={moved?.title}>
+        {moved?.title}
+      </span>
+      <span className={styles.whereTo}>
+        {isHere ? (isFirst ? 'moves here' : '') : `→ ${whereTo}`}
+      </span>
+      <span className={styles.actions}>
+        <Picker
+          label={`Move ${reference} under another task`}
+          entries={moveChoices(proposal, project, board, move)}
+          onPick={(key) => {
+            void onChange({ kind: 'move', taskId: move.taskId, ...wholeOfKey(key) });
+          }}
+          trigger={
+            <IconButton label={`Move ${reference} under another task`}>
+              <ArrowRightLeft />
+            </IconButton>
+          }
+          align="end"
+        />
+        <IconButton
+          label={`Leave ${reference} where it is`}
+          onClick={() => {
+            void onChange({ kind: 'removeMove', taskId: move.taskId });
+          }}
+        >
+          <X />
+        </IconButton>
+      </span>
+      {refusal}
+    </li>
+  );
+}
+
 interface TaskDetailsProps {
   tasks: readonly ProposedTask[];
   place: number;
   task: ProposedTask;
+  project: Project;
+  /** The tasks of the project, which a new task can be made a part of. */
+  board: readonly Task[];
   onChange: (change: ProposalChange) => Promise<boolean>;
 }
 
@@ -497,11 +653,20 @@ interface TaskDetailsProps {
  * about it, its priority, the tasks of the plan it waits for, the task it
  * is a part of, and a line to add a part to it.
  */
-function TaskDetails({ tasks, place, task, onChange }: TaskDetailsProps) {
+function TaskDetails({ tasks, place, task, project, board, onChange }: TaskDetailsProps) {
   const waits = waitedFor(tasks, place);
   const choices = waitChoices(tasks, place);
   const whole = task.partOf === null ? undefined : tasks[task.partOf];
-  const wholes = partOfChoices(tasks, place);
+  const wholeOnBoard =
+    task.partOfTask === null ? undefined : board.find((other) => other.id === task.partOfTask);
+  const wholes = [
+    ...partOfChoices(tasks, place).map((choice) => ({
+      key: keyOfPlace(choice.place),
+      reference: (choice.place + 1).toString(),
+      title: choice.title,
+    })),
+    ...boardWholeChoices(project, board, task),
+  ];
 
   return (
     <div className={styles.details}>
@@ -565,7 +730,26 @@ function TaskDetails({ tasks, place, task, onChange }: TaskDetailsProps) {
         </dd>
         <dt className="label">Part of</dt>
         <dd className={styles.waits}>
-          {whole === undefined || task.partOf === null ? (
+          {task.partOfTask !== null ? (
+            <ul className={styles.waitList}>
+              <li className={styles.wait}>
+                <span className={styles.place}>
+                  {wholeOnBoard ? taskReference(project, wholeOnBoard) : '—'}
+                </span>
+                <span className={styles.waitTitle}>
+                  {wholeOnBoard?.title ?? 'A task that is gone'}
+                </span>
+                <IconButton
+                  label={`Make "${task.title}" a task of its own`}
+                  onClick={() => {
+                    void onChange({ kind: 'makePartOf', task: place, partOf: null });
+                  }}
+                >
+                  <X />
+                </IconButton>
+              </li>
+            </ul>
+          ) : whole === undefined || task.partOf === null ? (
             <span className={styles.nothing}>Nothing. It is a task of its own.</span>
           ) : (
             <ul className={styles.waitList}>
@@ -586,17 +770,13 @@ function TaskDetails({ tasks, place, task, onChange }: TaskDetailsProps) {
           {wholes.length > 0 && (
             <Picker
               label={
-                whole === undefined
+                whole === undefined && wholeOnBoard === undefined
                   ? `Make "${task.title}" a part of a task`
                   : `Move "${task.title}" to another task`
               }
-              entries={wholes.map((choice) => ({
-                key: choice.place.toString(),
-                reference: (choice.place + 1).toString(),
-                title: choice.title,
-              }))}
+              entries={wholes}
               onPick={(key) => {
-                void onChange({ kind: 'makePartOf', task: place, partOf: Number(key) });
+                void onChange({ kind: 'makePartOf', task: place, ...wholeOfKey(key) });
               }}
             />
           )}

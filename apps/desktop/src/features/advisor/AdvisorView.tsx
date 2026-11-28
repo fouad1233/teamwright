@@ -11,6 +11,7 @@ import { ChoiceInput, Field, TextArea } from '@/shared/ui/Field';
 import { ChoiceMenu } from '@/shared/ui/Menu';
 
 import { RunsElsewhere } from '../sync/RunsElsewhere';
+import { useTasks } from '../tasks/taskQueries';
 import { useTeamMembers } from '../team/TeamContext';
 import { EFFORT_CHOICES, LEFT_TO_THE_PROGRAM, modelChoices } from '../team/profileChoices';
 import { effortLabel, modelLabel } from '../team/teamModel';
@@ -39,6 +40,8 @@ import { WorkFolderRow } from './WorkFolderRow';
 export function AdvisorView({ project }: { project: Project }) {
   const conversations = useConversationsOfProject();
   const team = useTeamMembers();
+  // The tasks a proposal names and moves, as the manager knows them.
+  const board = useTasks(project.id).data ?? [];
   const commands = useWorkCommands(project.id);
   const conversation = advisorConversation(conversations);
   // The manager can ask for a plan of something new while an earlier
@@ -171,6 +174,8 @@ export function AdvisorView({ project }: { project: Project }) {
           <ProposalCard
             key={conversation.turns.length}
             proposal={proposal}
+            project={project}
+            board={board}
             team={team}
             onChange={(change) => commands.changeProposal(conversation.id, change)}
             onApprove={(approved) => commands.approveProposal(conversation.id, approved)}
@@ -287,7 +292,7 @@ function StartPlanning({ project, onStart, onCancel }: StartPlanningProps) {
   // Asking the program whether it is there takes a few seconds. The button
   // waits for the answer, and the line next to it says what it waits for.
   const hint = isDemo
-    ? 'This is the demo. The Advisor here asks the same questions and proposes the same plan, whatever you write.'
+    ? 'This is the demo. The Advisor here asks the same questions and proposes the same plan, whatever you write, unless you ask it to group the tasks into modules.'
     : program.isPending
       ? 'Looking for Claude Code on this computer…'
       : (obstacle ??

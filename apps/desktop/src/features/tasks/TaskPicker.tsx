@@ -37,6 +37,11 @@ interface PickerProps {
    * a button with a plus.
    */
   trigger?: ReactElement;
+  /**
+   * Which edge of what opens it the list lines up with. Left out, a value
+   * lines up with its start and a button with its end.
+   */
+  align?: 'start' | 'end';
 }
 
 /**
@@ -45,7 +50,7 @@ interface PickerProps {
  * keyboard. It works on any list of tasks: those of a project, or those of
  * a plan that is not approved yet.
  */
-export function Picker({ label, entries, onPick, trigger }: PickerProps) {
+export function Picker({ label, entries, onPick, trigger, align }: PickerProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [highlighted, setHighlighted] = useState(0);
@@ -100,7 +105,7 @@ export function Picker({ label, entries, onPick, trigger }: PickerProps) {
           className={styles.picker}
           // A list opened from a value lines up with it; one opened from
           // the button with a plus at the end of a heading, with that end.
-          align={trigger ? 'start' : 'end'}
+          align={align ?? (trigger ? 'start' : 'end')}
           sideOffset={4}
         >
           <TextInput

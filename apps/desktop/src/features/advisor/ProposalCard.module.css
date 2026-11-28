@@ -382,3 +382,65 @@
   color: var(--ink-soft);
   line-height: 1.45;
 }
+
+/* The tasks that exist which a regrouping moves under a task of the plan:
+   under its row, set in one step further, as its parts are. */
+.movesHere {
+  grid-column: 2 / -1;
+  padding-left: calc((var(--depth, 0) + 1) * var(--space-5));
+}
+
+/* The tasks that exist moved elsewhere: a list between hairlines, like the
+   plan. */
+.moves {
+  border-top: 1px solid var(--rule);
+}
+
+.moves .move {
+  border-bottom: 1px solid var(--rule);
+}
+
+/* One task that exists and where it goes. */
+.move {
+  display: grid;
+  grid-template-columns: 14px auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  column-gap: var(--space-2);
+  min-height: 32px;
+}
+
+.moveMark {
+  width: 14px;
+  height: 14px;
+  color: var(--ink-faint);
+  stroke-width: 1.75;
+}
+
+.moveReference {
+  color: var(--ink-soft);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.moveTitle {
+  overflow: hidden;
+  color: var(--ink-soft);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Where it goes, said quietly: the task itself carries the weight. */
+.whereTo {
+  overflow: hidden;
+  max-width: 280px;
+  color: var(--ink-faint);
+  font-size: var(--text-small);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.move .refusal {
+  grid-column: 2 / -1;
+}
