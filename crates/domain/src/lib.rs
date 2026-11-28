@@ -32,6 +32,7 @@ pub mod integration;
 pub mod kit;
 pub mod member;
 pub mod memory;
+pub mod parts;
 pub mod permission;
 pub mod planning;
 pub mod project;
@@ -89,6 +90,7 @@ pub use memory::{
     MemoryContent, MemoryEntry, MemoryEntrySnapshot, MemoryKind, MemoryOrigin, MemorySource,
     SearchWords,
 };
+pub use parts::{NewPart, Outline, PartMove, RegroupingProblem, TaskInPlan, check_regrouping};
 pub use permission::{
     Answered, FILE_CHANGING_PROGRAMS, NoCommands, PermissionAnswer, PermissionDecision,
     PermissionKind, PermissionRequest, PermissionRequestSnapshot, PermissionRule, PermissionScope,

@@ -44,6 +44,25 @@ impl DependencyGraph<TaskId> {
     }
 }
 
+impl DependencyGraph<TaskId> {
+    /// Builds the graph of a set of tasks as the coordinator reads it: what
+    /// each task waits for and, because a task with parts starts only once
+    /// its parts are finished, each task for its parts. A part that waited
+    /// for its own task would close a loop in this graph.
+    pub fn from_tasks_and_parts<'a>(tasks: impl IntoIterator<Item = &'a Task>) -> Self {
+        let mut graph = Self::default();
+        for task in tasks {
+            for &blocker in task.blocked_by() {
+                graph.add_wait(task.id(), blocker);
+            }
+            if let Some(whole) = task.parent_id() {
+                graph.add_wait(whole, task.id());
+            }
+        }
+        graph
+    }
+}
+
 impl<Key: Copy + Eq + Hash + Ord> DependencyGraph<Key> {
     /// Builds the graph from each task with the tasks it waits for.
     pub fn from_waits<Waits: IntoIterator<Item = Key>>(
@@ -55,6 +74,12 @@ impl<Key: Copy + Eq + Hash + Ord> DependencyGraph<Key> {
             .filter(|(_, blockers)| !blockers.is_empty())
             .collect();
         Self { blockers }
+    }
+
+    /// Lets `task` wait for `blocker` as well, whether or not that closes a
+    /// loop: ask [`Self::would_create_cycle`] first.
+    pub fn add_wait(&mut self, task: Key, blocker: Key) {
+        self.blockers.entry(task).or_default().insert(blocker);
     }
 
     /// Tells whether making `task` wait for `blocker` would close a loop.

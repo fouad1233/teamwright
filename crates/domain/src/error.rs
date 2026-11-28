@@ -232,6 +232,10 @@ pub enum DomainError {
         other: String,
     },
 
+    /// A proposal moved the same task that exists twice.
+    #[error("the proposal moves the same task twice")]
+    TaskMovedTwice,
+
     /// A proposal was to be approved in a turn that proposed nothing.
     #[error("the turn proposed nothing")]
     NothingProposed,
