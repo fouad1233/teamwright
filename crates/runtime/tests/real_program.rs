@@ -24,12 +24,12 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use teamwright_application::{
-    AgentEvent, AgentRuntime, PermissionProfile, SessionChoice, SessionId, SignIn, TurnFailure,
-    TurnOutcome, TurnRequest, instructions_for,
+    AgentEvent, AgentRuntime, KnownTask, PermissionProfile, PlannedWhole, SessionChoice, SessionId,
+    SignIn, TurnFailure, TurnOutcome, TurnRequest, instructions_for,
 };
 use teamwright_domain::{
-    Color, Member, MemberInstructions, MemberKind, MemberName, Project, ProjectKey, ProjectName,
-    Workflow,
+    AreaId, Color, Member, MemberInstructions, MemberKind, MemberName, Project, ProjectKey,
+    ProjectName, Rank, Task, TaskDraft, TaskTitle, Workflow,
 };
 use teamwright_runtime::{ClaudeCode, Environment};
 
@@ -862,7 +862,7 @@ fn a_real_advisor_reads_the_work_folder_and_proposes_a_plan_with_parts() {
         .tasks
         .iter()
         .filter_map(|task| match task.part_of {
-            Some(teamwright_application::PlannedWhole::Proposed(whole)) => Some(whole),
+            Some(PlannedWhole::Proposed(whole)) => Some(whole),
             _ => None,
         })
         .collect();
@@ -877,6 +877,133 @@ fn a_real_advisor_reads_the_work_folder_and_proposes_a_plan_with_parts() {
         .map(|entry| entry.unwrap().file_name())
         .collect();
     assert_eq!(names, ["README.md"]);
+}
+
+#[test]
+#[ignore = "needs the real Claude Code, signed in, the built program, and spends one turn"]
+fn a_real_advisor_regroups_tasks_that_exist_under_new_tasks_when_asked() {
+    // A project with four tasks already, as the founder's had twenty-six:
+    // the Advisor is asked to put them under two new module tasks.
+    let folder = tempfile::tempdir().unwrap();
+    let folder = teamwright_runtime::full_form(folder.path()).unwrap();
+    let mut project = Project::create(
+        ProjectName::parse("Weather station").unwrap(),
+        ProjectKey::parse("WS").unwrap(),
+        String::new(),
+        Workflow::standard(),
+        chrono::Utc::now(),
+    );
+    let status = project.workflow().initial_status().clone();
+    let mut tasks: Vec<Task> = [
+        "Set up the repository",
+        "Write the build script",
+        "Calibrate the wind sensor",
+        "Solder the sensor board",
+    ]
+    .into_iter()
+    .map(|title| {
+        let number = project.allocate_task_number();
+        Task::create(
+            project.id(),
+            AreaId::generate(),
+            number,
+            &status,
+            Rank::between(None, None),
+            TaskDraft::titled(TaskTitle::parse(title).unwrap()),
+            chrono::Utc::now(),
+        )
+    })
+    .collect();
+    let first = tasks[0].id();
+    tasks[1].block_on(first, chrono::Utc::now()).unwrap();
+    let known: Vec<KnownTask> = tasks
+        .iter()
+        .map(|task| KnownTask {
+            reference: format!("WS-{}", task.number()),
+            part_of: None,
+            waits_for: if task.number() == 2 {
+                vec!["WS-1".to_owned()]
+            } else {
+                Vec::new()
+            },
+        })
+        .collect();
+    let mut request = request(
+        &folder,
+        "This is a test of planning. The project has four tasks, listed in your instructions. \
+         Regroup them: put WS-1 and WS-2 under a new task \"Module 0: Set up the project\", and \
+         WS-3 and WS-4 under a new task \"Module 1: The sensors\". Ask nothing and read no \
+         file: call propose_plan at once, with no members, the two new tasks and the moves. \
+         Then end your turn with one sentence.",
+        SessionChoice::New,
+    );
+    request.permissions = PermissionProfile::advisor();
+    request.extra_instructions = Some(teamwright_application::instructions_for_advisor(
+        &project,
+        &[],
+        &tasks,
+        &[],
+    ));
+    request.team_tools = vec![teamwright_application::TeamTool::ProposePlan {
+        team: Vec::new(),
+        tasks: known,
+    }];
+    let events = Arc::new(Mutex::new(Vec::new()));
+    let collected = Arc::clone(&events);
+
+    let turn = runtime()
+        .with_team_bus(bus_program(), vec!["--team-bus".to_owned()])
+        .start_turn(
+            request,
+            Box::new(move |event| collected.lock().unwrap().push(event)),
+        )
+        .unwrap();
+    let outcome = turn.wait().unwrap();
+    let events = events.lock().unwrap().clone();
+    for event in &events {
+        println!("{event:?}");
+    }
+    println!("{}", outcome.final_text);
+    print_usage(&outcome);
+
+    assert_eq!(outcome.failure, None);
+    let proposals: Vec<_> = events
+        .iter()
+        .filter_map(|event| match event {
+            AgentEvent::PlanProposed(proposal) => Some(proposal),
+            _ => None,
+        })
+        .collect();
+    let [proposal] = proposals.as_slice() else {
+        panic!("one proposal was expected: {events:?}");
+    };
+    // The decoder took two new tasks and four moves, and no task that
+    // exists was proposed again.
+    assert!(proposal.members.is_empty(), "{proposal:?}");
+    assert_eq!(proposal.tasks.len(), 2, "{proposal:?}");
+    let module = |words: &str| {
+        proposal
+            .tasks
+            .iter()
+            .position(|task| task.title.contains(words))
+            .unwrap_or_else(|| panic!("no task {words}: {proposal:?}"))
+    };
+    let (setup, sensors) = (module("Module 0"), module("Module 1"));
+    let mut moves: Vec<(String, Option<PlannedWhole>)> = proposal
+        .moves
+        .iter()
+        .map(|one| (one.task.clone(), one.part_of.clone()))
+        .collect();
+    moves.sort_by(|one, other| one.0.cmp(&other.0));
+    assert_eq!(
+        moves,
+        [
+            ("WS-1".to_owned(), Some(PlannedWhole::Proposed(setup))),
+            ("WS-2".to_owned(), Some(PlannedWhole::Proposed(setup))),
+            ("WS-3".to_owned(), Some(PlannedWhole::Proposed(sensors))),
+            ("WS-4".to_owned(), Some(PlannedWhole::Proposed(sensors))),
+        ]
+    );
 }
 
 #[test]
