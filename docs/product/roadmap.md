@@ -474,8 +474,10 @@ Several specialists working together with the manager in the loop.
   and rows. Both are stored and synced key by key, so two computers that
   change different tags or items of one task both keep their change.
   Tested in every layer, the taking in with two databases, and seen in a
-  browser on demo data; not yet run in the built program. A task made in
-  a view that is filtered by a tag does not get that tag yet.
+  browser on demo data; not yet run in the built program. Since 27 November
+  2026 a task made in a view filtered by a tag, by a choice of a field or
+  by "yes" carries that value and stays in the view; seen on the demo for
+  a tag, tested for the rest.
   Since then, in the built program on Linux (22 November 2026): a tag made
   in place and a checklist with items ticked, on the card, in the panel,
   in the history and after a restart
@@ -549,7 +551,13 @@ Several specialists working together with the manager in the loop.
   run the job for Macs with Apple silicon built its installer and then
   failed, because two jobs tried to create the release in the same
   second; it was run a second time and its files were added. The
-  workflow now creates the release once, before the builds. The installers are
+  workflow now creates the release once, before the builds.
+  [Version 0.3.0](https://github.com/fouad1233/teamwright/releases/tag/v0.3.0),
+  published on 27 November 2026, is the first with signed update files
+  and the list of updates the program asks; the first job of that run
+  failed once, because the list of releases did not yet show the draft
+  it had just made, and passed when run again, and the workflow now
+  takes the release from the request that makes it. The installers are
   not signed, so Windows and macOS warn before they open; none of them
   was installed and started by anybody yet, and the macOS and Linux
   builds were never run at all. The program tells the manager when a
