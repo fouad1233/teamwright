@@ -203,10 +203,18 @@ arguments):
   question answered in words.
 - `propose_plan`: the Advisor proposes a `summary`, at most eight `members`
   (a name, a responsibility, a reason, a `model` of one word and an
-  `effort` of `low`, `medium`, `high`, `xhigh` or `max`), and one to forty
+  `effort` of `low`, `medium`, `high`, `xhigh` or `max`), up to forty
   `tasks` (a title, a description, an `owner`, `estimate_hours`, a
   `priority`, normal unless said, the tasks it `waits_for`, and, for a part
-  of a larger task, the task it is `part_of`). An owner
+  of a larger task, the task it is `part_of`: a place in the list or the
+  reference of a task that exists), and, when the manager asked to regroup,
+  `moves` of tasks that exist (`task` by its reference, `part_of` a place or
+  a reference, or left out for a task of its own). A proposal has tasks,
+  moves or both. The bus is told the tasks of the project with `--task`,
+  `--part-of` and `--waits-for`, finds references whatever the capitals,
+  and refuses an unknown reference, a task moved twice, a task under itself
+  or its own parts, and a task under one it waits for, in words the model
+  acts on (decision 0046). An owner
   is `manager`, a proposed member, or a member the project has, whatever
   the capitals. A task waits only for other tasks of the list, and not in a
   circle. A part names another task of the list, the tasks are not parts

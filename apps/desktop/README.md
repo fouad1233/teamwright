@@ -411,8 +411,21 @@ The shell is where the work of an AI specialist meets the outside world
   `removeWait`, `addTask` with an optional `partOf`, `makePartOf`,
   `removeTask`, `removeMember`, `setProfile`) and names tasks and members
   by their places. A proposed task carries `partOf`, the place of the task
-  it is a part of, or null. The review shows a part under its task, set in,
-  with a fold for the parts of a task (`planRows` in `advisorModel.ts`).
+  it is a part of, or null, and `partOfTask`, a task of the project it is a
+  part of, or null. A proposal carries `moves` of tasks of the project
+  (`taskId`, and `partOf` or `partOfTask`, both null for a task of its
+  own), changed by `move` and `removeMove`; on the wire a `partOfTask`
+  comes before a `partOf`. The review shows a part under its task, set in,
+  with a fold for the parts of a task (`planRows` in `advisorModel.ts`),
+  the tasks moved under a new task under it ("moves here", `MoveRow`), and
+  the other moves after the plan, each with a picker and a cross. The task
+  panel has a row "Part of" (`WholeChoice` in `TaskPanel.tsx`) that moves a
+  task under another one through `make_task_part_of`, with a cross that
+  makes it a task of its own; the picker leaves out the task's own parts
+  (`possibleWholesOf`), and a refusal is shown in the backend's words. The
+  demo backend checks both with the same rule (`demo/parts.ts`), and its
+  Advisor regroups the tasks into one module for each area when it is
+  asked for modules (`scriptForRegrouping`).
   The Advisor's place shows the work folder of the project before the first
   message and under the head of the conversation (`WorkFolderRow.tsx`),
   and chooses another one through `usePlacesCommands`, the same hook and

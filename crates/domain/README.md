@@ -202,6 +202,28 @@ done with them. It does no input or output.
   its own task, directly or through others. The changes `MakePartOf` and
   `AddTask { part_of }` move a part, make it a task of its own, and add
   one; taking out a task with parts puts its parts where it was.
+- A task of a proposal may also be a part of a task the project has
+  (`part_of: Some(TaskInPlan::Existing(id))`), and a proposal may move tasks
+  the project has (`Proposal::with_moves`, `ProposedMove`): under a task of
+  the proposal, under another task that exists, or out from under one. A
+  task is moved once (`TaskMovedTwice`). The changes `Move` and
+  `RemoveMove` send a move elsewhere and take it out; taking out a task of
+  the proposal puts the tasks moved under it where it was. A proposal is
+  empty only with no members, no tasks and no moves. Whether the tasks it
+  names are there and keep the rules of parts needs the board, and is
+  checked with `check_regrouping`
+  ([decision 0046](../../docs/decisions/0046-regrouping-tasks-that-exist.md)).
+- `check_regrouping` (`parts.rs`) is the one rule of moving tasks under
+  others, for the board and for a proposal: given the outline of a project
+  (what each task is a part of and waits for), new tasks and moves, it
+  refuses a task that is not there or moved twice, a task under itself or
+  under one of its own parts, and a part that would wait for the task it
+  is a part of, directly or through others. Only what the regrouping
+  changes is looked at. It works on any key, as `DependencyGraph` does.
+  `DependencyGraph::from_tasks_and_parts` reads a project as the
+  coordinator does, each task waiting for its parts.
+- The history of a task tells a change of the task it is a part of
+  (`TaskChangeKind::MadePartOf`).
 - Tasks never wait for each other in a circle. `DependencyGraph` holds the
   rule once, for the tasks of a project (by identifier) and for those of a
   proposal (by place): `would_create_cycle` for one more dependency,

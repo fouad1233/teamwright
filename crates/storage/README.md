@@ -138,7 +138,10 @@ involved.
   with its answer) and their options, and `turn_proposals` with its members,
   its tasks, what each task waits for and the task it is a part of
   (`part_of`, version 31; a state logged before has none and reads as a
-  plan without parts). Each is written only when it
+  plan without parts), or the task of the project it is a part of
+  (`part_of_task`), and the tasks of the project it moves
+  (`turn_proposal_moves`, version 32; a state logged before has no `moves`
+  and reads as a plan that moves nothing). Each is written only when it
   differs from what is stored: when it is made, when the manager changes a
   proposal before approving it (each change is one logged state), and when
   it is answered or approved. They are logged as the entities `interview` and `proposal` with
@@ -456,6 +459,7 @@ in one transaction:
    | Two tasks of a project have one number | the task whose number was set later gets the next free number | only the computer that created that task |
    | Two projects have one key | the project whose key was set later gets the key with the next number (`SSN2` gives `SSN3`) | only the computer that created it |
    | A chain of waiting or of parts closes on itself | the link whose field was set last is removed | any computer |
+   | A part waits for the task it is a part of, directly or through others, because one computer made it a part while the other let it wait (decision 0046) | of the links of the circle, waits and parts alike, the one set last is removed | any computer |
    | A project has two backlogs, or two dashboards | the younger is removed | any computer |
    | Two views of a project have one name, whatever the capitals | the younger gets the name with the first free number from 2 on (`Board` gives `Board 2`) | any computer |
    | A project has no view left, because two computers each removed others | it gets a board again, with the identifier of its starting board, or, if that was deleted, the next one `View::board_again` gives | any computer |

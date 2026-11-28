@@ -30,6 +30,7 @@ The panel shows these parts, from the top:
 | Priority | Urgent, high, normal or low. Urgent and high show a colored flag. |
 | Estimate | The expected working time. Type it as `90m`, `2h` or `1h 30m`. |
 | Start, Due | The planned dates. A task cannot start after it is due. |
+| Part of | The task this one is a part of, or "A task of its own". See [subtasks](#subtasks). |
 | Area | Where the task is. Choose another area to move it with its subtasks. |
 | Sprint | The sprint of the task. Move it to another sprint or to the backlog here. |
 | Points | The story points. See [sprints and the backlog](sprints-and-backlog.md). |
@@ -65,6 +66,25 @@ to fold them away. Teamwright remembers which tasks you unfolded.
 A subtask has a status of its own. It stays under its task whatever that
 status is. To change it, open the subtask. A subtask is always in the area
 and the sprint of its task.
+
+**Move a task under another task**, or out from under one, with *Part of*
+in its panel. Press the value to pick the task it is to be a part of; type
+to narrow the list. Its own subtasks go with it. The cross makes it a task
+of its own again. A task that moves under another goes into the area and
+the sprint of its new task, with its subtasks; a task made one of its own
+keeps the area and the sprint it has. The history of the task says where
+it moved.
+
+Teamwright refuses a move that would leave tasks that can never start, and
+says why: a task cannot be a part of itself or of one of its own
+subtasks, and it cannot go under a task it waits for, directly or through
+other tasks, because a task with subtasks starts only once they are
+finished. For the same reason a subtask cannot wait for its own task. To
+regroup many tasks at once, ask [the Advisor](the-advisor.md#regroup-tasks-that-exist).
+
+This was tested at every layer, seen in the demo, and done in the built
+program on Linux, where a move survived a restart. It was not tried on a
+Mac.
 
 ## Tasks that wait for other tasks
 

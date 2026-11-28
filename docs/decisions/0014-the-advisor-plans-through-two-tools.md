@@ -183,3 +183,21 @@ five sentences about a small device that measures the air.
   before has no `part_of` and reads as a plan without parts.
 - A real Advisor on the cheapest model, asked to split one task in two,
   called `propose_plan` with two parts at the first attempt.
+
+## Note of 28 November 2026: a proposal may regroup tasks that exist
+
+The note above said that a proposal cannot refer to a task that exists, so
+a later round cannot add parts to one. That no longer holds
+([decision 0046](0046-regrouping-tasks-that-exist.md)). The founder asked
+his Advisor to put 26 tasks under 8 new module tasks, and it could not.
+
+- A new task of a proposal may be a part of a task that exists, named by
+  its reference (`part_of: "IOT-3"`).
+- A proposal may move tasks that exist (`moves`): under a task of the
+  proposal, under another task that exists, or out from under one. A
+  proposal may hold moves and new tasks and no members.
+- "A later round adds" still holds for members and tasks: nothing that
+  exists is changed or removed, except where a task that exists is a part
+  of, and only when the manager asked for a regrouping.
+- Approving checks the moves against the board as it is then, and does
+  nothing if one no longer holds.

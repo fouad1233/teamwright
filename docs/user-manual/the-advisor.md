@@ -91,7 +91,8 @@ does not fit first.
 - In the details, *Part of* says which task it is a part of. The cross makes
   it a task of its own; the plus moves it to another task. *Add a part*
   adds a part of your own to it. A part cannot wait for its own task, since
-  that task starts only once its parts are finished.
+  that task starts only once its parts are finished. A part can also be
+  made a part of a task you have, from the same list.
 - The cross on a task with parts takes out only that task. Its parts stay,
   where it was. Take a part out with its own cross.
 - *Add task* adds a task of your own.
@@ -124,10 +125,45 @@ the plan, as you approved it.
 
 Write to the Advisor again when the project needs more. It knows who is on
 the team and which tasks exist, and proposes what is to be added. It can
-split the tasks it proposes into parts, but it cannot add parts to a task
-that exists already; add those by hand under *Subtasks* in the task. It is told
-not to repeat a task, but Teamwright cannot tell a task that says the same
-thing in other words, so read what it adds. *Plan something new* starts a new
+split the tasks it proposes into parts, and a new task can be a part of a
+task that exists. It is told not to repeat a task, but Teamwright cannot
+tell a task that says the same thing in other words, so read what it adds.
+
+## Regroup tasks that exist
+
+Ask the Advisor to regroup the tasks you have, in your own words: "Put
+tasks 1 and 2 under a new task *Module 0: Set up the project*, tasks 3 to 5
+under *Module 1*, and so on." It proposes the new tasks and, for each task
+that exists, where it goes. It does this only when you ask; otherwise a
+proposal leaves the tasks you have where they are.
+
+In the proposal, the tasks that move under a new task stand under it,
+set in, the first of them saying *moves here*. Tasks that move under a
+task you have, or out from under one, are listed after the plan with where
+they go. On each:
+
+- the arrows send it elsewhere: under another task of the plan, under a
+  task you have, or *A task of its own*;
+- the cross leaves it where it is.
+
+A move that would leave tasks that can never start is refused beside its
+row, with the reason. When you approve, Teamwright checks the moves again
+against the board as it is then, because a task may have been deleted or
+moved since. If one no longer works, nothing is approved, and you are told
+which. Otherwise the new tasks are created and the tasks are moved, each
+with its subtasks, in one step.
+
+A moved task goes into the area and the sprint of the task it now belongs
+to, as every subtask does. A new task that takes in only tasks of one area
+and one sprint goes there with them; one that takes in tasks of several
+sprints goes into the backlog, and so do its tasks. The sentence before
+*Approve* reminds you of it.
+
+This was tested at every layer and seen in the demo, where the pretended
+Advisor groups the tasks into one module for each area when you ask for
+modules. A real Advisor on the lightest model regrouped four tasks under
+two new modules at its first attempt. Approving a regrouping was not tried
+in the installed program or on a Mac. *Plan something new* starts a new
 conversation. What the Advisor waits for, answers to its questions or a word
 about its proposal, is also counted in [the inbox](work.md#the-inbox).
 

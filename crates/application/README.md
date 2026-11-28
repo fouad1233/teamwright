@@ -81,6 +81,16 @@ project, two members of one team cannot have the same name.
   the error names both tasks the way the manager knows them (`IOT-3`).
 - Deleting a task deletes its subtasks and releases the tasks that waited for
   any of them.
+- `TaskService::make_part_of` moves a task, with its parts, under another
+  task of its project, or with `None` makes it a task of its own. The rule
+  is the domain's `check_regrouping`: not under itself or one of its own
+  parts, and not under a task it or one of its parts waits for
+  (`part_in_circle`, "IOT-4 cannot be a part of IOT-3, because IOT-4 or one
+  of its parts waits for IOT-3, and a task with parts starts only once its
+  parts are finished"). The task and its parts take the area and the sprint
+  of their new whole; a task made one of its own keeps them. One write.
+- A subtask cannot wait for the task it is a part of, directly or through
+  others (`dependency_cycle`): that task waits for its parts.
 - Every project has a team of its own. No two members of a team share a
   name, whatever the capitals.
 - A newcomer to a team gets a color that sets it apart from the others.
@@ -540,9 +550,17 @@ start or end.
   specialist works out itself and not to write "recommended" into an
   option. The instructions tell it to look at what the work folder holds
   before it asks or proposes, and when to split a task into parts (one too
-  large for one piece of work; not everything); a part names only a task of
-  the same proposal, so a later round cannot add parts to a task that
-  exists.
+  large for one piece of work; not everything); a part names a task of the
+  same proposal by its place or a task that exists by its reference. A
+  section "Regrouping" says that it moves tasks that exist only when the
+  manager asks, how, and that it never proposes a task again to regroup it
+  nor tells the manager to do it by hand; and the instructions say that
+  they hold over earlier messages of the conversation that say less
+  ([decision 0046](../../docs/decisions/0046-regrouping-tasks-that-exist.md)).
+- The Advisor's `propose_plan` is given the tasks of the project
+  (`KnownTask`: reference, whole, waits). When a proposal is recorded, the
+  references it names are turned into the identifiers of the tasks
+  (`no task IOT-9` otherwise, and the proposal is not recorded).
 - What the Advisor asks (`AgentEvent::InterviewAsked`) and proposes
   (`PlanProposed`) is recorded on its turn. An interview or a proposal is
   open while it belongs to the latest turn, that turn has ended, and the
@@ -563,16 +581,19 @@ start or end.
   approved as it was approved (members, and tasks with owners, sizes, the
   task each is a part of and what they wait for, so that a task the
   manager renamed or took out is
-  not proposed again), and that a proposal from then on holds only what is
-  to be added. The turn keeps the words of the manager alone.
+  not proposed again), the tasks that exist it moved and where, and that a
+  proposal from then on holds only what is to be added or moved. The turn
+  keeps the words of the manager alone.
 - `change_proposal` makes one change of the manager's (`ProposalEdit`) to
   the open proposal, checked by the domain (`ProposalChange`) and against
   the team: an owner must be on the team or in the proposal, and a
   proposed member whose name the team has cannot be taken out ("Firmware
   engineer is on the team already: approving does not add them again").
   The turn is saved, so the change is logged with the whole proposal,
-  kept over a restart and taken in by the other computers. Refusals:
-  `no_proposal_open`, `runs_elsewhere`, `rule_broken` with the reason in
+  kept over a restart and taken in by the other computers. A change is also
+  checked against the board as it is (`ProposalEdit::Move`, `RemoveMove`,
+  and `MakePartOf` with a task that exists). Refusals: `no_proposal_open`,
+  `runs_elsewhere`, `rule_broken` and `part_in_circle` with the reason in
   words. A refused change changes nothing.
 - `approve_proposal` takes what the manager left of the proposal
   (`ApprovedProposal`) and checks all of it first (`no_proposal_open`; the
@@ -582,8 +603,15 @@ start or end.
   whose name the team has, whatever the capitals; tasks go into the first
   status of the workflow, after the tasks there, numbered on, each waiting
   for the tasks the proposal says, and a part becomes a subtask of the task
-  created for its whole. The project, the members, the tasks and
-  the turn with the approved proposal go to `PlanningRepository` in one
+  created for its whole, or of the task that exists it names. Then the
+  moves are made, each task with its parts. Before any of it, the new tasks
+  and the moves are checked again against the board as it is then (a task
+  deleted since: `rule_broken`; a circle: `part_in_circle`), and nothing is
+  done if one fails. A new task of its own goes where the tasks moved under
+  it are when they share one area and one sprint, otherwise into the first
+  area and the backlog; every part goes into the area and the sprint of the
+  top of its chain. The project, the members, the new and the moved tasks
+  and the turn with the approved proposal go to `PlanningRepository` in one
   write, or nothing does. The proposal keeps what was approved, with the
   moment.
 - While the Advisor works, a project can be neither archived nor deleted

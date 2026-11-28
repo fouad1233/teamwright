@@ -29,7 +29,7 @@ was considered.
 | [0011](0011-what-a-specialist-may-do.md) | Let a specialist read and write in the folder of the project, and nothing else | Accepted |
 | [0012](0012-a-specialist-asks-through-a-tool.md) | Let a specialist ask the manager through a tool of its own | Accepted |
 | [0013](0013-the-folders-of-a-project.md) | Give a project a work folder the manager can choose, and folders that are only read; chosen where the project is planned too (note of 27 November 2026) | Accepted |
-| [0014](0014-the-advisor-plans-through-two-tools.md) | Let the Advisor interview and propose through two tools; a proposed task may be split into parts (note of 27 November 2026) | Accepted |
+| [0014](0014-the-advisor-plans-through-two-tools.md) | Let the Advisor interview and propose through two tools; a proposed task may be split into parts (note of 27 November 2026), also of a task that exists, and a proposal may move tasks that exist (note of 28 November 2026) | Accepted |
 | [0015](0015-light-where-something-happens.md) | Let light fall only where something happens or waits for the manager | Accepted |
 | [0016](0016-sprints-and-a-backlog.md) | Plan the work in sprints, with a backlog and story points | Accepted |
 | [0017](0017-sync-through-a-folder.md) | Keep computers in step through files of operations in a folder the user owns | Accepted |
@@ -61,6 +61,7 @@ was considered.
 | [0043](0043-a-notice-of-newer-versions.md) | Tell the manager when a newer version is out, looking only when allowed; installing from inside the program is not built | Accepted |
 | [0044](0044-folders-to-write-in-and-full-access.md) | Folders to write in, and full access per project and computer, with Teamwright's data, the sync folder, the settings of Claude Code and the keys always closed | Accepted |
 | [0045](0045-installing-updates-from-inside.md) | Install a newer version from inside the program, when the manager presses the button | Accepted |
+| [0046](0046-regrouping-tasks-that-exist.md) | Regroup tasks that exist: move one under another by hand, and let a proposal of the Advisor move tasks that exist, with one rule of parts for both | Accepted |
 
 ## Template
 

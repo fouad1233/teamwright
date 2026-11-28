@@ -228,6 +228,9 @@ commits: plain fields and deletions, waiting operations, repairs.
   creator, and both databases agree after the renumbering is taken in.
 - Two projects with the key `SSN`: the same.
 - A chain of waiting closed by two computers is opened again.
+- A chain of parts closed by two computers is opened again, and so is a
+  part left waiting for its own task by two computers: the link set last
+  gives way (decision 0046).
 - A member deleted while a task was given to them elsewhere: the task has
   nobody.
 - The clock: after taking in a stamp from the future, the next local stamp
