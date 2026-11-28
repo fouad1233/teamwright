@@ -26,6 +26,12 @@ A desktop app that opens and manages projects and tasks without any AI.
 - ✅ Desktop shell (Tauri) with a React and TypeScript interface
 - ✅ Projects with a workflow from a template
 - ✅ Tasks: priority, assignee, dates, estimate, subtasks, dependencies
+- ✅ Move a task under another task, or make it a task of its own, from
+  "Part of" in its panel; its subtasks, area and sprint go with it, and a
+  move that would leave tasks unable to start is refused with the reason
+  ([decision 0046](../decisions/0046-regrouping-tasks-that-exist.md)).
+  Tested at each layer, seen in the demo, and done in the built program
+  on Linux, where it survived a restart; not tried on a Mac
 - ✅ Board with drag and drop, list view, task panel
 - ✅ Demo backend, so the interface also runs in a plain browser
 - ✅ Smoke test that drives the real application
@@ -192,7 +198,13 @@ From a conversation to an approved team and plan.
   and remove them ([a note in decision
   0014](../decisions/0014-the-advisor-plans-through-two-tools.md)). A real
   Advisor proposed parts at its first attempt; seen in the demo, not tried
-  in the built program or on a Mac
+  in the built program or on a Mac. Since 28 November 2026 the Advisor can
+  regroup tasks that exist when asked: new tasks such as modules, with
+  tasks that exist moved under them, in one proposal the manager changes
+  and approves; approving checks the board again and does nothing if a
+  move no longer holds. A real Advisor regrouped four tasks at its first
+  attempt (about 0.003 USD); seen in the demo; approving a regrouping was
+  not tried in the built program or on a Mac
 - ✅ Import earlier Claude Code conversations as context digests
   ([decision 0041](../decisions/0041-earlier-conversations-as-digests.md)):
   the conversations found on this computer, by folder, the folders of the
