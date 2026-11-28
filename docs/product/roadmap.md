@@ -574,8 +574,12 @@ Several specialists working together with the manager in the loop.
   when the manager says so. Proven on Linux with throwaway keys and a
   local server: an older AppImage found a newer one, refused a copy
   signed with another key, installed the right one and restarted as the
-  newer version. Version 0.2.0 has no updater in it and is replaced by
-  hand once. A copy installed from a `.deb` or `.rpm` keeps the notice
+  newer version. On 28 November 2026 the same was done with the real
+  releases: the published 0.3.0 AppImage found 0.3.1, downloaded it,
+  checked its signature with the project's key, replaced itself with a
+  file equal byte for byte to the published 0.3.1, and restarted as
+  0.3.1. Version 0.2.0 has no updater in it and is replaced by hand
+  once. A copy installed from a `.deb` or `.rpm` keeps the notice
   and the release page. Not tried on Windows or on a Mac
 - ✅ [User manual](../user-manual/README.md): a table of contents and
   fifteen pages, written from the decision records, the roadmap and the
