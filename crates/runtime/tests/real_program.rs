@@ -812,7 +812,10 @@ fn a_real_advisor_reads_the_work_folder_and_proposes_a_plan_with_parts() {
         &[],
         &[],
     ));
-    request.team_tools = vec![teamwright_application::TeamTool::ProposePlan { team: Vec::new() }];
+    request.team_tools = vec![teamwright_application::TeamTool::ProposePlan {
+        team: Vec::new(),
+        tasks: Vec::new(),
+    }];
     let events = Arc::new(Mutex::new(Vec::new()));
     let collected = Arc::clone(&events);
 
@@ -858,7 +861,10 @@ fn a_real_advisor_reads_the_work_folder_and_proposes_a_plan_with_parts() {
     let parts: Vec<_> = proposal
         .tasks
         .iter()
-        .filter_map(|task| task.part_of)
+        .filter_map(|task| match task.part_of {
+            Some(teamwright_application::PlannedWhole::Proposed(whole)) => Some(whole),
+            _ => None,
+        })
         .collect();
     assert_eq!(parts.len(), 2, "two parts were expected: {proposal:?}");
     assert_eq!(parts[0], parts[1]);

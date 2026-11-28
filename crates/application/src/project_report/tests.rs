@@ -570,6 +570,7 @@ fn the_brief_is_the_summary_of_the_latest_plan_the_manager_approved() {
             summary: summary.to_owned(),
             members: Vec::new(),
             tasks: Vec::new(),
+            moves: Vec::new(),
             approved_at,
         })
     };

@@ -3,22 +3,23 @@
 //!
 //! The manager says what they want. The Advisor, a session that can only
 //! read, asks what it needs to know in an interview, and then proposes the
-//! members to add and the tasks to create. Nothing is created before the
-//! manager approves, and approving creates everything in one write or
-//! nothing.
+//! members to add and the tasks to create, and, when the manager asks for a
+//! regrouping, tasks of the project to move under other tasks. Nothing is
+//! created or moved before the manager approves, and approving does all of
+//! it in one write or nothing.
 //!
 //! The Advisor is not a member of the team: its conversation has no member
 //! and no task, and keeps the model and the effort it runs on.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::path::PathBuf;
 
 use teamwright_domain::{
-    Assignee, Conversation, ConversationId, Digest, Effort, InterviewAnswer, InterviewQuestion,
-    Member, MemberId, MemberInstructions, MemberKind, MemberName, MemberProfile, ModelName,
-    Priority, Project, ProjectId, Proposal, ProposalChange, ProposedMember, ProposedOwner,
-    ProposedTask, Rank, ReadyMadeSpecialist, Schedule, Task, TaskDraft, TaskTitle, Turn,
-    TurnOrigin,
+    AreaId, Assignee, Conversation, ConversationId, Digest, Effort, InterviewAnswer,
+    InterviewQuestion, Member, MemberId, MemberInstructions, MemberKind, MemberName, MemberProfile,
+    ModelName, NewPart, Outline, PartMove, Priority, Project, ProjectId, Proposal, ProposalChange,
+    ProposedMember, ProposedMove, ProposedOwner, ProposedTask, Rank, ReadyMadeSpecialist, Schedule,
+    SprintId, Task, TaskDraft, TaskId, TaskInPlan, TaskTitle, Turn, TurnOrigin, check_regrouping,
 };
 
 use super::{
@@ -29,15 +30,18 @@ use crate::areas::first_area_of;
 use crate::digests::newest_kept_first;
 use crate::error::ApplicationError;
 use crate::ports::ApprovedPlan;
+use crate::tasks::{follow_tops, regrouping_error, subtree_of};
 
-/// A proposal as the manager approves it: the members and the tasks that
-/// are left after the manager's changes.
+/// A proposal as the manager approves it: the members, the tasks and the
+/// moves that are left after the manager's changes.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ApprovedProposal {
     /// The members to add.
     pub members: Vec<ApprovedMember>,
     /// The tasks to create.
     pub tasks: Vec<ApprovedTask>,
+    /// The tasks of the project to move.
+    pub moves: Vec<ProposedMove>,
 }
 
 /// A member of a proposal as the manager approves it.
@@ -72,9 +76,9 @@ pub struct ApprovedTask {
     /// The tasks of the same proposal that must be finished first, by
     /// their places from 0.
     pub waits_for: Vec<usize>,
-    /// The task of the same proposal it is a part of, by its place from 0,
-    /// or nothing for a task of its own.
-    pub part_of: Option<usize>,
+    /// The task it is a part of: a task of the same proposal, by its place
+    /// from 0, or a task the project has; or nothing for a task of its own.
+    pub part_of: Option<TaskInPlan>,
 }
 
 /// Who a task of an approved proposal is given to.
@@ -148,13 +152,27 @@ pub enum ProposalEdit {
         /// The task it is a part of, or nothing for a task of its own.
         part_of: Option<usize>,
     },
-    /// Makes a task a part of another task of the proposal, or, with
-    /// nothing, a task of its own.
+    /// Makes a task a part of another task of the proposal or of a task
+    /// the project has, or, with nothing, a task of its own.
     MakePartOf {
         /// The task.
         task: usize,
         /// The task it is to be a part of, or nothing.
-        part_of: Option<usize>,
+        part_of: Option<TaskInPlan>,
+    },
+    /// Moves a task the project has under another task, or, with nothing,
+    /// makes it a task of its own, in place of what the proposal did with
+    /// it.
+    Move {
+        /// The task that is moved.
+        task: TaskId,
+        /// The task it becomes a part of, or nothing.
+        part_of: Option<TaskInPlan>,
+    },
+    /// Takes the move of a task the project has out of the proposal.
+    RemoveMove {
+        /// The task the proposal moved.
+        task: TaskId,
     },
     /// Takes a task out of the proposal.
     RemoveTask {
@@ -315,7 +333,9 @@ impl WorkService {
     /// a task or a member that is not there, a task that would wait for
     /// itself or in a circle, a task given to somebody who is neither on
     /// the team nor in the proposal, a member who is on the team already,
-    /// or nothing left at all; or if storage fails. A refused change
+    /// or nothing left at all; if a task of the project it names is gone
+    /// (`rule_broken`) or would break a rule of parts with the board as it
+    /// is now (`part_in_circle`); or if storage fails. A refused change
     /// changes nothing.
     pub fn change_proposal(
         &self,
@@ -350,6 +370,9 @@ impl WorkService {
             .proposal()
             .ok_or(ApplicationError::NoProposalOpen)?;
         refuse_owners_who_are_not_there(&team, changed.members(), changed.tasks())?;
+        let project = self.inner.require_project(conversation.project_id())?;
+        let board = ports.tasks.list_for_project(project.id())?;
+        check_on_board(&project, &board, changed.tasks(), changed.moves())?;
         ports.conversations.save_turn(proposing)?;
         ports.listener.conversation_changed(&conversation, &turns);
         Ok(ConversationWithTurns {
@@ -366,12 +389,18 @@ impl WorkService {
     /// created in the first status of the workflow, after the tasks that
     /// are there, numbered on, each waiting for the tasks the proposal
     /// says. A task that is a part of another becomes a subtask of the task
-    /// created for that one. A proposed member whose name the team has
-    /// already, whatever the capitals, is not added again, and a task given
-    /// to that name goes to the member the team has. The project, the members, the
-    /// tasks and the approved proposal are stored in one write, or
-    /// nothing is. The proposal keeps what was approved, with the moment.
-    /// No work starts by itself.
+    /// created for that one, or of the task of the project it names. Then
+    /// the tasks of the project the proposal moves are moved, each with its
+    /// own parts. A new task of its own goes into the first area and the
+    /// backlog, unless the tasks of the project moved under it are all in
+    /// one area and one sprint: it then goes there with them. A part goes
+    /// where the task at the top of it goes, as a subtask does. A proposed
+    /// member whose name the team has already, whatever the capitals, is
+    /// not added again, and a task given to that name goes to the member
+    /// the team has. The project, the members, the tasks, the moved tasks
+    /// and the approved proposal are stored in one write, or nothing is.
+    /// The proposal keeps what was approved, with the moment. No work
+    /// starts by itself.
     ///
     /// # Errors
     ///
@@ -382,10 +411,15 @@ impl WorkService {
     /// proposal, a task waiting for no other task of the proposal, tasks
     /// waiting in a circle, a task that is a part of no other task of the
     /// proposal, tasks that are parts of each other in a circle, a part
-    /// waiting for the task it is a part of, or nothing left at all; if the
-    /// conversation runs
-    /// on another computer (`runs_elsewhere`), where approving it a second
-    /// time would create the same tasks twice; or if storage fails.
+    /// waiting for the task it is a part of, a task of the project moved
+    /// twice, or nothing left at all; if a task of the project it names was
+    /// deleted since (`rule_broken`), or if, with the board as it is now,
+    /// a task would be a part of itself or of one of its parts, or a part
+    /// would wait for its task (`part_in_circle`): the board may have
+    /// changed since the proposal was made, and nothing of it is done
+    /// then; if the conversation runs on another computer
+    /// (`runs_elsewhere`), where approving it a second time would create
+    /// the same tasks twice; or if storage fails.
     pub fn approve_proposal(
         &self,
         conversation_id: ConversationId,
@@ -401,7 +435,7 @@ impl WorkService {
         let mut project = self.inner.require_project(conversation.project_id())?;
         let team = ports.members.list_for_project(project.id())?;
 
-        let (members, tasks) = Proposal::check_approval(
+        let (members, tasks, moves) = Proposal::check_approval(
             approved
                 .members
                 .into_iter()
@@ -412,8 +446,13 @@ impl WorkService {
                 .into_iter()
                 .map(proposed_task_from)
                 .collect::<Result<_, _>>()?,
+            approved.moves,
         )?;
         refuse_owners_who_are_not_there(&team, &members, &tasks)?;
+        // The board may have changed since the proposal was made: a task it
+        // names deleted or moved. Then nothing of it is done.
+        let mut board = ports.tasks.list_for_project(project.id())?;
+        check_on_board(&project, &board, &tasks, &moves)?;
 
         // Everything was checked. From here on nothing is refused, so the
         // members and the tasks are created together or not at all.
@@ -457,9 +496,7 @@ impl WorkService {
         }
 
         let status = project.workflow().initial_status().clone();
-        let mut last_rank = ports
-            .tasks
-            .list_for_project(project.id())?
+        let mut last_rank = board
             .iter()
             .filter(|task| task.status_id() == status.id())
             .map(Task::rank)
@@ -498,6 +535,10 @@ impl WorkService {
                 now,
             ));
         }
+        let id_of = |whole: TaskInPlan, created: &[Task]| match whole {
+            TaskInPlan::Proposed(place) => created.get(place).map(Task::id),
+            TaskInPlan::Existing(id) => Some(id),
+        };
         for (place, proposed) in tasks.iter().enumerate() {
             let blockers: Vec<_> = proposed
                 .waits_for
@@ -505,10 +546,9 @@ impl WorkService {
                 .filter_map(|&earlier| created.get(earlier).map(Task::id))
                 .collect();
             // A part becomes a subtask of the task created for its whole,
-            // which may come after it in the plan.
-            let parent = proposed
-                .part_of
-                .and_then(|whole| created.get(whole).map(Task::id));
+            // which may come after it in the plan, or of a task the
+            // project has.
+            let parent = proposed.part_of.and_then(|whole| id_of(whole, &created));
             if let Some(task) = created.get_mut(place) {
                 for blocker in blockers {
                     task.block_on(blocker, now)?;
@@ -518,13 +558,34 @@ impl WorkService {
                 }
             }
         }
+        place_new_wholes(&mut created, &tasks, &moves, &board, now);
+
+        // Then the moves, each task with its own parts. All the tasks of
+        // the project and the new ones are one list from here on, so that
+        // each part finds the top it goes with.
+        let before = board.clone();
+        let mut regrouped: BTreeSet<TaskId> = created.iter().map(Task::id).collect();
+        for one in &moves {
+            if let Some(task) = board.iter_mut().find(|task| task.id() == one.task) {
+                task.set_parent(one.part_of.and_then(|whole| id_of(whole, &created)), now)?;
+            }
+            regrouped.extend(subtree_of(one.task, &before));
+        }
+        let created_ids: BTreeSet<TaskId> = created.iter().map(Task::id).collect();
+        let mut everything = board;
+        everything.extend(created);
+        follow_tops(&mut everything, &regrouped, now);
+        let stored: Vec<Task> = everything
+            .into_iter()
+            .filter(|task| created_ids.contains(&task.id()) || !before.contains(task))
+            .collect();
 
         let proposing = turns.last_mut().ok_or(ApplicationError::NoProposalOpen)?;
-        proposing.approve_proposal(members, tasks, now)?;
+        proposing.approve_proposal(members, tasks, moves, now)?;
         ports.planning.save_approved_plan(&ApprovedPlan {
             project,
             members: newcomers,
-            tasks: created,
+            tasks: stored,
             turn: proposing.clone(),
         })?;
         ports.listener.conversation_changed(&conversation, &turns);
@@ -560,11 +621,12 @@ impl WorkService {
         // The session of the Advisor does not see an approval happen. If it
         // is not told, it takes its proposal for open and proposes all of
         // it again.
+        let board = ports.tasks.list_for_project(project.id())?;
         let prompt = earlier_turns
             .last()
             .and_then(Turn::proposal)
             .filter(|proposal| !proposal.is_open())
-            .map(|approved| message_after_approval(turn.request(), approved));
+            .map(|approved| message_after_approval(turn.request(), approved, &project, &board));
         self.begin_turn(
             NewTurn {
                 conversation,
@@ -619,6 +681,77 @@ fn proposed_task_from(task: ApprovedTask) -> Result<ProposedTask, ApplicationErr
     })
 }
 
+/// Checks the new tasks and the moves of a proposal against the board as it
+/// is now, by the one rule of regrouping: the tasks of the project they name
+/// are there, no task is a part of itself or of one of its own parts, and
+/// no part waits for the task it is a part of. A task of the project is
+/// named by its reference, a new task by its title.
+fn check_on_board(
+    project: &Project,
+    board: &[Task],
+    tasks: &[ProposedTask],
+    moves: &[ProposedMove],
+) -> Result<(), ApplicationError> {
+    let new_parts: Vec<NewPart> = tasks
+        .iter()
+        .map(|task| NewPart {
+            part_of: task.part_of,
+            waits_for: task.waits_for.clone(),
+        })
+        .collect();
+    let part_moves: Vec<PartMove> = moves
+        .iter()
+        .map(|one| PartMove {
+            task: one.task,
+            part_of: one.part_of,
+        })
+        .collect();
+    check_regrouping(&Outline::of_tasks(board), &new_parts, &part_moves).map_err(|problem| {
+        regrouping_error(problem, |named| match named {
+            TaskInPlan::Existing(id) => board.iter().find(|task| task.id() == id).map_or_else(
+                || "a task that is gone".to_owned(),
+                |task| reference_of(project, task),
+            ),
+            TaskInPlan::Proposed(place) => tasks.get(place).map_or_else(
+                || format!("task {}", place + 1),
+                |task| format!("\"{}\"", task.title),
+            ),
+        })
+    })
+}
+
+/// Puts each new task of its own into the area and the sprint of the tasks
+/// of the project the proposal moves under it, when they are all in one
+/// area and one sprint, so that a regrouping does not take them out of
+/// where the manager put them. A new task with other parts, or none, stays
+/// in the first area and the backlog. Its new parts follow it afterwards.
+fn place_new_wholes(
+    created: &mut [Task],
+    tasks: &[ProposedTask],
+    moves: &[ProposedMove],
+    board: &[Task],
+    now: teamwright_domain::Timestamp,
+) {
+    for (place, task) in created.iter_mut().enumerate() {
+        if tasks
+            .get(place)
+            .is_none_or(|proposed| proposed.part_of.is_some())
+        {
+            continue;
+        }
+        let places: BTreeSet<(AreaId, Option<SprintId>)> = moves
+            .iter()
+            .filter(|one| one.part_of == Some(TaskInPlan::Proposed(place)))
+            .filter_map(|one| board.iter().find(|known| known.id() == one.task))
+            .map(|known| (known.area_id(), known.sprint_id()))
+            .collect();
+        if let [(area_id, sprint_id)] = places.into_iter().collect::<Vec<_>>()[..] {
+            task.put_into_area(area_id, now);
+            task.plan_into(sprint_id, now);
+        }
+    }
+}
+
 /// A change the manager sent, checked against the rules of titles, names
 /// and models.
 fn proposal_change_from(edit: ProposalEdit) -> Result<ProposalChange, ApplicationError> {
@@ -659,6 +792,8 @@ fn proposal_change_from(edit: ProposalEdit) -> Result<ProposalChange, Applicatio
             part_of,
         },
         ProposalEdit::MakePartOf { task, part_of } => ProposalChange::MakePartOf { task, part_of },
+        ProposalEdit::Move { task, part_of } => ProposalChange::Move { task, part_of },
+        ProposalEdit::RemoveMove { task } => ProposalChange::RemoveMove { task },
         ProposalEdit::RemoveTask { task } => ProposalChange::RemoveTask { task },
         ProposalEdit::RemoveMember { member } => ProposalChange::RemoveMember { member },
         ProposalEdit::SetProfile {
@@ -744,16 +879,29 @@ pub fn answers_in_words(questions: &[InterviewQuestion], answers: &[InterviewAns
 /// task the manager renamed or took out for one that is still missing, and
 /// propose it again.
 #[must_use]
-pub fn message_after_approval(message: &str, approved: &Proposal) -> String {
+pub fn message_after_approval(
+    message: &str,
+    approved: &Proposal,
+    project: &Project,
+    tasks: &[Task],
+) -> String {
+    let reference = |id: TaskId| {
+        tasks.iter().find(|task| task.id() == id).map_or_else(
+            || "a task that was deleted since".to_owned(),
+            |task| reference_of(project, task),
+        )
+    };
     let mut lines = vec![
         "The manager approved your proposal, as it was or with changes. What the project has \
-         now is in your instructions: its members are on the team and its tasks exist."
+         now is in your instructions: its members are on the team, its tasks exist and the \
+         tasks it moved are where it put them."
             .to_owned(),
         String::new(),
         "This is what the manager approved. Before approving, the manager may have changed \
-         titles, sizes, owners, what waits for what and which task is a part of which, taken \
-         members or tasks out, and added tasks. What you proposed and do not find here was left \
-         out on purpose: do not propose it again unless the manager asks for it."
+         titles, sizes, owners, what waits for what, which task is a part of which and where a \
+         task is moved, taken members, tasks or moves out, and added tasks. What you proposed \
+         and do not find here was left out on purpose: do not propose it again unless the \
+         manager asks for it."
             .to_owned(),
     ];
     if !approved.members().is_empty() {
@@ -768,18 +916,35 @@ pub fn message_after_approval(message: &str, approved: &Proposal) -> String {
     }
     if !approved.tasks().is_empty() {
         lines.push("Tasks:".to_owned());
-        lines.extend(
-            approved
-                .tasks()
+        lines.extend(approved.tasks().iter().enumerate().map(|(place, task)| {
+            format!(
+                "{}. {}",
+                place + 1,
+                approved_task_in_words(task, &reference)
+            )
+        }));
+    }
+    if !approved.moves().is_empty() {
+        lines.push("Tasks that exist, moved:".to_owned());
+        lines.extend(approved.moves().iter().map(|one| {
+            let title = tasks
                 .iter()
-                .enumerate()
-                .map(|(place, task)| format!("{}. {}", place + 1, approved_task_in_words(task))),
-        );
+                .find(|task| task.id() == one.task)
+                .map(|task| format!(" {}", task.title()))
+                .unwrap_or_default();
+            let place = match one.part_of {
+                None => "now a task of its own".to_owned(),
+                Some(TaskInPlan::Proposed(place)) => format!("now a part of {}", place + 1),
+                Some(TaskInPlan::Existing(id)) => format!("now a part of {}", reference(id)),
+            };
+            format!("- {}{title}: {place}", reference(one.task))
+        }));
     }
     lines.push(String::new());
     lines.push(
-        "If what the manager writes calls for more, propose only what is to be added: no member \
-         who is on the team, no task that exists."
+        "If what the manager writes calls for more, propose only what is to be added or moved: \
+         no member who is on the team, and no task that exists again. To put a task that exists \
+         under another task, or out from under one, move it."
             .to_owned(),
     );
     lines.push(String::new());
@@ -788,9 +953,10 @@ pub fn message_after_approval(message: &str, approved: &Proposal) -> String {
 }
 
 /// A task of an approved proposal in one line: its title, who does it, its
-/// size, the task it is a part of and the tasks it waits for, by their
+/// size, the task it is a part of (by its number in the list, or by its
+/// reference if it existed already) and the tasks it waits for, by their
 /// numbers in the list.
-fn approved_task_in_words(task: &ProposedTask) -> String {
+fn approved_task_in_words(task: &ProposedTask, reference: &impl Fn(TaskId) -> String) -> String {
     let owner = match &task.owner {
         None => "nobody".to_owned(),
         Some(ProposedOwner::Manager) => "the manager".to_owned(),
@@ -800,8 +966,10 @@ fn approved_task_in_words(task: &ProposedTask) -> String {
     if let Some(minutes) = task.estimate_minutes {
         details.push(format!("size {minutes} minutes"));
     }
-    if let Some(whole) = task.part_of {
-        details.push(format!("part of {}", whole + 1));
+    match task.part_of {
+        Some(TaskInPlan::Proposed(whole)) => details.push(format!("part of {}", whole + 1)),
+        Some(TaskInPlan::Existing(id)) => details.push(format!("part of {}", reference(id))),
+        None => {}
     }
     if !task.waits_for.is_empty() {
         let numbers: Vec<String> = task
@@ -911,6 +1079,10 @@ pub fn instructions_for_advisor(
         "3. Propose with the tool propose_plan: a summary of the project, the team, and the \
          tasks. Then end your turn with one or two sentences."
             .to_owned(),
+        "What these instructions and the tool propose_plan offer may have grown since earlier \
+         messages of this conversation. Where an earlier message says you cannot do something \
+         that they now allow, follow them as they are now."
+            .to_owned(),
     ];
 
     lines.push(String::new());
@@ -942,9 +1114,11 @@ pub fn instructions_for_advisor(
             "What the project has already. Propose only what is to be added: members who are \
              not on the team yet and tasks that do not exist yet. Never list a member or a task \
              again that is there, also not one that you proposed earlier and the manager \
-             approved. If nobody is to be added, the list of members is empty. Nothing that is \
-             there is changed or removed. A new task may be given to a member who is there, by \
-             the name below."
+             approved. If nobody is to be added, the list of members is empty. A new task may \
+             be given to a member who is there, by the name below, and may be a part of a task \
+             that is there, by its reference below. Nothing that is there is changed or \
+             removed, with one exception: when the manager asks you to regroup tasks that \
+             exist, you move them (see \"Regrouping\")."
                 .to_owned(),
         );
         if !team.is_empty() {
@@ -1022,11 +1196,27 @@ pub fn instructions_for_advisor(
              its own with a name, for example \"Define the pin map\", and let the tasks that need \
              it wait for it.",
             "- A task that is too large for one piece of work is split into parts: list each part \
-             as a task with part_of naming the task it belongs to. That task starts only once its \
-             parts are finished, so a part never waits for it. Do not split everything: most \
-             tasks have no parts. Only a task of the same proposal can have new parts; a task that \
-             exists cannot.",
+             as a task with part_of naming the task it belongs to, by its place in your list or, \
+             for a task that exists, by its reference such as \"IOT-3\". That task starts only \
+             once its parts are finished, so a part never waits for it. Do not split everything: \
+             most tasks have no parts.",
             "- Plan what the manager asked for and nothing more.",
+            "",
+            "Regrouping:",
+            "- Only when the manager asks for it, never on your own initiative, you may regroup \
+             tasks that exist: put them under other tasks, as their parts, or take them out from \
+             under one. A typical request: put tasks 1 and 2 under a new task \"Module 0: Set up \
+             the project\", tasks 3 to 5 under \"Module 1\", and so on.",
+            "- Do it in the same propose_plan: list each new task, such as a module, under tasks, \
+             and list each task that exists that is to move under moves, by its reference, with \
+             part_of naming where it goes: a task of your list by its place, or another task \
+             that exists by its reference. Leave part_of out to make it a task of its own. Its \
+             own parts go with it. A proposal may hold moves and new tasks and no members.",
+            "- The rules of parts hold: no task is a part of itself or of one of its own parts, \
+             and a task that waits for another, directly or through others, cannot go under it. \
+             A moved task goes into the area and the sprint of the task it now belongs to.",
+            "- Never propose a task again in order to regroup it, and never tell the manager to \
+             regroup by hand what you can propose.",
             "",
             "Rules:",
             "- A choice that changes what is built, what it costs or when it is ready is the \

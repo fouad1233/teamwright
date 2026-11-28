@@ -65,6 +65,7 @@ pub use agent_runtime::{
     SignIn, TeamTool, TokenCounts, TurnFailure, TurnOutcome, TurnRequest,
 };
 pub use agent_runtime::{ConnectorStart, KitConnector, KitSkill, TurnKit};
+pub use agent_runtime::{KnownTask, PlannedMove, PlannedWhole};
 pub use agent_runtime::{ProtectedKind, ProtectedPlace};
 pub use appearance::{AppearanceService, Theme, ThemeStore};
 pub use areas::AreaService;

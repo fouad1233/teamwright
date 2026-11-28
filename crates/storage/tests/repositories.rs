@@ -1518,7 +1518,7 @@ fn a_proposal_and_its_approval_are_found_again_unchanged_and_logged_whole() {
     let mut tasks = a_proposal().tasks().to_vec();
     tasks.pop();
     tasks[1].owner = None;
-    turn.approve_proposal(Vec::new(), tasks, moment(12))
+    turn.approve_proposal(Vec::new(), tasks, Vec::new(), moment(12))
         .unwrap();
     store.conversations.save_turn(&turn).unwrap();
     let after_approving = logged_after(&store, start + after_proposing.len());
@@ -1607,7 +1607,15 @@ fn a_proposal_changed_before_approval_is_logged_whole_and_survives_reopening_the
     assert_eq!(proposal.tasks()[2].waits_for, [1]);
     // The part keeps the task it belongs to.
     let wholes: Vec<_> = proposal.tasks().iter().map(|task| task.part_of).collect();
-    assert_eq!(wholes, [None, None, None, Some(2)]);
+    assert_eq!(
+        wholes,
+        [
+            None,
+            None,
+            None,
+            Some(teamwright_domain::TaskInPlan::Proposed(2))
+        ]
+    );
 }
 
 #[test]
@@ -2924,9 +2932,10 @@ fn approving_a_proposal_creates_the_team_and_the_plan_in_one_logged_write() {
                     estimate_minutes: None,
                     priority: Priority::High,
                     waits_for: Vec::new(),
-                    part_of: Some(0),
+                    part_of: Some(teamwright_application::PlannedWhole::Proposed(0)),
                 },
             ],
+            moves: Vec::new(),
         }),
     );
     runtime.deliver(
@@ -2968,9 +2977,10 @@ fn approving_a_proposal_creates_the_team_and_the_plan_in_one_logged_write() {
                 estimate_minutes: None,
                 priority: Priority::High,
                 waits_for: Vec::new(),
-                part_of: Some(0),
+                part_of: Some(teamwright_domain::TaskInPlan::Proposed(0)),
             },
         ],
+        moves: Vec::new(),
     };
     let start = database.operations().unwrap().len();
 

@@ -8,6 +8,7 @@ import type {
   Project,
   Proposal,
   ProposalChange,
+  Task,
   Turn,
 } from '../types';
 import { DemoBackend } from './demoBackend';
@@ -32,7 +33,11 @@ function latestTurn(conversation: Conversation): Turn {
 
 /** What the manager approves when nothing of a proposal is changed. */
 function unchanged(proposal: Proposal): ApprovedProposal {
-  return structuredClone({ members: proposal.members, tasks: proposal.tasks });
+  return structuredClone({
+    members: proposal.members,
+    tasks: proposal.tasks,
+    moves: proposal.moves,
+  });
 }
 
 describe('planning with the Advisor in the DemoBackend', () => {
@@ -427,6 +432,7 @@ describe('planning with the Advisor in the DemoBackend', () => {
       const approved = await backend.approveProposal(conversation.id, {
         members: smaller.members,
         tasks: smaller.tasks,
+        moves: smaller.moves,
       });
 
       expect(await backend.listMembers(project.id)).toHaveLength(2);
@@ -566,11 +572,11 @@ describe('planning with the Advisor in the DemoBackend', () => {
       const conversation = await proposed();
 
       const error = await refusal(
-        backend.approveProposal(conversation.id, { members: [], tasks: [] }),
+        backend.approveProposal(conversation.id, { members: [], tasks: [], moves: [] }),
       );
 
       expect(error.code).toBe('rule_broken');
-      expect(error.message).toBe('the proposal has no members and no tasks');
+      expect(error.message).toBe('the proposal has no members, no tasks and no moves');
     });
 
     it('creates nothing when something is refused, and leaves the proposal open', async () => {
@@ -592,7 +598,7 @@ describe('planning with the Advisor in the DemoBackend', () => {
     it('refuses to approve twice, and where nothing was proposed', async () => {
       const asked = await interviewed();
       const nothingYet = await refusal(
-        backend.approveProposal(asked.id, { members: [], tasks: [] }),
+        backend.approveProposal(asked.id, { members: [], tasks: [], moves: [] }),
       );
       await backend.answerInterview(asked.id, ANSWERS);
       environment.passAll();
@@ -889,6 +895,180 @@ describe('planning with the Advisor in the DemoBackend', () => {
     });
   });
 
+  describe('regrouping tasks that exist', () => {
+    /** Four tasks on the board, the second waiting for the first. */
+    async function boardToRegroup(): Promise<Task[]> {
+      const board: Task[] = [];
+      for (const title of [
+        'Set up the repository',
+        'Write the build script',
+        'Calibrate the sensor',
+        'Solder the board',
+      ]) {
+        board.push(await backend.createTask({ projectId: project.id, title }));
+      }
+      const [first, second] = board;
+      if (first && second) {
+        await backend.addTaskDependency(second.id, first.id);
+      }
+      return board;
+    }
+
+    /** The board, and a conversation in which the Advisor proposed to regroup it. */
+    async function regroupingProposed(): Promise<[Conversation, Task[]]> {
+      const board = await boardToRegroup();
+      const conversation = await backend.advise(project.id, {
+        brief: 'Put the tasks into modules.',
+      });
+      environment.passAll();
+      return [await now(conversation.id), board];
+    }
+
+    async function taskNow(task: Task): Promise<Task> {
+      const found = (await backend.listTasks(project.id)).find((other) => other.id === task.id);
+      if (!found) {
+        throw new Error(`${task.title} is gone`);
+      }
+      return found;
+    }
+
+    function ids(board: readonly Task[]): Id[] {
+      return board.map((task) => task.id);
+    }
+
+    it('keeps the moves of a regrouping by the tasks they name', async () => {
+      const [conversation, board] = await regroupingProposed();
+
+      const proposal = proposalOf(conversation);
+      expect(latestTurn(conversation).interview).toBeNull();
+      expect(proposal.members).toEqual([]);
+      expect(proposal.tasks.map((task) => task.title)).toEqual(['Module 0: Part 1']);
+      expect(proposal.moves).toEqual(
+        ids(board).map((taskId) => ({ taskId, partOf: 0, partOfTask: null })),
+      );
+      expect(await backend.listConversationsWaiting()).toHaveLength(1);
+    });
+
+    it('regroups tasks that exist under new tasks in one step', async () => {
+      const [conversation, board] = await regroupingProposed();
+
+      await backend.approveProposal(conversation.id, unchanged(proposalOf(conversation)));
+
+      const tasks = await backend.listTasks(project.id);
+      expect(tasks).toHaveLength(5);
+      const module = tasks.find((task) => task.title === 'Module 0: Part 1');
+      expect(module?.number).toBe(5);
+      for (const task of board) {
+        expect((await taskNow(task)).parentId).toBe(module?.id);
+      }
+      const [first, second] = board;
+      if (!first || !second) {
+        throw new Error('the board has four tasks');
+      }
+      expect((await taskNow(second)).blockedBy).toEqual([first.id]);
+      expect(await backend.listTaskHistory(first.id)).toContainEqual(
+        expect.objectContaining({ kind: 'made_part_of', fromTaskId: null, toTaskId: module?.id }),
+      );
+      expect(await backend.listConversationsWaiting()).toHaveLength(0);
+      expect(proposalOf(await now(conversation.id)).moves).toHaveLength(4);
+    });
+
+    it('puts a new task where the tasks moved under it are', async () => {
+      const [conversation, board] = await regroupingProposed();
+      const sensor = await backend.addArea(project.id, 'Sensor');
+      for (const task of board) {
+        await backend.moveTaskToArea(task.id, sensor.id);
+      }
+
+      await backend.approveProposal(conversation.id, unchanged(proposalOf(conversation)));
+
+      const module = (await backend.listTasks(project.id)).find(
+        (task) => task.title === 'Module 0: Part 1',
+      );
+      expect(module?.areaId).toBe(sensor.id);
+      for (const task of board) {
+        expect((await taskNow(task)).areaId).toBe(sensor.id);
+      }
+    });
+
+    it('lets the manager change take out and add moves', async () => {
+      const [conversation, board] = await regroupingProposed();
+      const [first, second, third, fourth] = board;
+      if (!first || !second || !third || !fourth) {
+        throw new Error('the board has four tasks');
+      }
+
+      await backend.changeProposal(conversation.id, {
+        kind: 'move',
+        taskId: fourth.id,
+        partOf: null,
+        partOfTask: third.id,
+      });
+      const changed = await backend.changeProposal(conversation.id, {
+        kind: 'removeMove',
+        taskId: second.id,
+      });
+
+      const moves = proposalOf(changed).moves;
+      expect(moves).toHaveLength(3);
+      expect(moves[2]).toEqual({ taskId: fourth.id, partOf: null, partOfTask: third.id });
+
+      // A move the board does not allow is refused with the reason: task 2
+      // waits for task 1, which would wait for its part.
+      const error = await refusal(
+        backend.changeProposal(conversation.id, {
+          kind: 'move',
+          taskId: second.id,
+          partOf: null,
+          partOfTask: first.id,
+        }),
+      );
+      expect(error.code).toBe('part_in_circle');
+      expect(error.message).toBe(
+        'AQN-2 cannot be a part of AQN-1, because AQN-2 or one of its parts waits for AQN-1, and a task with parts starts only once its parts are finished',
+      );
+      expect(proposalOf(await now(conversation.id)).moves).toHaveLength(3);
+    });
+
+    it('refuses a regrouping the board no longer allows and does nothing', async () => {
+      const [conversation, board] = await regroupingProposed();
+      const [first, , third, fourth] = board;
+      if (!first || !third || !fourth) {
+        throw new Error('the board has four tasks');
+      }
+      const changed = await backend.changeProposal(conversation.id, {
+        kind: 'move',
+        taskId: fourth.id,
+        partOf: null,
+        partOfTask: third.id,
+      });
+      // Since the proposal, the manager let task 4 wait for task 3, under
+      // which it was to go.
+      await backend.addTaskDependency(fourth.id, third.id);
+
+      const error = await refusal(
+        backend.approveProposal(conversation.id, unchanged(proposalOf(changed))),
+      );
+
+      expect(error.code).toBe('part_in_circle');
+      expect(error.message).toBe(
+        'AQN-4 cannot be a part of AQN-3, because AQN-4 or one of its parts waits for AQN-3, and a task with parts starts only once its parts are finished',
+      );
+      const tasks = await backend.listTasks(project.id);
+      expect(tasks).toHaveLength(4);
+      expect(tasks.every((task) => task.parentId === null)).toBe(true);
+
+      // A task deleted since is refused as well.
+      await backend.deleteTask(first.id);
+      const gone = await refusal(
+        backend.approveProposal(conversation.id, unchanged(proposalOf(conversation))),
+      );
+      expect(gone.code).toBe('rule_broken');
+      expect(gone.message).toMatch(/^a task this proposal moves or adds a part to is no longer/);
+      expect(await backend.listTasks(project.id)).toHaveLength(3);
+    });
+  });
+
   describe('what happens to the record of the planning', () => {
     it('keeps a project while the Advisor is working on it', async () => {
       await backend.advise(project.id, { brief: 'A small air sensor.' });
@@ -939,6 +1119,7 @@ describe('tasks that wait in a circle', () => {
     priority: 'normal' as const,
     waitsFor,
     partOf: null,
+    partOfTask: null,
   });
 
   it('finds none where every task waits only for earlier ones', () => {

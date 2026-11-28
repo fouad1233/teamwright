@@ -857,21 +857,40 @@ export interface ProposedTask {
   waitsFor: number[];
   /**
    * The task of the same proposal this one is a part of, by its place from
-   * 0, or nothing for a task of its own. Approving makes it a subtask of
-   * that task. A task with parts starts only once its parts are finished.
+   * 0, or nothing. Approving makes it a subtask of that task. A task with
+   * parts starts only once its parts are finished.
    */
   partOf: number | null;
+  /**
+   * The task of the project this one is a part of, or nothing. With both
+   * `partOf` and this nothing, it is a task of its own.
+   */
+  partOfTask: Id | null;
 }
 
 /**
- * What the Advisor proposes: who to add to the team, and which tasks to
- * create. Nothing of it exists before the manager approves it.
+ * A task of the project that a proposal moves, with its own parts: under a
+ * task of the proposal (`partOf`, its place from 0), under another task of
+ * the project (`partOfTask`), or, with both nothing, out from under any.
+ * It goes into the area and the sprint of the task it goes under.
+ */
+export interface ProposedMove {
+  taskId: Id;
+  partOf: number | null;
+  partOfTask: Id | null;
+}
+
+/**
+ * What the Advisor proposes: who to add to the team, which tasks to
+ * create, and, when the manager asked to regroup, which tasks of the
+ * project to move. Nothing of it happens before the manager approves it.
  */
 export interface Proposal {
   /** The project in the Advisor's words, for the manager to check. */
   summary: string;
   members: ProposedMember[];
   tasks: ProposedTask[];
+  moves: ProposedMove[];
   /**
    * When the manager approved it. Nothing while it is not approved. Once it
    * is, the members and the tasks are what the manager approved, which may
@@ -881,19 +900,25 @@ export interface Proposal {
 }
 
 /**
- * A proposal as the manager approves it: the members and the tasks that
- * are left after the manager's changes.
+ * A proposal as the manager approves it: the members, the tasks and the
+ * moves that are left after the manager's changes. Approving checks the
+ * moves against the board as it is then, and refuses all of it if one no
+ * longer holds.
  */
 export interface ApprovedProposal {
   members: ProposedMember[];
   tasks: ProposedTask[];
+  moves: ProposedMove[];
 }
 
 /**
  * One change the manager makes to an open proposal before approving it.
- * Tasks and members are named by their places from 0. Taking a task out
- * takes out what waited for it, its parts go where it was, and the places
- * after it move up by one. Taking a member out leaves its tasks to nobody.
+ * Tasks and members are named by their places from 0, and a task of the
+ * project by its identifier. Taking a task out takes out what waited for
+ * it, its parts and the tasks moved under it go where it was, and the
+ * places after it move up by one. Taking a member out leaves its tasks to
+ * nobody. `move` sets where a task of the project goes (or adds a move),
+ * and `removeMove` leaves it where it is.
  */
 export type ProposalChange =
   | { kind: 'retitle'; task: number; title: string }
@@ -904,7 +929,9 @@ export type ProposalChange =
   | { kind: 'addWait'; task: number; waitsFor: number }
   | { kind: 'removeWait'; task: number; waitsFor: number }
   | { kind: 'addTask'; title: string; partOf?: number | null }
-  | { kind: 'makePartOf'; task: number; partOf: number | null }
+  | { kind: 'makePartOf'; task: number; partOf: number | null; partOfTask?: Id | null }
+  | { kind: 'move'; taskId: Id; partOf: number | null; partOfTask: Id | null }
+  | { kind: 'removeMove'; taskId: Id }
   | { kind: 'removeTask'; task: number }
   | { kind: 'removeMember'; member: number }
   | { kind: 'setProfile'; member: number; model: string | null; effort: Effort | null };

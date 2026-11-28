@@ -1,15 +1,19 @@
 import type {
   ApprovedProposal,
   Conversation,
+  Id,
   Interview,
   InterviewAnswer,
   InterviewQuestion,
   Member,
+  Project,
   Proposal,
+  ProposedMove,
   ProposedOwner,
   ProposedTask,
+  Task,
 } from '@/shared/api/types';
-import { formatEstimate } from '@/shared/lib/format';
+import { formatEstimate, taskReference } from '@/shared/lib/format';
 
 /**
  * The conversation with the Advisor that a project shows: the one that was
@@ -95,7 +99,11 @@ export function answerInWords(question: InterviewQuestion, answer: InterviewAnsw
  * are made, so the proposal itself holds them.
  */
 export function draftOf(proposal: Proposal): ApprovedProposal {
-  return structuredClone({ members: proposal.members, tasks: proposal.tasks });
+  return structuredClone({
+    members: proposal.members,
+    tasks: proposal.tasks,
+    moves: proposal.moves,
+  });
 }
 
 /** A task of a plan that another task of the same plan could wait for. */
@@ -211,9 +219,130 @@ export function partOfChoices(tasks: readonly ProposedTask[], place: number): Wa
   );
 }
 
-/** How many tasks of a plan are a part of another one. */
+/** How many tasks of a plan are a part of another one, of the plan or of the project. */
 export function countParts(tasks: readonly ProposedTask[]): number {
-  return tasks.filter((task) => task.partOf !== null).length;
+  return tasks.filter((task) => task.partOf !== null || task.partOfTask !== null).length;
+}
+
+/**
+ * The tasks of the project a proposal moves under a task of the proposal,
+ * in the order of the proposal: "moves here", under that task.
+ */
+export function movesUnder(moves: readonly ProposedMove[], place: number): ProposedMove[] {
+  return moves.filter((move) => move.partOfTask === null && move.partOf === place);
+}
+
+/**
+ * The tasks of the project a proposal moves under another task of the
+ * project, or makes tasks of their own: those that go under no task of the
+ * proposal.
+ */
+export function movesElsewhere(moves: readonly ProposedMove[]): ProposedMove[] {
+  return moves.filter((move) => move.partOfTask !== null || move.partOf === null);
+}
+
+/** The key of the choice "a task of its own" in a picker of wholes. */
+export const OWN_TASK = 'own';
+
+/** The key of a task of the proposal in a picker of wholes. */
+export function keyOfPlace(place: number): string {
+  return `place:${place.toString()}`;
+}
+
+/** The key of a task of the project in a picker of wholes. */
+export function keyOfTask(taskId: Id): string {
+  return `task:${taskId}`;
+}
+
+/** Where a key of a picker of wholes puts a task. */
+export function wholeOfKey(key: string): { partOf: number | null; partOfTask: Id | null } {
+  if (key.startsWith('place:')) {
+    return { partOf: Number(key.slice('place:'.length)), partOfTask: null };
+  }
+  if (key.startsWith('task:')) {
+    return { partOf: null, partOfTask: key.slice('task:'.length) };
+  }
+  return { partOf: null, partOfTask: null };
+}
+
+/** One place a task can be put under, as a picker lists it. */
+export interface WholeChoice {
+  key: string;
+  /** "3" for a task of the proposal, "AQN-12" for a task of the project. */
+  reference: string;
+  title: string;
+}
+
+/** A task of the project and every task below it, as their identifiers. */
+function subtreeOf(board: readonly Task[], root: Id): Set<Id> {
+  const below = new Set<Id>([root]);
+  for (let sizeBefore = 0; sizeBefore !== below.size;) {
+    sizeBefore = below.size;
+    for (const task of board) {
+      if (task.parentId !== null && below.has(task.parentId)) {
+        below.add(task.id);
+      }
+    }
+  }
+  return below;
+}
+
+/**
+ * Where a moved task of the project can go: under a task of the proposal,
+ * under another task of the project that is not one of its own parts, or
+ * on its own. Where it goes now is left out. Whether a choice breaks
+ * another rule is for the backend to say.
+ */
+export function moveChoices(
+  proposal: Pick<Proposal, 'tasks'>,
+  project: Project,
+  board: readonly Task[],
+  move: ProposedMove,
+): WholeChoice[] {
+  const below = subtreeOf(board, move.taskId);
+  const now =
+    move.partOfTask !== null
+      ? keyOfTask(move.partOfTask)
+      : move.partOf !== null
+        ? keyOfPlace(move.partOf)
+        : OWN_TASK;
+  const choices: WholeChoice[] = [
+    { key: OWN_TASK, reference: '', title: 'A task of its own' },
+    ...proposal.tasks.map((task, place) => ({
+      key: keyOfPlace(place),
+      reference: (place + 1).toString(),
+      title: task.title,
+    })),
+    ...[...board]
+      .sort((first, second) => first.number - second.number)
+      .filter((task) => !below.has(task.id))
+      .map((task) => ({
+        key: keyOfTask(task.id),
+        reference: taskReference(project, task),
+        title: task.title,
+      })),
+  ];
+  return choices.filter((choice) => choice.key !== now);
+}
+
+/**
+ * The tasks of the project a new task of a proposal can be made a part of,
+ * besides the tasks of the proposal: all of them but the one it is a part
+ * of already. Whether that breaks a rule is for the backend to say.
+ */
+export function boardWholeChoices(
+  project: Project,
+  board: readonly Task[],
+  task: ProposedTask,
+): WholeChoice[] {
+  return [...board]
+    .sort((first, second) => first.number - second.number)
+    .filter((other) => other.id !== task.partOfTask)
+    .map((other) => ({
+      key: keyOfTask(other.id),
+      reference: taskReference(project, other),
+      title: other.title,
+    }));
 }
 
 /** One of the people a proposed task can be given to. */
@@ -304,12 +433,21 @@ export function planInWords(tasks: readonly ProposedTask[]): string {
   return minutes === 0 ? size : `${size}, about ${formatEstimate(minutes)}`;
 }
 
-/** What a proposal holds, in a few words: "3 specialists and 12 tasks". */
-export function proposalInWords(proposal: Pick<Proposal, 'members' | 'tasks'>): string {
-  const tasks = count(proposal.tasks.length, 'task', 'tasks');
-  return proposal.members.length === 0
-    ? tasks
-    : `${teamInWords(proposal.members.length)} and ${tasks}`;
+/**
+ * What a proposal holds, in a few words: "3 specialists and 12 tasks", or
+ * "2 tasks and 6 moves" for a regrouping.
+ */
+export function proposalInWords(proposal: Pick<Proposal, 'members' | 'tasks' | 'moves'>): string {
+  const pieces = [
+    ...(proposal.members.length === 0 ? [] : [teamInWords(proposal.members.length)]),
+    ...(proposal.tasks.length === 0 && proposal.moves.length > 0
+      ? []
+      : [count(proposal.tasks.length, 'task', 'tasks')]),
+    ...(proposal.moves.length === 0 ? [] : [count(proposal.moves.length, 'move', 'moves')]),
+  ];
+  return pieces.length <= 1
+    ? (pieces[0] ?? '')
+    : `${pieces.slice(0, -1).join(', ')} and ${pieces.at(-1) ?? ''}`;
 }
 
 /**
@@ -334,8 +472,16 @@ export function approvalInWords(draft: ApprovedProposal, team: readonly Member[]
   const added = countNewMembers(draft, team);
   const tasks = count(draft.tasks.length, 'task', 'tasks');
   const what = added === 0 ? tasks : `${teamInWords(added)} and ${tasks}`;
-  const parts = countParts(draft.tasks) === 0 ? '' : ' The parts become subtasks of their tasks.';
-  return `Adds ${what} to the project.${parts} No work starts before you start it.`;
+  const adds =
+    added === 0 && draft.tasks.length === 0 && draft.moves.length > 0
+      ? ''
+      : `Adds ${what} to the project. `;
+  const parts = countParts(draft.tasks) === 0 ? '' : 'The parts become subtasks of their tasks. ';
+  const moves =
+    draft.moves.length === 0
+      ? ''
+      : `Moves ${count(draft.moves.length, 'task that exists', 'tasks that exist')} with their parts, into the area and the sprint of the task each goes under. `;
+  return `${adds}${parts}${moves}No work starts before you start it.`;
 }
 
 /**

@@ -551,6 +551,7 @@ mod tests {
             TeamTool::Interview,
             TeamTool::ProposePlan {
                 team: vec!["Hardware engineer".to_owned()],
+                tasks: Vec::new(),
             },
         ];
 

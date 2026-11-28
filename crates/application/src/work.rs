@@ -21,9 +21,9 @@ use teamwright_domain::{
     Assignee, ComputerId, Conversation, ConversationId, DecisionOption, DecisionRequest,
     DomainError, Handoff, HandoffContent, Interview, InterviewQuestion, Member, MemberId,
     MemberKind, MemberName, MemoryContent, MemoryEntry, MemoryKind, MemoryOrigin, ModelName,
-    Project, ProjectId, Proposal, ProposedMember, ProposedOwner, ProposedTask, Rank, SaidIn,
-    StatusCategory, Task, TaskId, TaskTitle, TeamMessage, Timestamp, Turn, TurnId, TurnOrigin,
-    TurnState, WordsMark,
+    Project, ProjectId, Proposal, ProposedMember, ProposedMove, ProposedOwner, ProposedTask, Rank,
+    SaidIn, StatusCategory, Task, TaskId, TaskInPlan, TaskTitle, TeamMessage, Timestamp, Turn,
+    TurnId, TurnOrigin, TurnState, WordsMark,
 };
 
 use crate::agent_runtime::{
@@ -1110,12 +1110,19 @@ impl WorkService {
                     .iter()
                     .map(|member| member.name().to_string())
                     .collect();
+                let known = known_tasks(project, &tasks);
                 (
                     profile.model.map(|model| model.to_string()),
                     profile.effort,
                     instructions_for_advisor(project, &team, &tasks, &readable_folders),
                     PermissionProfile::advisor(),
-                    vec![TeamTool::Interview, TeamTool::ProposePlan { team: names }],
+                    vec![
+                        TeamTool::Interview,
+                        TeamTool::ProposePlan {
+                            team: names,
+                            tasks: known,
+                        },
+                    ],
                 )
             }
         };
@@ -1390,7 +1397,23 @@ impl Inner {
                 interview_from(asked).and_then(|interview| turn.ask_interview(interview))
             }
             AgentEvent::PlanProposed(proposed) => {
-                proposal_from(proposed).and_then(|proposal| turn.propose(proposal))
+                // A proposal names the tasks of the project by the
+                // references the Advisor reads. They are kept by their
+                // identifiers, which a new number or key does not change.
+                let board = match ports.projects.find(conversation.project_id())? {
+                    Some(project) => {
+                        let tasks = ports.tasks.list_for_project(project.id())?;
+                        Some((project, tasks))
+                    }
+                    None => None,
+                };
+                let (project, tasks) = board.unzip();
+                proposal_from(
+                    proposed,
+                    project.as_ref(),
+                    tasks.as_deref().unwrap_or_default(),
+                )
+                .and_then(|proposal| turn.propose(proposal))
             }
             AgentEvent::HandoffPublished(published) => {
                 self.record_handoff(&conversation, turn, published, now)?
@@ -2035,9 +2058,59 @@ fn interview_from(asked: ManagerInterview) -> Result<Interview, DomainError> {
     )
 }
 
-/// The plan the Advisor proposed, as the domain keeps it. Names and titles
-/// follow the rules of members and tasks.
-fn proposal_from(proposed: PlanProposal) -> Result<Proposal, DomainError> {
+/// The tasks of a project as the Advisor knows them: by their references,
+/// with what each is a part of and waits for.
+fn known_tasks(project: &Project, tasks: &[Task]) -> Vec<agent_runtime::KnownTask> {
+    let reference_by_id = |id: TaskId| {
+        tasks
+            .iter()
+            .find(|task| task.id() == id)
+            .map(|task| reference_of(project, task))
+    };
+    tasks
+        .iter()
+        .map(|task| agent_runtime::KnownTask {
+            reference: reference_of(project, task),
+            part_of: task.parent_id().and_then(reference_by_id),
+            waits_for: task
+                .blocked_by()
+                .iter()
+                .filter_map(|&id| reference_by_id(id))
+                .collect(),
+        })
+        .collect()
+}
+
+/// The plan the Advisor proposed, as the domain keeps it, with the tasks of
+/// the project it names found by their references, whatever the capitals.
+/// Names and titles follow the rules of members and tasks.
+fn proposal_from(
+    proposed: PlanProposal,
+    project: Option<&Project>,
+    board: &[Task],
+) -> Result<Proposal, DomainError> {
+    let task_named = |reference: &str| {
+        project
+            .and_then(|project| {
+                board
+                    .iter()
+                    .find(|task| reference_of(project, task).eq_ignore_ascii_case(reference.trim()))
+            })
+            .map(Task::id)
+            .ok_or_else(|| DomainError::NoSuchTaskReference {
+                reference: reference.to_owned(),
+            })
+    };
+    let whole_of = |whole: Option<agent_runtime::PlannedWhole>| {
+        whole
+            .map(|whole| match whole {
+                agent_runtime::PlannedWhole::Proposed(place) => Ok(TaskInPlan::Proposed(place)),
+                agent_runtime::PlannedWhole::Existing(reference) => {
+                    task_named(&reference).map(TaskInPlan::Existing)
+                }
+            })
+            .transpose()
+    };
     let members = proposed
         .members
         .into_iter()
@@ -2065,11 +2138,21 @@ fn proposal_from(proposed: PlanProposal) -> Result<Proposal, DomainError> {
                 estimate_minutes: task.estimate_minutes,
                 priority: task.priority,
                 waits_for: task.waits_for,
-                part_of: task.part_of,
+                part_of: whole_of(task.part_of)?,
             })
         })
         .collect::<Result<Vec<_>, DomainError>>()?;
-    Proposal::new(&proposed.summary, members, tasks)
+    let moves = proposed
+        .moves
+        .into_iter()
+        .map(|planned| {
+            Ok(ProposedMove {
+                task: task_named(&planned.task)?,
+                part_of: whole_of(planned.part_of)?,
+            })
+        })
+        .collect::<Result<Vec<_>, DomainError>>()?;
+    Proposal::with_moves(&proposed.summary, members, tasks, moves)
 }
 
 /// Ends a turn the way the program says it ended.

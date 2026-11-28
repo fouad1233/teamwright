@@ -544,7 +544,9 @@ pub struct ApprovedPlan {
     pub project: Project,
     /// The members that join the team.
     pub members: Vec<Member>,
-    /// The tasks that are created, each waiting for the tasks it waits for.
+    /// The tasks that are created, each waiting for the tasks it waits for,
+    /// and the tasks of the project that the plan moved, with the parts
+    /// that went with them into another area or sprint.
     pub tasks: Vec<Task>,
     /// The turn that proposed, with its proposal approved.
     pub turn: Turn,

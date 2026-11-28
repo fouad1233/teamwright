@@ -5,7 +5,9 @@ import type {
   Conversation,
   InterviewQuestion,
   Member,
+  Project,
   ProposedTask,
+  Task,
   Turn,
 } from '@/shared/api/types';
 
@@ -19,6 +21,12 @@ import {
   countWithoutOwner,
   emptyAnswers,
   isAnswered,
+  keyOfPlace,
+  keyOfTask,
+  moveChoices,
+  movesElsewhere,
+  movesUnder,
+  OWN_TASK,
   openInterview,
   openProposal,
   ownerChoices,
@@ -31,6 +39,7 @@ import {
   waitChoices,
   waitedFor,
   waitsForInWords,
+  wholeOfKey,
 } from './advisorModel';
 
 function turn(overrides: Partial<Turn> = {}): Turn {
@@ -80,6 +89,7 @@ function task(title: string, overrides: Partial<ProposedTask> = {}): ProposedTas
     priority: 'normal',
     waitsFor: [],
     partOf: null,
+    partOfTask: null,
     ...overrides,
   };
 }
@@ -113,6 +123,7 @@ const DRAFT: ApprovedProposal = {
     }),
     task('Test the device', { owner: { kind: 'manager' }, waitsFor: [2, 1] }),
   ],
+  moves: [],
 };
 
 function member(name: string): Member {
@@ -301,7 +312,7 @@ describe('the parts of a plan', () => {
 
   it('says on approving that the parts become subtasks', () => {
     expect(countParts(tasks)).toBe(3);
-    expect(approvalInWords({ members: [], tasks }, [])).toBe(
+    expect(approvalInWords({ members: [], tasks, moves: [] }, [])).toBe(
       'Adds 5 tasks to the project. The parts become subtasks of their tasks. No work starts before you start it.',
     );
   });
@@ -361,7 +372,7 @@ describe('a proposal in words', () => {
 
   it('says what a proposal holds', () => {
     expect(proposalInWords(DRAFT)).toBe('2 specialists and 4 tasks');
-    expect(proposalInWords({ members: [], tasks: [task('One')] })).toBe('1 task');
+    expect(proposalInWords({ members: [], tasks: [task('One')], moves: [] })).toBe('1 task');
   });
 
   it('says what approving will do, without the members the team has already', () => {
@@ -373,6 +384,59 @@ describe('a proposal in words', () => {
     );
     expect(approvalInWords(DRAFT, [member('Hardware engineer'), member('Firmware engineer')])).toBe(
       'Adds 4 tasks to the project. No work starts before you start it.',
+    );
+  });
+});
+
+describe('the moves of a regrouping', () => {
+  const project = { key: 'AQN' } as Project;
+  const board = [
+    { id: 'repository', number: 1, title: 'Set up the repository', parentId: null },
+    { id: 'script', number: 2, title: 'Write the build script', parentId: 'repository' },
+    { id: 'sensor', number: 3, title: 'Calibrate the sensor', parentId: null },
+  ] as Task[];
+  const moves = [
+    { taskId: 'repository', partOf: 0, partOfTask: null },
+    { taskId: 'sensor', partOf: null, partOfTask: 'repository' },
+    { taskId: 'script', partOf: null, partOfTask: null },
+  ];
+
+  it('puts the moves under the task of the proposal they go under, and the others apart', () => {
+    expect(movesUnder(moves, 0).map((move) => move.taskId)).toEqual(['repository']);
+    expect(movesUnder(moves, 1)).toEqual([]);
+    expect(movesElsewhere(moves).map((move) => move.taskId)).toEqual(['sensor', 'script']);
+  });
+
+  it('offers every place but where a task goes now and its own parts', () => {
+    const [repository] = moves;
+    if (!repository) {
+      throw new Error('there is a move');
+    }
+    const choices = moveChoices(
+      { tasks: [task('Module 0'), task('Module 1')] },
+      project,
+      board,
+      repository,
+    );
+    expect(choices.map((choice) => [choice.key, choice.reference])).toEqual([
+      [OWN_TASK, ''],
+      [keyOfPlace(1), '2'],
+      [keyOfTask('sensor'), 'AQN-3'],
+    ]);
+  });
+
+  it('reads where a choice puts a task', () => {
+    expect(wholeOfKey(keyOfPlace(2))).toEqual({ partOf: 2, partOfTask: null });
+    expect(wholeOfKey(keyOfTask('sensor'))).toEqual({ partOf: null, partOfTask: 'sensor' });
+    expect(wholeOfKey(OWN_TASK)).toEqual({ partOf: null, partOfTask: null });
+  });
+
+  it('says what a regrouping holds and does', () => {
+    const regrouping = { members: [], tasks: [task('Module 0')], moves };
+    expect(proposalInWords(regrouping)).toBe('1 task and 3 moves');
+    expect(proposalInWords({ members: [], tasks: [], moves })).toBe('3 moves');
+    expect(approvalInWords({ members: [], tasks: [], moves }, [])).toBe(
+      'Moves 3 tasks that exist with their parts, into the area and the sprint of the task each goes under. No work starts before you start it.',
     );
   });
 });

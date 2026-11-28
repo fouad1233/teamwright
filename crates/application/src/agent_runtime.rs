@@ -509,6 +509,10 @@ pub enum TeamTool {
         /// task may be given to one of them as well as to a proposed
         /// member.
         team: Vec<String>,
+        /// The tasks the project has already, by the references the
+        /// Advisor reads. A new task may be a part of one of them, and a
+        /// proposal may move them.
+        tasks: Vec<KnownTask>,
     },
     /// `publish_handoff`: a specialist working on a task hands its result
     /// over to whoever builds on it. It is reported as
@@ -880,6 +884,19 @@ pub struct InterviewQuestionAsked {
     pub recommended: Option<usize>,
 }
 
+/// A task a project has, as the Advisor knows it: by its reference, with
+/// the task it is a part of and the tasks it waits for, so that what it
+/// proposes can be checked against the rules of parts.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct KnownTask {
+    /// The reference of the task, such as `IOT-3`.
+    pub reference: String,
+    /// The reference of the task it is a part of, if any.
+    pub part_of: Option<String>,
+    /// The references of the tasks it waits for.
+    pub waits_for: Vec<String>,
+}
+
 /// The team and the plan the Advisor proposes.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PlanProposal {
@@ -889,6 +906,27 @@ pub struct PlanProposal {
     pub members: Vec<PlannedMember>,
     /// The tasks to create.
     pub tasks: Vec<PlannedTask>,
+    /// The tasks of the project to move.
+    pub moves: Vec<PlannedMove>,
+}
+
+/// The task a task of a plan is a part of, or a task is moved under.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PlannedWhole {
+    /// A new task of the same plan, by its place, counted from 0.
+    Proposed(usize),
+    /// A task the project has, by its reference, such as `IOT-3`.
+    Existing(String),
+}
+
+/// A task of the project the Advisor proposes to move: under a task, or
+/// out from under one.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PlannedMove {
+    /// The reference of the task that is moved, such as `IOT-3`.
+    pub task: String,
+    /// The task it becomes a part of, or nothing for a task of its own.
+    pub part_of: Option<PlannedWhole>,
 }
 
 /// A member the Advisor proposes.
@@ -922,9 +960,9 @@ pub struct PlannedTask {
     /// The tasks of the same plan that must be finished first, by their
     /// places, counted from 0.
     pub waits_for: Vec<usize>,
-    /// The task of the same plan this one is a part of, by its place,
-    /// counted from 0, or nothing for a task of its own.
-    pub part_of: Option<usize>,
+    /// The task this one is a part of: a task of the same plan or one the
+    /// project has; or nothing for a task of its own.
+    pub part_of: Option<PlannedWhole>,
 }
 
 /// Who a proposed task is given to.

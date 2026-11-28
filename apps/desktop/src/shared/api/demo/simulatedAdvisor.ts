@@ -1,4 +1,4 @@
-import type { InterviewQuestion, Proposal } from '../types';
+import type { Area, InterviewQuestion, Project, Proposal, ProposedTask, Task } from '../types';
 import { WHAT_THIS_IS, type Script } from './simulatedSpecialist';
 
 /**
@@ -104,6 +104,7 @@ const PROPOSAL: NewProposal = {
       owner: { kind: 'manager' },
       estimateMinutes: 120,
       priority: 'high',
+      partOfTask: null,
       waitsFor: [],
       partOf: null,
     },
@@ -114,6 +115,7 @@ const PROPOSAL: NewProposal = {
       owner: { kind: 'member', name: HARDWARE },
       estimateMinutes: 240,
       priority: 'high',
+      partOfTask: null,
       waitsFor: [0],
       partOf: null,
     },
@@ -124,6 +126,7 @@ const PROPOSAL: NewProposal = {
       owner: { kind: 'member', name: HARDWARE },
       estimateMinutes: 120,
       priority: 'normal',
+      partOfTask: null,
       waitsFor: [1],
       partOf: null,
     },
@@ -133,6 +136,7 @@ const PROPOSAL: NewProposal = {
       owner: { kind: 'member', name: HARDWARE },
       estimateMinutes: 480,
       priority: 'normal',
+      partOfTask: null,
       waitsFor: [2],
       partOf: null,
     },
@@ -143,6 +147,7 @@ const PROPOSAL: NewProposal = {
       owner: { kind: 'member', name: HARDWARE },
       estimateMinutes: 600,
       priority: 'normal',
+      partOfTask: null,
       waitsFor: [3],
       partOf: null,
     },
@@ -153,6 +158,7 @@ const PROPOSAL: NewProposal = {
       owner: { kind: 'member', name: HARDWARE },
       estimateMinutes: 60,
       priority: 'normal',
+      partOfTask: null,
       waitsFor: [4],
       partOf: null,
     },
@@ -162,6 +168,7 @@ const PROPOSAL: NewProposal = {
       owner: { kind: 'member', name: FIRMWARE },
       estimateMinutes: 480,
       priority: 'normal',
+      partOfTask: null,
       waitsFor: [2],
       partOf: null,
     },
@@ -171,6 +178,7 @@ const PROPOSAL: NewProposal = {
       owner: { kind: 'member', name: FIRMWARE },
       estimateMinutes: 300,
       priority: 'normal',
+      partOfTask: null,
       waitsFor: [6],
       partOf: null,
     },
@@ -180,6 +188,7 @@ const PROPOSAL: NewProposal = {
       owner: { kind: 'member', name: FIRMWARE },
       estimateMinutes: 360,
       priority: 'normal',
+      partOfTask: null,
       waitsFor: [6],
       partOf: null,
     },
@@ -190,6 +199,7 @@ const PROPOSAL: NewProposal = {
       owner: { kind: 'member', name: MECHANICAL },
       estimateMinutes: 480,
       priority: 'normal',
+      partOfTask: null,
       waitsFor: [5],
       partOf: null,
     },
@@ -199,6 +209,7 @@ const PROPOSAL: NewProposal = {
       owner: { kind: 'manager' },
       estimateMinutes: 60,
       priority: 'high',
+      partOfTask: null,
       waitsFor: [4],
       partOf: null,
     },
@@ -209,6 +220,7 @@ const PROPOSAL: NewProposal = {
       owner: { kind: 'manager' },
       estimateMinutes: 60,
       priority: 'normal',
+      partOfTask: null,
       waitsFor: [7, 8, 9, 10],
       partOf: null,
     },
@@ -218,6 +230,7 @@ const PROPOSAL: NewProposal = {
       owner: { kind: 'manager' },
       estimateMinutes: 150,
       priority: 'normal',
+      partOfTask: null,
       waitsFor: [10],
       partOf: 11,
     },
@@ -227,6 +240,7 @@ const PROPOSAL: NewProposal = {
       owner: { kind: 'manager' },
       estimateMinutes: 30,
       priority: 'normal',
+      partOfTask: null,
       waitsFor: [12],
       partOf: 11,
     },
@@ -237,11 +251,94 @@ const PROPOSAL: NewProposal = {
       owner: { kind: 'manager' },
       estimateMinutes: 120,
       priority: 'normal',
+      partOfTask: null,
       waitsFor: [13],
       partOf: 11,
     },
   ],
+  moves: [],
 };
+
+/**
+ * Whether the manager asks the Advisor to regroup the tasks of a project:
+ * the demo reads only this of what the manager writes.
+ */
+export function asksToRegroup(text: string): boolean {
+  return /\b(regroup|group|module)/i.test(text);
+}
+
+/** The most tasks the demo puts into one module when a project has one area. */
+const TASKS_IN_A_MODULE = 4;
+
+/**
+ * The script of the Advisor that is asked to regroup the tasks of a
+ * project into modules, as the founder asked: one new task for each area
+ * of the project, named after it, with the tasks of their own of that area
+ * moved under it, each with its parts. A project with one area gets a
+ * module for every few tasks, in the order of their numbers. It proposes
+ * no member and asks nothing first.
+ */
+export function scriptForRegrouping(
+  project: Project,
+  areas: readonly Area[],
+  tasks: readonly Task[],
+): Script {
+  const tops = tasks
+    .filter((task) => task.parentId === null)
+    .sort((first, second) => first.number - second.number);
+  const groups: { name: string; tasks: Task[] }[] =
+    areas.length > 1
+      ? areas.map((area) => ({
+          name: area.name,
+          tasks: tops.filter((task) => task.areaId === area.id),
+        }))
+      : Array.from({ length: Math.ceil(tops.length / TASKS_IN_A_MODULE) }, (_, index) => ({
+          name: `Part ${(index + 1).toString()}`,
+          tasks: tops.slice(index * TASKS_IN_A_MODULE, (index + 1) * TASKS_IN_A_MODULE),
+        }));
+  const modules = groups.filter((group) => group.tasks.length > 0);
+  const proposal: NewProposal = {
+    summary: [
+      `The tasks of ${project.name} grouped into ${modules.length.toString()} modules, as you asked.`,
+      '',
+      '- **New:** one task for each module. It starts once its parts are finished.',
+      '- **Moved:** every task of its own goes under its module, with its parts. Nothing else of it changes, and a task that waits for another still does.',
+      '- **Where they go:** a moved task goes into the area and the sprint of its module.',
+    ].join('\n'),
+    members: [],
+    tasks: modules.map((module, place): ProposedTask => ({
+      title: `Module ${place.toString()}: ${module.name}`,
+      description: `Holds the tasks of ${module.name}. Done when they are.`,
+      owner: { kind: 'manager' },
+      estimateMinutes: null,
+      priority: 'normal',
+      waitsFor: [],
+      partOf: null,
+      partOfTask: null,
+    })),
+    moves: modules.flatMap((module, place) =>
+      module.tasks.map((task) => ({ taskId: task.id, partOf: place, partOfTask: null })),
+    ),
+  };
+  return {
+    acts: [
+      { after: 0, act: { kind: 'note', message: WHAT_THIS_IS } },
+      { after: 700, act: { kind: 'say', text: 'I am reading the tasks of the project.' } },
+      {
+        after: 900,
+        act: {
+          kind: 'say',
+          text: 'I group them by the area each one is in, and move each with its parts.',
+        },
+      },
+    ],
+    endsAfter: 800,
+    answer: `I propose ${modules.length.toString()} modules and move ${proposal.moves.length.toString()} tasks under them. Change where a task goes, or take a move out, and approve it when it fits.`,
+    tokens: { input: 20, output: 1400, cacheRead: 15_200, cacheWritten: 3100 },
+    contextAdded: 18_000,
+    proposes: proposal,
+  };
+}
 
 /**
  * The script of the Advisor that reads what the manager wants: it asks. It
@@ -378,5 +475,9 @@ export function withoutLastMember(proposal: NewProposal): NewProposal {
         }),
         partOf: task.partOf === null ? null : (newPlace.get(task.partOf) ?? null),
       })),
+    moves: proposal.moves.map((move) => ({
+      ...move,
+      partOf: move.partOf === null ? null : (newPlace.get(move.partOf) ?? null),
+    })),
   };
 }

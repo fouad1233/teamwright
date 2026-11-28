@@ -2,13 +2,18 @@ import { BackendError } from '../backend';
 import type {
   ApprovedProposal,
   Conversation,
+  Id,
   Interview,
   InterviewAnswer,
   InterviewQuestion,
+  Project,
   Proposal,
   ProposalChange,
+  ProposedMove,
   ProposedTask,
+  Task,
 } from '../types';
+import { checkRegrouping, regroupingError, type TaskInPlan } from './parts';
 
 /**
  * The interview that is open in a conversation: the one its latest turn
@@ -175,11 +180,12 @@ function liesBelow(tasks: readonly ProposedTask[], part: number, whole: number):
  * names and owners are checked afterwards, with the rest of the plan.
  */
 export function proposalAfter(
-  proposal: Pick<Proposal, 'members' | 'tasks'>,
+  proposal: Pick<Proposal, 'members' | 'tasks' | 'moves'>,
   change: ProposalChange,
 ): ApprovedProposal {
   const members = structuredClone(proposal.members);
   const tasks = structuredClone(proposal.tasks);
+  const moves = structuredClone(proposal.moves);
   const taskAt = (place: number): ProposedTask => {
     const task = Number.isInteger(place) ? tasks[place] : undefined;
     if (!task) {
@@ -249,11 +255,20 @@ export function proposalAfter(
         priority: 'normal',
         waitsFor: [],
         partOf,
+        partOfTask: null,
       });
       break;
     }
     case 'makePartOf': {
       const task = taskAt(change.task);
+      const partOfTask = change.partOfTask ?? null;
+      if (partOfTask !== null) {
+        // Whether the task of the project is there, and keeps the rules of
+        // parts, is for the board to say.
+        task.partOf = null;
+        task.partOfTask = partOfTask;
+        break;
+      }
       if (change.partOf !== null) {
         const whole = taskAt(change.partOf);
         if (change.partOf === change.task) {
@@ -270,18 +285,54 @@ export function proposalAfter(
         }
       }
       task.partOf = change.partOf;
+      task.partOfTask = null;
+      break;
+    }
+    case 'move': {
+      if (change.partOfTask === null && change.partOf !== null) {
+        taskAt(change.partOf);
+      }
+      const whole =
+        change.partOfTask !== null
+          ? { partOf: null, partOfTask: change.partOfTask }
+          : { partOf: change.partOf, partOfTask: null };
+      const existing = moves.find((move) => move.taskId === change.taskId);
+      if (existing) {
+        Object.assign(existing, whole);
+      } else {
+        moves.push({ taskId: change.taskId, ...whole });
+      }
+      break;
+    }
+    case 'removeMove': {
+      const kept = moves.filter((move) => move.taskId !== change.taskId);
+      if (kept.length === moves.length) {
+        throw new BackendError('rule_broken', 'the proposal does not move that task');
+      }
+      moves.splice(0, moves.length, ...kept);
       break;
     }
     case 'removeTask': {
-      const whole = taskAt(change.task).partOf;
+      const removed = taskAt(change.task);
       tasks.splice(change.task, 1);
       const movedUp = (place: number) => (place > change.task ? place - 1 : place);
+      // A part of the task that is taken out, or a task moved under it,
+      // stays in the plan, because its work is still to be done. It goes
+      // where the task was.
+      const rewhole = (whole: { partOf: number | null; partOfTask: Id | null }) => {
+        if (whole.partOf === change.task) {
+          whole.partOf = removed.partOf === null ? null : movedUp(removed.partOf);
+          whole.partOfTask = removed.partOfTask;
+        } else if (whole.partOf !== null) {
+          whole.partOf = movedUp(whole.partOf);
+        }
+      };
       for (const task of tasks) {
         task.waitsFor = task.waitsFor.filter((earlier) => earlier !== change.task).map(movedUp);
-        // A part of the task that is taken out stays in the plan, because
-        // its work is still to be done. It goes where the task was.
-        const partOf = task.partOf === change.task ? whole : task.partOf;
-        task.partOf = partOf === null ? null : movedUp(partOf);
+        rewhole(task);
+      }
+      for (const move of moves) {
+        rewhole(move);
       }
       break;
     }
@@ -302,5 +353,43 @@ export function proposalAfter(
       break;
     }
   }
-  return { members, tasks };
+  return { members, tasks, moves };
+}
+
+/** Where a task of a plan goes, as the rule of parts reads it. */
+function inPlan(whole: { partOf: number | null; partOfTask: Id | null }): TaskInPlan | null {
+  if (whole.partOfTask !== null) {
+    return { kind: 'existing', id: whole.partOfTask };
+  }
+  return whole.partOf === null ? null : { kind: 'proposed', place: whole.partOf };
+}
+
+/**
+ * Checks the new tasks and the moves of a proposal against the board as it
+ * is now, as the real application does: the tasks of the project they name
+ * are there, no task is a part of itself or of one of its parts, and no
+ * part waits for its task. A task of the project is named by its
+ * reference, a new task by its title. A task moved twice is refused too.
+ */
+export function checkOnBoard(
+  project: Project,
+  board: readonly Task[],
+  tasks: readonly ProposedTask[],
+  moves: readonly ProposedMove[],
+): void {
+  const problem = checkRegrouping(
+    board,
+    tasks.map((task) => ({ partOf: inPlan(task), waitsFor: task.waitsFor })),
+    moves.map((move) => ({ taskId: move.taskId, partOf: inPlan(move) })),
+  );
+  if (problem) {
+    throw regroupingError(problem, (named) => {
+      if (named.kind === 'proposed') {
+        const task = tasks[named.place];
+        return task ? `"${task.title}"` : `task ${(named.place + 1).toString()}`;
+      }
+      const task = board.find((known) => known.id === named.id);
+      return task ? `${project.key}-${task.number.toString()}` : 'a task that is gone';
+    });
+  }
 }

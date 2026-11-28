@@ -13,8 +13,8 @@ use std::time::Duration;
 use chrono::{TimeZone, Utc};
 use serde_json::{Map, Value};
 use teamwright_application::{
-    AgentEvent, McpServer, ModelUsage, PermissionDenial, PlanLimitHit, PlanReset, PlanUsage,
-    PlanWindow, PlanWindowKind, SessionContext, SessionId, SessionStarted, TokenCounts,
+    AgentEvent, KnownTask, McpServer, ModelUsage, PermissionDenial, PlanLimitHit, PlanReset,
+    PlanUsage, PlanWindow, PlanWindowKind, SessionContext, SessionId, SessionStarted, TokenCounts,
     TurnFailure, TurnOutcome,
 };
 
@@ -61,6 +61,8 @@ pub struct Decoder {
     /// The names of the members the project has, to which a proposed task
     /// may be given.
     team: Vec<String>,
+    /// The tasks the project has, which a proposal may name and move.
+    tasks: Vec<KnownTask>,
     /// The names of the teammates a message may go to.
     teammates: Vec<String>,
     /// Whether a command may be asked for with `ask_permission`, as the
@@ -129,6 +131,13 @@ impl Decoder {
             team,
             ..Self::default()
         }
+    }
+
+    /// The same decoder, for a project that has these tasks. A proposal
+    /// may make a new task a part of one of them, and move them.
+    #[must_use]
+    pub fn with_tasks(self, tasks: Vec<KnownTask>) -> Self {
+        Self { tasks, ..self }
     }
 
     /// The same decoder, for a session that may write to teammates of
@@ -506,7 +515,7 @@ impl Decoder {
         match tool {
             ASK_MANAGER_IN_SESSION => question_from(input).ok().map(AgentEvent::ManagerAsked),
             INTERVIEW_IN_SESSION => interview_from(input).ok().map(AgentEvent::InterviewAsked),
-            PROPOSE_PLAN_IN_SESSION => proposal_from(input, &self.team)
+            PROPOSE_PLAN_IN_SESSION => proposal_from(input, &self.team, &self.tasks)
                 .ok()
                 .map(AgentEvent::PlanProposed),
             ASK_PERMISSION_IN_SESSION => permission_from(input, self.commands_askable)
@@ -1108,6 +1117,34 @@ mod tests {
             with_team.as_slice(),
             [AgentEvent::PlanProposed(_)]
         ));
+    }
+
+    #[test]
+    fn a_proposal_may_move_the_tasks_the_project_has() {
+        let line = r#"{"type":"assistant","message":{"content":[{"type":"tool_use",
+            "id":"toolu_sample1","name":"mcp__teamwright__propose_plan","input":{
+            "summary":"Modules.","members":[],
+            "tasks":[{"title":"Module 0: Set up the project","owner":"manager"}],
+            "moves":[{"task":"AQN-1","part_of":1}]}}]}}"#;
+        let board = vec![KnownTask {
+            reference: "AQN-1".to_owned(),
+            part_of: None,
+            waits_for: Vec::new(),
+        }];
+
+        let without_tasks = Decoder::for_team(Vec::new()).decode_line(line);
+        let with_tasks = Decoder::for_team(Vec::new())
+            .with_tasks(board)
+            .decode_line(line);
+
+        assert!(matches!(
+            without_tasks.as_slice(),
+            [AgentEvent::ToolUse { .. }]
+        ));
+        let [AgentEvent::PlanProposed(proposal)] = with_tasks.as_slice() else {
+            panic!("the proposal was not taken: {with_tasks:?}");
+        };
+        assert_eq!(proposal.moves.len(), 1);
     }
 
     #[test]

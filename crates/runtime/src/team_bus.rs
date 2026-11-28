@@ -47,15 +47,17 @@ use teamwright_application::memory::{
     FOUND_TEXT_LENGTH, MAX_FACT_LENGTH, MOST_FACTS_PER_TURN, MOST_FOUND, kind_in_words, search,
 };
 use teamwright_application::{
-    Effort, InterviewQuestionAsked, ManagerInterview, ManagerQuestion, MemoryKind, PermissionAsk,
-    PlanProposal, PlannedMember, PlannedOwner, PlannedTask, PublishedHandoff, QuestionOption,
-    RememberedEntry, RememberedFact, SentMessage, TeamTool,
+    Effort, InterviewQuestionAsked, KnownTask, ManagerInterview, ManagerQuestion, MemoryKind,
+    PermissionAsk, PlanProposal, PlannedMember, PlannedMove, PlannedOwner, PlannedTask,
+    PlannedWhole, PublishedHandoff, QuestionOption, RememberedEntry, RememberedFact, SentMessage,
+    TeamTool,
 };
 use teamwright_domain::memory::shorten;
 use teamwright_domain::{
-    DependencyGraph, HandoffContent, MemberName, MemoryContent, MessageKind, ModelName,
-    PathInFolder, PermissionKind, PermissionRequest, PermissionRule, SearchWords, TaskTitle,
-    TeamMessage, WordsMark, framed_words,
+    DependencyGraph, HandoffContent, MemberName, MemoryContent, MessageKind, ModelName, NewPart,
+    Outline, PartMove, PathInFolder, PermissionKind, PermissionRequest, PermissionRule,
+    RegroupingProblem, SearchWords, TaskInPlan, TaskTitle, TeamMessage, WordsMark,
+    check_regrouping, framed_words,
 };
 
 /// The name of the tool server, as Claude Code is told it.
@@ -117,6 +119,17 @@ pub const MEMORY_ARGUMENT: &str = "--memory";
 
 /// The argument before the name of a member of the team.
 const MEMBER_ARGUMENT: &str = "--member";
+
+/// The argument before the reference of a task the project has.
+const TASK_ARGUMENT: &str = "--task";
+
+/// The argument before the reference of the task that the task named last
+/// is a part of.
+const PART_OF_ARGUMENT: &str = "--part-of";
+
+/// The argument before the reference of a task that the task named last
+/// waits for.
+const WAITS_FOR_ARGUMENT: &str = "--waits-for";
 
 /// The argument before the name of a teammate a message may go to.
 const TEAMMATE_ARGUMENT: &str = "--teammate";
@@ -215,10 +228,12 @@ const INTERVIEW_DESCRIPTION: &str = "Ask the manager what you need to know befor
 
 /// What the tool `propose_plan` tells the model it is for.
 const PROPOSE_PLAN_DESCRIPTION: &str = "Propose the team and the plan of the project to the \
-     manager, who can change them and approves them. Nothing is created before the manager \
-     approves. If the project has members or tasks already, propose only the members and the \
-     tasks that are to be added. A task that is too large for one piece of work may be split \
-     into parts with part_of; most tasks have none. After calling it, end your turn.";
+     manager, who can change them and approves them. Nothing is created or moved before the \
+     manager approves. If the project has members or tasks already, propose only the members \
+     and the tasks that are to be added. A task that is too large for one piece of work may be \
+     split into parts with part_of, which names a task of your list or a task that exists; most \
+     tasks have none. When the manager asks to regroup tasks that exist, and only then, list \
+     them under moves, each with the task it goes under. After calling it, end your turn.";
 
 /// What the tool `publish_handoff` tells the model it is for.
 const PUBLISH_HANDOFF_DESCRIPTION: &str = "Hand the result of your task over to whoever builds \
@@ -254,9 +269,10 @@ const MOST_OPTIONS: usize = 4;
 /// The most questions of an interview.
 const MOST_QUESTIONS: usize = 5;
 
-/// The most members and tasks of a proposal.
+/// The most members, tasks and moves of a proposal.
 const MOST_MEMBERS: usize = 8;
 const MOST_TASKS: usize = 40;
+const MOST_MOVES: usize = 200;
 
 /// The owner of a task that is the manager.
 const MANAGER: &str = "manager";
@@ -340,10 +356,22 @@ pub fn bus_arguments(tools: &[TeamTool]) -> Vec<String> {
     for tool in tools {
         arguments.push(name_of(tool).to_owned());
         match tool {
-            TeamTool::ProposePlan { team } => {
+            TeamTool::ProposePlan { team, tasks } => {
                 for name in team {
                     arguments.push(MEMBER_ARGUMENT.to_owned());
                     arguments.push(name.clone());
+                }
+                for task in tasks {
+                    arguments.push(TASK_ARGUMENT.to_owned());
+                    arguments.push(task.reference.clone());
+                    if let Some(whole) = &task.part_of {
+                        arguments.push(PART_OF_ARGUMENT.to_owned());
+                        arguments.push(whole.clone());
+                    }
+                    for blocker in &task.waits_for {
+                        arguments.push(WAITS_FOR_ARGUMENT.to_owned());
+                        arguments.push(blocker.clone());
+                    }
                 }
             }
             TeamTool::PublishHandoff { folder } => {
@@ -384,6 +412,7 @@ pub fn bus_arguments(tools: &[TeamTool]) -> Vec<String> {
 pub fn tools_from_arguments(arguments: &[String]) -> Result<Vec<TeamTool>, String> {
     let mut tools = Vec::new();
     let mut team = Vec::new();
+    let mut known: Vec<KnownTask> = Vec::new();
     let mut teammates = Vec::new();
     let mut folder = None;
     let mut memory = None;
@@ -399,7 +428,10 @@ pub fn tools_from_arguments(arguments: &[String]) -> Result<Vec<TeamTool>, Strin
         match argument.as_str() {
             ASK_MANAGER => tools.push(TeamTool::AskManager),
             INTERVIEW => tools.push(TeamTool::Interview),
-            PROPOSE_PLAN => tools.push(TeamTool::ProposePlan { team: Vec::new() }),
+            PROPOSE_PLAN => tools.push(TeamTool::ProposePlan {
+                team: Vec::new(),
+                tasks: Vec::new(),
+            }),
             PUBLISH_HANDOFF => tools.push(TeamTool::PublishHandoff {
                 folder: PathBuf::new(),
             }),
@@ -420,6 +452,26 @@ pub fn tools_from_arguments(arguments: &[String]) -> Result<Vec<TeamTool>, Strin
                 memory = crate::memory_file::entries_from(Path::new(&file)).ok();
             }
             MEMBER_ARGUMENT => team.push(value_after(&mut given, MEMBER_ARGUMENT)?),
+            TASK_ARGUMENT => known.push(KnownTask {
+                reference: value_after(&mut given, TASK_ARGUMENT)?,
+                part_of: None,
+                waits_for: Vec::new(),
+            }),
+            PART_OF_ARGUMENT => {
+                let whole = value_after(&mut given, PART_OF_ARGUMENT)?;
+                known
+                    .last_mut()
+                    .ok_or_else(|| format!("{PART_OF_ARGUMENT} needs {TASK_ARGUMENT} before it"))?
+                    .part_of = Some(whole);
+            }
+            WAITS_FOR_ARGUMENT => {
+                let blocker = value_after(&mut given, WAITS_FOR_ARGUMENT)?;
+                known
+                    .last_mut()
+                    .ok_or_else(|| format!("{WAITS_FOR_ARGUMENT} needs {TASK_ARGUMENT} before it"))?
+                    .waits_for
+                    .push(blocker);
+            }
             TEAMMATE_ARGUMENT => teammates.push(value_after(&mut given, TEAMMATE_ARGUMENT)?),
             FOLDER_ARGUMENT => {
                 folder = Some(PathBuf::from(value_after(&mut given, FOLDER_ARGUMENT)?))
@@ -429,7 +481,13 @@ pub fn tools_from_arguments(arguments: &[String]) -> Result<Vec<TeamTool>, Strin
     }
     for tool in &mut tools {
         match tool {
-            TeamTool::ProposePlan { team: members } => members.clone_from(&team),
+            TeamTool::ProposePlan {
+                team: members,
+                tasks,
+            } => {
+                members.clone_from(&team);
+                tasks.clone_from(&known);
+            }
             TeamTool::SendMessage { teammates: names } => names.clone_from(&teammates),
             TeamTool::PublishHandoff { folder: place } => {
                 *place = folder
@@ -640,7 +698,8 @@ fn interview_question_from(
 }
 
 /// Reads and checks the arguments of a call of `propose_plan`. `team` holds
-/// the names of the members the project has already.
+/// the names of the members the project has already, `tasks` the tasks it
+/// has, by their references, with what they are a part of and wait for.
 ///
 /// The summary says something. There are at most eight members, each with
 /// a name that no other has and that nobody on the team has, whatever the
@@ -654,7 +713,12 @@ fn interview_question_from(
 /// another task of the list, counted the same way, at any depth, as a
 /// subtask is on the board; no task is a part of itself, directly or
 /// further down, and a part does not wait for the task it is a part of,
-/// which starts only once its parts are finished. An estimate in hours
+/// which starts only once its parts are finished. A task may also be a
+/// part of a task that exists, named by its reference, whatever the
+/// capitals. The moves name tasks that exist, each once, and say what each
+/// goes under: a task of the list, another task that exists, or nothing.
+/// A proposal holds tasks, moves or both. The rules of parts hold for
+/// the tasks that exist as the bus was told of them. An estimate in hours
 /// becomes minutes, and the priority is normal unless it is said.
 /// Whitespace around the texts is removed. Names and titles follow the
 /// rules of members and tasks.
@@ -663,7 +727,11 @@ fn interview_question_from(
 ///
 /// Returns what to change, in plain words, if the arguments are not
 /// acceptable. The model reads it and tries again.
-pub fn proposal_from(arguments: &Value, team: &[String]) -> Result<PlanProposal, String> {
+pub fn proposal_from(
+    arguments: &Value,
+    team: &[String],
+    known: &[KnownTask],
+) -> Result<PlanProposal, String> {
     let Some(arguments) = arguments.as_object() else {
         return Err(
             "Give the proposal as an object with \"summary\", \"members\" and \"tasks\"."
@@ -706,16 +774,54 @@ pub fn proposal_from(arguments: &Value, team: &[String]) -> Result<PlanProposal,
         ));
     }
 
-    let given_tasks = arguments
-        .get("tasks")
-        .and_then(Value::as_array)
-        .filter(|tasks| (1..=MOST_TASKS).contains(&tasks.len()))
-        .ok_or_else(|| "Give one to forty tasks.".to_owned())?;
-    let known: HashSet<String> = names.union(&on_the_team).cloned().collect();
+    let none = Vec::new();
+    let given_tasks = match arguments.get("tasks") {
+        None | Some(Value::Null) => &none,
+        Some(tasks) => tasks
+            .as_array()
+            .filter(|tasks| tasks.len() <= MOST_TASKS)
+            .ok_or_else(|| "Give the tasks as a list of at most forty.".to_owned())?,
+    };
+    let given_moves = match arguments.get("moves") {
+        None | Some(Value::Null) => &none,
+        Some(moves) => moves
+            .as_array()
+            .filter(|moves| moves.len() <= MOST_MOVES)
+            .ok_or_else(|| {
+                "Give the moves as a list, each with the reference of a task that exists."
+                    .to_owned()
+            })?,
+    };
+    if given_tasks.is_empty() && given_moves.is_empty() {
+        return Err(
+            "Give one to forty tasks, or, when the manager asked to regroup tasks that exist, \
+             the moves."
+                .to_owned(),
+        );
+    }
+    let owners: HashSet<String> = names.union(&on_the_team).cloned().collect();
+    let references = References::of(known);
     let tasks = given_tasks
         .iter()
         .enumerate()
-        .map(|(index, task)| planned_task_from(index + 1, task, given_tasks.len(), &known))
+        .map(|(index, task)| {
+            planned_task_from(index + 1, task, given_tasks.len(), &owners, &references)
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let mut moved = HashSet::new();
+    let moves = given_moves
+        .iter()
+        .enumerate()
+        .map(|(index, one)| {
+            let planned = planned_move_from(index + 1, one, given_tasks.len(), &references)?;
+            if !moved.insert(planned.task.clone()) {
+                return Err(format!(
+                    "{} is moved twice. Move each task that exists once.",
+                    planned.task
+                ));
+            }
+            Ok(planned)
+        })
         .collect::<Result<Vec<_>, _>>()?;
     if wait_in_circle(&tasks) {
         return Err(
@@ -739,10 +845,178 @@ pub fn proposal_from(arguments: &Value, team: &[String]) -> Result<PlanProposal,
                 .to_owned(),
         );
     }
+    check_with_the_board(known, &tasks, &moves)?;
     Ok(PlanProposal {
         summary,
         members,
         tasks,
+        moves,
+    })
+}
+
+/// The references of the tasks a project has, found whatever the capitals
+/// and the spaces around them.
+struct References {
+    /// Each reference in capitals, with the reference as the project has it.
+    by_key: std::collections::HashMap<String, String>,
+}
+
+impl References {
+    fn of(known: &[KnownTask]) -> Self {
+        Self {
+            by_key: known
+                .iter()
+                .map(|task| (task.reference.trim().to_uppercase(), task.reference.clone()))
+                .collect(),
+        }
+    }
+
+    /// The reference as the project has it, if the project has the task.
+    fn find(&self, given: &str) -> Option<String> {
+        self.by_key.get(&given.trim().to_uppercase()).cloned()
+    }
+}
+
+/// Reads where a task goes: a place in the list of `count`, counted from 1,
+/// or the reference of a task that exists. Says what is wrong otherwise.
+fn whole_from(
+    value: &Value,
+    count: usize,
+    references: &References,
+    not_there: impl Fn(&Value) -> String,
+) -> Result<PlannedWhole, String> {
+    if let Some(reference) = value.as_str() {
+        return references
+            .find(reference)
+            .map(PlannedWhole::Existing)
+            .ok_or_else(|| not_there(value));
+    }
+    place_from(value, count)
+        .map(PlannedWhole::Proposed)
+        .ok_or_else(|| not_there(value))
+}
+
+/// Reads one move of a proposal; `place` counts from 1.
+fn planned_move_from(
+    place: usize,
+    one: &Value,
+    count: usize,
+    references: &References,
+) -> Result<PlannedMove, String> {
+    let Some(one) = one.as_object() else {
+        return Err(format!(
+            "Move {place} needs \"task\": the reference of a task that exists, such as \"IOT-3\"."
+        ));
+    };
+    let given = optional_text(one, "task")?.unwrap_or_default();
+    let task = references.find(&given).ok_or_else(|| {
+        format!(
+            "Move {place} names \"{given}\", which is not a task that exists. Use the reference \
+             of a task from your instructions, such as \"IOT-3\"."
+        )
+    })?;
+    let part_of = match one.get("part_of") {
+        None | Some(Value::Null) => None,
+        Some(value) => Some(whole_from(value, count, references, |value| {
+            format!(
+                "Move {place} puts {task} under {value}, which is neither a task of the list nor \
+                 a task that exists. Give part_of as the place of a task in the list, counted \
+                 from 1, or as the reference of a task that exists; leave it out to make {task} a \
+                 task of its own."
+            )
+        })?),
+    };
+    Ok(PlannedMove { task, part_of })
+}
+
+/// Checks the new tasks and the moves against the tasks that exist, by the
+/// rules of parts, and says what to change in words the model reads. The
+/// tasks that exist are known by their places in `known`.
+fn check_with_the_board(
+    known: &[KnownTask],
+    tasks: &[PlannedTask],
+    moves: &[PlannedMove],
+) -> Result<(), String> {
+    let key = |reference: &str| reference.trim().to_uppercase();
+    let places: std::collections::HashMap<String, usize> = known
+        .iter()
+        .enumerate()
+        .map(|(place, task)| (key(&task.reference), place))
+        .collect();
+    let place_of = |reference: &str| places.get(&key(reference)).copied();
+    let outline = Outline::new(known.iter().enumerate().map(|(place, task)| {
+        (
+            place,
+            task.part_of.as_deref().and_then(place_of),
+            task.waits_for
+                .iter()
+                .filter_map(|blocker| place_of(blocker))
+                .collect(),
+        )
+    }));
+    // A reference the project does not have was refused before, as each
+    // task and move was read.
+    let in_plan = |whole: &Option<PlannedWhole>| match whole {
+        None => None,
+        Some(PlannedWhole::Proposed(place)) => Some(TaskInPlan::Proposed(*place)),
+        Some(PlannedWhole::Existing(reference)) => place_of(reference).map(TaskInPlan::Existing),
+    };
+    let new_parts: Vec<NewPart<usize>> = tasks
+        .iter()
+        .map(|task| NewPart {
+            part_of: in_plan(&task.part_of),
+            waits_for: task.waits_for.clone(),
+        })
+        .collect();
+    let part_moves: Vec<PartMove<usize>> = moves
+        .iter()
+        .filter_map(|one| {
+            Some(PartMove {
+                task: place_of(&one.task)?,
+                part_of: in_plan(&one.part_of),
+            })
+        })
+        .collect();
+    let Err(problem) = check_regrouping(&outline, &new_parts, &part_moves) else {
+        return Ok(());
+    };
+    let name = |task: TaskInPlan<usize>| match task {
+        TaskInPlan::Existing(place) => known
+            .get(place)
+            .map(|task| task.reference.clone())
+            .unwrap_or_default(),
+        TaskInPlan::Proposed(place) => format!("task {}", place + 1),
+    };
+    Err(match problem {
+        RegroupingProblem::NotThere(place) => format!(
+            "The project has no task {}. Use the references of your instructions.",
+            name(TaskInPlan::Existing(place))
+        ),
+        RegroupingProblem::NoSuchPlace(place) => format!("The list has no task {}.", place + 1),
+        RegroupingProblem::MovedTwice(place) => format!(
+            "{} is moved twice. Move each task that exists once.",
+            name(TaskInPlan::Existing(place))
+        ),
+        RegroupingProblem::PartOfItsOwnPart { task, whole } if task == whole => format!(
+            "{} cannot be a part of itself. Put it under another task, or leave it where it is.",
+            name(task)
+        ),
+        RegroupingProblem::PartOfItsOwnPart { task, whole } => format!(
+            "{} cannot be a part of {}, which is a part of {} already, directly or further down. \
+             Put it under a task that is not one of its own parts.",
+            name(task),
+            name(whole),
+            name(task)
+        ),
+        RegroupingProblem::PartWaitsForWhole { task, whole } => format!(
+            "{} cannot be a part of {}: {} or one of its parts waits for {}, directly or through \
+             other tasks, and a task with parts starts only once its parts are finished, so \
+             neither could start. Put it under another task, or leave it where it is.",
+            name(task),
+            name(whole),
+            name(task),
+            name(whole)
+        ),
     })
 }
 
@@ -794,6 +1068,7 @@ fn planned_task_from(
     task: &Value,
     count: usize,
     known: &HashSet<String>,
+    references: &References,
 ) -> Result<PlannedTask, String> {
     let Some(task) = task.as_object() else {
         return Err(format!("Task {place} has no title."));
@@ -865,15 +1140,22 @@ fn planned_task_from(
     let part_of = match task.get("part_of") {
         None | Some(Value::Null) => None,
         Some(value) => Some(
-            place_from(value, count)
-                .filter(|whole| *whole + 1 != place)
-                .ok_or_else(|| {
-                    format!(
-                        "Task {place} is a part of {value}, which is not another task of the list. \
-                         Give part_of as the place of the task it belongs to, counted from 1, or \
-                         leave it out."
-                    )
-                })?,
+            whole_from(value, count, references, |value| {
+                format!(
+                    "Task {place} is a part of {value}, which is neither another task of the list \
+                     nor a task that exists. Give part_of as the place of the task it belongs to, \
+                     counted from 1, or as the reference of a task that exists, such as \
+                     \"IOT-3\"; or leave it out."
+                )
+            })
+            .and_then(|whole| match whole {
+                PlannedWhole::Proposed(whole) if whole + 1 == place => Err(format!(
+                    "Task {place} is a part of {value}, which is not another task of the list. \
+                     Give part_of as the place of the task it belongs to, counted from 1, or \
+                     leave it out."
+                )),
+                whole => Ok(whole),
+            })?,
         ),
     };
 
@@ -916,9 +1198,17 @@ fn parts_in_circle(tasks: &[PlannedTask]) -> bool {
         tasks
             .iter()
             .enumerate()
-            .map(|(place, task)| (place, task.part_of)),
+            .map(|(place, task)| (place, proposed_whole(task))),
     )
     .has_cycle()
+}
+
+/// The task of the same list a task is a part of, if it is one of the list.
+fn proposed_whole(task: &PlannedTask) -> Option<usize> {
+    match task.part_of {
+        Some(PlannedWhole::Proposed(whole)) => Some(whole),
+        _ => None,
+    }
 }
 
 /// Whether some tasks wait for each other in a circle once a task with
@@ -928,7 +1218,7 @@ fn parts_wait_in_circle(tasks: &[PlannedTask]) -> bool {
         let parts = tasks
             .iter()
             .enumerate()
-            .filter(move |(_, other)| other.part_of == Some(place))
+            .filter(move |(_, other)| proposed_whole(other) == Some(place))
             .map(|(part, _)| part);
         (place, task.waits_for.iter().copied().chain(parts))
     }))
@@ -1364,8 +1654,8 @@ impl Bus {
                 INTERVIEW_TAKEN,
                 "The questions were not sent to the manager.",
             ),
-            TeamTool::ProposePlan { team } => (
-                proposal_from(&arguments, team).map(|_| ()),
+            TeamTool::ProposePlan { team, tasks } => (
+                proposal_from(&arguments, team, tasks).map(|_| ()),
                 PROPOSAL_TAKEN,
                 "The proposal was not sent to the manager.",
             ),
@@ -1752,13 +2042,15 @@ fn interview_tool() -> Value {
 /// it, with the efforts Teamwright knows and a model of any one word. What
 /// it says about members and tasks that are there already was added when a
 /// real Advisor, asked for more, proposed its whole plan a second time.
+/// The moves, and a part of a task that exists, were added when a real
+/// Advisor, asked to regroup tasks into modules, could not (decision 0046).
 fn propose_plan_tool() -> Value {
     json!({
         "name": PROPOSE_PLAN,
         "description": PROPOSE_PLAN_DESCRIPTION,
         "inputSchema": {
             "type": "object",
-            "required": ["summary", "members", "tasks"],
+            "required": ["summary", "members"],
             "properties": {
                 "summary": {
                     "type": "string",
@@ -1809,9 +2101,10 @@ fn propose_plan_tool() -> Value {
                 },
                 "tasks": {
                     "type": "array",
-                    "minItems": 1,
                     "maxItems": MOST_TASKS,
-                    "description": "The tasks to create. No task that exists already.",
+                    "description": "The tasks to create. No task that exists already: to put \
+                                    a task that exists under another, move it. Empty or left \
+                                    out only when the proposal moves tasks and adds none.",
                     "items": {
                         "type": "object",
                         "required": ["title", "owner"],
@@ -1848,15 +2141,46 @@ fn propose_plan_tool() -> Value {
                                                 their places in this list, counted from 1."
                             },
                             "part_of": {
-                                "type": "integer",
-                                "description": "Only for a part of a larger task: the place \
-                                                of the task in this list that it is a part \
-                                                of, counted from 1. A part can have parts of \
-                                                its own. The larger task starts only once its \
-                                                parts are finished, so a part never waits for \
-                                                it. Leave it out for a task of its own, as \
-                                                most tasks are. It names a task of this list, \
-                                                never a task that exists."
+                                "type": ["integer", "string"],
+                                "description": "Only for a part of a larger task: the task \
+                                                it is a part of, either its place in this \
+                                                list, counted from 1, or the reference of a \
+                                                task that exists, such as \"IOT-3\". A part \
+                                                can have parts of its own. The larger task \
+                                                starts only once its parts are finished, so \
+                                                a part never waits for it. Leave it out for a \
+                                                task of its own, as most tasks are."
+                            }
+                        }
+                    }
+                },
+                "moves": {
+                    "type": "array",
+                    "maxItems": MOST_MOVES,
+                    "description": "Only when the manager asks to regroup tasks that exist: \
+                                    each task that exists to move under another task, or out \
+                                    from under one. Its own parts go with it, into the area \
+                                    and the sprint of the task it goes under. Leave it out \
+                                    otherwise.",
+                    "items": {
+                        "type": "object",
+                        "required": ["task"],
+                        "properties": {
+                            "task": {
+                                "type": "string",
+                                "description": "The reference of the task that exists, such \
+                                                as \"IOT-3\", as your instructions list it. \
+                                                Each task is moved once."
+                            },
+                            "part_of": {
+                                "type": ["integer", "string"],
+                                "description": "Where it goes: the place of a task in the list \
+                                                of tasks, counted from 1, such as a new \
+                                                module, or the reference of another task that \
+                                                exists. Leave it out to make it a task of its \
+                                                own. A task never goes under itself or under \
+                                                one of its own parts, nor under a task it \
+                                                waits for."
                             }
                         }
                     }
@@ -1964,7 +2288,10 @@ mod tests {
         vec![
             TeamTool::AskManager,
             TeamTool::Interview,
-            TeamTool::ProposePlan { team: team() },
+            TeamTool::ProposePlan {
+                team: team(),
+                tasks: Vec::new(),
+            },
         ]
     }
 
@@ -2258,7 +2585,7 @@ mod tests {
 
     #[test]
     fn a_good_proposal_is_read_with_its_places_counted_from_0_and_hours_as_minutes() {
-        let proposal = proposal_from(&good_proposal(), &team()).unwrap();
+        let proposal = proposal_from(&good_proposal(), &team(), &[]).unwrap();
 
         assert_eq!(proposal.summary, "A device that measures the air.");
         assert_eq!(proposal.members[0].model.as_deref(), Some("opus"));
@@ -2283,8 +2610,18 @@ mod tests {
             PlannedOwner::Member("Mechanical engineer".to_owned())
         );
         // A part names the task it belongs to, counted from 0 here too.
-        let wholes: Vec<_> = tasks.iter().map(|task| task.part_of).collect();
-        assert_eq!(wholes, [None, None, None, None, Some(3), Some(3)]);
+        let wholes: Vec<_> = tasks.iter().map(|task| task.part_of.clone()).collect();
+        assert_eq!(
+            wholes,
+            [
+                None,
+                None,
+                None,
+                None,
+                Some(PlannedWhole::Proposed(3)),
+                Some(PlannedWhole::Proposed(3))
+            ]
+        );
         assert_eq!(tasks[5].waits_for, [4]);
     }
 
@@ -2293,7 +2630,7 @@ mod tests {
         let refused = |change: &dyn Fn(&mut Value)| {
             let mut arguments = good_proposal();
             change(&mut arguments);
-            proposal_from(&arguments, &team()).unwrap_err()
+            proposal_from(&arguments, &team(), &[]).unwrap_err()
         };
 
         assert_eq!(
@@ -2334,7 +2671,12 @@ mod tests {
         );
         assert_eq!(
             refused(&|arguments| arguments["tasks"] = json!([])),
-            "Give one to forty tasks."
+            "Give one to forty tasks, or, when the manager asked to regroup tasks that exist, the \
+             moves."
+        );
+        assert_eq!(
+            refused(&|arguments| arguments["tasks"] = json!("Draw it")),
+            "Give the tasks as a list of at most forty."
         );
         assert_eq!(
             refused(&|arguments| arguments["tasks"][2]["title"] = json!("")),
@@ -2366,20 +2708,19 @@ mod tests {
             refused(&|arguments| arguments["tasks"][0]["waits_for"] = json!([3]))
                 .starts_with("The tasks wait for each other in a circle")
         );
-        for wrong in [
-            json!(5),
-            json!(7),
-            json!(0),
-            json!(1.5),
-            json!("4"),
-            json!([4]),
-        ] {
+        assert_eq!(
+            refused(&|arguments| arguments["tasks"][4]["part_of"] = json!(5)),
+            "Task 5 is a part of 5, which is not another task of the list. Give part_of as the \
+             place of the task it belongs to, counted from 1, or leave it out."
+        );
+        for wrong in [json!(7), json!(0), json!(1.5), json!("4"), json!([4])] {
             assert_eq!(
                 refused(&|arguments| arguments["tasks"][4]["part_of"] = wrong.clone()),
                 format!(
-                    "Task 5 is a part of {wrong}, which is not another task of the list. Give \
-                     part_of as the place of the task it belongs to, counted from 1, or leave it \
-                     out."
+                    "Task 5 is a part of {wrong}, which is neither another task of the list nor a \
+                     task that exists. Give part_of as the place of the task it belongs to, \
+                     counted from 1, or as the reference of a task that exists, such as \
+                     \"IOT-3\"; or leave it out."
                 )
             );
         }
@@ -2399,6 +2740,186 @@ mod tests {
                 arguments["tasks"][5]["waits_for"] = json!([2]);
             })
             .starts_with("A part waits for the task it is a part of")
+        );
+    }
+
+    /// The tasks a project has: IOT-1 with its part IOT-3, and IOT-2, which
+    /// waits for IOT-1.
+    fn known() -> Vec<KnownTask> {
+        let task = |reference: &str, part_of: Option<&str>, waits_for: &[&str]| KnownTask {
+            reference: reference.to_owned(),
+            part_of: part_of.map(str::to_owned),
+            waits_for: waits_for
+                .iter()
+                .map(|&blocker| blocker.to_owned())
+                .collect(),
+        };
+        vec![
+            task("IOT-1", None, &[]),
+            task("IOT-2", None, &["IOT-1"]),
+            task("IOT-3", Some("IOT-1"), &[]),
+        ]
+    }
+
+    /// What the founder asked for: two new modules, the tasks that exist
+    /// moved under them, and a new part of a task that exists.
+    fn regrouping() -> Value {
+        json!({
+            "summary": "The tasks grouped into modules.",
+            "members": [],
+            "tasks": [
+                { "title": "Module 0: Set up the project", "owner": "manager" },
+                { "title": "Module 1: The sensor", "owner": "manager" },
+                { "title": "Check the offsets", "owner": "manager", "part_of": "iot-3" }
+            ],
+            "moves": [
+                { "task": "IOT-1", "part_of": 1 },
+                { "task": " iot-2 ", "part_of": 1 },
+                { "task": "IOT-3", "part_of": 2 }
+            ]
+        })
+    }
+
+    #[test]
+    fn a_regrouping_is_read_with_its_moves_and_the_parts_of_tasks_that_exist() {
+        let proposal = proposal_from(&regrouping(), &team(), &known()).unwrap();
+
+        assert!(proposal.members.is_empty());
+        assert_eq!(
+            proposal.tasks[2].part_of,
+            Some(PlannedWhole::Existing("IOT-3".to_owned()))
+        );
+        assert_eq!(
+            proposal.moves,
+            [
+                PlannedMove {
+                    task: "IOT-1".to_owned(),
+                    part_of: Some(PlannedWhole::Proposed(0)),
+                },
+                PlannedMove {
+                    task: "IOT-2".to_owned(),
+                    part_of: Some(PlannedWhole::Proposed(0)),
+                },
+                PlannedMove {
+                    task: "IOT-3".to_owned(),
+                    part_of: Some(PlannedWhole::Proposed(1)),
+                },
+            ]
+        );
+        // A proposal of moves alone is taken, and a move without part_of
+        // makes a task one of its own.
+        let only_moves = json!({
+            "summary": "IOT-3 on its own.",
+            "members": [],
+            "moves": [{ "task": "IOT-3" }]
+        });
+        let proposal = proposal_from(&only_moves, &team(), &known()).unwrap();
+        assert!(proposal.tasks.is_empty());
+        assert_eq!(proposal.moves[0].part_of, None);
+    }
+
+    #[test]
+    fn a_regrouping_that_cannot_be_made_is_refused_with_what_to_change() {
+        let refused = |change: &dyn Fn(&mut Value)| {
+            let mut arguments = regrouping();
+            change(&mut arguments);
+            proposal_from(&arguments, &team(), &known()).unwrap_err()
+        };
+
+        assert_eq!(
+            refused(&|arguments| arguments["moves"][0]["task"] = json!("IOT-9")),
+            "Move 1 names \"IOT-9\", which is not a task that exists. Use the reference of a \
+             task from your instructions, such as \"IOT-3\"."
+        );
+        assert_eq!(
+            refused(&|arguments| arguments["moves"][1]["task"] = json!("IOT-1")),
+            "IOT-1 is moved twice. Move each task that exists once."
+        );
+        assert_eq!(
+            refused(&|arguments| arguments["moves"][2]["part_of"] = json!("IOT-7")),
+            "Move 3 puts IOT-3 under \"IOT-7\", which is neither a task of the list nor a task \
+             that exists. Give part_of as the place of a task in the list, counted from 1, or as \
+             the reference of a task that exists; leave it out to make IOT-3 a task of its own."
+        );
+        assert_eq!(
+            refused(&|arguments| arguments["tasks"][2]["part_of"] = json!("IOT-8")),
+            "Task 3 is a part of \"IOT-8\", which is neither another task of the list nor a task \
+             that exists. Give part_of as the place of the task it belongs to, counted from 1, or \
+             as the reference of a task that exists, such as \"IOT-3\"; or leave it out."
+        );
+        // IOT-1 under its own part IOT-3.
+        assert_eq!(
+            refused(
+                &|arguments| arguments["moves"] = json!([{ "task": "IOT-1", "part_of": "IOT-3" }])
+            ),
+            "IOT-1 cannot be a part of IOT-3, which is a part of IOT-1 already, directly or \
+             further down. Put it under a task that is not one of its own parts."
+        );
+        // IOT-2 waits for IOT-1: under it, IOT-1 would wait for IOT-2.
+        assert_eq!(
+            refused(
+                &|arguments| arguments["moves"] = json!([{ "task": "IOT-2", "part_of": "IOT-1" }])
+            ),
+            "IOT-2 cannot be a part of IOT-1: IOT-2 or one of its parts waits for IOT-1, directly \
+             or through other tasks, and a task with parts starts only once its parts are \
+             finished, so neither could start. Put it under another task, or leave it where it is."
+        );
+        assert_eq!(
+            refused(&|arguments| {
+                arguments["tasks"] = json!([]);
+                arguments["moves"] = json!([]);
+            }),
+            "Give one to forty tasks, or, when the manager asked to regroup tasks that exist, the \
+             moves."
+        );
+    }
+
+    #[test]
+    fn the_tasks_that_exist_go_to_the_server_as_arguments_and_are_read_back() {
+        let tools = vec![TeamTool::ProposePlan {
+            team: team(),
+            tasks: known(),
+        }];
+
+        let arguments = bus_arguments(&tools);
+
+        assert_eq!(
+            arguments,
+            [
+                "propose_plan",
+                "--member",
+                "Mechanical engineer",
+                "--task",
+                "IOT-1",
+                "--task",
+                "IOT-2",
+                "--waits-for",
+                "IOT-1",
+                "--task",
+                "IOT-3",
+                "--part-of",
+                "IOT-1"
+            ]
+        );
+        assert_eq!(tools_from_arguments(&arguments), Ok(tools));
+        assert!(tools_from_arguments(&["--part-of".to_owned(), "IOT-1".to_owned()]).is_err());
+    }
+
+    #[test]
+    fn the_tool_offers_moves_and_parts_of_tasks_that_exist() {
+        let tool = propose_plan_tool();
+        let properties = &tool["inputSchema"]["properties"];
+
+        assert_eq!(properties["moves"]["items"]["required"], json!(["task"]));
+        assert_eq!(
+            properties["tasks"]["items"]["properties"]["part_of"]["type"],
+            json!(["integer", "string"])
+        );
+        assert!(
+            !tool["description"]
+                .as_str()
+                .unwrap()
+                .contains("never a task that exists")
         );
     }
 
@@ -2423,7 +2944,10 @@ mod tests {
         assert!(tools_from_arguments(&["--member".to_owned()]).is_err());
         assert_eq!(name_in_session(&TeamTool::Interview), INTERVIEW_IN_SESSION);
         assert_eq!(
-            name_in_session(&TeamTool::ProposePlan { team: Vec::new() }),
+            name_in_session(&TeamTool::ProposePlan {
+                team: Vec::new(),
+                tasks: Vec::new()
+            }),
             PROPOSE_PLAN_IN_SESSION
         );
         assert_eq!(
@@ -2485,7 +3009,10 @@ mod tests {
     fn the_server_offers_the_tools_of_the_advisor_when_they_are_given() {
         let mut bus = Bus::offering(vec![
             TeamTool::Interview,
-            TeamTool::ProposePlan { team: team() },
+            TeamTool::ProposePlan {
+                team: team(),
+                tasks: Vec::new(),
+            },
         ]);
         let answer = answer_of(
             &mut bus,

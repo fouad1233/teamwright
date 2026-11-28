@@ -9,14 +9,14 @@ use std::sync::Arc;
 use chrono::{TimeDelta, TimeZone};
 use teamwright_domain::{
     Color, ComputerId, ConversationId, DomainError, Effort, InterviewAnswer, MemberKind, Priority,
-    Project, Proposal, ProposedOwner, Timestamp, TurnOrigin, TurnState,
+    Project, Proposal, ProposedOwner, TaskInPlan, Timestamp, TurnOrigin, TurnState,
 };
 
 use super::*;
 use crate::agent_runtime::{
-    AgentEvent, InterviewQuestionAsked, ManagerInterview, ModelUsage, PermissionProfile,
-    PlanProposal, PlannedMember, PlannedOwner, PlannedTask, QuestionOption, SessionId,
-    SessionStarted, TeamTool, TokenCounts, TurnOutcome,
+    AgentEvent, InterviewQuestionAsked, KnownTask, ManagerInterview, ModelUsage, PermissionProfile,
+    PlanProposal, PlannedMember, PlannedMove, PlannedOwner, PlannedTask, PlannedWhole,
+    QuestionOption, SessionId, SessionStarted, TeamTool, TokenCounts, TurnOutcome,
 };
 use crate::in_memory::InMemorySprintRepository;
 use crate::in_memory::{
@@ -40,6 +40,7 @@ const MECHANICAL: &str = "Mechanical engineer";
 struct Planning {
     projects: ProjectService,
     tasks: TaskService,
+    areas: crate::areas::AreaService,
     team: TeamService,
     work: WorkService,
     digests: Arc<crate::in_memory::InMemoryDigestRepository>,
@@ -67,6 +68,9 @@ fn planning() -> Planning {
     let digests = Arc::new(crate::in_memory::InMemoryDigestRepository::default());
     let file_system = Arc::new(PretendFileSystem::default());
     let clock = Arc::new(ManualClock::starting_at(start_of_day()));
+    let projects_store_for_areas = projects_store.clone();
+    let tasks_store_for_areas = tasks_store.clone();
+    let area_store_for_areas = area_store.clone();
     let projects = ProjectService::new(
         projects_store.clone(),
         tasks_store.clone(),
@@ -132,6 +136,12 @@ fn planning() -> Planning {
         })
         .unwrap();
     Planning {
+        areas: crate::areas::AreaService::new(
+            projects_store_for_areas,
+            tasks_store_for_areas,
+            area_store_for_areas,
+            clock.clone(),
+        ),
         projects,
         tasks,
         team,
@@ -236,7 +246,7 @@ fn plan() -> PlanProposal {
         }
     };
     let part = |whole: usize, task: PlannedTask| PlannedTask {
-        part_of: Some(whole),
+        part_of: Some(PlannedWhole::Proposed(whole)),
         ..task
     };
     let normal = Priority::Normal;
@@ -383,6 +393,7 @@ fn plan() -> PlanProposal {
                 ),
             ),
         ],
+        moves: Vec::new(),
     }
 }
 
@@ -414,12 +425,16 @@ fn without_last_member(plan: &PlanProposal) -> PlanProposal {
                     .iter()
                     .filter_map(|place| new_place.get(place).copied())
                     .collect(),
-                part_of: task
-                    .part_of
-                    .and_then(|place| new_place.get(&place).copied()),
+                part_of: match &task.part_of {
+                    Some(PlannedWhole::Proposed(place)) => {
+                        new_place.get(place).copied().map(PlannedWhole::Proposed)
+                    }
+                    other => other.clone(),
+                },
                 ..task.clone()
             })
             .collect(),
+        moves: Vec::new(),
     }
 }
 
@@ -453,6 +468,7 @@ fn unchanged(proposal: &Proposal) -> ApprovedProposal {
                 part_of: task.part_of,
             })
             .collect(),
+        moves: proposal.moves().to_vec(),
     }
 }
 
@@ -748,7 +764,8 @@ fn runs_in_the_work_folder_with_the_tools_of_the_advisor_on_the_model_of_the_con
         [
             TeamTool::Interview,
             TeamTool::ProposePlan {
-                team: vec![HARDWARE.to_owned()]
+                team: vec![HARDWARE.to_owned()],
+                tasks: Vec::new(),
             }
         ]
     );
@@ -1040,7 +1057,7 @@ fn ends_the_turn_after_the_answers_with_a_team_and_a_plan_that_are_not_approved(
     // The last task is split into three parts, which follow it.
     let wholes: Vec<_> = proposal.tasks().iter().map(|task| task.part_of).collect();
     assert_eq!(wholes[..12], [None; 12]);
-    assert_eq!(wholes[12..], [Some(11); 3]);
+    assert_eq!(wholes[12..], [Some(TaskInPlan::Proposed(11)); 3]);
 }
 
 #[test]
@@ -1401,7 +1418,10 @@ fn refuses_a_proposal_with_nothing_left_in_it() {
     let (code, message) = refusal(planning.approve(&conversation, ApprovedProposal::default()));
 
     assert_eq!(code, "rule_broken");
-    assert_eq!(message, "the proposal has no members and no tasks");
+    assert_eq!(
+        message,
+        "the proposal has no members, no tasks and no moves"
+    );
 }
 
 #[test]
@@ -1579,7 +1599,7 @@ fn changes_the_rest_of_a_task_and_of_a_member_and_adds_and_takes_out_tasks() {
     // The last task waited for 7, 8, 9 and 10; 9 is gone and 10 moved up.
     assert_eq!(proposal.tasks()[10].waits_for, [7, 8, 9]);
     // Its parts moved up with it.
-    assert_eq!(proposal.tasks()[11].part_of, Some(10));
+    assert_eq!(proposal.tasks()[11].part_of, Some(TaskInPlan::Proposed(10)));
 }
 
 #[test]
@@ -1600,7 +1620,7 @@ fn moves_a_part_adds_a_part_and_releases_the_parts_of_a_task_that_is_taken_out()
         },
         ProposalEdit::MakePartOf {
             task: 5,
-            part_of: Some(4),
+            part_of: Some(TaskInPlan::Proposed(4)),
         },
         ProposalEdit::AddTask {
             title: "Order a stencil".to_owned(),
@@ -1625,8 +1645,11 @@ fn moves_a_part_adds_a_part_and_releases_the_parts_of_a_task_that_is_taken_out()
     assert_eq!(
         wholes,
         [
-            ("Define the outline of the board".to_owned(), Some(4)),
-            ("Order a stencil".to_owned(), Some(4)),
+            (
+                "Define the outline of the board".to_owned(),
+                Some(TaskInPlan::Proposed(4))
+            ),
+            ("Order a stencil".to_owned(), Some(TaskInPlan::Proposed(4))),
         ]
     );
     assert_eq!(proposal.tasks().len(), 15);
@@ -1659,7 +1682,7 @@ fn refuses_a_part_that_waits_for_its_task_or_lies_in_a_circle_of_parts() {
     assert_eq!(
         refused(ProposalEdit::MakePartOf {
             task: 11,
-            part_of: Some(12)
+            part_of: Some(TaskInPlan::Proposed(12))
         }),
         (
             "rule_broken".to_owned(),
@@ -1673,7 +1696,7 @@ fn refuses_a_part_that_waits_for_its_task_or_lies_in_a_circle_of_parts() {
     assert_eq!(
         refused(ProposalEdit::MakePartOf {
             task: 5,
-            part_of: Some(4)
+            part_of: Some(TaskInPlan::Proposed(4))
         })
         .0,
         "rule_broken"
@@ -1695,7 +1718,7 @@ fn refuses_a_part_that_waits_for_its_task_or_lies_in_a_circle_of_parts() {
 
     // The same rules hold for what is approved.
     let mut circle = unchanged(&before);
-    circle.tasks[11].part_of = Some(12);
+    circle.tasks[11].part_of = Some(TaskInPlan::Proposed(12));
     let (code, message) = refusal(planning.approve(&conversation, circle));
     assert_eq!(code, "rule_broken");
     assert_eq!(
@@ -1703,7 +1726,7 @@ fn refuses_a_part_that_waits_for_its_task_or_lies_in_a_circle_of_parts() {
         "the tasks of the proposal are parts of each other in a circle"
     );
     let mut nowhere = unchanged(&before);
-    nowhere.tasks[12].part_of = Some(15);
+    nowhere.tasks[12].part_of = Some(TaskInPlan::Proposed(15));
     assert_eq!(
         refusal(planning.approve(&conversation, nowhere)).1,
         "\"Solder the first board\" is a part of a task that is not another task of the proposal"
@@ -1736,7 +1759,8 @@ fn tells_the_advisor_which_approved_task_is_a_part_of_which() {
     assert!(instructions.contains(
         "- AQN-13: Solder the first board (To do, given to the manager, part of AQN-12)"
     ));
-    assert!(instructions.contains("Only a task of the same proposal can have new parts"));
+    assert!(instructions.contains("for a task that exists, by its reference such as \"IOT-3\""));
+    assert!(!instructions.contains("a task that exists cannot"));
 }
 
 #[test]
@@ -2303,5 +2327,339 @@ fn nothing_is_said_about_digests_when_there_are_none() {
 
 /// Converts a plan of the runtime into the proposal the domain keeps.
 fn proposal_from(plan: PlanProposal) -> Result<Proposal, DomainError> {
-    super::super::proposal_from(plan)
+    super::super::proposal_from(plan, None, &[])
+}
+
+// Regrouping tasks that exist
+
+/// Four tasks on the board, the second waiting for the first, as the
+/// founder had them before asking for modules.
+fn board_to_regroup(planning: &Planning) -> Vec<Task> {
+    let board: Vec<Task> = [
+        "Set up the repository",
+        "Write the build script",
+        "Calibrate the sensor",
+        "Solder the board",
+    ]
+    .into_iter()
+    .map(|title| {
+        planning
+            .tasks
+            .create(NewTask::titled(planning.project.id(), title))
+            .unwrap()
+    })
+    .collect();
+    planning
+        .tasks
+        .add_dependency(board[1].id(), board[0].id())
+        .unwrap();
+    board
+}
+
+/// What the Advisor proposes when it is asked to put tasks 1 and 2 under a
+/// new "Module 0" and tasks 3 and 4 under a new "Module 1": two new tasks
+/// and four moves, the references written as the model may write them.
+fn regrouping_plan() -> PlanProposal {
+    let module = |title: &str| PlannedTask {
+        title: title.to_owned(),
+        description: String::new(),
+        owner: PlannedOwner::Manager,
+        estimate_minutes: None,
+        priority: Priority::Normal,
+        waits_for: Vec::new(),
+        part_of: None,
+    };
+    let moving = |reference: &str, whole: usize| PlannedMove {
+        task: reference.to_owned(),
+        part_of: Some(PlannedWhole::Proposed(whole)),
+    };
+    PlanProposal {
+        summary: "The tasks grouped into two modules.".to_owned(),
+        members: Vec::new(),
+        tasks: vec![
+            module("Module 0: Set up the project"),
+            module("Module 1: The sensor"),
+        ],
+        moves: vec![
+            moving("AQN-1", 0),
+            moving("aqn-2", 0),
+            moving("AQN-3", 1),
+            moving(" AQN-4 ", 1),
+        ],
+    }
+}
+
+/// The board, and a conversation in which the Advisor proposed to regroup
+/// it.
+fn regrouping_proposed(planning: &Planning) -> (ConversationWithTurns, Vec<Task>) {
+    let board = board_to_regroup(planning);
+    let conversation = planning
+        .advise("Put tasks 1 and 2 under a new Module 0, and 3 and 4 under a new Module 1.")
+        .unwrap();
+    planning.play(
+        Some(AgentEvent::PlanProposed(regrouping_plan())),
+        "I propose two modules.",
+    );
+    (planning.now(conversation.conversation.id()), board)
+}
+
+fn task_now(planning: &Planning, task: &Task) -> Task {
+    planning.tasks.get(task.id()).unwrap()
+}
+
+#[test]
+fn gives_the_advisor_the_tasks_that_exist_with_what_they_are_a_part_of_and_wait_for() {
+    let planning = planning();
+    board_to_regroup(&planning);
+
+    planning.advise("Regroup the tasks.").unwrap();
+
+    let requests = planning.runtime.requests();
+    let tools = &requests[0].team_tools;
+    let Some(TeamTool::ProposePlan { tasks, .. }) = tools.get(1) else {
+        panic!("the Advisor is given propose_plan");
+    };
+    assert_eq!(
+        tasks[1],
+        KnownTask {
+            reference: "AQN-2".to_owned(),
+            part_of: None,
+            waits_for: vec!["AQN-1".to_owned()],
+        }
+    );
+    assert_eq!(tasks.len(), 4);
+}
+
+#[test]
+fn keeps_the_moves_of_a_regrouping_by_the_tasks_they_name() {
+    let planning = planning();
+
+    let (conversation, board) = regrouping_proposed(&planning);
+
+    let proposal = proposal_of(&conversation);
+    assert!(proposal.members().is_empty());
+    assert_eq!(proposal.tasks().len(), 2);
+    let moves: Vec<(TaskId, Option<TaskInPlan>)> = proposal
+        .moves()
+        .iter()
+        .map(|one| (one.task, one.part_of))
+        .collect();
+    assert_eq!(
+        moves,
+        [
+            (board[0].id(), Some(TaskInPlan::Proposed(0))),
+            (board[1].id(), Some(TaskInPlan::Proposed(0))),
+            (board[2].id(), Some(TaskInPlan::Proposed(1))),
+            (board[3].id(), Some(TaskInPlan::Proposed(1))),
+        ]
+    );
+    assert_eq!(planning.waiting(), [conversation.conversation.id()]);
+}
+
+#[test]
+fn regroups_tasks_that_exist_under_new_tasks_in_one_step() {
+    let planning = planning();
+    let (conversation, board) = regrouping_proposed(&planning);
+
+    planning
+        .approve(&conversation, unchanged(proposal_of(&conversation)))
+        .unwrap();
+
+    let tasks = planning.tasks();
+    assert_eq!(tasks.len(), 6);
+    let module = |title: &str| {
+        tasks
+            .iter()
+            .find(|task| task.title().as_str() == title)
+            .unwrap()
+            .clone()
+    };
+    let first = module("Module 0: Set up the project");
+    let second = module("Module 1: The sensor");
+    assert_eq!((first.number(), second.number()), (5, 6));
+    for (task, whole) in [
+        (&board[0], &first),
+        (&board[1], &first),
+        (&board[2], &second),
+        (&board[3], &second),
+    ] {
+        assert_eq!(task_now(&planning, task).parent_id(), Some(whole.id()));
+    }
+    // What waited still waits, and the history of a moved task says so.
+    assert_eq!(
+        task_now(&planning, &board[1])
+            .blocked_by()
+            .iter()
+            .copied()
+            .collect::<Vec<_>>(),
+        [board[0].id()]
+    );
+    let history = planning.tasks.history(board[0].id()).unwrap();
+    assert!(history.iter().any(|change| change.kind
+        == teamwright_domain::TaskChangeKind::MadePartOf {
+            from: None,
+            to: Some(first.id()),
+        }));
+    assert!(planning.waiting().is_empty());
+    assert_eq!(
+        proposal_of(&planning.now(conversation.conversation.id()))
+            .moves()
+            .len(),
+        4
+    );
+}
+
+#[test]
+fn puts_a_new_task_where_the_tasks_moved_under_it_are() {
+    let planning = planning();
+    let (conversation, board) = regrouping_proposed(&planning);
+    let sensor = planning.areas.add(planning.project.id(), "Sensor").unwrap();
+    for task in &board[2..] {
+        planning.areas.move_task(task.id(), sensor.id()).unwrap();
+    }
+
+    planning
+        .approve(&conversation, unchanged(proposal_of(&conversation)))
+        .unwrap();
+
+    let tasks = planning.tasks();
+    let area_of = |title: &str| {
+        tasks
+            .iter()
+            .find(|task| task.title().as_str() == title)
+            .unwrap()
+            .area_id()
+    };
+    assert_eq!(area_of("Module 1: The sensor"), sensor.id());
+    assert_ne!(area_of("Module 0: Set up the project"), sensor.id());
+    assert_eq!(task_now(&planning, &board[3]).area_id(), sensor.id());
+}
+
+#[test]
+fn lets_the_manager_change_take_out_and_add_moves() {
+    let planning = planning();
+    let (conversation, board) = regrouping_proposed(&planning);
+    let id = conversation.conversation.id();
+
+    planning
+        .work
+        .change_proposal(
+            id,
+            ProposalEdit::Move {
+                task: board[3].id(),
+                part_of: Some(TaskInPlan::Existing(board[2].id())),
+            },
+        )
+        .unwrap();
+    let changed = planning
+        .work
+        .change_proposal(
+            id,
+            ProposalEdit::RemoveMove {
+                task: board[1].id(),
+            },
+        )
+        .unwrap();
+
+    let moves = proposal_of(&changed).moves();
+    assert_eq!(moves.len(), 3);
+    assert_eq!(moves[2].part_of, Some(TaskInPlan::Existing(board[2].id())));
+
+    // A move the board does not allow is refused with the reason: task 2
+    // waits for task 1, which would wait for its part.
+    let error = planning
+        .work
+        .change_proposal(
+            id,
+            ProposalEdit::Move {
+                task: board[1].id(),
+                part_of: Some(TaskInPlan::Existing(board[0].id())),
+            },
+        )
+        .unwrap_err();
+    assert_eq!(error.code(), "part_in_circle");
+    assert_eq!(
+        error.to_string(),
+        "AQN-2 cannot be a part of AQN-1, because AQN-2 or one of its parts waits for AQN-1, and \
+         a task with parts starts only once its parts are finished"
+    );
+    assert_eq!(proposal_of(&planning.now(id)).moves().len(), 3);
+}
+
+#[test]
+fn refuses_a_regrouping_the_board_no_longer_allows_and_does_nothing() {
+    let planning = planning();
+    let (conversation, board) = regrouping_proposed(&planning);
+    let id = conversation.conversation.id();
+    planning
+        .work
+        .change_proposal(
+            id,
+            ProposalEdit::Move {
+                task: board[3].id(),
+                part_of: Some(TaskInPlan::Existing(board[2].id())),
+            },
+        )
+        .unwrap();
+    let changed = planning.now(id);
+    // Since the proposal, the manager let task 4 wait for task 3, under
+    // which it was to go.
+    planning
+        .tasks
+        .add_dependency(board[3].id(), board[2].id())
+        .unwrap();
+
+    let (code, message) = refusal(planning.approve(&changed, unchanged(proposal_of(&changed))));
+
+    assert_eq!(code, "part_in_circle");
+    assert_eq!(
+        message,
+        "AQN-4 cannot be a part of AQN-3, because AQN-4 or one of its parts waits for AQN-3, and \
+         a task with parts starts only once its parts are finished"
+    );
+    assert_eq!(planning.tasks().len(), 4);
+    assert!(
+        planning
+            .tasks()
+            .iter()
+            .all(|task| task.parent_id().is_none())
+    );
+
+    // A task deleted since is refused as well.
+    planning.tasks.delete(board[0].id()).unwrap();
+    let (code, message) =
+        refusal(planning.approve(&conversation, unchanged(proposal_of(&conversation))));
+    assert_eq!(code, "rule_broken");
+    assert!(message.starts_with("a task this proposal moves or adds a part to is no longer"));
+    assert_eq!(planning.tasks().len(), 3);
+}
+
+#[test]
+fn tells_the_advisor_what_was_moved() {
+    let planning = planning();
+    let (conversation, _) = regrouping_proposed(&planning);
+    planning
+        .approve(&conversation, unchanged(proposal_of(&conversation)))
+        .unwrap();
+
+    planning
+        .work
+        .reply(conversation.conversation.id(), "Thank you.")
+        .unwrap();
+
+    let requests = planning.runtime.requests();
+    let prompt = &requests.last().unwrap().prompt;
+    assert!(prompt.contains("Tasks that exist, moved:"));
+    assert!(prompt.contains("- AQN-1 Set up the repository: now a part of 1"));
+    assert!(prompt.contains("To put a task that exists under another task"));
+}
+
+#[test]
+fn tells_the_advisor_to_regroup_only_when_the_manager_asks() {
+    let planning = planning();
+
+    let instructions = instructions_for_advisor(&planning.project, &[], &[], &[]);
+
+    assert!(instructions.contains("Only when the manager asks for it, never on your own"));
+    assert!(instructions.contains("may have grown since earlier messages"));
 }

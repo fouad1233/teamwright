@@ -10,23 +10,29 @@
 //! [`ProposalChange`] at a time: the title, the size and what a task waits
 //! for, and the rest of what a task or a member says.
 //!
-//! A proposed task may be a part of another task of the same proposal, as
-//! a subtask is a part of a task on the board. Parts follow the rules of
+//! A proposed task may be a part of another task of the same proposal, or
+//! of a task the project has, as a subtask is a part of a task on the
+//! board. A proposal may also move tasks the project has: under a task of
+//! the proposal, under another task that exists, or out from under one,
+//! when the manager asks to regroup them. Parts follow the rules of
 //! subtasks: a part may have parts of its own, at any depth, and no task is
 //! a part of itself, directly or further down. A task with parts starts
 //! only once its parts are finished, so a part may not wait for the task it
 //! is a part of.
 //!
 //! The rules here are those about one proposal. Whether the owner of a task
-//! is somebody the project has needs the team, and is checked where the
-//! team is known.
+//! is somebody the project has needs the team, and whether the tasks it
+//! names and moves are there and keep the rules of parts needs the board
+//! ([`crate::check_regrouping`]); both are checked where they are known.
 
 use std::collections::HashSet;
 
 use crate::conversation::DecisionOption;
 use crate::dependencies::DependencyGraph;
 use crate::error::DomainError;
+use crate::ids::TaskId;
 use crate::member::Effort;
+use crate::parts::TaskInPlan;
 use crate::task::Priority;
 use crate::text::{MemberName, ModelName, TaskTitle};
 use crate::time::Timestamp;
@@ -270,10 +276,22 @@ pub struct ProposedTask {
     /// The tasks of the same proposal that must be finished first, by their
     /// places from 0.
     pub waits_for: Vec<usize>,
-    /// The task of the same proposal this one is a part of, by its place
-    /// from 0, or nothing for a task of its own. Approving makes it a
-    /// subtask of that task.
-    pub part_of: Option<usize>,
+    /// The task this one is a part of: a task of the same proposal, by its
+    /// place from 0, or a task the project has; or nothing for a task of
+    /// its own. Approving makes it a subtask of that task.
+    pub part_of: Option<TaskInPlan>,
+}
+
+/// A task the project has, which a proposal moves under another task or
+/// makes a task of its own. Its own parts go with it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ProposedMove {
+    /// The task that is moved.
+    pub task: TaskId,
+    /// The task it becomes a part of: a task of the proposal, by its place
+    /// from 0, or another task the project has; or nothing for a task of
+    /// its own.
+    pub part_of: Option<TaskInPlan>,
 }
 
 /// One change the manager makes to a proposal before approving it. Tasks
@@ -340,17 +358,33 @@ pub enum ProposalChange {
         /// The task it is a part of, or nothing for a task of its own.
         part_of: Option<usize>,
     },
-    /// Makes a task a part of another task of the proposal, or, with
-    /// nothing, a task of its own.
+    /// Makes a task a part of another task of the proposal or of a task
+    /// the project has, or, with nothing, a task of its own.
     MakePartOf {
         /// The task.
         task: usize,
         /// The task it is to be a part of, or nothing.
-        part_of: Option<usize>,
+        part_of: Option<TaskInPlan>,
     },
-    /// Takes a task out. No task waits for it any more, its parts take its
-    /// place under the task it was a part of (or become tasks of their
-    /// own), and the places of the tasks after it move up by one.
+    /// Moves a task the project has under a task, or, with nothing, makes
+    /// it a task of its own, in place of what the proposal did with it
+    /// before. A task the proposal did not move yet is moved from now on.
+    Move {
+        /// The task that is moved.
+        task: TaskId,
+        /// The task it becomes a part of, or nothing.
+        part_of: Option<TaskInPlan>,
+    },
+    /// Takes the move of a task the project has out of the proposal: the
+    /// task stays where it is.
+    RemoveMove {
+        /// The task the proposal moved.
+        task: TaskId,
+    },
+    /// Takes a task out. No task waits for it any more, its parts and the
+    /// tasks moved under it take its place under the task it was a part of
+    /// (or become tasks of their own), and the places of the tasks after it
+    /// move up by one.
     RemoveTask {
         /// The task.
         task: usize,
@@ -381,19 +415,26 @@ pub struct ProposalSnapshot {
     pub members: Vec<ProposedMember>,
     /// The tasks to create.
     pub tasks: Vec<ProposedTask>,
+    /// The tasks of the project to move.
+    pub moves: Vec<ProposedMove>,
     /// When the manager approved it, if the manager has.
     pub approved_at: Option<Timestamp>,
 }
 
-/// What the Advisor proposes: who to add to the team, and which tasks to
-/// create. Nothing of it exists before the manager approves it.
+/// What the Advisor proposes: who to add to the team, which tasks to
+/// create, and which tasks of the project to move. Nothing of it happens
+/// before the manager approves it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Proposal {
     summary: String,
     members: Vec<ProposedMember>,
     tasks: Vec<ProposedTask>,
+    moves: Vec<ProposedMove>,
     approved_at: Option<Timestamp>,
 }
+
+/// The members, the tasks and the moves of a plan, checked and tidied.
+pub type CheckedPlan = (Vec<ProposedMember>, Vec<ProposedTask>, Vec<ProposedMove>);
 
 impl Proposal {
     /// Makes a proposal that has not been approved. Whitespace around the
@@ -409,17 +450,34 @@ impl Proposal {
         members: Vec<ProposedMember>,
         tasks: Vec<ProposedTask>,
     ) -> Result<Self, DomainError> {
+        Self::with_moves(summary, members, tasks, Vec::new())
+    }
+
+    /// Makes a proposal that also moves tasks the project has, as
+    /// [`Self::new`] does.
+    ///
+    /// # Errors
+    ///
+    /// As [`Self::new`], and if a task is moved twice or under a place that
+    /// is not a task of the proposal.
+    pub fn with_moves(
+        summary: &str,
+        members: Vec<ProposedMember>,
+        tasks: Vec<ProposedTask>,
+        moves: Vec<ProposedMove>,
+    ) -> Result<Self, DomainError> {
         let summary = summary.trim();
         if summary.is_empty() {
             return Err(DomainError::EmptyText {
                 field: "summary of the proposal",
             });
         }
-        let (members, tasks) = tidy_plan(members, tasks)?;
+        let (members, tasks, moves) = tidy_plan(members, tasks, moves)?;
         Ok(Self {
             summary: summary.to_owned(),
             members,
             tasks,
+            moves,
             approved_at: None,
         })
     }
@@ -431,6 +489,7 @@ impl Proposal {
             summary: snapshot.summary,
             members: snapshot.members,
             tasks: snapshot.tasks,
+            moves: snapshot.moves,
             approved_at: snapshot.approved_at,
         }
     }
@@ -453,6 +512,13 @@ impl Proposal {
     #[must_use]
     pub fn tasks(&self) -> &[ProposedTask] {
         &self.tasks
+    }
+
+    /// The tasks of the project to move. Once the proposal is approved,
+    /// the moves the manager approved.
+    #[must_use]
+    pub fn moves(&self) -> &[ProposedMove] {
+        &self.moves
     }
 
     /// When the manager approved it. Nothing while it is not approved.
@@ -479,12 +545,17 @@ impl Proposal {
     /// if a task is a part of itself or of a place that is not another task
     /// of the list; if tasks are parts of each other in a circle; if a part
     /// waits for the task it is a part of, directly or through other tasks;
-    /// or if nothing is left: no members and no tasks.
+    /// if a task of the project is moved twice, or under a place that is
+    /// not a task of the list; or if nothing is left: no members, no tasks
+    /// and no moves. Whether the tasks of the project it names are there
+    /// and keep the rules of parts is for the board to say
+    /// ([`crate::check_regrouping`]).
     pub fn check_approval(
         members: Vec<ProposedMember>,
         tasks: Vec<ProposedTask>,
-    ) -> Result<(Vec<ProposedMember>, Vec<ProposedTask>), DomainError> {
-        tidy_plan(members, tasks)
+        moves: Vec<ProposedMove>,
+    ) -> Result<CheckedPlan, DomainError> {
+        tidy_plan(members, tasks, moves)
     }
 
     /// Makes one change of the manager's to the proposal. A change that
@@ -495,14 +566,16 @@ impl Proposal {
     /// Returns an error if the proposal has been approved already, if the
     /// change names a task or a member the proposal does not have, if a
     /// task is to wait for itself or for a task that waits for it, if a
-    /// task is to be a part of itself or of one of its parts, or if
-    /// nothing would be left: no members and no tasks.
+    /// task is to be a part of itself or of one of its parts, if a move
+    /// that is taken out is not there, or if nothing would be left: no
+    /// members, no tasks and no moves.
     pub fn change(&mut self, change: ProposalChange) -> Result<(), DomainError> {
         if !self.is_open() {
             return Err(DomainError::AlreadyApproved);
         }
         let mut members = self.members.clone();
         let mut tasks = self.tasks.clone();
+        let mut moves = self.moves.clone();
         match change {
             ProposalChange::Retitle { task, title } => task_at(&mut tasks, task)?.title = title,
             ProposalChange::Describe { task, description } => {
@@ -534,16 +607,42 @@ impl Proposal {
                     estimate_minutes: None,
                     priority: Priority::Normal,
                     waits_for: Vec::new(),
-                    part_of,
+                    part_of: part_of.map(TaskInPlan::Proposed),
                 });
             }
             ProposalChange::MakePartOf { task, part_of } => {
                 make_part_of(&mut tasks, task, part_of)?;
             }
+            ProposalChange::Move { task, part_of } => {
+                if let Some(TaskInPlan::Proposed(whole)) = part_of {
+                    task_at(&mut tasks, whole)?;
+                }
+                match moves.iter_mut().find(|one| one.task == task) {
+                    Some(one) => one.part_of = part_of,
+                    None => moves.push(ProposedMove { task, part_of }),
+                }
+            }
+            ProposalChange::RemoveMove { task } => {
+                let before = moves.len();
+                moves.retain(|one| one.task != task);
+                if moves.len() == before {
+                    return Err(DomainError::NoSuchMove);
+                }
+            }
             ProposalChange::RemoveTask { task } => {
                 let whole = task_at(&mut tasks, task)?.part_of;
                 tasks.remove(task);
                 let moved_up = |place: usize| if place > task { place - 1 } else { place };
+                // A part of the task that is taken out, or a task moved
+                // under it, stays in the plan, because its work is still to
+                // be done. It goes where the task was.
+                let rewhole = |part_of: Option<TaskInPlan>| match part_of {
+                    Some(TaskInPlan::Proposed(place)) if place == task => whole,
+                    Some(TaskInPlan::Proposed(place)) => {
+                        Some(TaskInPlan::Proposed(moved_up(place)))
+                    }
+                    other => other,
+                };
                 for other in &mut tasks {
                     other.waits_for = other
                         .waits_for
@@ -551,13 +650,10 @@ impl Proposal {
                         .filter(|&&earlier| earlier != task)
                         .map(|&earlier| moved_up(earlier))
                         .collect();
-                    // A part of the task that is taken out stays in the
-                    // plan, because its work is still to be done. It goes
-                    // where the task was.
-                    if other.part_of == Some(task) {
-                        other.part_of = whole;
-                    }
-                    other.part_of = other.part_of.map(moved_up);
+                    other.part_of = rewhole(other.part_of);
+                }
+                for one in &mut moves {
+                    one.part_of = rewhole(one.part_of);
                 }
             }
             ProposalChange::RemoveMember { member } => {
@@ -582,9 +678,10 @@ impl Proposal {
                 member.effort = effort;
             }
         }
-        let (members, tasks) = tidy_plan(members, tasks)?;
+        let (members, tasks, moves) = tidy_plan(members, tasks, moves)?;
         self.members = members;
         self.tasks = tasks;
+        self.moves = moves;
         Ok(())
     }
 
@@ -594,24 +691,28 @@ impl Proposal {
         &mut self,
         members: Vec<ProposedMember>,
         tasks: Vec<ProposedTask>,
+        moves: Vec<ProposedMove>,
         now: Timestamp,
     ) -> Result<(), DomainError> {
         if !self.is_open() {
             return Err(DomainError::AlreadyApproved);
         }
-        let (members, tasks) = tidy_plan(members, tasks)?;
+        let (members, tasks, moves) = tidy_plan(members, tasks, moves)?;
         self.members = members;
         self.tasks = tasks;
+        self.moves = moves;
         self.approved_at = Some(now);
         Ok(())
     }
 }
 
-/// Checks the members and the tasks of a plan, and returns them tidied.
+/// Checks the members, the tasks and the moves of a plan, and returns them
+/// tidied.
 fn tidy_plan(
     members: Vec<ProposedMember>,
     tasks: Vec<ProposedTask>,
-) -> Result<(Vec<ProposedMember>, Vec<ProposedTask>), DomainError> {
+    moves: Vec<ProposedMove>,
+) -> Result<CheckedPlan, DomainError> {
     let mut names = HashSet::new();
     let members = members
         .into_iter()
@@ -645,10 +746,10 @@ fn tidy_plan(
                     waits_for.push(earlier);
                 }
             }
-            if task
-                .part_of
-                .is_some_and(|whole| whole >= count || whole == place)
-            {
+            if matches!(
+                task.part_of,
+                Some(TaskInPlan::Proposed(whole)) if whole >= count || whole == place
+            ) {
                 return Err(DomainError::PartOfNoOtherTask {
                     title: task.title.to_string(),
                 });
@@ -669,10 +770,23 @@ fn tidy_plan(
     if graph_of(&tasks).has_cycle() {
         return Err(DomainError::PartsWaitInCircle);
     }
-    if members.is_empty() && tasks.is_empty() {
+    let mut moved = HashSet::new();
+    for one in &moves {
+        if !moved.insert(one.task) {
+            return Err(DomainError::TaskMovedTwice);
+        }
+        if let Some(TaskInPlan::Proposed(whole)) = one.part_of
+            && whole >= count
+        {
+            return Err(DomainError::NoSuchProposedTask {
+                number: whole.saturating_add(1),
+            });
+        }
+    }
+    if members.is_empty() && tasks.is_empty() && moves.is_empty() {
         return Err(DomainError::EmptyProposal);
     }
-    Ok((members, tasks))
+    Ok((members, tasks, moves))
 }
 
 /// The task at a place of a plan, counted from 0.
@@ -716,10 +830,12 @@ fn add_wait(tasks: &mut [ProposedTask], task: usize, waits_for: usize) -> Result
 fn make_part_of(
     tasks: &mut [ProposedTask],
     task: usize,
-    part_of: Option<usize>,
+    part_of: Option<TaskInPlan>,
 ) -> Result<(), DomainError> {
     let title = task_at(tasks, task)?.title.to_string();
-    if let Some(whole) = part_of {
+    // Whether a task the project has is there, and keeps the rules of parts,
+    // is for the board to say.
+    if let Some(TaskInPlan::Proposed(whole)) = part_of {
         let other = task_at(tasks, whole)?.title.to_string();
         if whole == task {
             return Err(DomainError::PartOfNoOtherTask { title });
@@ -741,7 +857,7 @@ fn graph_of(tasks: &[ProposedTask]) -> DependencyGraph<usize> {
         let parts = tasks
             .iter()
             .enumerate()
-            .filter(move |(_, other)| other.part_of == Some(place))
+            .filter(move |(_, other)| other.part_of == Some(TaskInPlan::Proposed(place)))
             .map(|(part, _)| part);
         (place, task.waits_for.iter().copied().chain(parts))
     }))
@@ -765,8 +881,17 @@ fn wholes_of(tasks: &[ProposedTask]) -> DependencyGraph<usize> {
         tasks
             .iter()
             .enumerate()
-            .map(|(place, task)| (place, task.part_of)),
+            .map(|(place, task)| (place, proposed_whole(task))),
     )
+}
+
+/// The task of the same plan a task is a part of, by its place, if it is
+/// one of the plan.
+const fn proposed_whole(task: &ProposedTask) -> Option<usize> {
+    match task.part_of {
+        Some(TaskInPlan::Proposed(whole)) => Some(whole),
+        _ => None,
+    }
 }
 
 #[cfg(test)]
@@ -965,7 +1090,7 @@ mod tests {
             Proposal::new("A device.", Vec::new(), Vec::new())
                 .unwrap_err()
                 .to_string(),
-            "the proposal has no members and no tasks"
+            "the proposal has no members, no tasks and no moves"
         );
     }
 
@@ -973,6 +1098,7 @@ mod tests {
     fn no_two_members_of_a_proposal_have_the_same_name_whatever_the_capitals() {
         let error = Proposal::check_approval(
             vec![member("Hardware engineer"), member("hardware ENGINEER")],
+            Vec::new(),
             Vec::new(),
         )
         .unwrap_err();
@@ -992,6 +1118,7 @@ mod tests {
                     task("Draw the schematic", Vec::new()),
                     task("Route the board", waits_for),
                 ],
+                Vec::new(),
             )
             .unwrap_err();
             assert_eq!(
@@ -1010,6 +1137,7 @@ mod tests {
                     .into_iter()
                     .map(|waits_for| task("A task", waits_for))
                     .collect(),
+                Vec::new(),
             )
         };
 
@@ -1037,14 +1165,24 @@ mod tests {
         .unwrap();
 
         proposal
-            .approve(vec![member("Hardware engineer")], Vec::new(), moment(5))
+            .approve(
+                vec![member("Hardware engineer")],
+                Vec::new(),
+                Vec::new(),
+                moment(5),
+            )
             .unwrap();
 
         assert_eq!(proposal.members(), [member("Hardware engineer")]);
         assert!(proposal.tasks().is_empty());
         assert_eq!(proposal.approved_at(), Some(moment(5)));
         assert_eq!(
-            proposal.approve(vec![member("Hardware engineer")], Vec::new(), moment(6)),
+            proposal.approve(
+                vec![member("Hardware engineer")],
+                Vec::new(),
+                Vec::new(),
+                moment(6)
+            ),
             Err(DomainError::AlreadyApproved)
         );
     }
@@ -1055,7 +1193,7 @@ mod tests {
             Proposal::new("A device.", vec![member("Hardware engineer")], Vec::new()).unwrap();
         let before = proposal.clone();
 
-        let refused = proposal.approve(Vec::new(), Vec::new(), moment(5));
+        let refused = proposal.approve(Vec::new(), Vec::new(), Vec::new(), moment(5));
 
         assert_eq!(refused, Err(DomainError::EmptyProposal));
         assert_eq!(proposal, before);
@@ -1309,6 +1447,7 @@ mod tests {
             .approve(
                 proposal.members().to_vec(),
                 proposal.tasks().to_vec(),
+                Vec::new(),
                 moment(5),
             )
             .unwrap();
@@ -1323,7 +1462,7 @@ mod tests {
 
     fn part(title: &str, part_of: usize) -> ProposedTask {
         ProposedTask {
-            part_of: Some(part_of),
+            part_of: Some(TaskInPlan::Proposed(part_of)),
             ..task(title, Vec::new())
         }
     }
@@ -1356,7 +1495,7 @@ mod tests {
     }
 
     fn wholes(proposal: &Proposal) -> Vec<Option<usize>> {
-        proposal.tasks().iter().map(|task| task.part_of).collect()
+        proposal.tasks().iter().map(proposed_whole).collect()
     }
 
     #[test]
@@ -1375,6 +1514,7 @@ mod tests {
                     task("Build the board", Vec::new()),
                     part("Route the board", whole),
                 ],
+                Vec::new(),
             )
             .unwrap_err();
             assert_eq!(
@@ -1393,6 +1533,7 @@ mod tests {
                 part("Draw the schematic", 0),
                 part("Route the board", 1),
             ],
+            Vec::new(),
         )
         .unwrap_err();
 
@@ -1413,11 +1554,12 @@ mod tests {
                 vec![
                     task("Build the board", Vec::new()),
                     ProposedTask {
-                        part_of: Some(0),
+                        part_of: Some(TaskInPlan::Proposed(0)),
                         ..task("Route the board", waits)
                     },
                     task("Order the parts", vec![0]),
                 ],
+                Vec::new(),
             )
             .unwrap_err();
             assert_eq!(error, DomainError::PartsWaitInCircle);
@@ -1430,10 +1572,11 @@ mod tests {
                     task("Build the board", Vec::new()),
                     part("Draw the schematic", 0),
                     ProposedTask {
-                        part_of: Some(0),
+                        part_of: Some(TaskInPlan::Proposed(0)),
                         ..task("Route the board", vec![1])
                     },
                 ],
+                Vec::new()
             )
             .is_ok()
         );
@@ -1443,7 +1586,7 @@ mod tests {
     fn a_part_can_be_moved_to_another_task_or_made_a_task_of_its_own() {
         let moved = parts_changed(ProposalChange::MakePartOf {
             task: 3,
-            part_of: Some(4),
+            part_of: Some(TaskInPlan::Proposed(4)),
         })
         .unwrap();
         assert_eq!(wholes(&moved), [None, Some(0), Some(0), Some(4), None]);
@@ -1461,7 +1604,7 @@ mod tests {
         assert_eq!(
             parts_changed(ProposalChange::MakePartOf {
                 task: 0,
-                part_of: Some(3),
+                part_of: Some(TaskInPlan::Proposed(3)),
             })
             .unwrap_err()
             .to_string(),
@@ -1471,7 +1614,7 @@ mod tests {
         assert_eq!(
             parts_changed(ProposalChange::MakePartOf {
                 task: 2,
-                part_of: Some(2),
+                part_of: Some(TaskInPlan::Proposed(2)),
             }),
             Err(DomainError::PartOfNoOtherTask {
                 title: "Route the board".to_owned()
@@ -1480,7 +1623,7 @@ mod tests {
         assert_eq!(
             parts_changed(ProposalChange::MakePartOf {
                 task: 2,
-                part_of: Some(5),
+                part_of: Some(TaskInPlan::Proposed(5)),
             }),
             Err(DomainError::NoSuchProposedTask { number: 6 })
         );
@@ -1489,7 +1632,7 @@ mod tests {
         assert_eq!(
             parts_changed(ProposalChange::MakePartOf {
                 task: 4,
-                part_of: Some(0),
+                part_of: Some(TaskInPlan::Proposed(0)),
             }),
             Err(DomainError::PartsWaitInCircle)
         );
@@ -1550,6 +1693,180 @@ mod tests {
                 part_of: Some(9),
             }),
             Err(DomainError::NoSuchProposedTask { number: 10 })
+        );
+    }
+
+    /// Two tasks the project has, by made-up identifiers.
+    fn existing() -> (TaskId, TaskId) {
+        (TaskId::generate(), TaskId::generate())
+    }
+
+    fn moving(task: TaskId, part_of: Option<TaskInPlan>) -> ProposedMove {
+        ProposedMove { task, part_of }
+    }
+
+    #[test]
+    fn a_proposal_may_only_move_tasks_that_exist() {
+        let (calibrate, solder) = existing();
+        let proposal = Proposal::with_moves(
+            "Regroup into modules.",
+            Vec::new(),
+            vec![task("Module 0: Set up the project", Vec::new())],
+            vec![
+                moving(calibrate, Some(TaskInPlan::Proposed(0))),
+                moving(solder, None),
+            ],
+        )
+        .unwrap();
+        assert_eq!(proposal.moves().len(), 2);
+
+        let only_moves = Proposal::with_moves(
+            "Make one a task of its own.",
+            Vec::new(),
+            Vec::new(),
+            vec![moving(solder, None)],
+        );
+        assert!(only_moves.is_ok(), "a proposal of moves alone is not empty");
+    }
+
+    #[test]
+    fn a_task_that_exists_is_moved_once_and_under_a_task_of_the_proposal() {
+        let (calibrate, _) = existing();
+        assert_eq!(
+            Proposal::with_moves(
+                "Regroup.",
+                Vec::new(),
+                vec![task("Module 0", Vec::new())],
+                vec![moving(calibrate, None), moving(calibrate, None)],
+            ),
+            Err(DomainError::TaskMovedTwice)
+        );
+        assert_eq!(
+            Proposal::with_moves(
+                "Regroup.",
+                Vec::new(),
+                vec![task("Module 0", Vec::new())],
+                vec![moving(calibrate, Some(TaskInPlan::Proposed(1)))],
+            ),
+            Err(DomainError::NoSuchProposedTask { number: 2 })
+        );
+    }
+
+    #[test]
+    fn a_new_task_may_be_a_part_of_a_task_that_exists() {
+        let (calibrate, _) = existing();
+        let proposal = Proposal::new(
+            "A part for a task on the board.",
+            Vec::new(),
+            vec![ProposedTask {
+                part_of: Some(TaskInPlan::Existing(calibrate)),
+                ..task("Check the offsets", Vec::new())
+            }],
+        )
+        .unwrap();
+        assert_eq!(
+            proposal.tasks()[0].part_of,
+            Some(TaskInPlan::Existing(calibrate))
+        );
+    }
+
+    #[test]
+    fn a_move_is_changed_taken_out_and_added() {
+        let (calibrate, solder) = existing();
+        let mut proposal = Proposal::with_moves(
+            "Regroup.",
+            Vec::new(),
+            vec![task("Module 0", Vec::new()), task("Module 1", Vec::new())],
+            vec![moving(calibrate, Some(TaskInPlan::Proposed(0)))],
+        )
+        .unwrap();
+
+        proposal
+            .change(ProposalChange::Move {
+                task: calibrate,
+                part_of: Some(TaskInPlan::Proposed(1)),
+            })
+            .unwrap();
+        proposal
+            .change(ProposalChange::Move {
+                task: solder,
+                part_of: Some(TaskInPlan::Existing(calibrate)),
+            })
+            .unwrap();
+        assert_eq!(
+            proposal.moves(),
+            [
+                moving(calibrate, Some(TaskInPlan::Proposed(1))),
+                moving(solder, Some(TaskInPlan::Existing(calibrate))),
+            ]
+        );
+        assert_eq!(
+            proposal.change(ProposalChange::Move {
+                task: solder,
+                part_of: Some(TaskInPlan::Proposed(2)),
+            }),
+            Err(DomainError::NoSuchProposedTask { number: 3 })
+        );
+
+        proposal
+            .change(ProposalChange::RemoveMove { task: solder })
+            .unwrap();
+        assert_eq!(
+            proposal.moves(),
+            [moving(calibrate, Some(TaskInPlan::Proposed(1)))]
+        );
+        assert_eq!(
+            proposal.change(ProposalChange::RemoveMove { task: solder }),
+            Err(DomainError::NoSuchMove)
+        );
+    }
+
+    #[test]
+    fn taking_a_task_out_leaves_the_tasks_moved_under_it_where_it_was() {
+        let (calibrate, solder) = existing();
+        let mut proposal = Proposal::with_moves(
+            "Regroup.",
+            Vec::new(),
+            vec![
+                task("Module 0", Vec::new()),
+                ProposedTask {
+                    part_of: Some(TaskInPlan::Existing(solder)),
+                    ..task("Module 1", Vec::new())
+                },
+                task("Module 2", Vec::new()),
+            ],
+            vec![
+                moving(calibrate, Some(TaskInPlan::Proposed(1))),
+                moving(solder, Some(TaskInPlan::Proposed(2))),
+            ],
+        )
+        .unwrap();
+
+        proposal
+            .change(ProposalChange::RemoveTask { task: 1 })
+            .unwrap();
+
+        assert_eq!(
+            proposal.moves(),
+            [
+                moving(calibrate, Some(TaskInPlan::Existing(solder))),
+                moving(solder, Some(TaskInPlan::Proposed(1))),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_task_can_be_made_a_part_of_a_task_that_exists() {
+        let (calibrate, _) = existing();
+        let proposal = parts_changed(ProposalChange::MakePartOf {
+            task: 4,
+            part_of: Some(TaskInPlan::Existing(calibrate)),
+        })
+        .unwrap();
+
+        assert_eq!(
+            proposal.tasks()[4].part_of,
+            Some(TaskInPlan::Existing(calibrate))
         );
     }
 }

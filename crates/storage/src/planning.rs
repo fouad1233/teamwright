@@ -1,7 +1,7 @@
 //! Stores what the Advisor asked and proposed in a turn: its interview,
 //! with the questions, their options and the answers, and its proposal,
-//! with the members, the tasks, what each task waits for and the task it is
-//! a part of.
+//! with the members, the tasks, what each task waits for, the task it is a
+//! part of, and the tasks of the project it moves.
 //!
 //! Both are kept in rows of their own, keyed by the turn, and are written
 //! only when they differ from what is stored. Each is logged as one entity
@@ -18,8 +18,8 @@ use serde_json::{Map, Value};
 use teamwright_application::{ApprovedPlan, PlanningRepository, StorageError};
 use teamwright_domain::{
     DecisionOption, DomainError, Interview, InterviewAnswer, InterviewQuestion, InterviewSnapshot,
-    MemberName, ModelName, Proposal, ProposalSnapshot, ProposedMember, ProposedOwner, ProposedTask,
-    TaskTitle, Turn,
+    MemberName, ModelName, Proposal, ProposalSnapshot, ProposedMember, ProposedMove, ProposedOwner,
+    ProposedTask, TaskInPlan, TaskTitle, Turn,
 };
 
 use crate::codec;
@@ -186,7 +186,23 @@ pub(crate) struct ProposalRecord {
     summary: String,
     members: Vec<ProposedMemberRecord>,
     tasks: Vec<ProposedTaskRecord>,
+    /// The tasks of the project the proposal moves. A state logged before
+    /// moves existed has none, and is read as a plan that moves nothing.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    moves: Vec<ProposedMoveRecord>,
     approved_at: Option<String>,
+}
+
+/// One task of the project a proposal moves, and where it goes: under a
+/// task of the proposal (`part_of`), under another task of the project
+/// (`part_of_task`), or, with neither, out from under any.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+struct ProposedMoveRecord {
+    task_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    part_of: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    part_of_task: Option<String>,
 }
 
 /// One member of a proposal.
@@ -213,6 +229,35 @@ struct ProposedTaskRecord {
     /// before parts existed has none, and is read as a task of its own.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     part_of: Option<i64>,
+    /// The task of the project this one is a part of, if it is not a task
+    /// of the proposal. A state logged before has none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    part_of_task: Option<String>,
+}
+
+/// A whole as two columns: the place of a task of the proposal, or the
+/// identifier of a task of the project.
+fn whole_to_store(whole: Option<TaskInPlan>) -> (Option<i64>, Option<String>) {
+    match whole {
+        None => (None, None),
+        Some(TaskInPlan::Proposed(place)) => (Some(stored_position(place)), None),
+        Some(TaskInPlan::Existing(id)) => (None, Some(id.to_string())),
+    }
+}
+
+/// Reads a whole from its two columns. Both set is damage.
+fn whole_from_store(
+    part_of: Option<i64>,
+    part_of_task: Option<&str>,
+) -> Result<Option<TaskInPlan>, DatabaseError> {
+    match (part_of, part_of_task) {
+        (None, None) => Ok(None),
+        (Some(place), None) => Ok(Some(TaskInPlan::Proposed(position_from_store(place)?))),
+        (None, Some(id)) => Ok(Some(TaskInPlan::Existing(codec::parse(id)?))),
+        (Some(_), Some(id)) => Err(DatabaseError::Damaged(format!(
+            "a part of a proposal names both a place and the task {id}"
+        ))),
+    }
 }
 
 impl ProposalRecord {
@@ -244,6 +289,7 @@ impl ProposalRecord {
                             (Some(OWNER_MEMBER.to_owned()), Some(name.to_string()))
                         }
                     };
+                    let (part_of, part_of_task) = whole_to_store(task.part_of);
                     ProposedTaskRecord {
                         title: task.title.to_string(),
                         description: task.description.clone(),
@@ -257,7 +303,20 @@ impl ProposalRecord {
                             .copied()
                             .map(stored_position)
                             .collect(),
-                        part_of: task.part_of.map(stored_position),
+                        part_of,
+                        part_of_task,
+                    }
+                })
+                .collect(),
+            moves: proposal
+                .moves()
+                .iter()
+                .map(|one| {
+                    let (part_of, part_of_task) = whole_to_store(one.part_of);
+                    ProposedMoveRecord {
+                        task_id: one.task.to_string(),
+                        part_of,
+                        part_of_task,
                     }
                 })
                 .collect(),
@@ -324,7 +383,17 @@ impl ProposalRecord {
                         .iter()
                         .map(|&place| position_from_store(place))
                         .collect::<Result<_, _>>()?,
-                    part_of: task.part_of.map(position_from_store).transpose()?,
+                    part_of: whole_from_store(task.part_of, task.part_of_task.as_deref())?,
+                })
+            })
+            .collect::<Result<Vec<_>, DatabaseError>>()?;
+        let moves = self
+            .moves
+            .iter()
+            .map(|one| {
+                Ok(ProposedMove {
+                    task: codec::parse(&one.task_id)?,
+                    part_of: whole_from_store(one.part_of, one.part_of_task.as_deref())?,
                 })
             })
             .collect::<Result<Vec<_>, DatabaseError>>()?;
@@ -332,6 +401,7 @@ impl ProposalRecord {
             summary: self.summary,
             members,
             tasks,
+            moves,
             approved_at: self
                 .approved_at
                 .as_deref()
@@ -512,11 +582,11 @@ fn write_proposal(
         transaction.execute(
             "INSERT INTO turn_proposal_tasks (
                  turn_id, position, title, description, owner_kind, owner_name,
-                 estimate_minutes, priority, part_of
+                 estimate_minutes, priority, part_of, part_of_task
              )
              VALUES (
                  :turn_id, :position, :title, :description, :owner_kind, :owner_name,
-                 :estimate_minutes, :priority, :part_of
+                 :estimate_minutes, :priority, :part_of, :part_of_task
              )
              ON CONFLICT (turn_id, position) DO UPDATE SET
                  title = excluded.title,
@@ -525,7 +595,8 @@ fn write_proposal(
                  owner_name = excluded.owner_name,
                  estimate_minutes = excluded.estimate_minutes,
                  priority = excluded.priority,
-                 part_of = excluded.part_of",
+                 part_of = excluded.part_of,
+                 part_of_task = excluded.part_of_task",
             named_params! {
                 ":turn_id": record.turn_id,
                 ":position": position,
@@ -536,6 +607,7 @@ fn write_proposal(
                 ":estimate_minutes": task.estimate_minutes,
                 ":priority": task.priority,
                 ":part_of": task.part_of,
+                ":part_of_task": task.part_of_task,
             },
         )?;
         // The rows of what a task waits for are only keys, so they are
@@ -563,6 +635,30 @@ fn write_proposal(
         named_params! {
             ":turn_id": record.turn_id,
             ":count": stored_position(record.tasks.len()),
+        },
+    )?;
+    for (position, one) in (0_i64..).zip(&record.moves) {
+        transaction.execute(
+            "INSERT INTO turn_proposal_moves (turn_id, position, task_id, part_of, part_of_task)
+             VALUES (:turn_id, :position, :task_id, :part_of, :part_of_task)
+             ON CONFLICT (turn_id, position) DO UPDATE SET
+                 task_id = excluded.task_id,
+                 part_of = excluded.part_of,
+                 part_of_task = excluded.part_of_task",
+            named_params! {
+                ":turn_id": record.turn_id,
+                ":position": position,
+                ":task_id": one.task_id,
+                ":part_of": one.part_of,
+                ":part_of_task": one.part_of_task,
+            },
+        )?;
+    }
+    transaction.execute(
+        "DELETE FROM turn_proposal_moves WHERE turn_id = :turn_id AND position >= :count",
+        named_params! {
+            ":turn_id": record.turn_id,
+            ":count": stored_position(record.moves.len()),
         },
     )?;
     Ok(())
@@ -665,7 +761,7 @@ pub(crate) fn stored_proposal(
     let mut tasks: Vec<ProposedTaskRecord> = connection
         .prepare(
             "SELECT title, description, owner_kind, owner_name, estimate_minutes, priority,
-                    part_of
+                    part_of, part_of_task
              FROM turn_proposal_tasks WHERE turn_id = :turn_id ORDER BY position",
         )?
         .query_map(named_params! { ":turn_id": turn_id }, |row| {
@@ -678,6 +774,7 @@ pub(crate) fn stored_proposal(
                 priority: row.get("priority")?,
                 waits_for: Vec::new(),
                 part_of: row.get("part_of")?,
+                part_of_task: row.get("part_of_task")?,
             })
         })?
         .collect::<Result<_, _>>()?;
@@ -701,11 +798,25 @@ pub(crate) fn stored_proposal(
             })?;
         task.waits_for.push(waits_for);
     }
+    let moves = connection
+        .prepare(
+            "SELECT task_id, part_of, part_of_task FROM turn_proposal_moves
+             WHERE turn_id = :turn_id ORDER BY position",
+        )?
+        .query_map(named_params! { ":turn_id": turn_id }, |row| {
+            Ok(ProposedMoveRecord {
+                task_id: row.get("task_id")?,
+                part_of: row.get("part_of")?,
+                part_of_task: row.get("part_of_task")?,
+            })
+        })?
+        .collect::<Result<_, _>>()?;
     Ok(Some(ProposalRecord {
         turn_id: turn_id.to_owned(),
         summary,
         members,
         tasks,
+        moves,
         approved_at,
     }))
 }
@@ -762,6 +873,56 @@ mod tests {
         assert_eq!(proposal.tasks().len(), 2);
         assert!(proposal.tasks().iter().all(|task| task.part_of.is_none()));
         assert_eq!(proposal.tasks()[1].waits_for, [0]);
+        assert!(
+            proposal.moves().is_empty(),
+            "a state logged before moves has none"
+        );
+    }
+
+    #[test]
+    fn a_proposal_that_moves_nothing_is_logged_as_before_and_one_that_moves_with_its_moves() {
+        let state = |moves: Vec<ProposedMoveRecord>| {
+            serde_json::to_value(ProposalRecord {
+                turn_id: "turn-1".to_owned(),
+                summary: "A device.".to_owned(),
+                members: Vec::new(),
+                tasks: Vec::new(),
+                moves,
+                approved_at: None,
+            })
+            .unwrap()
+        };
+        assert!(state(Vec::new()).get("moves").is_none());
+
+        let task = teamwright_domain::TaskId::generate();
+        let whole = teamwright_domain::TaskId::generate();
+        let moving = state(vec![
+            ProposedMoveRecord {
+                task_id: task.to_string(),
+                part_of: None,
+                part_of_task: Some(whole.to_string()),
+            },
+            ProposedMoveRecord {
+                task_id: whole.to_string(),
+                part_of: None,
+                part_of_task: None,
+            },
+        ]);
+        let record: ProposalRecord = serde_json::from_value(moving).unwrap();
+        let proposal = record.into_proposal().unwrap();
+        assert_eq!(
+            proposal.moves(),
+            [
+                ProposedMove {
+                    task,
+                    part_of: Some(TaskInPlan::Existing(whole)),
+                },
+                ProposedMove {
+                    task: whole,
+                    part_of: None,
+                },
+            ]
+        );
     }
 
     #[test]
@@ -775,6 +936,7 @@ mod tests {
             priority: "normal".to_owned(),
             waits_for: Vec::new(),
             part_of: None,
+            part_of_task: None,
         };
         let alone = serde_json::to_value(&record).unwrap();
         let part = serde_json::to_value(ProposedTaskRecord {

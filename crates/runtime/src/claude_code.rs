@@ -294,11 +294,11 @@ impl AgentRuntime for ClaudeCode {
         refuse_a_script(&program)?;
         // The decoder checks a proposal against the team the bus was told
         // of, and a message against the teammates, as the bus does.
-        let team = request
+        let (team, tasks) = request
             .team_tools
             .iter()
             .find_map(|tool| match tool {
-                TeamTool::ProposePlan { team } => Some(team.clone()),
+                TeamTool::ProposePlan { team, tasks } => Some((team.clone(), tasks.clone())),
                 _ => None,
             })
             .unwrap_or_default();
@@ -318,6 +318,7 @@ impl AgentRuntime for ClaudeCode {
             command(&program, &arguments, Some(&working_folder), &environment),
             request.prompt,
             Decoder::for_team(team)
+                .with_tasks(tasks)
                 .with_teammates(teammates)
                 .with_commands_askable(commands_askable),
             listener,

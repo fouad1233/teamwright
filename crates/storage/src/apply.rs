@@ -199,6 +199,7 @@ mod tests {
         "turn_proposal_members",
         "turn_proposal_tasks",
         "turn_proposal_task_waits",
+        "turn_proposal_moves",
     ];
 
     fn moment(minutes: i64) -> Timestamp {
@@ -393,7 +394,7 @@ mod tests {
             Turn::start(advisor.id(), "Propose.", TurnOrigin::Message, moment(9)).unwrap();
         proposing
             .propose(
-                Proposal::new(
+                Proposal::with_moves(
                     "A device.",
                     Vec::new(),
                     vec![ProposedTask {
@@ -403,6 +404,10 @@ mod tests {
                         estimate_minutes: None,
                         priority: Priority::Normal,
                         waits_for: Vec::new(),
+                        part_of: Some(teamwright_domain::TaskInPlan::Existing(board.id())),
+                    }],
+                    vec![teamwright_domain::ProposedMove {
+                        task: board.id(),
                         part_of: None,
                     }],
                 )

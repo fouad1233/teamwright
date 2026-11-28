@@ -97,8 +97,8 @@ pub use permission::{
     StartedBy, TurnAbout, granted_rules,
 };
 pub use planning::{
-    Interview, InterviewAnswer, InterviewQuestion, InterviewSnapshot, Proposal, ProposalChange,
-    ProposalSnapshot, ProposedMember, ProposedOwner, ProposedTask,
+    CheckedPlan, Interview, InterviewAnswer, InterviewQuestion, InterviewSnapshot, Proposal,
+    ProposalChange, ProposalSnapshot, ProposedMember, ProposedMove, ProposedOwner, ProposedTask,
 };
 pub use project::{Project, ProjectKey, ProjectSnapshot};
 pub use project_files::{EntryKind, FolderEntry, PathInFolder};

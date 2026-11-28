@@ -169,9 +169,21 @@ pub enum DomainError {
     #[error("the tasks of the proposal wait for each other in a circle")]
     TasksWaitInCircle,
 
-    /// A proposal had neither members nor tasks.
-    #[error("the proposal has no members and no tasks")]
+    /// A proposal had neither members nor tasks nor moves.
+    #[error("the proposal has no members, no tasks and no moves")]
     EmptyProposal,
+
+    /// A change took out a move that a proposal does not have.
+    #[error("the proposal does not move that task")]
+    NoSuchMove,
+
+    /// A plan named a task of the project by a reference the project does
+    /// not have.
+    #[error("the project has no task {reference}")]
+    NoSuchTaskReference {
+        /// The reference, such as `IOT-3`.
+        reference: String,
+    },
 
     /// An earlier conversation held no request of the user, so there is
     /// nothing to give an account of.

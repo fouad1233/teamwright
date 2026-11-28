@@ -14,7 +14,8 @@ use crate::ids::{ComputerId, ConversationId, MemberId, ProjectId, TaskId, TurnId
 use crate::macros::text_enum;
 use crate::member::{Effort, MemberProfile};
 use crate::planning::{
-    Interview, InterviewAnswer, Proposal, ProposalChange, ProposedMember, ProposedTask,
+    Interview, InterviewAnswer, Proposal, ProposalChange, ProposedMember, ProposedMove,
+    ProposedTask,
 };
 use crate::text::ModelName;
 use crate::time::Timestamp;
@@ -893,7 +894,7 @@ impl Turn {
     }
 
     /// Records that the manager approved the proposal of the turn, with
-    /// the members and the tasks the manager left in it. The proposal
+    /// the members, the tasks and the moves the manager left in it. The proposal
     /// keeps them in place of what was proposed.
     ///
     /// # Errors
@@ -905,6 +906,7 @@ impl Turn {
         &mut self,
         members: Vec<ProposedMember>,
         tasks: Vec<ProposedTask>,
+        moves: Vec<ProposedMove>,
         now: Timestamp,
     ) -> Result<(), DomainError> {
         if self.is_running() {
@@ -913,7 +915,7 @@ impl Turn {
         self.proposal
             .as_mut()
             .ok_or(DomainError::NothingProposed)?
-            .approve(members, tasks, now)
+            .approve(members, tasks, moves, now)
     }
 
     /// Makes one change of the manager's to the proposal of the turn before
@@ -1918,13 +1920,13 @@ mod tests {
         turn.propose(proposal()).unwrap();
         let members = || proposal().members().to_vec();
         assert_eq!(
-            turn.approve_proposal(members(), Vec::new(), moment(3)),
+            turn.approve_proposal(members(), Vec::new(), Vec::new(), moment(3)),
             Err(DomainError::TurnStillRunning)
         );
         turn.finish("I propose one specialist.", tokens(), moment(4))
             .unwrap();
 
-        turn.approve_proposal(members(), Vec::new(), moment(5))
+        turn.approve_proposal(members(), Vec::new(), Vec::new(), moment(5))
             .unwrap();
 
         assert_eq!(turn.proposal().unwrap().approved_at(), Some(moment(5)));
@@ -1933,7 +1935,7 @@ mod tests {
             .finish("Report.", tokens(), moment(3))
             .unwrap();
         assert_eq!(
-            nothing_proposed.approve_proposal(members(), Vec::new(), moment(4)),
+            nothing_proposed.approve_proposal(members(), Vec::new(), Vec::new(), moment(4)),
             Err(DomainError::NothingProposed)
         );
     }

@@ -243,7 +243,7 @@ describe('syncing through a folder in the DemoBackend', () => {
         backend.reply(conversation.id, 'Go on.'),
         backend.answerDecision(conversation.id, { option: 0, note: '' }),
         backend.answerInterview(conversation.id, []),
-        backend.approveProposal(conversation.id, { members: [], tasks: [] }),
+        backend.approveProposal(conversation.id, { members: [], tasks: [], moves: [] }),
         backend.stopWork(conversation.id),
       ]) {
         const refused = await refusal(request);

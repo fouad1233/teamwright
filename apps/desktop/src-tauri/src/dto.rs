@@ -25,10 +25,10 @@ use teamwright_domain::{
     Area, Assignee, CalendarDate, Color, ComputerId, ContextUse, Conversation, DecisionOption,
     DecisionRequest, DomainError, Effort, EventKind, EventKinds, Field, FieldFilter, FieldNumber,
     FieldText, FieldValue, Fill, GroupKey, Interview, InterviewAnswer, Member, MemberKind,
-    Priority, Project, ProjectTemplate, Proposal, ProposedOwner, Schedule, ScopeTask, Sprint,
-    SprintSummary, Status, StatusCategory, StatusLoad, Step, StepContent, StoryPoints, Tag, Task,
-    TaskChange, TaskChangeKind, TaskGroup, Timestamp, TokenCounts, Turn, Velocity, View,
-    ViewAssignee, ViewFilter, ViewId, ViewKind, WorkInProgressLimit, context_of,
+    Priority, Project, ProjectTemplate, Proposal, ProposedMove, ProposedOwner, Schedule, ScopeTask,
+    Sprint, SprintSummary, Status, StatusCategory, StatusLoad, Step, StepContent, StoryPoints, Tag,
+    Task, TaskChange, TaskChangeKind, TaskGroup, TaskInPlan, Timestamp, TokenCounts, Turn,
+    Velocity, View, ViewAssignee, ViewFilter, ViewId, ViewKind, WorkInProgressLimit, context_of,
 };
 
 use crate::error::CommandError;
@@ -1653,7 +1653,43 @@ pub struct ProposalDto {
     summary: String,
     members: Vec<ProposedMemberDto>,
     tasks: Vec<ProposedTaskDto>,
+    moves: Vec<ProposedMoveDto>,
     approved_at: Option<String>,
+}
+
+/// A task of the project that a proposal moves: under a task of the
+/// proposal (`partOf`, its place from 0), under another task of the
+/// project (`partOfTask`), or, with both null, out from under any.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProposedMoveDto {
+    task_id: String,
+    part_of: Option<usize>,
+    part_of_task: Option<String>,
+}
+
+/// A whole as the two fields of the wire: the place of a task of the
+/// proposal, or the identifier of a task of the project.
+fn whole_to_wire(whole: Option<TaskInPlan>) -> (Option<usize>, Option<String>) {
+    match whole {
+        None => (None, None),
+        Some(TaskInPlan::Proposed(place)) => (Some(place), None),
+        Some(TaskInPlan::Existing(id)) => (None, Some(id.to_string())),
+    }
+}
+
+/// A whole from the two fields of the wire. A task of the project, if one
+/// is named, comes before a place; a place that is not a whole number from
+/// 0 is read as a place no proposal has.
+fn whole_from_wire(
+    part_of: Option<f64>,
+    part_of_task: Option<&str>,
+) -> Result<Option<TaskInPlan>, CommandError> {
+    Ok(match (part_of_task, part_of) {
+        (Some(id), _) => Some(TaskInPlan::Existing(parse_id(id)?)),
+        (None, Some(place)) => Some(TaskInPlan::Proposed(place_from_number(place))),
+        (None, None) => None,
+    })
 }
 
 /// A member of a proposal.
@@ -1693,8 +1729,11 @@ pub struct ProposedTaskDto {
     /// The tasks of the same proposal it waits for, by their places from 0.
     waits_for: Vec<usize>,
     /// The task of the same proposal it is a part of, by its place from 0,
-    /// or null for a task of its own.
+    /// or null.
     part_of: Option<usize>,
+    /// The task of the project it is a part of, by its identifier, or null.
+    /// With both null, it is a task of its own.
+    part_of_task: Option<String>,
 }
 
 impl From<&Proposal> for ProposalDto {
@@ -1715,19 +1754,35 @@ impl From<&Proposal> for ProposalDto {
             tasks: proposal
                 .tasks()
                 .iter()
-                .map(|task| ProposedTaskDto {
-                    title: task.title.to_string(),
-                    description: task.description.clone(),
-                    owner: task.owner.as_ref().map(|owner| match owner {
-                        ProposedOwner::Manager => ProposedOwnerDto::Manager,
-                        ProposedOwner::Member(name) => ProposedOwnerDto::Member {
-                            name: name.to_string(),
-                        },
-                    }),
-                    estimate_minutes: task.estimate_minutes,
-                    priority: task.priority.as_str(),
-                    waits_for: task.waits_for.clone(),
-                    part_of: task.part_of,
+                .map(|task| {
+                    let (part_of, part_of_task) = whole_to_wire(task.part_of);
+                    ProposedTaskDto {
+                        title: task.title.to_string(),
+                        description: task.description.clone(),
+                        owner: task.owner.as_ref().map(|owner| match owner {
+                            ProposedOwner::Manager => ProposedOwnerDto::Manager,
+                            ProposedOwner::Member(name) => ProposedOwnerDto::Member {
+                                name: name.to_string(),
+                            },
+                        }),
+                        estimate_minutes: task.estimate_minutes,
+                        priority: task.priority.as_str(),
+                        waits_for: task.waits_for.clone(),
+                        part_of,
+                        part_of_task,
+                    }
+                })
+                .collect(),
+            moves: proposal
+                .moves()
+                .iter()
+                .map(|one| {
+                    let (part_of, part_of_task) = whole_to_wire(one.part_of);
+                    ProposedMoveDto {
+                        task_id: one.task.to_string(),
+                        part_of,
+                        part_of_task,
+                    }
                 })
                 .collect(),
             approved_at: proposal.approved_at().map(moment_to_text),
@@ -1777,6 +1832,20 @@ impl From<InterviewAnswerInput> for InterviewAnswer {
 pub struct ApprovedProposalInput {
     members: Vec<ProposedMemberInput>,
     tasks: Vec<ProposedTaskInput>,
+    /// The tasks of the project to move; none if left out.
+    #[serde(default)]
+    moves: Vec<ProposedMoveInput>,
+}
+
+/// A task of the project that the manager approves to move.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProposedMoveInput {
+    task_id: String,
+    #[serde(default)]
+    part_of: Option<f64>,
+    #[serde(default)]
+    part_of_task: Option<String>,
 }
 
 /// A member of a proposal as the manager approves it.
@@ -1812,9 +1881,13 @@ pub struct ProposedTaskInput {
     #[serde(default)]
     waits_for: Vec<f64>,
     /// The place of the task it is a part of, from 0, read as `waits_for`
-    /// is; null or missing for a task of its own.
+    /// is; null or missing if it is not a part of a task of the proposal.
     #[serde(default)]
     part_of: Option<f64>,
+    /// The identifier of the task of the project it is a part of; null or
+    /// missing if it is not a part of one.
+    #[serde(default)]
+    part_of_task: Option<String>,
 }
 
 impl TryFrom<ApprovedProposalInput> for ApprovedProposal {
@@ -1849,7 +1922,17 @@ impl TryFrom<ApprovedProposalInput> for ApprovedProposal {
                         estimate_minutes: task.estimate_minutes,
                         priority: parse_priority(&task.priority)?,
                         waits_for: task.waits_for.into_iter().map(place_from_number).collect(),
-                        part_of: task.part_of.map(place_from_number),
+                        part_of: whole_from_wire(task.part_of, task.part_of_task.as_deref())?,
+                    })
+                })
+                .collect::<Result<_, CommandError>>()?,
+            moves: input
+                .moves
+                .into_iter()
+                .map(|one| {
+                    Ok(ProposedMove {
+                        task: parse_id(&one.task_id)?,
+                        part_of: whole_from_wire(one.part_of, one.part_of_task.as_deref())?,
                     })
                 })
                 .collect::<Result<_, CommandError>>()?,
@@ -1908,9 +1991,27 @@ pub enum ProposalEditInput {
         #[serde(default)]
         part_of: Option<f64>,
     },
-    /// Makes a task a part of another task of the proposal, or, with null,
-    /// a task of its own.
-    MakePartOf { task: f64, part_of: Option<f64> },
+    /// Makes a task a part of another task of the proposal (`partOf`) or of
+    /// a task of the project (`partOfTask`), or, with both null, a task of
+    /// its own.
+    MakePartOf {
+        task: f64,
+        part_of: Option<f64>,
+        #[serde(default)]
+        part_of_task: Option<String>,
+    },
+    /// Moves a task of the project under a task of the proposal
+    /// (`partOf`) or of the project (`partOfTask`), or, with both null,
+    /// makes it a task of its own.
+    Move {
+        task_id: String,
+        #[serde(default)]
+        part_of: Option<f64>,
+        #[serde(default)]
+        part_of_task: Option<String>,
+    },
+    /// Takes the move of a task of the project out of the proposal.
+    RemoveMove { task_id: String },
     /// Takes a task out of the proposal.
     RemoveTask { task: f64 },
     /// Takes a member out of the proposal.
@@ -1968,9 +2069,24 @@ impl TryFrom<ProposalEditInput> for teamwright_application::ProposalEdit {
                 title,
                 part_of: part_of.map(place),
             },
-            ProposalEditInput::MakePartOf { task, part_of } => Edit::MakePartOf {
+            ProposalEditInput::MakePartOf {
+                task,
+                part_of,
+                part_of_task,
+            } => Edit::MakePartOf {
                 task: place(task),
-                part_of: part_of.map(place),
+                part_of: whole_from_wire(part_of, part_of_task.as_deref())?,
+            },
+            ProposalEditInput::Move {
+                task_id,
+                part_of,
+                part_of_task,
+            } => Edit::Move {
+                task: parse_id(&task_id)?,
+                part_of: whole_from_wire(part_of, part_of_task.as_deref())?,
+            },
+            ProposalEditInput::RemoveMove { task_id } => Edit::RemoveMove {
+                task: parse_id(&task_id)?,
             },
             ProposalEditInput::RemoveTask { task } => Edit::RemoveTask { task: place(task) },
             ProposalEditInput::RemoveMember { member } => Edit::RemoveMember {
@@ -4487,9 +4603,35 @@ mod tests {
             read(serde_json::json!({ "kind": "makePartOf", "task": 1, "partOf": 0.5 })).unwrap(),
             ProposalEdit::MakePartOf {
                 task: 1,
-                part_of: Some(usize::MAX)
+                part_of: Some(TaskInPlan::Proposed(usize::MAX))
             }
         );
+        // A task of the project is named by its identifier, and comes
+        // before a place.
+        let task = teamwright_domain::TaskId::generate();
+        assert_eq!(
+            read(serde_json::json!({
+                "kind": "makePartOf", "task": 1, "partOf": 0, "partOfTask": task.to_string()
+            }))
+            .unwrap(),
+            ProposalEdit::MakePartOf {
+                task: 1,
+                part_of: Some(TaskInPlan::Existing(task))
+            }
+        );
+        assert_eq!(
+            read(serde_json::json!({ "kind": "move", "taskId": task.to_string(), "partOf": 2 }))
+                .unwrap(),
+            ProposalEdit::Move {
+                task,
+                part_of: Some(TaskInPlan::Proposed(2))
+            }
+        );
+        assert_eq!(
+            read(serde_json::json!({ "kind": "removeMove", "taskId": task.to_string() })).unwrap(),
+            ProposalEdit::RemoveMove { task }
+        );
+        assert!(read(serde_json::json!({ "kind": "removeMove", "taskId": "nonsense" })).is_err());
         assert!(
             read(serde_json::json!({ "kind": "prioritize", "task": 0, "priority": "huge" }))
                 .is_err()

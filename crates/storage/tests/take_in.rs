@@ -1546,7 +1546,7 @@ fn a_proposal_changed_before_approval_reaches_the_other_computer_as_it_reads() {
         TaskTitle, TokenCounts, Turn, TurnOrigin,
     };
 
-    let (desk, laptop, project, _) = desk_and_laptop();
+    let (desk, laptop, project, board) = desk_and_laptop();
     let conversations = SqliteConversationRepository::new(desk.database.clone());
     let conversation = Conversation::start_with_advisor(
         project.id(),
@@ -1606,9 +1606,15 @@ fn a_proposal_changed_before_approval_reaches_the_other_computer_as_it_reads() {
         waits_for: 1,
     })
     .unwrap();
+    // A move of a task the project has travels with the proposal.
+    turn.change_proposal(ProposalChange::Move {
+        task: board.id(),
+        part_of: Some(teamwright_domain::TaskInPlan::Proposed(2)),
+    })
+    .unwrap();
     turn.change_proposal(ProposalChange::MakePartOf {
         task: 0,
-        part_of: Some(1),
+        part_of: Some(teamwright_domain::TaskInPlan::Proposed(1)),
     })
     .unwrap();
     conversations.save_turn(&turn).unwrap();
@@ -1624,7 +1630,11 @@ fn a_proposal_changed_before_approval_reaches_the_other_computer_as_it_reads() {
         "Route the board in four layers"
     );
     assert!(proposal.tasks()[2].waits_for.is_empty());
-    assert_eq!(proposal.tasks()[0].part_of, Some(1));
+    assert_eq!(
+        proposal.tasks()[0].part_of,
+        Some(teamwright_domain::TaskInPlan::Proposed(1))
+    );
+    assert_eq!(proposal.moves()[0].task, board.id());
     assert_eq!(laptop.everything(), desk.everything());
 }
 

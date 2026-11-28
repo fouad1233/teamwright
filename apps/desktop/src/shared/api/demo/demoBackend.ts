@@ -64,6 +64,7 @@ import type {
   ProjectUsage,
   ProposalChange,
   ProposedMember,
+  ProposedMove,
   ProposedTask,
   ReadyMadeSpecialist,
   Sprint,
@@ -137,6 +138,7 @@ import {
 } from './readyMade';
 import {
   answersInWords,
+  checkOnBoard,
   openInterviewOf,
   openProposalOf,
   proposalAfter,
@@ -145,7 +147,13 @@ import {
   waitInCircle,
 } from './planning';
 import { PROJECT_TEMPLATES, checkedLimit, requireTemplate, statusLoads } from './templates';
-import { scriptForAnswers, scriptForBrief, scriptForChange } from './simulatedAdvisor';
+import {
+  asksToRegroup,
+  scriptForAnswers,
+  scriptForBrief,
+  scriptForChange,
+  scriptForRegrouping,
+} from './simulatedAdvisor';
 import {
   asListed,
   dayOfMoment,
@@ -1944,7 +1952,9 @@ export class DemoBackend implements Backend {
         conversation,
         brief,
         'message',
-        scriptForBrief(this.earlier.digestsOf(project.id).length),
+        this.wantsRegrouping(project.id, brief)
+          ? this.regroupingScript(project.id)
+          : scriptForBrief(this.earlier.digestsOf(project.id).length),
       );
       return conversation;
     });
@@ -2003,12 +2013,17 @@ export class DemoBackend implements Backend {
         ...team.map((member) => member.name),
         ...members.map((member) => member.name),
       ]);
-      if (members.length === 0 && tasks.length === 0) {
-        throw new BackendError('rule_broken', 'the proposal has no members and no tasks');
+      const moves = tidyProposedMoves(approved.moves, tasks.length);
+      if (members.length === 0 && tasks.length === 0 && moves.length === 0) {
+        throw new BackendError('rule_broken', 'the proposal has no members, no tasks and no moves');
       }
+      // The board may have changed since the proposal was made: a task it
+      // names deleted or moved. Then nothing of it is done.
+      const board = this.tasksOfProject(project.id);
+      checkOnBoard(project, board, tasks, moves);
 
       // Everything was checked. From here on nothing is refused, so the
-      // members and the tasks are created together or not at all.
+      // members, the tasks and the moves are made together or not at all.
       const now = this.nowAsText();
       const byName = new Map(team.map((member) => [member.name.toLowerCase(), member]));
       for (const proposed of members) {
@@ -2078,20 +2093,58 @@ export class DemoBackend implements Backend {
         this.tasks.set(task.id, task);
         created.push(task);
       }
+      const idOf = (whole: { partOf: number | null; partOfTask: Id | null }) =>
+        whole.partOfTask ?? (whole.partOf === null ? null : (created[whole.partOf]?.id ?? null));
       for (const [place, proposed] of tasks.entries()) {
         const task = created[place];
         if (task) {
           task.blockedBy = proposed.waitsFor.flatMap((earlier) => created[earlier]?.id ?? []);
           // A part becomes a subtask of the task created for its whole,
-          // which may come after it in the plan.
-          task.parentId = proposed.partOf === null ? null : (created[proposed.partOf]?.id ?? null);
+          // which may come after it in the plan, or of a task the project
+          // has.
+          task.parentId = idOf(proposed);
+          // A new task of its own goes where the tasks moved under it are,
+          // when they are all in one area and one sprint.
+          if (proposed.partOf === null && proposed.partOfTask === null) {
+            const places = new Set(
+              moves
+                .filter((move) => move.partOfTask === null && move.partOf === place)
+                .flatMap((move) => {
+                  const known = board.find((other) => other.id === move.taskId);
+                  return known ? [JSON.stringify([known.areaId, known.sprintId])] : [];
+                }),
+            );
+            const [only] = [...places];
+            if (places.size === 1 && only !== undefined) {
+              const [areaId, sprintId] = JSON.parse(only) as [Id, Id | null];
+              task.areaId = areaId;
+              task.sprintId = sprintId;
+            }
+          }
         }
       }
+      // Then the moves, each task with its own parts, and every part goes
+      // where the top of it goes.
+      const regrouped = new Set(created.map((task) => task.id));
+      for (const move of moves) {
+        const moved = this.tasks.get(move.taskId);
+        if (moved) {
+          for (const id of this.subtreeOf(moved)) {
+            regrouped.add(id);
+          }
+          if (moved.parentId !== idOf(move)) {
+            moved.parentId = idOf(move);
+            moved.updatedAt = now;
+          }
+        }
+      }
+      followTops(this.tasksOfProject(project.id), regrouped, now);
 
       // The record keeps what was approved, which may be less than what
       // was proposed.
       proposal.members = members;
       proposal.tasks = tasks;
+      proposal.moves = moves;
       proposal.approvedAt = now;
       this.noteVersions();
       this.tellListeners(conversation);
@@ -2125,11 +2178,19 @@ export class DemoBackend implements Backend {
         ...team.map((member) => member.name),
         ...members.map((member) => member.name),
       ]);
-      if (members.length === 0 && tasks.length === 0) {
-        throw new BackendError('rule_broken', 'the proposal has no members and no tasks');
+      const moves = tidyProposedMoves(changed.moves, tasks.length);
+      if (members.length === 0 && tasks.length === 0 && moves.length === 0) {
+        throw new BackendError('rule_broken', 'the proposal has no members, no tasks and no moves');
       }
+      checkOnBoard(
+        this.requireProject(conversation.projectId),
+        this.tasksOfProject(conversation.projectId),
+        tasks,
+        moves,
+      );
       proposal.members = members;
       proposal.tasks = tasks;
+      proposal.moves = moves;
       this.noteVersions();
       this.tellListeners(conversation);
       return conversation;
@@ -2152,8 +2213,32 @@ export class DemoBackend implements Backend {
     const previous = [...conversation.turns]
       .reverse()
       .find((turn) => turn.proposal !== null)?.proposal;
-    this.beginTurn(conversation, text, 'message', scriptForChange(previous ?? undefined));
+    this.beginTurn(
+      conversation,
+      text,
+      'message',
+      this.wantsRegrouping(conversation.projectId, text)
+        ? this.regroupingScript(conversation.projectId)
+        : scriptForChange(previous ?? undefined),
+    );
     return conversation;
+  }
+
+  /**
+   * Whether the manager asks the Advisor to regroup the tasks of a project
+   * that has some: the one thing the demo reads of what is written.
+   */
+  private wantsRegrouping(projectId: Id, text: string): boolean {
+    return asksToRegroup(text) && this.tasksOfProject(projectId).length > 0;
+  }
+
+  /** The script of an Advisor that regroups the tasks of a project into modules. */
+  private regroupingScript(projectId: Id) {
+    return scriptForRegrouping(
+      this.requireProject(projectId),
+      this.areasOf(projectId),
+      this.tasksOfProject(projectId),
+    );
   }
 
   /** One conversation with the Advisor runs in a project at a time. */
@@ -4847,7 +4932,9 @@ function tidyProposedTasks(
         `"${title}" waits for a task that is not another task of the proposal`,
       );
     }
-    const partOf = task.partOf;
+    // A part of a task of the project is checked against the board.
+    const partOfTask = task.partOfTask ?? null;
+    const partOf = partOfTask === null ? task.partOf : null;
     if (
       partOf !== null &&
       (!Number.isInteger(partOf) || partOf < 0 || partOf >= tasks.length || partOf === place)
@@ -4866,6 +4953,7 @@ function tidyProposedTasks(
       priority: task.priority,
       waitsFor,
       partOf,
+      partOfTask,
     };
   });
   if (waitInCircle(tidy)) {
@@ -4887,6 +4975,31 @@ function tidyProposedTasks(
     );
   }
   return tidy;
+}
+
+/**
+ * Checks the moves of a proposal: each task of the project is moved once,
+ * and a move under a task of the proposal names one of its `count` tasks.
+ * Whether the tasks are there and keep the rules of parts is for the board
+ * to say (`checkOnBoard`). A task of the project, if one is named, comes
+ * before a place, as on the wire of the real application.
+ */
+function tidyProposedMoves(
+  moves: readonly ProposedMove[] | undefined,
+  count: number,
+): ProposedMove[] {
+  const moved = new Set<Id>();
+  return (moves ?? []).map((move) => {
+    if (moved.has(move.taskId)) {
+      throw new BackendError('rule_broken', 'the proposal moves the same task twice');
+    }
+    moved.add(move.taskId);
+    const partOf = move.partOfTask === null ? move.partOf : null;
+    if (partOf !== null && (!Number.isInteger(partOf) || partOf < 0 || partOf >= count)) {
+      throw new BackendError('rule_broken', `the proposal has no task ${(partOf + 1).toString()}`);
+    }
+    return { taskId: move.taskId, partOf, partOfTask: move.partOfTask };
+  });
 }
 
 /**
