@@ -4357,7 +4357,7 @@ dependencies = [
 
 [[package]]
 name = "teamwright-application"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "chrono",
  "iana-time-zone",
@@ -4367,7 +4367,7 @@ dependencies = [
 
 [[package]]
 name = "teamwright-desktop"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "chrono",
  "serde",
@@ -4389,7 +4389,7 @@ dependencies = [
 
 [[package]]
 name = "teamwright-domain"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "chrono",
  "sha2",
@@ -4399,7 +4399,7 @@ dependencies = [
 
 [[package]]
 name = "teamwright-integrations"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "chrono",
  "serde",
@@ -4412,7 +4412,7 @@ dependencies = [
 
 [[package]]
 name = "teamwright-runtime"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "chrono",
  "serde",
@@ -4425,7 +4425,7 @@ dependencies = [
 
 [[package]]
 name = "teamwright-storage"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "chrono",
  "rusqlite",
@@ -4440,7 +4440,7 @@ dependencies = [
 
 [[package]]
 name = "teamwright-workbook"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "calamine",
  "chrono",
